@@ -1,5 +1,7 @@
 require u-boot-common-gxp_${PV}.inc
 
+SRC_URI += "file://fw_env.config"
+
 SUMMARY = "U-Boot bootloader fw_printenv/setenv utilities"
 DEPENDS += "mtd-utils"
 
@@ -22,6 +24,7 @@ do_install () {
 	ln -sf fw_printenv ${D}${base_sbindir}/fw_setenv
 
 	install -d ${D}${sysconfdir}
+	install -m 644 ${UNPACKDIR}/fw_env.config ${D}${sysconfdir}/fw_env.config
 }
 
 do_install:class-cross () {
