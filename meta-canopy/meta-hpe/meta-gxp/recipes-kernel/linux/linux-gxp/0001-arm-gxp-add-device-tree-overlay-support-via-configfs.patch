@@ -1,0 +1,959 @@
+From 6f5d93ffec197e54acbfd1eb65b32cb56976dea9 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 8 Jan 2026 01:16:56 +0100
+Subject: [PATCH 1/8] arm: gxp: add device tree overlay support via configfs
+
+Add device tree overlay support enabling runtime loading of device tree
+overlays through the configfs interface. This allows platform-specific
+hardware configurations to be applied at boot time based on server ID.
+
+Key changes:
+- Add configfs interface for overlay management
+- Add sysfs interface for overlay status
+- Support for of_overlay_disable kernel parameter
+- Extend overlay support with proper target node resolution
+
+This is required for HPE GXP BMC platforms where different ProLiant
+server variants need different device tree configurations loaded at
+runtime.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+
+diff --git a/Documentation/ABI/testing/sysfs-firmware-devicetree-overlays b/Documentation/ABI/testing/sysfs-firmware-devicetree-overlays
+new file mode 100644
+index 000000000000..88d15498a21b
+--- /dev/null
++++ b/Documentation/ABI/testing/sysfs-firmware-devicetree-overlays
+@@ -0,0 +1,52 @@
++What:		/sys/firmware/devicetree/overlays/
++Date:		October 2015
++Contact:	Pantelis Antoniou <pantelis.antoniou@konsulko.com>
++Description:
++		This directory contains the applied device tree overlays of
++		the running system, as directories of the overlay id.
++
++What:		/sys/firmware/devicetree/overlays/enable
++Date:		October 2015
++Contact:	Pantelis Antoniou <pantelis.antoniou@konsulko.com>
++Description:
++		The master enable switch, by default is 1, and when
++		set to 0 it cannot be re-enabled for security reasons.
++
++		The discussion about this switch takes place in:
++		http://comments.gmane.org/gmane.linux.drivers.devicetree/101871
++
++		Kees Cook:
++		"Coming from the perspective of drawing a bright line between
++		kernel and the root user (which tends to start with disabling
++		kernel module loading), I would say that there at least needs
++		to be a high-level one-way "off" switch for the interface so
++		that systems that have this interface can choose to turn it off
++		during initial boot, etc."
++
++What:		/sys/firmware/devicetree/overlays/<id>
++Date:		October 2015
++Contact:	Pantelis Antoniou <pantelis.antoniou@konsulko.com>
++Description:
++		Each directory represents an applied overlay, containing
++		the following attribute files.
++
++What:		/sys/firmware/devicetree/overlays/<id>/can_remove
++Date:		October 2015
++Contact:	Pantelis Antoniou <pantelis.antoniou@konsulko.com>
++Description:
++		The attribute set to 1 means that the overlay can be removed,
++		while 0 means that the overlay is being overlapped therefore
++		removal is prohibited.
++
++What:		/sys/firmware/devicetree/overlays/<id>/<fragment-name>/
++Date:		October 2015
++Contact:	Pantelis Antoniou <pantelis.antoniou@konsulko.com>
++Description:
++		Each of these directories contain information about of the
++		particular overlay fragment.
++
++What:		/sys/firmware/devicetree/overlays/<id>/<fragment-name>/target
++Date:		October 2015
++Contact:	Pantelis Antoniou <pantelis.antoniou@konsulko.com>
++Description:
++		The full-path of the target of the fragment
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index 44fde25bb221..08b84ce6ebd7 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -3435,6 +3435,8 @@
+ 			This can be set from sysctl after boot.
+ 			See Documentation/admin-guide/sysctl/vm.rst for details.
+ 
++	of_overlay_disable	[OF] Disable device tree overlays at boot time.
++
+ 	ohci1394_dma=early	[HW] enable debugging via the ohci1394 driver.
+ 			See Documentation/core-api/debugging-via-ohci1394.rst for more
+ 			info.
+diff --git a/Documentation/devicetree/configfs-overlays.txt b/Documentation/devicetree/configfs-overlays.txt
+new file mode 100644
+index 000000000000..531e5f50a307
+--- /dev/null
++++ b/Documentation/devicetree/configfs-overlays.txt
+@@ -0,0 +1,31 @@
++Howto use the configfs overlay interface.
++
++A device-tree configfs entry is created in /config/device-tree/overlays
++and it is manipulated using standard file system I/O.
++Note that this is a debug level interface, for use by developers and
++not necessarily something accessed by normal users due to the
++security implications of having direct access to the kernel's device tree.
++
++* To create an overlay you mkdir the directory:
++
++	# mkdir /config/device-tree/overlays/foo
++
++* Either you echo the overlay firmware file to the path property file.
++
++	# echo foo.dtbo >/config/device-tree/overlays/foo/path
++
++* Or you cat the contents of the overlay to the dtbo file
++
++	# cat foo.dtbo >/config/device-tree/overlays/foo/dtbo
++
++The overlay file will be applied, and devices will be created/destroyed
++as required.
++
++To remove it simply rmdir the directory.
++
++	# rmdir /config/device-tree/overlays/foo
++
++The rationale for the dual interface (firmware & direct copy) is that each is
++better suited to different use patterns. The firmware interface is what's
++intended to be used by hardware managers in the kernel, while the copy interface
++make sense for developers (since it avoids problems with namespaces).
+diff --git a/drivers/of/Kconfig b/drivers/of/Kconfig
+index 18450437d5d5..303737ebce43 100644
+--- a/drivers/of/Kconfig
++++ b/drivers/of/Kconfig
+@@ -93,6 +93,14 @@ config OF_OVERLAY
+ 	  While this option is selected automatically when needed, you can
+ 	  enable it manually to improve device tree unit test coverage.
+ 
++config OF_CONFIGFS
++	bool "Device Tree Overlay ConfigFS interface"
++	select CONFIGFS_FS
++	select OF_FLATTREE
++	depends on OF_OVERLAY
++	help
++	  Enable a simple user-space driven DT overlay interface.
++
+ config OF_NUMA
+ 	bool
+ 
+diff --git a/drivers/of/Makefile b/drivers/of/Makefile
+index 6e1e5212f058..3222259b0393 100644
+--- a/drivers/of/Makefile
++++ b/drivers/of/Makefile
+@@ -1,6 +1,7 @@
+ # SPDX-License-Identifier: GPL-2.0
+ obj-y = base.o device.o platform.o property.o
+ obj-$(CONFIG_OF_KOBJ) += kobj.o
++obj-$(CONFIG_OF_CONFIGFS) += configfs.o
+ obj-$(CONFIG_OF_DYNAMIC) += dynamic.o
+ obj-$(CONFIG_OF_FLATTREE) += fdt.o
+ obj-$(CONFIG_OF_EARLY_FLATTREE) += fdt_address.o
+diff --git a/drivers/of/base.c b/drivers/of/base.c
+index 161a23631472..f1d98f81b1ce 100644
+--- a/drivers/of/base.c
++++ b/drivers/of/base.c
+@@ -166,7 +166,7 @@ void __of_phandle_cache_inv_entry(phandle handle)
+ void __init of_core_init(void)
+ {
+ 	struct device_node *np;
+-
++	int ret;
+ 
+ 	/* Create the kset, and register existing nodes */
+ 	mutex_lock(&of_mutex);
+@@ -177,7 +177,7 @@ void __init of_core_init(void)
+ 		return;
+ 	}
+ 	for_each_of_allnodes(np) {
+-		__of_attach_node_sysfs(np);
++		__of_attach_node_post(np);
+ 		if (np->phandle && !phandle_cache[of_phandle_cache_hash(np->phandle)])
+ 			phandle_cache[of_phandle_cache_hash(np->phandle)] = np;
+ 	}
+@@ -186,6 +186,10 @@ void __init of_core_init(void)
+ 	/* Symlink in /proc as required by userspace ABI */
+ 	if (of_root)
+ 		proc_symlink("device-tree", NULL, "/sys/firmware/devicetree/base");
++
++	ret = of_overlay_init();
++	if (ret != 0)
++		pr_warn("of_init: of_overlay_init failed!\n");
+ }
+ 
+ static struct property *__of_find_property(const struct device_node *np,
+diff --git a/drivers/of/configfs.c b/drivers/of/configfs.c
+new file mode 100644
+index 000000000000..5c149660acbd
+--- /dev/null
++++ b/drivers/of/configfs.c
+@@ -0,0 +1,281 @@
++/*
++ * Configfs entries for device-tree
++ *
++ * Copyright (C) 2013 - Pantelis Antoniou <panto@antoniou-consulting.com>
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License
++ * as published by the Free Software Foundation; either version
++ * 2 of the License, or (at your option) any later version.
++ */
++#include <linux/ctype.h>
++#include <linux/cpu.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_fdt.h>
++#include <linux/spinlock.h>
++#include <linux/sizes.h>
++#include <linux/slab.h>
++#include <linux/proc_fs.h>
++#include <linux/configfs.h>
++#include <linux/types.h>
++#include <linux/stat.h>
++#include <linux/limits.h>
++#include <linux/file.h>
++#include <linux/vmalloc.h>
++#include <linux/firmware.h>
++
++#include "of_private.h"
++
++struct cfs_overlay_item {
++	struct config_item	item;
++
++	char			path[PATH_MAX];
++
++	const struct firmware	*fw;
++	struct device_node	*overlay;
++	int			ov_id;
++
++	void			*dtbo;
++	int			dtbo_size;
++};
++
++static int create_overlay(struct cfs_overlay_item *overlay, const void *blob,
++			  size_t size)
++{
++	int err;
++
++	err = of_overlay_fdt_apply(blob, size, &overlay->ov_id);
++	if (err < 0)
++		pr_err("%s: Failed to create overlay (err=%d)\n", __func__,
++		       err);
++
++	return err;
++}
++
++static inline struct cfs_overlay_item *to_cfs_overlay_item(
++		struct config_item *item)
++{
++	return item ? container_of(item, struct cfs_overlay_item, item) : NULL;
++}
++
++static ssize_t cfs_overlay_item_path_show(struct config_item *item, char *page)
++{
++	return sprintf(page, "%s\n", to_cfs_overlay_item(item)->path);
++}
++
++static ssize_t cfs_overlay_item_path_store(struct config_item *item,
++		const char *page, size_t count)
++{
++	struct cfs_overlay_item *overlay = to_cfs_overlay_item(item);
++	const char *p = page;
++	char *s;
++	int err;
++
++	/* if it's set do not allow changes */
++	if (overlay->path[0] != '\0' || overlay->dtbo_size > 0)
++		return -EPERM;
++
++	/* copy to path buffer (and make sure it's always zero terminated */
++	count = snprintf(overlay->path, sizeof(overlay->path) - 1, "%s", p);
++	overlay->path[sizeof(overlay->path) - 1] = '\0';
++
++	/* strip trailing newlines */
++	s = overlay->path + strlen(overlay->path);
++	while (s > overlay->path && *--s == '\n')
++		*s = '\0';
++
++	pr_debug("%s: path is '%s'\n", __func__, overlay->path);
++
++	err = request_firmware(&overlay->fw, overlay->path, NULL);
++	if (err != 0)
++		goto out_err;
++
++	err = create_overlay(overlay, overlay->fw->data, overlay->fw->size);
++	if (err < 0)
++		goto out_err;
++
++	return count;
++
++out_err:
++
++	release_firmware(overlay->fw);
++	overlay->fw = NULL;
++
++	overlay->path[0] = '\0';
++	return err;
++}
++
++static ssize_t cfs_overlay_item_status_show(struct config_item *item,
++		char *page)
++{
++	return sprintf(page, "%s\n", to_cfs_overlay_item(item)->ov_id >= 0 ?
++					"applied" : "unapplied");
++}
++
++CONFIGFS_ATTR(cfs_overlay_item_, path);
++CONFIGFS_ATTR_RO(cfs_overlay_item_, status);
++
++static struct configfs_attribute *cfs_overlay_attrs[] = {
++	&cfs_overlay_item_attr_path,
++	&cfs_overlay_item_attr_status,
++	NULL,
++};
++
++static ssize_t cfs_overlay_item_dtbo_read(struct config_item *item, void *buf,
++		size_t max_count)
++{
++	struct cfs_overlay_item *overlay = to_cfs_overlay_item(item);
++
++	pr_debug("%s: buf=%p max_count=%zu\n", __func__,
++			buf, max_count);
++
++	if (overlay->dtbo == NULL)
++		return 0;
++
++	/* copy if buffer provided */
++	if (buf != NULL) {
++		/* the buffer must be large enough */
++		if (overlay->dtbo_size > max_count)
++			return -ENOSPC;
++
++		memcpy(buf, overlay->dtbo, overlay->dtbo_size);
++	}
++
++	return overlay->dtbo_size;
++}
++
++static ssize_t cfs_overlay_item_dtbo_write(struct config_item *item,
++		const void *buf, size_t count)
++{
++	struct cfs_overlay_item *overlay = to_cfs_overlay_item(item);
++	int err;
++
++	/* if it's set do not allow changes */
++	if (overlay->path[0] != '\0' || overlay->dtbo_size > 0)
++		return -EPERM;
++
++	/* copy the contents */
++	overlay->dtbo = kmemdup(buf, count, GFP_KERNEL);
++	if (overlay->dtbo == NULL)
++		return -ENOMEM;
++
++	overlay->dtbo_size = count;
++
++	err = create_overlay(overlay, overlay->dtbo, overlay->dtbo_size);
++	if (err < 0)
++		goto out_err;
++
++	return count;
++
++out_err:
++	kfree(overlay->dtbo);
++	overlay->dtbo = NULL;
++	overlay->dtbo_size = 0;
++	pr_err("Returning error %d\n", err);
++	return err;
++}
++
++CONFIGFS_BIN_ATTR(cfs_overlay_item_, dtbo, NULL, SZ_1M);
++
++static struct configfs_bin_attribute *cfs_overlay_bin_attrs[] = {
++	&cfs_overlay_item_attr_dtbo,
++	NULL,
++};
++
++static void cfs_overlay_release(struct config_item *item)
++{
++	struct cfs_overlay_item *overlay = to_cfs_overlay_item(item);
++
++	if (overlay->ov_id >= 0)
++		of_overlay_remove(&overlay->ov_id);
++	if (overlay->fw)
++		release_firmware(overlay->fw);
++	/* kfree with NULL is safe */
++	kfree(overlay->dtbo);
++	kfree(overlay);
++}
++
++static struct configfs_item_operations cfs_overlay_item_ops = {
++	.release		= cfs_overlay_release,
++};
++
++static struct config_item_type cfs_overlay_type = {
++	.ct_item_ops	= &cfs_overlay_item_ops,
++	.ct_attrs	= cfs_overlay_attrs,
++	.ct_bin_attrs	= cfs_overlay_bin_attrs,
++	.ct_owner	= THIS_MODULE,
++};
++
++static struct config_item *cfs_overlay_group_make_item(
++		struct config_group *group, const char *name)
++{
++	struct cfs_overlay_item *overlay;
++
++	overlay = kzalloc(sizeof(*overlay), GFP_KERNEL);
++	if (!overlay)
++		return ERR_PTR(-ENOMEM);
++	overlay->ov_id = -1;
++
++	config_item_init_type_name(&overlay->item, name, &cfs_overlay_type);
++	return &overlay->item;
++}
++
++static void cfs_overlay_group_drop_item(struct config_group *group,
++		struct config_item *item)
++{
++	struct cfs_overlay_item *overlay = to_cfs_overlay_item(item);
++
++	config_item_put(&overlay->item);
++}
++
++static struct configfs_group_operations overlays_ops = {
++	.make_item	= cfs_overlay_group_make_item,
++	.drop_item	= cfs_overlay_group_drop_item,
++};
++
++static struct config_item_type overlays_type = {
++	.ct_group_ops   = &overlays_ops,
++	.ct_owner       = THIS_MODULE,
++};
++
++static struct configfs_group_operations of_cfs_ops = {
++	/* empty - we don't allow anything to be created */
++};
++
++static struct config_item_type of_cfs_type = {
++	.ct_group_ops   = &of_cfs_ops,
++	.ct_owner       = THIS_MODULE,
++};
++
++static struct config_group of_cfs_overlay_group;
++
++static struct configfs_subsystem of_cfs_subsys = {
++	.su_group = {
++		.cg_item = {
++			.ci_namebuf = "device-tree",
++			.ci_type = &of_cfs_type,
++		},
++	},
++	.su_mutex = __MUTEX_INITIALIZER(of_cfs_subsys.su_mutex),
++};
++
++static int __init of_cfs_init(void)
++{
++	int ret;
++
++	config_group_init(&of_cfs_subsys.su_group);
++	config_group_init_type_name(&of_cfs_overlay_group, "overlays",
++			&overlays_type);
++	configfs_add_default_group(&of_cfs_overlay_group,
++			&of_cfs_subsys.su_group);
++
++	ret = configfs_register_subsystem(&of_cfs_subsys);
++	if (ret != 0) {
++		pr_err("%s: failed to register subsys\n", __func__);
++		goto out;
++	}
++out:
++	return ret;
++}
++late_initcall(of_cfs_init);
+diff --git a/drivers/of/dynamic.c b/drivers/of/dynamic.c
+index fe64430b438a..7478bfc8d440 100644
+--- a/drivers/of/dynamic.c
++++ b/drivers/of/dynamic.c
+@@ -243,7 +243,7 @@ int of_attach_node(struct device_node *np)
+ 	__of_attach_node(np);
+ 	raw_spin_unlock_irqrestore(&devtree_lock, flags);
+ 
+-	__of_attach_node_sysfs(np);
++	__of_attach_node_post(np);
+ 	mutex_unlock(&of_mutex);
+ 
+ 	of_reconfig_notify(OF_RECONFIG_ATTACH_NODE, &rd);
+@@ -295,7 +295,7 @@ int of_detach_node(struct device_node *np)
+ 	__of_detach_node(np);
+ 	raw_spin_unlock_irqrestore(&devtree_lock, flags);
+ 
+-	__of_detach_node_sysfs(np);
++	__of_detach_node_post(np);
+ 	mutex_unlock(&of_mutex);
+ 
+ 	of_reconfig_notify(OF_RECONFIG_DETACH_NODE, &rd);
+@@ -634,10 +634,10 @@ static int __of_changeset_entry_apply(struct of_changeset_entry *ce)
+ 
+ 	switch (ce->action) {
+ 	case OF_RECONFIG_ATTACH_NODE:
+-		__of_attach_node_sysfs(ce->np);
++		__of_attach_node_post(ce->np);
+ 		break;
+ 	case OF_RECONFIG_DETACH_NODE:
+-		__of_detach_node_sysfs(ce->np);
++		__of_detach_node_post(ce->np);
+ 		break;
+ 	case OF_RECONFIG_ADD_PROPERTY:
+ 		/* ignore duplicate names */
+diff --git a/drivers/of/kobj.c b/drivers/of/kobj.c
+index a32e60b024b8..a2f956ca34b4 100644
+--- a/drivers/of/kobj.c
++++ b/drivers/of/kobj.c
+@@ -112,7 +112,7 @@ void __of_update_property_sysfs(struct device_node *np, struct property *newprop
+ 	__of_add_property_sysfs(np, newprop);
+ }
+ 
+-int __of_attach_node_sysfs(struct device_node *np)
++int __of_attach_node_post(struct device_node *np)
+ {
+ 	const char *name;
+ 	struct kobject *parent;
+@@ -146,7 +146,7 @@ int __of_attach_node_sysfs(struct device_node *np)
+ 	return 0;
+ }
+ 
+-void __of_detach_node_sysfs(struct device_node *np)
++void __of_detach_node_post(struct device_node *np)
+ {
+ 	struct property *pp;
+ 
+diff --git a/drivers/of/of_private.h b/drivers/of/of_private.h
+index d9e6a324de0a..7dbb70a1d199 100644
+--- a/drivers/of/of_private.h
++++ b/drivers/of/of_private.h
+@@ -63,8 +63,8 @@ int __of_add_property_sysfs(struct device_node *np, struct property *pp);
+ void __of_remove_property_sysfs(struct device_node *np, struct property *prop);
+ void __of_update_property_sysfs(struct device_node *np, struct property *newprop,
+ 		struct property *oldprop);
+-int __of_attach_node_sysfs(struct device_node *np);
+-void __of_detach_node_sysfs(struct device_node *np);
++int __of_attach_node_post(struct device_node *np);
++void __of_detach_node_post(struct device_node *np);
+ #else
+ static inline int __of_add_property_sysfs(struct device_node *np, struct property *pp)
+ {
+@@ -73,11 +73,11 @@ static inline int __of_add_property_sysfs(struct device_node *np, struct propert
+ static inline void __of_remove_property_sysfs(struct device_node *np, struct property *prop) {}
+ static inline void __of_update_property_sysfs(struct device_node *np,
+ 		struct property *newprop, struct property *oldprop) {}
+-static inline int __of_attach_node_sysfs(struct device_node *np)
++static inline int __of_attach_node_post(struct device_node *np)
+ {
+ 	return 0;
+ }
+-static inline void __of_detach_node_sysfs(struct device_node *np) {}
++static inline void __of_detach_node_post(struct device_node *np) {}
+ #endif
+ 
+ #if defined(CONFIG_OF_RESOLVE)
+@@ -135,9 +135,9 @@ extern int __of_update_property(struct device_node *np,
+ extern void __of_update_property_sysfs(struct device_node *np,
+ 		struct property *newprop, struct property *oldprop);
+ 
+-extern int __of_attach_node_sysfs(struct device_node *np);
++extern int __of_attach_node_post(struct device_node *np);
+ extern void __of_detach_node(struct device_node *np);
+-extern void __of_detach_node_sysfs(struct device_node *np);
++extern void __of_detach_node_post(struct device_node *np);
+ 
+ extern void __of_sysfs_remove_bin_file(struct device_node *np,
+ 				       struct property *prop);
+@@ -168,5 +168,14 @@ static inline int of_dma_get_range(struct device_node *np,
+ 	return -ENODEV;
+ }
+ #endif
++#if defined(CONFIG_OF_OVERLAY)
++extern int of_overlay_init(void);
++#else
++static inline int of_overlay_init(void)
++{
++	return 0;
++}
++#endif
++
+ 
+ #endif /* _LINUX_OF_PRIVATE_H */
+diff --git a/drivers/of/overlay.c b/drivers/of/overlay.c
+index 50bbe0edf538..21e05bf127b9 100644
+--- a/drivers/of/overlay.c
++++ b/drivers/of/overlay.c
+@@ -20,9 +20,24 @@
+ #include <linux/libfdt.h>
+ #include <linux/err.h>
+ #include <linux/idr.h>
++#include <linux/sysfs.h>
++#include <linux/atomic.h>
+ 
+ #include "of_private.h"
+ 
++/* fwd. decl */
++struct overlay_changeset;
++struct fragment;
++/* an attribute for each fragment */
++struct fragment_attribute {
++	struct attribute attr;
++	ssize_t (*show)(struct kobject *kobj, struct fragment_attribute *fattr,
++			char *buf);
++	ssize_t (*store)(struct kobject *kobj, struct fragment_attribute *fattr,
++			 const char *buf, size_t count);
++	struct fragment *fragment;
++};
++
+ /**
+  * struct target - info about current target node as recursing through overlay
+  * @np:			node where current level of overlay will be applied
+@@ -45,12 +60,18 @@ struct target {
+ 
+ /**
+  * struct fragment - info about fragment nodes in overlay expanded device tree
++ * @info:	info node that contains the target and overlay
+  * @target:	target of the overlay operation
+  * @overlay:	pointer to the __overlay__ node
+  */
+ struct fragment {
+ 	struct device_node *overlay;
+ 	struct device_node *target;
++	struct overlay_changeset *ovcs;
++	struct device_node *info;
++	struct attribute_group attr_group;
++	struct attribute *attrs[2];
++	struct fragment_attribute target_attr;
+ };
+ 
+ /**
+@@ -71,10 +92,23 @@ struct overlay_changeset {
+ 	struct device_node *overlay_tree;
+ 	int count;
+ 	struct fragment *fragments;
++	const struct attribute_group **attr_groups;
+ 	bool symbols_fragment;
+ 	struct of_changeset cset;
++	struct kobject kobj;
+ };
+ 
++/* master enable switch; once set to 0 can't be re-enabled */
++static atomic_t ov_enable = ATOMIC_INIT(1);
++
++static int __init of_overlay_disable_setup(char *str __always_unused)
++{
++	atomic_set(&ov_enable, 0);
++	return 1;
++}
++__setup("of_overlay_disable", of_overlay_disable_setup);
++
++
+ /* flags are sticky - once set, do not reset */
+ static int devicetree_state_flags;
+ #define DTSF_APPLY_FAIL		0x01
+@@ -94,6 +128,9 @@ static int devicetree_corrupt(void)
+ static int build_changeset_next_level(struct overlay_changeset *ovcs,
+ 		struct target *target, const struct device_node *overlay_node);
+ 
++static int overlay_removal_is_ok(struct overlay_changeset *ovcs);
++
++
+ /*
+  * of_resolve_phandles() finds the largest phandle in the live tree.
+  * of_overlay_apply() may add a larger phandle to the live tree.
+@@ -716,6 +753,17 @@ static struct device_node *find_target(struct device_node *info_node)
+ 	return NULL;
+ }
+ 
++static ssize_t target_show(struct kobject *kobj,
++			   struct fragment_attribute *fattr, char *buf)
++{
++	struct fragment *fragment = fattr->fragment;
++
++	return snprintf(buf, PAGE_SIZE, "%pOF\n", fragment->target);
++}
++
++static const struct fragment_attribute target_template_attr = __ATTR_RO(target);
++
++
+ /**
+  * init_overlay_changeset() - initialize overlay changeset from overlay tree
+  * @ovcs:	Overlay changeset to build
+@@ -735,8 +783,7 @@ static int init_overlay_changeset(struct overlay_changeset *ovcs,
+ 	struct device_node *node, *overlay_node;
+ 	struct fragment *fragment;
+ 	struct fragment *fragments;
+-	int cnt, id, ret;
+-
++	int i, cnt, id, ret;
+ 	/*
+ 	 * Warn for some issues.  Can not return -EINVAL for these until
+ 	 * of_unittest_apply_overlay() is fixed to pass these checks.
+@@ -798,6 +845,7 @@ static int init_overlay_changeset(struct overlay_changeset *ovcs,
+ 			ret = -EINVAL;
+ 			goto err_free_fragments;
+ 		}
++		fragment->info = of_node_get(node);
+ 
+ 		cnt++;
+ 	}
+@@ -818,7 +866,7 @@ static int init_overlay_changeset(struct overlay_changeset *ovcs,
+ 			ret = -EINVAL;
+ 			goto err_free_fragments;
+ 		}
+-
++		fragment->info = of_node_get(node);
+ 		cnt++;
+ 	}
+ 
+@@ -832,6 +880,34 @@ static int init_overlay_changeset(struct overlay_changeset *ovcs,
+ 	ovcs->count = cnt;
+ 	ovcs->fragments = fragments;
+ 
++	ovcs->attr_groups = kcalloc(cnt + 1, sizeof(struct attribute_group *),
++				    GFP_KERNEL);
++	if (ovcs->attr_groups == NULL) {
++		ret = -ENOMEM;
++		goto err_free_fragments;
++	}
++
++	for (i = 0; i < cnt; i++) {
++		fragment = &ovcs->fragments[i];
++
++		ovcs->attr_groups[i] = &fragment->attr_group;
++
++		fragment->target_attr = target_template_attr;
++		/* make lockdep happy */
++		sysfs_attr_init(&fragment->target_attr.attr);
++		fragment->target_attr.fragment = fragment;
++
++		fragment->attrs[0] = &fragment->target_attr.attr;
++		fragment->attrs[1] = NULL;
++
++		/* NOTE: direct reference to the full_name */
++		fragment->attr_group.name =
++			kbasename(fragment->info->full_name);
++		fragment->attr_group.attrs = fragment->attrs;
++
++	}
++	ovcs->attr_groups[i] = NULL;
++
+ 	return 0;
+ 
+ err_free_fragments:
+@@ -853,12 +929,26 @@ static void free_overlay_changeset(struct overlay_changeset *ovcs)
+ 
+ 	if (ovcs->id)
+ 		idr_remove(&ovcs_idr, ovcs->id);
++	kfree(ovcs->attr_groups);
+ 
+ 	for (i = 0; i < ovcs->count; i++) {
+ 		of_node_put(ovcs->fragments[i].target);
+ 		of_node_put(ovcs->fragments[i].overlay);
++		of_node_put(ovcs->fragments[i].info);
+ 	}
+ 	kfree(ovcs->fragments);
++	kobject_put(&ovcs->kobj);
++}
++
++static inline struct overlay_changeset *kobj_to_ovcs(struct kobject *kobj)
++{
++	return container_of(kobj, struct overlay_changeset, kobj);
++}
++
++static void overlay_changeset_release(struct kobject *kobj)
++{
++	struct overlay_changeset *ovcs = kobj_to_ovcs(kobj);
++
+ 	/*
+ 	 * There should be no live pointers into ovcs->overlay_tree and
+ 	 * ovcs->fdt due to the policy that overlay notifiers are not allowed
+@@ -869,6 +959,57 @@ static void free_overlay_changeset(struct overlay_changeset *ovcs)
+ 	kfree(ovcs);
+ }
+ 
++static ssize_t enable_show(struct kobject *kobj,
++		struct kobj_attribute *attr, char *buf)
++{
++	return snprintf(buf, PAGE_SIZE, "%d\n", atomic_read(&ov_enable));
++}
++static ssize_t enable_store(struct kobject *kobj,
++		struct kobj_attribute *attr, const char *buf, size_t count)
++{
++	int ret;
++	bool new_enable;
++
++	ret = strtobool(buf, &new_enable);
++	if (ret != 0)
++		return ret;
++	/* if we've disabled it, no going back */
++	if (atomic_read(&ov_enable) == 0)
++		return -EPERM;
++	atomic_set(&ov_enable, (int)new_enable);
++	return count;
++}
++
++static struct kobj_attribute enable_attr = __ATTR_RW(enable);
++
++static const struct attribute *overlay_global_attrs[] = {
++	&enable_attr.attr,
++	NULL
++};
++static ssize_t can_remove_show(struct kobject *kobj,
++		struct kobj_attribute *attr, char *buf)
++{
++	struct overlay_changeset *ovcs = kobj_to_ovcs(kobj);
++
++	return snprintf(buf, PAGE_SIZE, "%d\n", overlay_removal_is_ok(ovcs));
++}
++
++static struct kobj_attribute can_remove_attr = __ATTR_RO(can_remove);
++
++static struct attribute *overlay_changeset_attrs[] = {
++	&can_remove_attr.attr,
++	NULL
++};
++
++static struct kobj_type overlay_changeset_ktype = {
++	.release = overlay_changeset_release,
++	.sysfs_ops = &kobj_sysfs_ops,	/* default kobj sysfs ops */
++	.default_attrs = overlay_changeset_attrs,
++};
++
++static struct kset *ov_kset;
++
++
+ /*
+  * internal documentation
+  *
+@@ -923,6 +1064,11 @@ static int of_overlay_apply(const void *fdt, struct device_node *tree,
+ 	 * overlay changeset code is responsible for freeing them.
+ 	 */
+ 
++	/* administratively disabled */
++	if (!atomic_read(&ov_enable))
++		return -EPERM;
++
++
+ 	if (devicetree_corrupt()) {
+ 		pr_err("devicetree state suspect, refuse to apply overlay\n");
+ 		kfree(fdt);
+@@ -938,6 +1084,7 @@ static int of_overlay_apply(const void *fdt, struct device_node *tree,
+ 		ret = -ENOMEM;
+ 		goto out;
+ 	}
++	kobject_init(&ovcs->kobj, &overlay_changeset_ktype);
+ 
+ 	of_overlay_mutex_lock();
+ 	mutex_lock(&of_mutex);
+@@ -975,6 +1122,21 @@ static int of_overlay_apply(const void *fdt, struct device_node *tree,
+ 		}
+ 		goto err_free_overlay_changeset;
+ 	}
++	ovcs->kobj.kset = ov_kset;
++	ret = kobject_add(&ovcs->kobj, NULL, "%d", ovcs->id);
++	if (ret != 0) {
++		pr_err("%s: kobject_add() failed for tree@%s\n", __func__,
++				tree->full_name);
++		goto err_revert;
++	}
++
++	ret = sysfs_create_groups(&ovcs->kobj, ovcs->attr_groups);
++	if (ret != 0) {
++		pr_err("%s: sysfs_create_groups() failed for tree@%s\n",
++				__func__, tree->full_name);
++		goto err_revert;
++	}
++
+ 
+ 	ret = __of_changeset_apply_notify(&ovcs->cset);
+ 	if (ret)
+@@ -993,6 +1155,14 @@ static int of_overlay_apply(const void *fdt, struct device_node *tree,
+ 	}
+ 
+ 	goto out_unlock;
++err_revert:
++	ret_tmp = 0;
++	ret_revert = __of_changeset_revert_entries(&ovcs->cset, &ret_tmp);
++	if (ret_revert) {
++		pr_debug("overlay changeset revert error %d\n", ret_revert);
++		devicetree_state_flags |= DTSF_REVERT_FAIL;
++	}
++
+ 
+ err_free_tree:
+ 	kfree(fdt);
+@@ -1217,6 +1387,8 @@ int of_overlay_remove(int *ovcs_id)
+ 	}
+ 
+ 	list_del(&ovcs->ovcs_list);
++	sysfs_remove_groups(&ovcs->kobj, ovcs->attr_groups);
++
+ 
+ 	ret_apply = 0;
+ 	ret = __of_changeset_revert_entries(&ovcs->cset, &ret_apply);
+@@ -1275,3 +1447,18 @@ int of_overlay_remove_all(void)
+ 	return 0;
+ }
+ EXPORT_SYMBOL_GPL(of_overlay_remove_all);
++
++/* called from of_init() */
++int of_overlay_init(void)
++{
++	int rc;
++
++	ov_kset = kset_create_and_add("overlays", NULL, &of_kset->kobj);
++	if (!ov_kset)
++		return -ENOMEM;
++	rc = sysfs_create_files(&ov_kset->kobj, overlay_global_attrs);
++	WARN(rc, "%s: error adding global attributes\n", __func__);
++
++	return rc;
++
++}
+diff --git a/drivers/of/unittest.c b/drivers/of/unittest.c
+index 06cc988faf78..f4dce42dad25 100644
+--- a/drivers/of/unittest.c
++++ b/drivers/of/unittest.c
+@@ -1371,7 +1371,7 @@ static void attach_node_and_children(struct device_node *np)
+ 	of_node_clear_flag(np, OF_DETACHED);
+ 	raw_spin_unlock_irqrestore(&devtree_lock, flags);
+ 
+-	__of_attach_node_sysfs(np);
++	__of_attach_node_post(np);
+ 	mutex_unlock(&of_mutex);
+ 
+ 	while (child) {
+@@ -1431,7 +1431,7 @@ static int __init unittest_data_add(void)
+ 	if (!of_root) {
+ 		of_root = unittest_data_node;
+ 		for_each_of_allnodes(np)
+-			__of_attach_node_sysfs(np);
++			__of_attach_node_post(np);
+ 		of_aliases = of_find_node_by_path("/aliases");
+ 		of_chosen = of_find_node_by_path("/chosen");
+ 		of_overlay_mutex_unlock();
+@@ -3095,7 +3095,7 @@ static __init void of_unittest_overlay_high_level(void)
+ 		of_root->child = overlay_base_root->child;
+ 
+ 	for_each_of_allnodes_from(overlay_base_root, np)
+-		__of_attach_node_sysfs(np);
++		__of_attach_node_post(np);
+ 
+ 	if (of_symbols) {
+ 		struct property *new_prop;
+-- 
+2.52.0
+

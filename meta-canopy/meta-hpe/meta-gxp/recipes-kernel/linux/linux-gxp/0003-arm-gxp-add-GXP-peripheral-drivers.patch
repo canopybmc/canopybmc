@@ -1,0 +1,2967 @@
+From 824fb19a16b2e65030f951c614c7ae6cf2d77930 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 8 Jan 2026 01:19:38 +0100
+Subject: [PATCH 3/8] arm: gxp: add GXP peripheral drivers
+
+Add peripheral drivers for the HPE GXP BMC SoC:
+
+GPIO:
+- gpio-gxp: GXP GPIO controller driver
+
+I2C:
+- i2c-gxp: GXP I2C bus controller
+- I2C core updates for better OF and SMBus support
+
+SPI:
+- spi-gxp: GXP SPI controller driver
+- gxp-spifi: GXP SPI Flash Interface (SPIFI) controller
+- gxp-spifi-ctrl1: Secondary SPIFI controller
+
+Serial:
+- 8250_gxp_vuart: GXP Virtual UART driver for serial console
+
+Network:
+- gxp-umac: GXP Unified MAC Ethernet controller
+
+MTD/Flash:
+- Updates to Macronix and Winbond SPI-NOR drivers for GXP flash support
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+
+diff --git a/arch/arm/include/asm/gpio.h b/arch/arm/include/asm/gpio.h
+index c50e383358c4..1b7f29c4a62b 100644
+--- a/arch/arm/include/asm/gpio.h
++++ b/arch/arm/include/asm/gpio.h
+@@ -5,6 +5,7 @@
+ #if CONFIG_ARCH_NR_GPIO > 0
+ #define ARCH_NR_GPIOS CONFIG_ARCH_NR_GPIO
+ #endif
++#define ARCH_NR_GPIOS 1024
+ 
+ /* Note: this may rely upon the value of ARCH_NR_GPIOS set in mach/gpio.h */
+ #include <asm-generic/gpio.h>
+diff --git a/drivers/gpio/gpio-gxp.c b/drivers/gpio/gpio-gxp.c
+index 1488b4cf30df..9808d391a73f 100644
+--- a/drivers/gpio/gpio-gxp.c
++++ b/drivers/gpio/gpio-gxp.c
+@@ -18,16 +18,17 @@
+ #include <linux/mfd/syscon.h>
+ #include <linux/interrupt.h>
+ 
+-#define GPIDATL	0x40
++
++#define GPIDATL 0x40
+ #define GPIDATH 0x60
+-#define GPODATL	0xb0
++#define GPODATL 0xb0
+ #define GPODATH 0xb4
+-#define GPODAT2L	0xf8
+-#define GPODAT2H	0xfc
+-#define GPOOWNL	0x110
++#define GPODAT2L        0xf8
++#define GPODAT2H        0xfc
++#define GPOOWNL 0x110
+ #define GPOOWNH 0x114
+-#define GPOOWN2L	0x118
+-#define GPOOWN2H	0x11c
++#define GPOOWN2L        0x118
++#define GPOOWN2H        0x11c
+ 
+ #define GPIO_DIR_OUT 0
+ #define GPIO_DIR_IN  1
+@@ -46,6 +47,7 @@
+ struct gxp_gpio_drvdata {
+ 	struct regmap *csm_map;
+ 	struct regmap *vuhc0_map;
++	void __iomem *base;
+ 	struct gpio_chip chip;
+ 	int irq;
+ };
+@@ -54,42 +56,58 @@ static int csm_gpio_get(struct gpio_chip *chip, unsigned int offset)
+ {
+ 	struct gxp_gpio_drvdata *drvdata = dev_get_drvdata(chip->parent);
+ 	int ret = 0;
++	unsigned char value;
+ 
+ 	switch (offset) {
+ 	case 0 ... 31:
+ 		// GPI LOW
+-		regmap_read(drvdata->csm_map, GPIDATL,	&ret);
++		{
++		regmap_read(drvdata->csm_map, GPIDATL,  &ret);
+ 		ret = (ret & BIT(offset))?1:0;
++		}
+ 		break;
+ 	case 32 ... 63:
+ 		//GPI HIGH
+-		regmap_read(drvdata->csm_map, GPIDATH,	&ret);
++		{
++		regmap_read(drvdata->csm_map, GPIDATH,  &ret);
+ 		ret = (ret & BIT(offset - 32))?1:0;
++		}
+ 		break;
+ 	case 64 ... 95:
+ 		//GPO chain 1 LOW
+-		regmap_read(drvdata->csm_map, GPODATL,	&ret);
++		{
++		regmap_read(drvdata->csm_map, GPODATL,  &ret);
+ 		ret = (ret & BIT(offset - 64))?1:0;
++		}
+ 		break;
+ 	case 96 ... 127:
+ 		//GPO chain 1 HIGH
+-		regmap_read(drvdata->csm_map, GPODATH,	&ret);
++		{
++		regmap_read(drvdata->csm_map, GPODATH,  &ret);
+ 		ret = (ret & BIT(offset - 96))?1:0;
++		}
+ 		break;
+ 	case 128 ...  159:
+ 		//GPO chain 2 LOW
+-		regmap_read(drvdata->csm_map, GPODAT2L,	&ret);
++		{
++		regmap_read(drvdata->csm_map, GPODAT2L, &ret);
+ 		ret = (ret & BIT(offset - 128))?1:0;
++		}
+ 		break;
+ 	case 160 ... 191:
+ 		//GPO chain 2 HIGH
+-		regmap_read(drvdata->csm_map, GPODAT2H,	&ret);
++		{
++		regmap_read(drvdata->csm_map, GPODAT2H, &ret);
+ 		ret = (ret & BIT(offset - 160))?1:0;
++		}
+ 		break;
+ 	case 192:
+ 		//SW_RESET
+-		regmap_read(drvdata->csm_map, 0x5C,	&ret);
++/*              regmap_read(drvdata->csm_map, 0x5C,     &ret);
+ 		ret = (ret & BIT(15))?1:0;
++		*/
++		value = readb(drvdata->base + 0x5d);
++		ret = (ret & BIT(7))?1:0;
+ 		break;
+ 	case 193:
+ 		// Placehold for NMI_OUT
+@@ -131,7 +149,7 @@ static void csm_gpio_set(struct gpio_chip *chip, unsigned int offset,
+ 
+ 		//output value
+ 		regmap_update_bits(drvdata->csm_map, GPOOWNH,
+-				BIT(offset - 96),	BIT(offset - 96));
++				BIT(offset - 96),       BIT(offset - 96));
+ 		regmap_update_bits(drvdata->csm_map, GPODATH,
+ 				BIT(offset - 96), value?BIT(offset - 96):0);
+ 
+@@ -158,7 +176,7 @@ static void csm_gpio_set(struct gpio_chip *chip, unsigned int offset,
+ 	case 160 ... 191:
+ 		//GPO chain 2 HIGH
+ 		//keep onwership setting
+-		regmap_read(drvdata->csm_map, GPOOWN2H,	&tmp);
++		regmap_read(drvdata->csm_map, GPOOWN2H, &tmp);
+ 		tmp = (tmp&BIT(offset - 160))?1:0;
+ 
+ 		//output value
+@@ -174,13 +192,22 @@ static void csm_gpio_set(struct gpio_chip *chip, unsigned int offset,
+ 	case 192:
+ 		//SW_RESET
+ 		if (value) {
+-			regmap_update_bits(drvdata->csm_map, 0x5C,
++/*                      regmap_update_bits(drvdata->csm_map, 0x5C,
+ 					BIT(0), BIT(0)); //unmask
+ 			regmap_update_bits(drvdata->csm_map, 0x5C,
+ 					BIT(15), BIT(15));
++
++			regmap_write(drvdata->csm_map, 0x5C,0x01);
++			regmap_write(drvdata->csm_map, 0x5C,0x8001);
++			*/
++			writeb(0x00, drvdata->base + 0x5c);
++			writeb(0x80, drvdata->base + 0x5d);
++
+ 		} else {
+-			regmap_update_bits(drvdata->csm_map, 0x5C,
++		/*      regmap_update_bits(drvdata->csm_map, 0x5C,
+ 					BIT(15), 0);
++					*/
++			writeb(0x00, drvdata->base + 0x5d);
+ 		}
+ 		break;
+ 	case 193:
+@@ -384,15 +411,15 @@ static int gxp_gpio_direction_output(struct gpio_chip *chip,
+ }
+ 
+ const static struct gpio_chip common_chip = {
+-	.label			= "gxp_gpio",
+-	.owner			= THIS_MODULE,
+-	.get			= gxp_gpio_get,
+-	.set			= gxp_gpio_set,
++	.label                  = "gxp_gpio",
++	.owner                  = THIS_MODULE,
++	.get                    = gxp_gpio_get,
++	.set                    = gxp_gpio_set,
+ 	.get_direction = gxp_gpio_get_direction,
+ 	.direction_input = gxp_gpio_direction_input,
+ 	.direction_output = gxp_gpio_direction_output,
+ 	.base = -1,
+-	//.can_sleep		= true,
++	//.can_sleep            = true,
+ };
+ 
+ static int gxp_gpio_probe(struct platform_device *pdev)
+@@ -401,6 +428,7 @@ static int gxp_gpio_probe(struct platform_device *pdev)
+ 	struct gxp_gpio_drvdata *drvdata;
+ 	struct device *dev = &pdev->dev;
+ 	struct device *parent;
++	struct resource *res;
+ 
+ 	parent = dev->parent;
+ 	if (!parent) {
+@@ -417,6 +445,10 @@ static int gxp_gpio_probe(struct platform_device *pdev)
+ 
+ 	drvdata->csm_map = syscon_regmap_lookup_by_phandle(dev->of_node,
+ 							"csm_handle");
++	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	drvdata->base = devm_ioremap_resource(&pdev->dev, res);
++
++
+ 	if (IS_ERR(drvdata->csm_map)) {
+ 		dev_err(dev, "failed to map csm_handle\n");
+ 		return -ENODEV;
+@@ -454,10 +486,10 @@ MODULE_DEVICE_TABLE(of, gxp_gpio_of_match);
+ 
+ static struct platform_driver gxp_gpio_driver = {
+ 	.driver = {
+-		.name	= "gxp-gpio",
++		.name   = "gxp-gpio",
+ 		.of_match_table = gxp_gpio_of_match,
+ 	},
+-	.probe		= gxp_gpio_probe,
++	.probe          = gxp_gpio_probe,
+ };
+ module_platform_driver(gxp_gpio_driver);
+ 
+diff --git a/drivers/i2c/busses/i2c-gxp.c b/drivers/i2c/busses/i2c-gxp.c
+index f69981db09c3..cbea705ea8ff 100644
+--- a/drivers/i2c/busses/i2c-gxp.c
++++ b/drivers/i2c/busses/i2c-gxp.c
+@@ -26,34 +26,34 @@
+ static const char * const gxp_i2c_name[] = {
+ 	"gxp-i2c0", "gxp-i2c1", "gxp-i2c2", "gxp-i2c3",
+ 	"gxp-i2c4", "gxp-i2c5", "gxp-i2c6", "gxp-i2c7",
+-	"gxp-i2c8",	"gxp-i2c9" };
++	"gxp-i2c8",     "gxp-i2c9" };
+ 
+ /* Default value */
+-#define GXP_I2C_BIT_RATE	100000	/* 100kHz */
++#define GXP_I2C_BIT_RATE        100000  /* 100kHz */
+ 
+ /* GXP I2C Global interrupt status/enable register*/
+-#define GXP_I2CINTSTAT		0x00
+-#define GXP_I2CINTEN		0x04
++#define GXP_I2CINTSTAT          0x00
++#define GXP_I2CINTEN            0x04
+ 
+ /* GXP I2C registers */
+-#define GXP_I2CSTAT		0x00
+-#define MASK_STOP_EVENT		0x20
+-#define MASK_ACK		0x08
+-#define MASK_RW			0x04
+-#define GXP_I2CEVTERR		0x01
+-#define MASK_SLAVE_CMD_EVENT	0x01
+-#define MASK_SLAVE_DATA_EVENT	0x02
+-#define MASK_MASTER_EVENT	0x10
+-#define GXP_I2CSNPDAT		0x02
+-#define GXP_I2CMCMD		0x04
+-#define GXP_I2CSCMD		0x06
+-#define GXP_I2CSNPAA		0x09
+-#define GXP_I2CADVFEAT		0x0A
+-#define GXP_I2COWNADR		0x0B
+-#define GXP_I2CFREQDIV		0x0C
+-#define GXP_I2CFLTFAIR		0x0D
+-#define GXP_I2CTMOEDG		0x0E
+-#define GXP_I2CCYCTIM		0x0F
++#define GXP_I2CSTAT             0x00
++#define MASK_STOP_EVENT         0x20
++#define MASK_ACK                0x08
++#define MASK_RW                 0x04
++#define GXP_I2CEVTERR           0x01
++#define MASK_SLAVE_CMD_EVENT    0x01
++#define MASK_SLAVE_DATA_EVENT   0x02
++#define MASK_MASTER_EVENT       0x10
++#define GXP_I2CSNPDAT           0x02
++#define GXP_I2CMCMD             0x04
++#define GXP_I2CSCMD             0x06
++#define GXP_I2CSNPAA            0x09
++#define GXP_I2CADVFEAT          0x0A
++#define GXP_I2COWNADR           0x0B
++#define GXP_I2CFREQDIV          0x0C
++#define GXP_I2CFLTFAIR          0x0D
++#define GXP_I2CTMOEDG           0x0E
++#define GXP_I2CCYCTIM           0x0F
+ 
+ static bool i2c_global_init_done;
+ 
+@@ -70,18 +70,18 @@ enum {
+ 
+ struct gxp_i2c_drvdata {
+ 	struct device *dev;
+-	void __iomem	*base;
++	void __iomem    *base;
+ 	uint32_t bus_frequency;
+ 	int engine;
+ 	int irq;
+ 	struct completion completion;
+-	struct i2c_adapter	adapter;
++	struct i2c_adapter      adapter;
+ 	struct i2c_msg *curr_msg;
+ 	int msgs_remaining;
+ 	int msgs_num;
+ 	uint8_t *buf;
+ 	size_t buf_remaining;
+-	unsigned char		state;
++	unsigned char           state;
+ 	struct i2c_client *slave;
+ 	unsigned char stopped;
+ };
+@@ -101,7 +101,7 @@ static void gxp_i2c_start(struct gxp_i2c_drvdata *drvdata)
+ 	if (drvdata->curr_msg->flags & I2C_M_RD)
+ 		value |= 0x05; // read
+ 	else
+-		value |= 0x01;	//write
++		value |= 0x01;  //write
+ 	/* dev_err(drvdata->dev,
+ 	 *  "gxp_i2c_start:msg[%d/%d] addr=0x%02x flags=0x%02x len=%d\n",
+ 	 *   drvdata->msgs_num - drvdata->msgs_remaining, drvdata->msgs_num,
+@@ -145,7 +145,10 @@ static int gxp_i2c_master_xfer(struct i2c_adapter *adapter,
+ 			break;
+ 		case GXP_I2C_ADDR_PHASE:
+ 			dev_err(drvdata->dev,
+-			"gxp_i2c_start:Addr phase timeout\n");
++			"gxp_i2c_start:Addr phase timeout to %x\n", msgs->addr);
++			if (drvdata->slave)
++				pr_info("SLAVE detected %x\n", drvdata->slave);
++			// dump_stack();
+ 			break;
+ 		default:
+ 			dev_err(drvdata->dev,
+@@ -425,7 +428,7 @@ static bool gxp_i2c_slave_irq_handler(struct gxp_i2c_drvdata *drvdata)
+ 				ret = i2c_slave_event(drvdata->slave,
+ 					I2C_SLAVE_WRITE_REQUESTED, &buf);
+ 				if (!ret)
+-					writeb(0x69, base + GXP_I2CSCMD);	//ack next byte from master
++					writeb(0x69, base + GXP_I2CSCMD);       //ack next byte from master
+ 				else
+ 					writeb(0x61, base + GXP_I2CSCMD); //nack next byte from master
+ 			}
+@@ -452,12 +455,14 @@ static bool gxp_i2c_slave_irq_handler(struct gxp_i2c_drvdata *drvdata)
+ 			buf = (uint8_t)value;
+ 			ret = i2c_slave_event(drvdata->slave,
+ 					I2C_SLAVE_WRITE_RECEIVED, &buf);
+-			if (!ret)
++			if (!ret) {
+ 				writeb(0x69, base + GXP_I2CSCMD); //ack next byte from master
+-			else
++			} else {
+ 				writeb(0x61, base + GXP_I2CSCMD); //nack next byte from master
++			}
+ 		}
+ 	} else {
++		pr_info("i2c-gxp: Unknown request\n");
+ 		return false;
+ 	}
+ 
+@@ -476,6 +481,8 @@ static irqreturn_t gxp_i2c_irq_handler(int irq, void *_drvdata)
+ 		return IRQ_NONE;
+ 
+ 	value = readb(base + GXP_I2CEVTERR);
++//      if (drvdata->engine == 8)
++//              pr_info("GXP_I2CEVTERR: %x\n", value);
+ 
+ 	// Error
+ 	if (value & ~(MASK_MASTER_EVENT | MASK_SLAVE_CMD_EVENT |
+@@ -528,10 +535,10 @@ static void gxp_i2c_init(struct gxp_i2c_drvdata *drvdata)
+ 	writeb(0x00, base + GXP_I2CCYCTIM); //disable maximum cycle timeout
+ 	writeb(0x00, base + GXP_I2CSNPAA); //disable snoop alert address
+ 	writeb(0x00, base + GXP_I2CADVFEAT); //disable advanced feature
+-	writeb(0xF0, base + GXP_I2CSCMD);	//clear and mask slave event
+-	writeb(0x80, base + GXP_I2CMCMD);	//clear master event
+-	writeb(0x00, base + GXP_I2CEVTERR);	//clear error event
+-	writeb(0x00, base + GXP_I2COWNADR);	//slave not used
++	writeb(0xF0, base + GXP_I2CSCMD);       //clear and mask slave event
++	writeb(0x80, base + GXP_I2CMCMD);       //clear master event
++	writeb(0x00, base + GXP_I2CEVTERR);     //clear error event
++	writeb(0x00, base + GXP_I2COWNADR);     //slave not used
+ }
+ 
+ static int gxp_i2c_probe(struct platform_device *pdev)
+@@ -565,6 +572,7 @@ static int gxp_i2c_probe(struct platform_device *pdev)
+ 
+ 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+ 	drvdata->base = devm_ioremap_resource(&pdev->dev, res);
++	pr_info("gxp_i2c: Resource %x mapped to %x\n", res->start, drvdata->base);
+ 	if (IS_ERR(drvdata->base))
+ 		return PTR_ERR(drvdata->base);
+ 
+@@ -641,10 +649,10 @@ static const struct of_device_id gxp_i2c_of_match[] = {
+ MODULE_DEVICE_TABLE(of, gxp_i2c_of_match);
+ 
+ static struct platform_driver gxp_i2c_driver = {
+-	.probe	= gxp_i2c_probe,
++	.probe  = gxp_i2c_probe,
+ 	.remove = gxp_i2c_remove,
+ 	.driver = {
+-		.name	= "gxp-i2c",
++		.name   = "gxp-i2c",
+ 		.of_match_table = gxp_i2c_of_match,
+ 	},
+ };
+diff --git a/drivers/i2c/i2c-core-of.c b/drivers/i2c/i2c-core-of.c
+index 3ed74aa4b44b..e20e76225ec0 100644
+--- a/drivers/i2c/i2c-core-of.c
++++ b/drivers/i2c/i2c-core-of.c
+@@ -58,6 +58,8 @@ int of_i2c_get_board_info(struct device *dev, struct device_node *node,
+ 	if (of_get_property(node, "wakeup-source", NULL))
+ 		info->flags |= I2C_CLIENT_WAKE;
+ 
++	of_property_read_string(node, "dev-name", &(info->dev_name));
++
+ 	return 0;
+ }
+ EXPORT_SYMBOL_GPL(of_i2c_get_board_info);
+@@ -237,7 +239,7 @@ static int of_i2c_notify(struct notifier_block *nb, unsigned long action,
+ 	case OF_RECONFIG_CHANGE_ADD:
+ 		adap = of_find_i2c_adapter_by_node(rd->dn->parent);
+ 		if (adap == NULL)
+-			return NOTIFY_OK;	/* not for us */
++			return NOTIFY_OK;       /* not for us */
+ 
+ 		if (of_node_test_and_set_flag(rd->dn, OF_POPULATED)) {
+ 			put_device(&adap->dev);
+@@ -262,7 +264,7 @@ static int of_i2c_notify(struct notifier_block *nb, unsigned long action,
+ 		/* find our device by node */
+ 		client = of_find_i2c_device_by_node(rd->dn);
+ 		if (client == NULL)
+-			return NOTIFY_OK;	/* no? not meant for us */
++			return NOTIFY_OK;       /* no? not meant for us */
+ 
+ 		/* unregister takes one ref away */
+ 		i2c_unregister_device(client);
+diff --git a/drivers/i2c/i2c-core-smbus.c b/drivers/i2c/i2c-core-smbus.c
+index f5c9787992e9..e1b72f7a3acf 100644
+--- a/drivers/i2c/i2c-core-smbus.c
++++ b/drivers/i2c/i2c-core-smbus.c
+@@ -38,7 +38,7 @@ static u8 crc8(u16 data)
+ }
+ 
+ /* Incremental CRC8 over count bytes in the array pointed to by p */
+-static u8 i2c_smbus_pec(u8 crc, u8 *p, size_t count)
++u8 i2c_smbus_pec(u8 crc, u8 *p, size_t count)
+ {
+ 	int i;
+ 
+@@ -46,12 +46,14 @@ static u8 i2c_smbus_pec(u8 crc, u8 *p, size_t count)
+ 		crc = crc8((crc ^ p[i]) << 8);
+ 	return crc;
+ }
++EXPORT_SYMBOL(i2c_smbus_pec);
+ 
+ /* Assume a 7-bit address, which is reasonable for SMBus */
+ static u8 i2c_smbus_msg_pec(u8 pec, struct i2c_msg *msg)
+ {
+ 	/* The address will be sent first */
+ 	u8 addr = i2c_8bit_addr_from_msg(msg);
++
+ 	pec = i2c_smbus_pec(pec, &addr, 1);
+ 
+ 	/* The data buffer follows */
+@@ -73,6 +75,7 @@ static inline void i2c_smbus_add_pec(struct i2c_msg *msg)
+ static int i2c_smbus_check_pec(u8 cpec, struct i2c_msg *msg)
+ {
+ 	u8 rpec = msg->buf[--msg->len];
++
+ 	cpec = i2c_smbus_msg_pec(cpec, msg);
+ 
+ 	if (rpec != cpec) {
+@@ -113,7 +116,7 @@ EXPORT_SYMBOL(i2c_smbus_read_byte);
+ s32 i2c_smbus_write_byte(const struct i2c_client *client, u8 value)
+ {
+ 	return i2c_smbus_xfer(client->adapter, client->addr, client->flags,
+-	                      I2C_SMBUS_WRITE, value, I2C_SMBUS_BYTE, NULL);
++			      I2C_SMBUS_WRITE, value, I2C_SMBUS_BYTE, NULL);
+ }
+ EXPORT_SYMBOL(i2c_smbus_write_byte);
+ 
+@@ -150,6 +153,7 @@ s32 i2c_smbus_write_byte_data(const struct i2c_client *client, u8 command,
+ 			      u8 value)
+ {
+ 	union i2c_smbus_data data;
++
+ 	data.byte = value;
+ 	return i2c_smbus_xfer(client->adapter, client->addr, client->flags,
+ 			      I2C_SMBUS_WRITE, command,
+@@ -190,6 +194,7 @@ s32 i2c_smbus_write_word_data(const struct i2c_client *client, u8 command,
+ 			      u16 value)
+ {
+ 	union i2c_smbus_data data;
++
+ 	data.word = value;
+ 	return i2c_smbus_xfer(client->adapter, client->addr, client->flags,
+ 			      I2C_SMBUS_WRITE, command,
+@@ -202,7 +207,7 @@ EXPORT_SYMBOL(i2c_smbus_write_word_data);
+  * @client: Handle to slave device
+  * @command: Byte interpreted by slave
+  * @values: Byte array into which data will be read; big enough to hold
+- *	the data returned by the slave.  SMBus allows at most 32 bytes.
++ *      the data returned by the slave.  SMBus allows at most 32 bytes.
+  *
+  * This executes the SMBus "block read" protocol, returning negative errno
+  * else the number of data bytes in the slave's response.
+@@ -621,8 +626,8 @@ EXPORT_SYMBOL(__i2c_smbus_xfer);
+  * @command: Byte interpreted by slave
+  * @length: Size of data block; SMBus allows at most I2C_SMBUS_BLOCK_MAX bytes
+  * @values: Byte array into which data will be read; big enough to hold
+- *	the data returned by the slave.  SMBus allows at most
+- *	I2C_SMBUS_BLOCK_MAX bytes.
++ *      the data returned by the slave.  SMBus allows at most
++ *      I2C_SMBUS_BLOCK_MAX bytes.
+  *
+  * This executes the SMBus "block read" protocol if supported by the adapter.
+  * If block read is not supported, it emulates it using either word or byte
+diff --git a/drivers/mtd/spi-nor/Kconfig b/drivers/mtd/spi-nor/Kconfig
+index 710137b54364..7e4d64aed194 100644
+--- a/drivers/mtd/spi-nor/Kconfig
++++ b/drivers/mtd/spi-nor/Kconfig
+@@ -32,4 +32,10 @@ config SPI_GXP_SPIFI
+ 	help
+ 	  This enables support for GXP SPI Flash Interface
+ 
++config SPI_GXP_SPIFI_CTRL1
++        tristate "GXP SPI Flash Modular Interface"
++        depends on ARCH_HPE
++        help
++          This enables support for GXP SPI Flash Interface
++
+ endif # MTD_SPI_NOR
+diff --git a/drivers/mtd/spi-nor/controllers/Makefile b/drivers/mtd/spi-nor/controllers/Makefile
+index b93f03af2219..7d46229db427 100644
+--- a/drivers/mtd/spi-nor/controllers/Makefile
++++ b/drivers/mtd/spi-nor/controllers/Makefile
+@@ -6,3 +6,4 @@ obj-$(CONFIG_SPI_INTEL_SPI)	+= intel-spi.o
+ obj-$(CONFIG_SPI_INTEL_SPI_PCI)	+= intel-spi-pci.o
+ obj-$(CONFIG_SPI_INTEL_SPI_PLATFORM)	+= intel-spi-platform.o
+ obj-$(CONFIG_SPI_GXP_SPIFI)	+= gxp-spifi.o
++obj-$(CONFIG_SPI_GXP_SPIFI_CTRL1)	+= gxp-spifi-ctrl1.o
+diff --git a/drivers/mtd/spi-nor/controllers/gxp-spifi-ctrl1.c b/drivers/mtd/spi-nor/controllers/gxp-spifi-ctrl1.c
+new file mode 100644
+index 000000000000..d44d6cf777e9
+--- /dev/null
++++ b/drivers/mtd/spi-nor/controllers/gxp-spifi-ctrl1.c
+@@ -0,0 +1,455 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (C) 2019 Hewlett-Packard Development Company, L.P.
++ *
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ */
++
++#include <linux/io.h>
++#include <linux/iopoll.h>
++#include <linux/err.h>
++#include <linux/module.h>
++#include <linux/clk.h>
++#include <linux/mtd/mtd.h>
++#include <linux/mtd/partitions.h>
++#include <linux/mtd/spi-nor.h>
++#include <linux/of.h>
++#include <linux/of_device.h>
++#include <linux/platform_device.h>
++#include <linux/spi/spi.h>
++#include <linux/mutex.h>
++
++#include <linux/fs.h>
++#include <linux/errno.h>
++#include <linux/kernel.h>
++#include <linux/major.h>
++#include <linux/seq_file.h>
++#include <linux/proc_fs.h>
++#include <linux/stat.h>
++#include <linux/init.h>
++#include <linux/kdev_t.h>
++#include <linux/device.h>
++#include <linux/cdev.h>
++#include <linux/wait.h>
++#include <linux/sched.h>
++#include <linux/kthread.h>
++#include <linux/delay.h>
++#include <linux/poll.h>
++
++#define GXP_SPI0_MAX_CHIPSELECT         2
++#define GXP_SPI_SLEEP_TIME 1
++#define GXP_SPI_TIMEOUT (130 * 1000000 / GXP_SPI_SLEEP_TIME)
++
++
++#define MANUAL_MODE     0
++#define DIRECT_MODE     1
++#define SPILDAT_LEN     256
++
++#define OFFSET_SPIMCFG          0x0
++#define OFFSET_SPIMCTRL         0x4
++#define OFFSET_SPICMD                   0x5
++#define OFFSET_SPIDCNT          0x6
++#define OFFSET_SPIADDR          0x8
++#define OFFSET_SPIINTSTS        0xc
++
++#define SPIMCTRL_START  0x01
++#define SPIMCTRL_BUSY           0x02
++#define SPIMCTRL_DIR            0x08
++
++struct gxp_spifi_ctrl1_drvdata {
++	struct device *dev;
++	struct device_node *local;
++	void __iomem    *reg_base;
++	void __iomem    *dat_base;
++	void __iomem    *dir_base;
++	struct resource *res;
++	uint32_t spi_ctrl;
++	uint32_t reset;
++	uint32_t currentDevice;
++	dev_t spifidev;
++	struct cdev spifi_c_dev;
++	struct class *dev_cl;
++	struct spi_nor nor[GXP_SPI0_MAX_CHIPSELECT];
++	struct mutex mutex;
++};
++
++struct gxp_spifi_ctrl1_drvdata *spifiCtrl;
++
++static int gxp_spi_ctrl1_prep(struct spi_nor *nor)
++{
++	struct gxp_spifi_ctrl1_drvdata *spifi = nor->priv;
++
++	mutex_lock(&spifi->mutex);
++
++	return 0;
++}
++
++static void gxp_spi_ctrl1_unprep(struct spi_nor *nor)
++{
++	struct gxp_spifi_ctrl1_drvdata *spifi = nor->priv;
++
++	mutex_unlock(&spifi->mutex);
++}
++
++static void gxp_spi_ctrl1_set_mode(struct spi_nor *nor, int mode)
++{
++	u8 value;
++	struct gxp_spifi_ctrl1_drvdata *spifi = nor->priv;
++	void __iomem *reg_base = spifi->reg_base;
++
++	value = readb(reg_base + OFFSET_SPIMCTRL);
++
++	if (mode == MANUAL_MODE) {
++		writeb(0x55, reg_base + OFFSET_SPICMD);
++		writeb(0xaa, reg_base + OFFSET_SPICMD);
++		value &= ~0x30;
++	} else
++		value |= 0x30;
++	writeb(value, reg_base + OFFSET_SPIMCTRL);
++}
++
++static int gxp_spi_ctrl1_read_reg(struct spi_nor *nor, u8 opcode, u8 *buf, size_t len)
++{
++	int ret = 0;
++
++	struct gxp_spifi_ctrl1_drvdata *spifi = nor->priv;
++	void __iomem *reg_base = spifi->reg_base;
++
++	u32 value;
++	int cs;
++
++	cs = 0;
++	if (cs < 0) {
++		//invalid nor pointer
++		return -1;
++	}
++
++	value = readl(reg_base + OFFSET_SPIMCFG);
++	value &= ~(1<<24);
++	value |= (cs<<24);      //set chipselect
++	value &= ~(0x07<<16);   //set the address size to 0
++	value &= ~(0x1f<<19);   //set the dummy_cnt to 0
++	writel(value, reg_base + OFFSET_SPIMCFG);
++
++	writel(0, reg_base + OFFSET_SPIADDR);
++
++	writeb(opcode, reg_base + OFFSET_SPICMD);
++
++	writew(len, reg_base + OFFSET_SPIDCNT);
++
++	value = readb(reg_base + OFFSET_SPIMCTRL);
++	value &= ~SPIMCTRL_DIR;
++	value |= SPIMCTRL_START;
++
++	writeb(value, reg_base + OFFSET_SPIMCTRL);
++
++	ret = readb_poll_timeout(reg_base + OFFSET_SPIMCTRL, value,
++				!(value & SPIMCTRL_BUSY),
++				GXP_SPI_SLEEP_TIME, GXP_SPI_TIMEOUT);
++	if (ret) {
++		dev_warn(spifi->dev, "read reg busy time out\n");
++		return ret;
++	}
++
++	memcpy_fromio(buf, spifi->dat_base, len);
++	return ret;
++}
++
++static int gxp_spi_ctrl1_write_reg(struct spi_nor *nor, u8 opcode, const u8 *buf, size_t len)
++{
++	int ret = 0;
++	struct gxp_spifi_ctrl1_drvdata *spifi = nor->priv;
++	void __iomem *reg_base = spifi->reg_base;
++
++	u32 value;
++	int cs;
++
++	cs = 0;
++	if (cs < 0) {
++		//invalid nor pointer
++		return -1;
++	}
++
++	value = readl(reg_base + OFFSET_SPIMCFG);
++	value &= ~(1<<24);
++	value |= (cs<<24);      //set chipselect
++	value &= ~(0x07<<16);   //set the address size to 0
++	value &= ~(0x1f<<19);   //set the dummy_cnt to 0
++	writel(value, reg_base + OFFSET_SPIMCFG);
++
++	writel(0, reg_base + OFFSET_SPIADDR);
++
++	writeb(opcode, reg_base + OFFSET_SPICMD);
++
++	memcpy_toio(spifi->dat_base, buf, len);
++
++	writew(len, reg_base + OFFSET_SPIDCNT);
++
++	value = readb(reg_base + OFFSET_SPIMCTRL);
++	value |= SPIMCTRL_DIR;
++	value |= SPIMCTRL_START;
++
++	writeb(value, reg_base + OFFSET_SPIMCTRL);
++
++	ret = readb_poll_timeout(reg_base + OFFSET_SPIMCTRL, value,
++				!(value & SPIMCTRL_BUSY),
++				GXP_SPI_SLEEP_TIME, GXP_SPI_TIMEOUT);
++	if (ret)
++		dev_warn(spifi->dev, "write reg busy time out\n");
++
++	return ret;
++}
++
++static ssize_t gxp_spi_ctrl1_read(struct spi_nor *nor, loff_t from,
++			size_t len, u_char *buf)
++{
++	int cs;
++	int ret;
++	u32 offset = from;
++	struct gxp_spifi_ctrl1_drvdata *spifi = nor->priv;
++	const struct spi_nor_hwcaps hwcaps = {
++		.mask = SNOR_HWCAPS_READ | SNOR_HWCAPS_PP,
++	};
++
++	memcpy_fromio(buf, spifi->dir_base + offset, len);
++
++	return len;
++}
++
++static ssize_t gxp_spi_ctrl1_write(struct spi_nor *nor, loff_t to,
++			size_t len, const u_char *buf)
++{
++	struct gxp_spifi_ctrl1_drvdata *spifi = nor->priv;
++	void __iomem *reg_base = spifi->reg_base;
++
++	u32 write_len;
++	u32 value;
++	int cs;
++	int ret = 0;
++
++	cs = 0;
++	if (cs < 0) {
++		//invalid nor pointer
++		return -1;
++	}
++
++	write_len = len;
++	if (write_len > SPILDAT_LEN)
++		write_len = SPILDAT_LEN;
++
++	value = readl(reg_base + OFFSET_SPIMCFG);
++	value &= ~(1<<24);
++	value |= (cs<<24);      //set chipselect
++	value &= ~(0x07<<16);
++	value |= (nor->addr_width<<16); //set the address size
++	value &= ~(0x1f<<19);   //set the dummy_cnt to 0
++	writel(value, reg_base + OFFSET_SPIMCFG);
++
++	writel(to, reg_base + OFFSET_SPIADDR);
++
++	writeb(nor->program_opcode, reg_base + OFFSET_SPICMD);
++
++	writew(write_len, reg_base + OFFSET_SPIDCNT);
++
++	memcpy_toio(spifi->dat_base, buf, write_len);
++
++	value = readb(reg_base + OFFSET_SPIMCTRL);
++	value |= SPIMCTRL_DIR;
++	value |= SPIMCTRL_START;
++
++	writeb(value, reg_base + OFFSET_SPIMCTRL);
++
++	ret = readb_poll_timeout(reg_base + OFFSET_SPIMCTRL, value,
++				!(value & SPIMCTRL_BUSY),
++				GXP_SPI_SLEEP_TIME, GXP_SPI_TIMEOUT);
++	if (ret) {
++		dev_warn(spifi->dev, "write busy time out\n");
++		return ret;
++	}
++
++	return write_len;
++}
++
++static int gxp_spi_ctrl1_erase(struct spi_nor *nor, loff_t offs)
++{
++	int ret = 0;
++	struct gxp_spifi_ctrl1_drvdata *spifi = nor->priv;
++	void __iomem *reg_base = spifi->reg_base;
++
++	u32 value;
++	int cs;
++
++	cs = 0;
++	if (cs < 0) {
++		//invalid nor pointer
++		return -1;
++	}
++
++	value = readl(reg_base + OFFSET_SPIMCFG);
++	value &= ~(1<<24);
++	value |= (cs<<24);      //set chipselect
++	value &= ~(0x07<<16);   //set the address size
++	value |= (nor->addr_width<<16);
++	value &= ~(0x1f<<19);   //set the dummy_cnt to 0
++	writel(value, reg_base + OFFSET_SPIMCFG);
++
++	writel(offs, reg_base + OFFSET_SPIADDR);
++
++	writeb(nor->erase_opcode, reg_base + OFFSET_SPICMD);
++
++	writew(0, reg_base + OFFSET_SPIDCNT);
++
++	value = readb(reg_base + OFFSET_SPIMCTRL);
++	value |= SPIMCTRL_DIR;
++	value |= SPIMCTRL_START;
++
++	writeb(value, reg_base + OFFSET_SPIMCTRL);
++
++	ret = readb_poll_timeout(reg_base + OFFSET_SPIMCTRL, value,
++				!(value & SPIMCTRL_BUSY),
++				GXP_SPI_SLEEP_TIME, GXP_SPI_TIMEOUT);
++	if (ret)
++		dev_warn(spifi->dev, "erase busy time out\n");
++
++	return ret;
++}
++
++static const struct spi_nor_controller_ops gxp_smc_controller_ops = {
++	.prepare = gxp_spi_ctrl1_prep,
++	.unprepare = gxp_spi_ctrl1_unprep,
++	.read_reg = gxp_spi_ctrl1_read_reg,
++	.write_reg = gxp_spi_ctrl1_write_reg,
++	.read = gxp_spi_ctrl1_read,
++	.write = gxp_spi_ctrl1_write,
++	.erase = gxp_spi_ctrl1_erase,
++};
++
++static int gxp_spi_setup_flash(struct gxp_spifi_ctrl1_drvdata *spifi,
++				struct device_node *np)
++{
++	int ret;
++	u32 spi_cs;
++	struct spi_nor *nor;
++	const struct spi_nor_hwcaps hwcaps = {
++		.mask = SNOR_HWCAPS_READ | SNOR_HWCAPS_PP,
++	};
++
++	// On controller 1 all devices share the same CS -> 0
++	// So we enumarate them based on device number
++	spi_cs = 0;
++
++	nor = &spifi->nor[spi_cs];
++
++	nor->dev = spifi->dev;
++	spi_nor_set_flash_node(nor, np);
++	nor->controller_ops = &gxp_smc_controller_ops;
++	nor->priv  = spifi;
++
++	gxp_spi_ctrl1_set_mode(nor, MANUAL_MODE);
++
++	ret = spi_nor_scan(nor, NULL, &hwcaps);
++	if (ret) {
++		dev_err(spifi->dev, "spi flash scan failed\n");
++		return ret;
++	}
++	pr_info("gxp-spifi: Scan done\n");
++	ret = mtd_device_register(&nor->mtd, NULL, 0);
++	if (ret) {
++		dev_err(spifi->dev, "mtd device parse failed\n");
++		return ret;
++	}
++
++	return 0;
++}
++
++static int gxp_spifi_ctrl1_probe(struct platform_device *pdev)
++{
++	struct device_node *np;
++	struct gxp_spifi_ctrl1_drvdata *spifi;
++	struct resource *res;
++	int count = 0;
++	uint32_t spi_ctrl;
++
++	pr_info("gxp-spifi: %s %s %d\n", pdev->dev.init_name, pdev->name, pdev->num_resources);
++
++	spifi = devm_kzalloc(&pdev->dev, sizeof(*spifi), GFP_KERNEL);
++	if (!spifi)
++		return -ENOMEM;
++
++	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	spifi->reg_base = devm_ioremap_resource(&pdev->dev, res);
++	if (IS_ERR(spifi->reg_base))
++		return PTR_ERR(spifi->reg_base);
++
++	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
++	spifi->dat_base = devm_ioremap_resource(&pdev->dev, res);
++	if (IS_ERR(spifi->dat_base))
++		return PTR_ERR(spifi->dat_base);
++
++	res = platform_get_resource(pdev, IORESOURCE_MEM, 2);
++	spifi->res = res;
++	spifi->dir_base = devm_ioremap_resource(&pdev->dev, res);
++	if (IS_ERR(spifi->dir_base))
++		return PTR_ERR(spifi->dir_base);
++
++	mutex_init(&spifi->mutex);
++
++	spifi->dev = &pdev->dev;
++	platform_set_drvdata(pdev, spifi);
++
++	// which ctrl initialized ?
++	spifiCtrl = spifi;
++	spifi->currentDevice = 0;
++
++	//the spifi has two cs lines, expect two child flash device nodes.
++	// First device
++	// nor->addr_width
++	np = of_get_next_available_child(pdev->dev.of_node, NULL);
++	if (np) {
++		if (gxp_spi_setup_flash(spifi, np))
++			dev_err(&pdev->dev,
++				"unable to setup flash chip at cs0\n");
++		else {
++			if (spifi->nor[0].addr_width == 3)
++				// Switch address to 3 bytes
++				writel(0x0000400E, spifi->reg_base + 0x10);
++			else
++				// default is 4 bytes
++				writel(0x0000400F, spifi->reg_base + 0x10);
++			count++;
++		}
++	}
++
++	return count > 0 ? 0 : -ENODEV;
++}
++
++static int gxp_spifi_ctrl1_remove(struct platform_device *pdev)
++{
++	struct spi_nor *nor;
++
++	nor = &spifiCtrl->nor[0];
++	mtd_device_unregister(&nor->mtd);
++	return 0;
++}
++
++static const struct of_device_id gxp_spifi_ctrl1_match[] = {
++	{.compatible = "hpe,gxp-spifi-ctrl1"},
++	{ /* null */ }
++};
++MODULE_DEVICE_TABLE(of, gxp_spifi_ctrl1_match);
++
++static struct platform_driver gxp_spifi_ctrl1_driver = {
++	.probe = gxp_spifi_ctrl1_probe,
++	.remove = gxp_spifi_ctrl1_remove,
++	.driver = {
++		.name = "gxp-spifi-ctrl1",
++		.of_match_table = gxp_spifi_ctrl1_match,
++	},
++};
++module_platform_driver(gxp_spifi_ctrl1_driver);
++
++MODULE_DESCRIPTION("HPE GXP SPI Flash Modular Interface driver");
++MODULE_AUTHOR("Jean-Marie Verdun <verdun@hpe.com>");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/mtd/spi-nor/controllers/gxp-spifi.c b/drivers/mtd/spi-nor/controllers/gxp-spifi.c
+index d27d68913861..ff88baab2606 100644
+--- a/drivers/mtd/spi-nor/controllers/gxp-spifi.c
++++ b/drivers/mtd/spi-nor/controllers/gxp-spifi.c
+@@ -21,39 +21,68 @@
+ #include <linux/spi/spi.h>
+ #include <linux/mutex.h>
+ 
+-#define GXP_SPI0_MAX_CHIPSELECT		2
++#include <linux/fs.h>
++#include <linux/errno.h>
++#include <linux/kernel.h>
++#include <linux/major.h>
++#include <linux/seq_file.h>
++#include <linux/proc_fs.h>
++#include <linux/stat.h>
++#include <linux/init.h>
++#include <linux/kdev_t.h>
++#include <linux/device.h>
++#include <linux/cdev.h>
++#include <linux/wait.h>
++#include <linux/sched.h>
++#include <linux/kthread.h>
++#include <linux/delay.h>
++#include <linux/poll.h>
++
++#define GXP_SPI0_MAX_CHIPSELECT         2
+ #define GXP_SPI_SLEEP_TIME 1
+ #define GXP_SPI_TIMEOUT (130 * 1000000 / GXP_SPI_SLEEP_TIME)
+ 
+ 
+-#define MANUAL_MODE	0
+-#define DIRECT_MODE	1
+-#define SPILDAT_LEN	256
++#define MANUAL_MODE     0
++#define DIRECT_MODE     1
++#define SPILDAT_LEN     256
+ 
+-#define OFFSET_SPIMCFG		0x0
+-#define OFFSET_SPIMCTRL		0x4
+-#define OFFSET_SPICMD			0x5
+-#define OFFSET_SPIDCNT		0x6
+-#define OFFSET_SPIADDR		0x8
+-#define OFFSET_SPIINTSTS	0xc
++#define OFFSET_SPIMCFG          0x0
++#define OFFSET_SPIMCTRL         0x4
++#define OFFSET_SPICMD                   0x5
++#define OFFSET_SPIDCNT          0x6
++#define OFFSET_SPIADDR          0x8
++#define OFFSET_SPIINTSTS        0xc
+ 
+-#define SPIMCTRL_START	0x01
+-#define SPIMCTRL_BUSY		0x02
+-#define SPIMCTRL_DIR		0x08
++#define SPIMCTRL_START  0x01
++#define SPIMCTRL_BUSY           0x02
++#define SPIMCTRL_DIR            0x08
+ 
+ struct gxp_spifi_drvdata {
+ 	struct device *dev;
+-	void __iomem	*reg_base;
+-	void __iomem	*dat_base;
+-	void __iomem	*dir_base;
++	struct device_node *local;
++	void __iomem    *reg_base;
++	void __iomem    *dat_base;
++	void __iomem    *dir_base;
++	struct resource *res;
++	uint32_t spi_ctrl;
++	uint32_t reset;
++	uint32_t currentDevice;
++	dev_t spifidev;
++	struct cdev spifi_c_dev;
++	struct class *dev_cl;
+ 	struct spi_nor nor[GXP_SPI0_MAX_CHIPSELECT];
+ 	struct mutex mutex;
+ };
+ 
++struct gxp_spifi_drvdata *spifiCtrl1;
++
+ static int gxp_spi_get_cs(struct spi_nor *nor)
+ {
+ 	struct gxp_spifi_drvdata *spifi = nor->priv;
+-
++	// spi ctrl1 has only 1 CS
++	if (spifi->spi_ctrl == 1)
++		return 0;
+ 	if (&spifi->nor[0] == nor)
+ 		return 0;
+ 	else if (&spifi->nor[1] == nor)
+@@ -112,9 +141,9 @@ static int gxp_spi_read_reg(struct spi_nor *nor, u8 opcode, u8 *buf, size_t len)
+ 
+ 	value = readl(reg_base + OFFSET_SPIMCFG);
+ 	value &= ~(1<<24);
+-	value |= (cs<<24);	//set chipselect
+-	value &= ~(0x07<<16);	//set the address size to 0
+-	value &= ~(0x1f<<19);	//set the dummy_cnt to 0
++	value |= (cs<<24);      //set chipselect
++	value &= ~(0x07<<16);   //set the address size to 0
++	value &= ~(0x1f<<19);   //set the dummy_cnt to 0
+ 	writel(value, reg_base + OFFSET_SPIMCFG);
+ 
+ 	writel(0, reg_base + OFFSET_SPIADDR);
+@@ -158,9 +187,9 @@ static int gxp_spi_write_reg(struct spi_nor *nor, u8 opcode, const u8 *buf, size
+ 
+ 	value = readl(reg_base + OFFSET_SPIMCFG);
+ 	value &= ~(1<<24);
+-	value |= (cs<<24);	//set chipselect
+-	value &= ~(0x07<<16);	//set the address size to 0
+-	value &= ~(0x1f<<19);	//set the dummy_cnt to 0
++	value |= (cs<<24);      //set chipselect
++	value &= ~(0x07<<16);   //set the address size to 0
++	value &= ~(0x1f<<19);   //set the dummy_cnt to 0
+ 	writel(value, reg_base + OFFSET_SPIMCFG);
+ 
+ 	writel(0, reg_base + OFFSET_SPIADDR);
+@@ -190,15 +219,29 @@ static ssize_t gxp_spi_read(struct spi_nor *nor, loff_t from,
+ 			size_t len, u_char *buf)
+ {
+ 	int cs;
++	int ret;
+ 	u32 offset = from;
+ 	struct gxp_spifi_drvdata *spifi = nor->priv;
++	const struct spi_nor_hwcaps hwcaps = {
++		.mask = SNOR_HWCAPS_READ | SNOR_HWCAPS_PP,
++	};
+ 
+ 	cs = gxp_spi_get_cs(nor);
+-	if (cs < 0) {
+-		//invalid nor pointer
+-		return -1;
+-	} else if (cs == 0) {
+-		offset += 0x4000000;
++	if (spifi->spi_ctrl == 0) {
++		if (cs < 0) {
++			//invalid nor pointer
++			return -1;
++		} else if (cs == 0) {
++			offset += 0x4000000;
++		}
++	} else {
++		if (spifi->reset == 1) {
++			spifi->reset = 2;
++			// ret = spi_nor_scan(nor, NULL, &hwcaps);
++			pr_info("spi-fi: Reading from ctrl1 : %x\n", len);
++		}
++		spifi->reset += 1;
++
+ 	}
+ 
+ 	memcpy_fromio(buf, spifi->dir_base + offset, len);
+@@ -229,10 +272,10 @@ static ssize_t gxp_spi_write(struct spi_nor *nor, loff_t to,
+ 
+ 	value = readl(reg_base + OFFSET_SPIMCFG);
+ 	value &= ~(1<<24);
+-	value |= (cs<<24);	//set chipselect
++	value |= (cs<<24);      //set chipselect
+ 	value &= ~(0x07<<16);
+ 	value |= (nor->addr_width<<16); //set the address size
+-	value &= ~(0x1f<<19);	//set the dummy_cnt to 0
++	value &= ~(0x1f<<19);   //set the dummy_cnt to 0
+ 	writel(value, reg_base + OFFSET_SPIMCFG);
+ 
+ 	writel(to, reg_base + OFFSET_SPIADDR);
+@@ -269,6 +312,8 @@ static int gxp_spi_erase(struct spi_nor *nor, loff_t offs)
+ 	u32 value;
+ 	int cs;
+ 
++	if (spifi == spifiCtrl1)
++		pr_info("Erase command\n");
+ 	cs = gxp_spi_get_cs(nor);
+ 	if (cs < 0) {
+ 		//invalid nor pointer
+@@ -277,15 +322,18 @@ static int gxp_spi_erase(struct spi_nor *nor, loff_t offs)
+ 
+ 	value = readl(reg_base + OFFSET_SPIMCFG);
+ 	value &= ~(1<<24);
+-	value |= (cs<<24);	//set chipselect
+-	value &= ~(0x07<<16);	//set the address size
++	value |= (cs<<24);      //set chipselect
++	value &= ~(0x07<<16);   //set the address size
+ 	value |= (nor->addr_width<<16);
+-	value &= ~(0x1f<<19);	//set the dummy_cnt to 0
++	value &= ~(0x1f<<19);   //set the dummy_cnt to 0
+ 	writel(value, reg_base + OFFSET_SPIMCFG);
+ 
+ 	writel(offs, reg_base + OFFSET_SPIADDR);
+ 
+ 	writeb(nor->erase_opcode, reg_base + OFFSET_SPICMD);
++	if (spifi == spifiCtrl1)
++		pr_info("Erasing : %x\n", nor->erase_opcode);
++
+ 
+ 	writew(0, reg_base + OFFSET_SPIDCNT);
+ 
+@@ -324,6 +372,11 @@ static int gxp_spi_setup_flash(struct gxp_spifi_drvdata *spifi,
+ 		.mask = SNOR_HWCAPS_READ | SNOR_HWCAPS_PP,
+ 	};
+ 
++	// On controller 1 all devices share the same CS -> 0
++	// So we enumarate them based on device number
++	if (spifi->spi_ctrl == 1) {
++		spi_cs = spifi->currentDevice;
++	} else
+ 	if (!of_property_read_u32(np, "reg", &spi_cs)) {
+ 		switch (spi_cs) {
+ 		case 0:
+@@ -350,7 +403,7 @@ static int gxp_spi_setup_flash(struct gxp_spifi_drvdata *spifi,
+ 		dev_err(spifi->dev, "spi flash scan failed\n");
+ 		return ret;
+ 	}
+-
++	pr_info("gxp-spifi: Scan done\n");
+ 	ret = mtd_device_register(&nor->mtd, NULL, 0);
+ 	if (ret) {
+ 		dev_err(spifi->dev, "mtd device parse failed\n");
+@@ -360,12 +413,59 @@ static int gxp_spi_setup_flash(struct gxp_spifi_drvdata *spifi,
+ 	return 0;
+ }
+ 
++static int spifi_release(struct inode *inode, struct file *flip)
++{
++	return 0;
++}
++
++ssize_t spifi_write(struct file *f, const char *buf, size_t len, loff_t *off)
++{
++	/* if (copy_to_user(buf, &drvdata->postcode, 2))
++		return -EFAULT;
++		*/
++	char memory_buffer[2048];
++
++	copy_from_user(&memory_buffer[0], buf, len);
++	return 1;
++}
++
++static int spifi_open(struct inode *inode, struct file *file)
++{
++	unsigned short int value, ret;
++	struct spi_nor *nor;
++	const struct spi_nor_hwcaps hwcaps = {
++		.mask = SNOR_HWCAPS_READ | SNOR_HWCAPS_PP,
++	};
++	pr_info("Open Operation");
++// Let's reset spifi ctrl1 cs0
++	if (spifiCtrl1 != NULL) {
++		nor = &spifiCtrl1->nor[0];
++		mtd_device_unregister(&nor->mtd);
++		// spi_nor_set_flash_node(nor, spifiCtrl1->local);
++		gxp_spi_set_mode(nor, MANUAL_MODE);
++		ret = spi_nor_scan(nor, NULL, &hwcaps);
++		ret = mtd_device_register(&nor->mtd, NULL, 0);
++	}
++	return 0;
++}
++
++
++static const struct file_operations spifi_fops = {
++	.owner          = THIS_MODULE,
++	.open           = spifi_open,
++	.write          = spifi_write,
++	.release        = spifi_release,
++};
++
+ static int gxp_spifi_probe(struct platform_device *pdev)
+ {
+ 	struct device_node *np;
+ 	struct gxp_spifi_drvdata *spifi;
+ 	struct resource *res;
+ 	int count = 0;
++	uint32_t spi_ctrl;
++
++	pr_info("gxp-spifi: %s %s %d\n", pdev->dev.init_name, pdev->name, pdev->num_resources);
+ 
+ 	spifi = devm_kzalloc(&pdev->dev, sizeof(*spifi), GFP_KERNEL);
+ 	if (!spifi)
+@@ -382,6 +482,7 @@ static int gxp_spifi_probe(struct platform_device *pdev)
+ 		return PTR_ERR(spifi->dat_base);
+ 
+ 	res = platform_get_resource(pdev, IORESOURCE_MEM, 2);
++	spifi->res = res;
+ 	spifi->dir_base = devm_ioremap_resource(&pdev->dev, res);
+ 	if (IS_ERR(spifi->dir_base))
+ 		return PTR_ERR(spifi->dir_base);
+@@ -391,24 +492,109 @@ static int gxp_spifi_probe(struct platform_device *pdev)
+ 	spifi->dev = &pdev->dev;
+ 	platform_set_drvdata(pdev, spifi);
+ 
++	// which ctrl initialized ?
++	if (!of_property_read_u32(pdev->dev.of_node, "ctrl", &spi_ctrl)) {
++		if (spi_ctrl < 2)
++			spifi->spi_ctrl = spi_ctrl;
++		else
++			spifi->spi_ctrl = 0;
++		spifi->reset = 0;
++	} else
++		spifi->spi_ctrl = 0;
++	spifi->currentDevice = 0;
++	pr_info("gxp-spifi: Current controller %d\n", spifi->spi_ctrl);
++	// switch address mode to 4 byte
++	writel(0x0000400F, spifi->reg_base + 0x10);
++
+ 	//the spifi has two cs lines, expect two child flash device nodes.
++	// First device
+ 	np = of_get_next_available_child(pdev->dev.of_node, NULL);
+ 	if (np) {
++		if (spifi->spi_ctrl == 1) {
++			// We need to attach the SYS ROM to GXP
++			// Lion specific code
++			spifi->currentDevice = 0;
++			void __iomem *SEVSTAT = ioremap(0x80200070, 4);
++			unsigned long status = readl(SEVSTAT);
++
++			dev_err(&pdev->dev, "Status registerd %lx\n", status);
++			iounmap(SEVSTAT);
++			void __iomem *SPIMux = ioremap(0xD1000119, 1);
++			unsigned char Reg = readb(SPIMux);
++
++			dev_err(&pdev->dev, "Current CPLD SPI allocation %x\n", Reg);
++			// Attach SPI UEFI ROM to GXP
++			Reg = Reg & 0xEF;
++			writeb(Reg, SPIMux);
++			Reg = readb(SPIMux);
++			dev_err(&pdev->dev, "New SPI Mux allocation %x\n", Reg);
++			iounmap(SPIMux);
++		}
++
++
+ 		if (gxp_spi_setup_flash(spifi, np))
+ 			dev_err(&pdev->dev,
+ 				"unable to setup flash chip at cs0\n");
+ 		else
+ 			count++;
+ 	}
+-
++	// second device
+ 	np = of_get_next_available_child(pdev->dev.of_node, np);
+ 	if (np) {
++		if (spifi->spi_ctrl == 1) {
++			void __iomem *SPIMux = ioremap(0xD1000119, 1);
++			unsigned char Reg = readb(SPIMux);
++
++			spifi->currentDevice = 1;
++									dev_err(&pdev->dev, "Current CPLD SPI allocation %x\n", Reg);
++			// Attach SPI UEFI VAR to GXP
++			Reg = Reg | 0x10;
++			writeb(Reg, SPIMux);
++			Reg = readb(SPIMux);
++			dev_err(&pdev->dev, "New SPI Mux allocation %x\n", Reg);
++		}
+ 		if (gxp_spi_setup_flash(spifi, np))
+ 			dev_err(&pdev->dev,
+ 				"unable to setup flash chip at cs1\n");
+ 		else
+ 			count++;
+ 	}
++
++	// Let's create the character device for the /input/output
++	// We shall do that only if it hasn't yet be created and for ctrl1
++	if (spifi->spi_ctrl == 1) {
++		int ret;
++		struct device *dev_ret;
++
++		spifi->local = np;
++		ret = alloc_chrdev_region(&spifi->spifidev, 0, 1, "gxp-spi");
++		if (ret < 0)
++			return ret;
++
++		spifi->dev_cl = class_create(THIS_MODULE, "chardrvspifi");
++		if (IS_ERR(spifi->dev_cl)) {
++			unregister_chrdev_region(spifi->spifidev, 1);
++			return PTR_ERR(spifi->dev_cl);
++		}
++		dev_ret = device_create(spifi->dev_cl, NULL, spifi->spifidev, NULL, "spifi");
++		if (IS_ERR(dev_ret)) {
++			class_destroy(spifi->dev_cl);
++			unregister_chrdev_region(spifi->spifidev, 1);
++			return PTR_ERR(dev_ret);
++		}
++		cdev_init(&spifi->spifi_c_dev, &spifi_fops);
++		ret = cdev_add(&spifi->spifi_c_dev, spifi->spifidev, 1);
++		if (ret < 0) {
++			device_destroy(spifi->dev_cl, spifi->spifidev);
++					class_destroy(spifi->dev_cl);
++			unregister_chrdev_region(spifi->spifidev, 1);
++			return ret;
++		}
++		spifiCtrl1 = spifi;
++	}
++
++
++
+ 	return count > 0 ? 0 : -ENODEV;
+ }
+ 
+diff --git a/drivers/mtd/spi-nor/macronix.c b/drivers/mtd/spi-nor/macronix.c
+index 9203abaac229..067a5dae6745 100644
+--- a/drivers/mtd/spi-nor/macronix.c
++++ b/drivers/mtd/spi-nor/macronix.c
+@@ -40,11 +40,12 @@ static const struct flash_info macronix_parts[] = {
+ 	{ "mx25l4005a",  INFO(0xc22013, 0, 64 * 1024,   8, SECT_4K) },
+ 	{ "mx25l8005",   INFO(0xc22014, 0, 64 * 1024,  16, 0) },
+ 	{ "mx25l1606e",  INFO(0xc22015, 0, 64 * 1024,  32, SECT_4K) },
+-	{ "mx25l3205d",  INFO(0xc22016, 0, 64 * 1024,  64, SECT_4K) },
++	{ "mx25l3233f",  INFO(0xc22016, 0, 64 * 1024,  64,
++			      SECT_4K | SPI_NOR_DUAL_READ) },
+ 	{ "mx25l3255e",  INFO(0xc29e16, 0, 64 * 1024,  64, SECT_4K) },
+ 	{ "mx25l6405d",  INFO(0xc22017, 0, 64 * 1024, 128, SECT_4K) },
+ 	{ "mx25u2033e",  INFO(0xc22532, 0, 64 * 1024,   4, SECT_4K) },
+-	{ "mx25u3235f",	 INFO(0xc22536, 0, 64 * 1024,  64,
++	{ "mx25u3235f",  INFO(0xc22536, 0, 64 * 1024,  64,
+ 			      SECT_4K | SPI_NOR_DUAL_READ |
+ 			      SPI_NOR_QUAD_READ) },
+ 	{ "mx25u4035",   INFO(0xc22533, 0, 64 * 1024,   8, SECT_4K) },
+@@ -87,7 +88,7 @@ static const struct flash_info macronix_parts[] = {
+ 			      SPI_NOR_QUAD_READ) },
+ 	{ "mx66l1g55g",  INFO(0xc2261b, 0, 64 * 1024, 2048,
+ 			      SPI_NOR_QUAD_READ) },
+-	{ "mx66u2g45g",	 INFO(0xc2253c, 0, 64 * 1024, 4096,
++	{ "mx66u2g45g",  INFO(0xc2253c, 0, 64 * 1024, 4096,
+ 			      SECT_4K | SPI_NOR_DUAL_READ |
+ 			      SPI_NOR_QUAD_READ | SPI_NOR_4B_OPCODES) },
+ };
+diff --git a/drivers/mtd/spi-nor/winbond.c b/drivers/mtd/spi-nor/winbond.c
+index e5dfa786f190..331b17bb505c 100644
+--- a/drivers/mtd/spi-nor/winbond.c
++++ b/drivers/mtd/spi-nor/winbond.c
+@@ -91,6 +91,8 @@ static const struct flash_info winbond_parts[] = {
+ 	{ "w25q256", INFO(0xef4019, 0, 64 * 1024, 512,
+ 			  SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ)
+ 	  .fixups = &w25q256_fixups },
++	{ "w25q512jvq", INFO(0xef4020, 0, 64 * 1024, 1024,
++			     SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
+ 	{ "w25q256jvm", INFO(0xef7019, 0, 64 * 1024, 512,
+ 			     SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
+ 	{ "w25q256jw", INFO(0xef6019, 0, 64 * 1024, 512,
+@@ -101,9 +103,9 @@ static const struct flash_info winbond_parts[] = {
+ 
+ /**
+  * winbond_set_4byte_addr_mode() - Set 4-byte address mode for Winbond flashes.
+- * @nor:	pointer to 'struct spi_nor'.
+- * @enable:	true to enter the 4-byte address mode, false to exit the 4-byte
+- *		address mode.
++ * @nor:        pointer to 'struct spi_nor'.
++ * @enable:     true to enter the 4-byte address mode, false to exit the 4-byte
++ *              address mode.
+  *
+  * Return: 0 on success, -errno otherwise.
+  */
+diff --git a/drivers/net/ethernet/hpe/gxp-umac.c b/drivers/net/ethernet/hpe/gxp-umac.c
+index d68c81c7324c..10842ea090f9 100644
+--- a/drivers/net/ethernet/hpe/gxp-umac.c
++++ b/drivers/net/ethernet/hpe/gxp-umac.c
+@@ -32,22 +32,22 @@
+ #include "gxp-umac.h"
+ 
+ //page 0
+-#define PHY_88E1514_COPPER_CONTROL_REG		0
+-#define PHY_88E1514_PAGE_ADDRESS		22
++#define PHY_88E1514_COPPER_CONTROL_REG          0
++#define PHY_88E1514_PAGE_ADDRESS                22
+ 
+ //page 18
+-#define PHY_88E1514_GENERAL_CONTROL_REG1	20
++#define PHY_88E1514_GENERAL_CONTROL_REG1        20
+ 
+-#define DRV_MODULE_NAME		"gxp-umac"
+-#define DRV_MODULE_VERSION	"0.1"
++#define DRV_MODULE_NAME         "gxp-umac"
++#define DRV_MODULE_VERSION      "0.1"
+ 
+ struct umac_priv {
+ 	void __iomem *base;
+ 	int irq;
+ 	struct platform_device *pdev;
+ 
+-	struct umac_tx_descs	*tx_descs;
+-	struct umac_rx_descs	*rx_descs;
++	struct umac_tx_descs    *tx_descs;
++	struct umac_rx_descs    *rx_descs;
+ 	dma_addr_t tx_descs_dma_addr;
+ 	dma_addr_t rx_descs_dma_addr;
+ 
+@@ -356,12 +356,20 @@ static int umac_start_xmit(struct sk_buff *skb, struct net_device *ndev)
+ 	pframe = umac->tx_descs->framelist[umac->tx_cur];
+ 
+ 	length = skb->len;
++
++	// In the case of a VLAN traffic we must send 1518 bytes
++/*
+ 	if (length > 1514) {
+ 		netdev_err(ndev, "send data %d bytes > 1514, clamp it to 1514\n",
+ 			   skb->len);
+ 		length = 1514;
+ 	}
+-
++*/
++	if (length > 1518) {
++		netdev_err(ndev, "send data %d bytes >= 1518, clamp it to 1518\n",
++			   skb->len);
++		length = 1518;
++	}
+ 	memset(pframe, 0, UMAC_MAX_FRAME_SIZE);
+ 	memcpy(pframe, skb->data, length);
+ 
+@@ -369,7 +377,7 @@ static int umac_start_xmit(struct sk_buff *skb, struct net_device *ndev)
+ 		length = ETH_ZLEN; // minimum tx byte
+ 
+ 	//dev_info(&pdev->dev, "ximt tx_cur=%d pkt len=%d\n",
+-	//		umac->tx_cur, length);
++	//              umac->tx_cur, length);
+ 	ptxdesc->count = length;
+ 	ptxdesc->status = UMAC_RING_ENTRY_HW_OWN;
+ 	ptxdesc->cksumoffset = 0; //disable checksum generation
+@@ -607,23 +615,23 @@ static int umac_stop(struct net_device *ndev)
+ }
+ 
+ static const struct ethtool_ops umac_ethtool_ops = {
+-	.get_ts_info	= ethtool_op_get_ts_info,
+-	.get_link_ksettings	= umac_get_link_ksettings,
+-	.set_link_ksettings	= umac_set_link_ksettings,
+-	.get_drvinfo	= umac_get_drvinfo,
+-	.nway_reset	= umac_nway_reset,
+-	.get_link	= umac_get_link,
++	.get_ts_info    = ethtool_op_get_ts_info,
++	.get_link_ksettings     = umac_get_link_ksettings,
++	.set_link_ksettings     = umac_set_link_ksettings,
++	.get_drvinfo    = umac_get_drvinfo,
++	.nway_reset     = umac_nway_reset,
++	.get_link       = umac_get_link,
+ };
+ 
+ static const struct net_device_ops umac_netdev_ops = {
+-	.ndo_open		= umac_open,
+-	.ndo_stop		= umac_stop,
+-	.ndo_start_xmit		= umac_start_xmit,
+-	.ndo_get_stats		= umac_get_stats,
+-	.ndo_do_ioctl		= umac_ioctl,
+-	//.ndo_change_mtu		= eth_change_mtu,
+-	.ndo_validate_addr	= eth_validate_addr,
+-	.ndo_set_mac_address	= umac_eth_mac_addr,
++	.ndo_open               = umac_open,
++	.ndo_stop               = umac_stop,
++	.ndo_start_xmit         = umac_start_xmit,
++	.ndo_get_stats          = umac_get_stats,
++	.ndo_do_ioctl           = umac_ioctl,
++	//.ndo_change_mtu               = eth_change_mtu,
++	.ndo_validate_addr      = eth_validate_addr,
++	.ndo_set_mac_address    = umac_eth_mac_addr,
+ };
+ 
+ static int umac_init_mac_address(struct net_device *ndev)
+@@ -746,7 +754,7 @@ static int umac_setup_phy(struct net_device *ndev)
+ 			interface = PHY_INTERFACE_MODE_NA;
+ 
+ 		umac->phy_dev = of_phy_connect(ndev, phy_handle,
+-			&umac_adjust_link, 0, interface);
++					       &umac_adjust_link, 0, interface);
+ 
+ 		if (!umac->phy_dev)
+ 			return -ENODEV;
+@@ -761,15 +769,15 @@ static int umac_setup_phy(struct net_device *ndev)
+ 
+ 		netdev_info(ndev, "Setting fixed link configuration for PHY\n");
+ 		if (of_property_read_u32(fixed_link_node, "speed",
+-				&umac->phy_dev->speed)) {
++					 &umac->phy_dev->speed)) {
+ 			netdev_err(ndev, "Invalid fixed-link specified.\n");
+ 			return -EINVAL;
+ 		}
+ 		umac->phy_dev->duplex = of_property_read_bool(fixed_link_node,
+-			"full-duplex");
++							      "full-duplex");
+ 		umac->phy_dev->pause = of_property_read_bool(fixed_link_node, "pause");
+ 		umac->phy_dev->asym_pause = of_property_read_bool(fixed_link_node,
+-			"asym-pause");
++								  "asym-pause");
+ 		umac->phy_dev->autoneg = AUTONEG_DISABLE;
+ 		__clear_bit(ETHTOOL_LINK_MODE_Autoneg_BIT, umac->phy_dev->advertising);
+ 	}
+@@ -875,7 +883,7 @@ static const struct of_device_id umac_of_matches[] = {
+ MODULE_DEVICE_TABLE(of, umac_of_matches);
+ 
+ static struct platform_driver umac_driver = {
+-	.driver	= {
++	.driver = {
+ 		.name    = "gxp-umac",
+ 		.of_match_table = of_match_ptr(umac_of_matches),
+ 	},
+diff --git a/drivers/net/ethernet/hpe/gxp-umac.h b/drivers/net/ethernet/hpe/gxp-umac.h
+index e6872a1d1652..748446be165f 100644
+--- a/drivers/net/ethernet/hpe/gxp-umac.h
++++ b/drivers/net/ethernet/hpe/gxp-umac.h
+@@ -114,7 +114,9 @@
+ // maximum ethernet frame size
+ #define UMAC_MIN_FRAME_SIZE       60    // excludes preable, sfd, and fcs
+ #define UMAC_MAX_PAYLOAD_SIZE     1500
+-#define UMAC_MAX_FRAME_SIZE       1514  // excludes preable, sfd, and fcs
++// vejmarie
++// #define UMAC_MAX_FRAME_SIZE       1514  // excludes preable, sfd, and fcs
++#define UMAC_MAX_FRAME_SIZE       1518  // excludes preable, sfd, and fcs
+ #define UMAC_MAX_PACKET_ROUNDED   0x600 // 1536, nicely aligned
+ #define MAX_PKT_SIZE		  1518
+ 
+diff --git a/drivers/spi/Kconfig b/drivers/spi/Kconfig
+index 5cff60de8e83..24eacf787f86 100644
+--- a/drivers/spi/Kconfig
++++ b/drivers/spi/Kconfig
+@@ -339,6 +339,13 @@ config SPI_FSL_QUADSPI
+ 	  This controller does not support generic SPI messages. It only
+ 	  supports the high-level SPI memory interface.
+ 
++config SPI_GXP
++	tristate "GXP SPI driver"
++	depends on ARCH_HPE || COMPILE_TEST
++	help
++	  This enables support for the driver for GXP bus attached SPI
++	  controllers.
++
+ config SPI_HISI_SFC_V3XX
+ 	tristate "HiSilicon SPI NOR Flash Controller for Hi16XX chipsets"
+ 	depends on (ARM64 && ACPI) || COMPILE_TEST
+diff --git a/drivers/spi/Makefile b/drivers/spi/Makefile
+index 6fea5821662e..2f122b12d367 100644
+--- a/drivers/spi/Makefile
++++ b/drivers/spi/Makefile
+@@ -54,6 +54,7 @@ obj-$(CONFIG_SPI_FSL_LPSPI)		+= spi-fsl-lpspi.o
+ obj-$(CONFIG_SPI_FSL_QUADSPI)		+= spi-fsl-qspi.o
+ obj-$(CONFIG_SPI_FSL_SPI)		+= spi-fsl-spi.o
+ obj-$(CONFIG_SPI_GPIO)			+= spi-gpio.o
++obj-$(CONFIG_SPI_GXP)			+= spi-gxp.o
+ obj-$(CONFIG_SPI_HISI_SFC_V3XX)		+= spi-hisi-sfc-v3xx.o
+ obj-$(CONFIG_SPI_IMG_SPFI)		+= spi-img-spfi.o
+ obj-$(CONFIG_SPI_IMX)			+= spi-imx.o
+diff --git a/drivers/spi/spi-gxp.c b/drivers/spi/spi-gxp.c
+new file mode 100644
+index 000000000000..87cf04317607
+--- /dev/null
++++ b/drivers/spi/spi-gxp.c
+@@ -0,0 +1,606 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/* Copyright (C) 2022 Hewlett-Packard Development Company, L.P. */
++
++#include <linux/iopoll.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_device.h>
++#include <linux/platform_device.h>
++#include <linux/spi/spi.h>
++#include <linux/spi/spi-mem.h>
++
++#define GXP_SPI0_MAX_CHIPSELECT 2
++#define GXP_SPI_SLEEP_TIME      1
++#define GXP_SPI_TIMEOUT (130 * 1000000 / GXP_SPI_SLEEP_TIME)
++
++#define MANUAL_MODE             0
++#define DIRECT_MODE             1
++#define SPILDAT_LEN             256
++
++#define OFFSET_SPIMCFG          0x0
++#define OFFSET_SPIMCTRL         0x4
++#define OFFSET_SPICMD           0x5
++#define OFFSET_SPIDCNT          0x6
++#define OFFSET_SPIADDR          0x8
++#define OFFSET_SPILDAT          0x40
++#define OFFSET_SPIINTSTS        0xc
++
++#define SPIMCTRL_START          0x01
++#define SPIMCTRL_BUSY           0x02
++#define SPIMCTRL_DIR            0x08
++
++struct gxp_spi;
++
++struct gxp_spi_chip {
++	struct gxp_spi *spifi;
++	u32 cs;
++};
++
++struct gxp_spi_data {
++	u32 max_cs;
++	u32 mode_bits;
++};
++
++struct gxp_spi {
++	const struct gxp_spi_data *data;
++	void __iomem *reg_base;
++	void __iomem *dat_base;
++	void __iomem *dir_base;
++	u32 max_clk;
++	struct device *dev;
++	struct gxp_spi_chip chips[GXP_SPI0_MAX_CHIPSELECT];
++};
++
++static void gxp_spi_set_mode(struct gxp_spi *spifi, int mode)
++{
++	u8 value;
++	u32 lvalue;
++	void __iomem *reg_base = spifi->reg_base;
++
++//      pr_info("gxp-spi: running set mode\n");
++
++	value = readb(reg_base + OFFSET_SPIMCTRL);
++
++	if (mode == MANUAL_MODE) {
++		writeb(0x55, reg_base + OFFSET_SPICMD);
++		writeb(0xaa, reg_base + OFFSET_SPICMD);
++		value &= ~0x30;
++	} else {
++		value |= 0x30;
++	}
++	writeb(value, reg_base + OFFSET_SPIMCTRL);
++	// Let's setup the clock
++	// vejmarie
++	lvalue = readl(spifi->reg_base + OFFSET_SPIMCFG);
++	// chipselect
++	lvalue &= ~(0xfa);
++	// override
++	lvalue = 0x1000007;
++	pr_info("spi-gxp: MCFG %lx\n", lvalue);
++	writel(lvalue, spifi->reg_base + OFFSET_SPIMCFG);
++}
++
++static int gxp_spi_read_reg(struct gxp_spi_chip *chip, const struct spi_mem_op *op)
++{
++	int ret;
++	struct gxp_spi *spifi = chip->spifi;
++	void __iomem *reg_base = spifi->reg_base;
++	u32 value;
++//      pr_info("gxp_spi_read_reg: read ...\n");
++
++	value = readl(reg_base + OFFSET_SPIMCFG);
++	value &= ~(1 << 24);
++	value |= (chip->cs << 24);
++	value &= ~(0x07 << 16);
++	value &= ~(0x1f << 19);
++	writel(value, reg_base + OFFSET_SPIMCFG);
++
++	writel(0, reg_base + OFFSET_SPIADDR);
++
++	writeb(op->cmd.opcode, reg_base + OFFSET_SPICMD);
++
++	writew(op->data.nbytes, reg_base + OFFSET_SPIDCNT);
++
++	value = readb(reg_base + OFFSET_SPIMCTRL);
++	value &= ~SPIMCTRL_DIR;
++	value |= SPIMCTRL_START;
++
++	writeb(value, reg_base + OFFSET_SPIMCTRL);
++
++	ret = readb_poll_timeout(reg_base + OFFSET_SPIMCTRL, value,
++				 !(value & SPIMCTRL_BUSY),
++				 GXP_SPI_SLEEP_TIME, GXP_SPI_TIMEOUT);
++	if (ret) {
++		dev_warn(spifi->dev, "read reg busy time out\n");
++		return ret;
++	}
++
++	memcpy_fromio(op->data.buf.in, spifi->dat_base, op->data.nbytes);
++	return ret;
++}
++
++static int gxp_spi_write_reg(struct gxp_spi_chip *chip, const struct spi_mem_op *op)
++{
++	int ret;
++	struct gxp_spi *spifi = chip->spifi;
++	void __iomem *reg_base = spifi->reg_base;
++	u32 value;
++
++	value = readl(reg_base + OFFSET_SPIMCFG);
++	value &= ~(1 << 24);
++	value |= (chip->cs << 24);
++	value &= ~(0x07 << 16);
++	value &= ~(0x1f << 19);
++	writel(value, reg_base + OFFSET_SPIMCFG);
++
++	writel(0, reg_base + OFFSET_SPIADDR);
++
++	writeb(op->cmd.opcode, reg_base + OFFSET_SPICMD);
++
++	memcpy_toio(spifi->dat_base, op->data.buf.in, op->data.nbytes);
++
++	writew(op->data.nbytes, reg_base + OFFSET_SPIDCNT);
++
++	value = readb(reg_base + OFFSET_SPIMCTRL);
++	value |= SPIMCTRL_DIR;
++	value |= SPIMCTRL_START;
++
++	writeb(value, reg_base + OFFSET_SPIMCTRL);
++
++	ret = readb_poll_timeout(reg_base + OFFSET_SPIMCTRL, value,
++				 !(value & SPIMCTRL_BUSY),
++				 GXP_SPI_SLEEP_TIME, GXP_SPI_TIMEOUT);
++	if (ret)
++		dev_warn(spifi->dev, "write reg busy time out\n");
++
++	return ret;
++}
++
++static ssize_t gxp_spi_read(struct gxp_spi_chip *chip, const struct spi_mem_op *op)
++{
++	struct gxp_spi *spifi = chip->spifi;
++	u32 offset = op->addr.val;
++//      pr_info("gxp_spi: read operation\n");
++	if (chip->cs == 0)
++		offset += 0x4000000;
++
++	memcpy_fromio(op->data.buf.in, spifi->dir_base + offset, op->data.nbytes);
++
++	return 0;
++}
++
++/* static int gxp_spi_transfer(struct spi_device *spi, struct spi_message *m)
++{
++	struct spi_master *master = spi->master;
++	struct gxp_spi *c = spi_master_get_devdata(master);
++	struct spi_transfer *t;
++	unsigned long flags;
++
++	m->actual_length = 0;
++
++	list_for_each_entry(t, &m->transfers, transfer_list) {
++		if (!t->tx_buf && !t->rx_buf && t->len)
++			return -EINVAL;
++	}
++
++	spin_lock_irqsave(&c->lock, flags);
++	list_add_tail(&m->queue, &c->queue);
++	schedule_work(&c->work);
++	spin_unlock_irqrestore(&c->lock, flags);
++
++	return 0;
++}
++*/
++
++
++static ssize_t gxp_spi_write(struct gxp_spi_chip *chip, const struct spi_mem_op *op)
++{
++	struct gxp_spi *spifi = chip->spifi;
++	void __iomem *reg_base = spifi->reg_base;
++	u32 write_len;
++	u32 value;
++	int ret;
++
++	write_len = op->data.nbytes;
++	if (write_len > SPILDAT_LEN)
++		write_len = SPILDAT_LEN;
++
++	value = readl(reg_base + OFFSET_SPIMCFG);
++	value &= ~(1 << 24);
++	value |= (chip->cs << 24);
++	value &= ~(0x07 << 16);
++	value |= (op->addr.nbytes << 16);
++	value &= ~(0x1f << 19);
++	writel(value, reg_base + OFFSET_SPIMCFG);
++
++	writel(op->addr.val, reg_base + OFFSET_SPIADDR);
++
++	writeb(op->cmd.opcode, reg_base + OFFSET_SPICMD);
++
++	writew(write_len, reg_base + OFFSET_SPIDCNT);
++
++	memcpy_toio(spifi->dat_base, op->data.buf.in, write_len);
++
++	value = readb(reg_base + OFFSET_SPIMCTRL);
++	value |= SPIMCTRL_DIR;
++	value |= SPIMCTRL_START;
++
++	writeb(value, reg_base + OFFSET_SPIMCTRL);
++
++	ret = readb_poll_timeout(reg_base + OFFSET_SPIMCTRL, value,
++				 !(value & SPIMCTRL_BUSY),
++				 GXP_SPI_SLEEP_TIME, GXP_SPI_TIMEOUT);
++	if (ret) {
++		dev_warn(spifi->dev, "write busy time out\n");
++		return ret;
++	}
++
++	return 0;
++}
++
++static int do_gxp_exec_mem_op(struct spi_mem *mem, const struct spi_mem_op *op)
++{
++	struct gxp_spi *spifi = spi_controller_get_devdata(mem->spi->controller);
++	// vejmarie
++	// struct gxp_spi_chip *chip = &spifi->chips[spi_get_chipselect(mem->spi, 0)];
++	struct gxp_spi_chip *chip = &spifi->chips[mem->spi->chip_select];
++	int ret = 0;
++//      pr_info("gxp-spi: Mem op\n");
++
++	if (op->data.dir == SPI_MEM_DATA_IN) {
++		if (!op->addr.nbytes)
++			ret = gxp_spi_read_reg(chip, op);
++		else
++			// vejmarie gxp_spi_read
++			ret = gxp_spi_read_reg(chip, op);
++	} else {
++		if (!op->addr.nbytes)
++			ret = gxp_spi_write_reg(chip, op);
++		else
++			// vejmarie gxp_spi_write
++			ret = gxp_spi_write_reg(chip, op);
++	}
++
++	return ret;
++}
++
++static int gxp_exec_mem_op(struct spi_mem *mem, const struct spi_mem_op *op)
++{
++	int ret;
++
++//      pr_info("gxp-spi: exec mem op\n");
++	ret = do_gxp_exec_mem_op(mem, op);
++	if (ret)
++		dev_err(&mem->spi->dev, "operation failed: %d", ret);
++
++	return ret;
++}
++
++static const struct spi_controller_mem_ops gxp_spi_mem_ops = {
++	.exec_op = gxp_exec_mem_op,
++};
++
++static int gxp_spi_setup(struct spi_device *spi)
++{
++
++	struct gxp_spi *spifi = spi_controller_get_devdata(spi->controller);
++	// vejmarie
++	// unsigned int cs = spi_get_chipselect(spi, 0);
++	unsigned int cs = spi->chip_select;
++	struct gxp_spi_chip *chip = &spifi->chips[cs];
++//      pr_info("gxp-spi: running setup\n");
++
++	chip->spifi = spifi;
++	chip->cs = cs;
++	pr_info("spi-gxp: set manual mode\n");
++	gxp_spi_set_mode(spifi, MANUAL_MODE);
++
++	return 0;
++}
++
++static int gxp_spi_transfer(struct spi_controller *ctlr,
++				   struct spi_message *msg)
++{
++	struct spi_transfer *xfer = NULL;
++	struct spi_transfer *xfer_rx = NULL;
++	struct spi_transfer *xfer_tx = NULL;
++	struct gxp_spi *spifi = spi_controller_get_devdata(ctlr);
++	struct spi_device *spidev = msg->spi;
++	u8 *buf = NULL;
++	u32 tx_len = 0;
++	u32 rx_len = 0;
++	u32 i;
++	u32 ret;
++	u32 addr;
++	unsigned int value = 0;
++	int msg_t = 0;
++	int transfer_cnt = 0;
++
++	// GXP ASIC doesn't support raw transfer mode
++	// They have to be merged either in
++	// Write/Read transfer and faked with CMD + ADDR + DATA
++	// Write only
++	// Anything else can't work as we do not have fine grain control
++	// of the SPI interface which was designed for SPI-NOR
++	// For W5500 that shouldn't be a massive issue as
++	// - Reads are processed through a write-read operation
++	// (the write is providing the address to the device and the control byte)
++	// - Write are raw write without any feedback from the device
++
++
++	list_for_each_entry(xfer, &msg->transfers,
++			    transfer_list) {
++		transfer_cnt++;
++		pr_info("gxp-spi: looping\n");
++		if (xfer->tx_buf) {
++			pr_info("gxp-spi: transmit buffer\n");
++			msg_t = msg_t | 1;
++		}
++		if ((xfer->rx_buf)) {
++			msg_t = msg_t | 2;
++			pr_info("gxp-spi: read buffer set\n");
++		}
++	}
++	pr_info("gxp-spi: Message type %d cnt %d\n", msg_t, transfer_cnt);
++//      pr_info("gxp-spi: Running transfer\n");
++
++	if (transfer_cnt > 2) {
++		// not supported
++		return EINVAL;
++	}
++	// So we need at least 2 messages, and one read
++	// otherwise we process only the write operations
++	// if we have multiple write/read that will be tricky
++	if ((transfer_cnt == 2) && (msg_t == 3)) {
++		xfer_tx = list_first_entry_or_null(&msg->transfers, struct spi_transfer, transfer_list);
++		if (xfer_tx->tx_buf) {
++			pr_info("First message is a Transmit\n");
++		}
++		xfer_rx = list_next_entry(xfer_tx, transfer_list);
++		if (xfer_rx->rx_buf) {
++			pr_info("Second message is a read of %d bytes\n", xfer_rx->len);
++		}
++			 buf = (u8 *)xfer_tx->tx_buf;
++		 pr_info("gxp-spi: transfer receiving mode\n");
++		 // let's setup the read operation
++		 // 2 bytes addressing + 1 byte CMD
++		 value = readl(spifi->reg_base + OFFSET_SPIMCFG);
++		 value &= ~(1 << 24);
++		 value |= (0 << 24);
++		 value &= ~(0x07 << 16);
++		 value |= (2 << 16);
++		 value &= ~(0x1f << 19);
++		 // override
++		 value = 0x20007;
++		 writel(value, spifi->reg_base + OFFSET_SPIMCFG);
++		 // write the command
++		 pr_info("Data transmitted : %x %x %x\n", buf[0], buf[1], buf[2]);
++		 writeb(buf[0], spifi->reg_base + OFFSET_SPICMD);
++		 // write the address (0x19 into our trial)
++		 // make it a writel !!!
++		 addr = 0;
++		 addr |= buf[1] << 8;
++		 addr |= buf[2];
++		 writel(addr, spifi->reg_base + OFFSET_SPIADDR);
++//                 writeb(buf[1], spifi->reg_base + OFFSET_SPIADDR);
++//                 writeb(buf[2], spifi->reg_base + OFFSET_SPIADDR+1);
++		pr_info("spi-gxp: spi frame %x%x\n", buf[0], addr);
++
++		 pr_info("spi-gxp: Configuration register %lx\n", value);
++		 // writel(0, spifi->reg_base + OFFSET_SPIADDR);
++		 writew(xfer_rx->len, spifi->reg_base + OFFSET_SPIDCNT);
++		 value = readb(spifi->reg_base + OFFSET_SPIMCTRL);
++		 value &= ~SPIMCTRL_DIR;
++		 value |= SPIMCTRL_START;
++		 pr_info("gxp-spi: MCTRL %x\n", value);
++		 writeb(value, spifi->reg_base + OFFSET_SPIMCTRL);
++		 ret = readb_poll_timeout(spifi->reg_base + OFFSET_SPIMCTRL, value,
++			 !(value & SPIMCTRL_BUSY),
++			 GXP_SPI_SLEEP_TIME, GXP_SPI_TIMEOUT);
++		if (ret) {
++			  dev_warn(spifi->dev, "read reg busy time out\n");
++			return ret;
++		}
++		  memcpy_fromio((u8 *)xfer_rx->rx_buf, spifi->dat_base, xfer_rx->len);
++		  buf = (u8 *)xfer_rx->rx_buf;
++		  for (i = 0 ; i < xfer_rx->len ; i++) {
++			 pr_info("gxp-spi: %x\n", *buf++);
++		}
++		goto done;
++
++
++	}
++	list_for_each_entry(xfer, &msg->transfers,
++			    transfer_list) {
++		if ((xfer->tx_buf) && (xfer->rx_buf)) {
++			pr_info("We got a write/read operation\n");
++		} else if (xfer->tx_buf) {
++			buf = (u8 *)xfer->tx_buf;
++			// tx_len = xfer->len - 1;
++			tx_len = xfer->len;
++			pr_info("gxp-spi: transfer buffer filled with %d bytes\n", xfer->len);
++			for (i = 0; i < tx_len; i++) {
++				pr_info("gxp-spi: Data %x\n", buf[i]);
++			}
++			// Ok we can try to write the data
++			// memcpy((u8 *)spifi->reg_base + OFFSET_SPILDAT, buf, tx_len);
++			// we shall do one byte into the command register
++			// 3 bytes addressing
++			// remaining is data
++			value = readl(spifi->reg_base + OFFSET_SPIMCFG);
++									value &= ~(1 << 24);
++			value |= (0 << 24);
++			value &= ~(0x07 << 16);
++			value |= (3 << 16);
++			value &= ~(0x1f << 19);
++			pr_info("gxp-spi: Write operation MCFG %x\n", value);
++			writel(value, spifi->reg_base + OFFSET_SPIMCFG);
++			// write the command
++			writeb(buf[0], spifi->reg_base + OFFSET_SPICMD);
++			// write the address
++			addr = 0;
++			addr |= buf[1] << 16;
++			addr |= buf[2] << 8;
++			addr |= buf[3];
++			writel(addr, spifi->reg_base + OFFSET_SPIADDR);
++//                      writeb(buf[1], spifi->reg_base + OFFSET_SPIADDR);
++//                      writeb(buf[2], spifi->reg_base + OFFSET_SPIADDR+1);
++//                      writeb(buf[3], spifi->reg_base + OFFSET_SPIADDR+2);
++			// remaining bytes
++			if ((tx_len-4) > 0) {
++				writew(tx_len-4, spifi->reg_base + OFFSET_SPIDCNT);
++				memcpy_toio((u8 *)spifi->dat_base, &buf[4], tx_len-4);
++			} else {
++				writew(0, spifi->reg_base + OFFSET_SPIDCNT);
++			}
++			//
++			value = readb(spifi->reg_base + OFFSET_SPIMCTRL);
++			value |= (1<<3);
++			writeb(value, spifi->reg_base + OFFSET_SPIMCTRL);
++			writeb(tx_len, spifi->reg_base + OFFSET_SPIDCNT);
++			// set the start bit to run the transfer
++									value = readb(spifi->reg_base + OFFSET_SPIMCTRL);
++																value |= SPIMCTRL_START;
++																writeb(value, spifi->reg_base + OFFSET_SPIMCTRL);
++
++																//wait busy bit is cleared
++																do {
++																								value = readb(spifi->reg_base + OFFSET_SPIMCTRL);
++																} while (value & SPIMCTRL_BUSY);
++		}
++		/*      if (xfer->rx_buf) {
++			pr_info("gxp-spi: transfer receiving mode\n");
++			// let's setup the read operation
++			// 2 bytes addressing + 1 byte CMD
++			value = readl(spifi->reg_base + OFFSET_SPIMCFG);
++			value &= ~(1 << 24);
++			value |= (0 << 24);
++			value &= ~(0x07 << 16);
++			value |= (2 << 16);
++			value &= ~(0x1f << 19);
++			writel(value, spifi->reg_base + OFFSET_SPIMCFG);
++
++			pr_info("spi-gxp: Configuration register %lx\n", value);
++			writel(0, spifi->reg_base + OFFSET_SPIADDR);
++			writew(xfer->len, spifi->reg_base + OFFSET_SPIDCNT);
++			value = readb(spifi->reg_base + OFFSET_SPIMCTRL);
++			value &= ~SPIMCTRL_DIR;
++			value |= SPIMCTRL_START;
++			writeb(value, spifi->reg_base + OFFSET_SPIMCTRL);
++			ret = readb_poll_timeout(spifi->reg_base + OFFSET_SPIMCTRL, value,
++				 !(value & SPIMCTRL_BUSY),
++				 GXP_SPI_SLEEP_TIME, GXP_SPI_TIMEOUT);
++			if (ret) {
++				dev_warn(spifi->dev, "read reg busy time out\n");
++				return ret;
++									}
++			memcpy_fromio((u8 *)xfer->rx_buf, spifi->dat_base, xfer->len);
++			buf=(u8 *)xfer->rx_buf;
++			for(i=0 ; i < xfer->len ; i++) {
++				pr_info("gxp-spi: %x\n", *buf++);
++			}
++		}
++		*/
++	}
++
++done:
++	/* Update statistics */
++	msg->actual_length = tx_len + rx_len + 1;
++//      pr_info("gxp-spi: Data transfer: %d\n", msg->actual_length);
++	/* complete the transaction */
++	msg->status = 0;
++	spi_finalize_current_message(ctlr);
++//      pr_info("gxp-spi: exiting transfer\n");
++	return 0;
++}
++
++static int gxp_spifi_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	const struct gxp_spi_data *data;
++	struct spi_controller *ctlr;
++	struct gxp_spi *spifi;
++	int ret;
++	u32 max_clk_rate;
++	// For the moment we support only 1 node, while their could be 2 of them
++	struct device_node *np = dev->of_node;
++
++	data = of_device_get_match_data(&pdev->dev);
++
++	if (of_property_read_u32(np, "spi-max-frequency", &max_clk_rate)) {
++		dev_err(&pdev->dev, "couldn't determine spi-max-frequency of device node\n");
++		return -ENXIO;
++	}
++	pr_info("spi-gxp: Max clock rate set to %d\n", max_clk_rate);
++
++	// vejmarie
++	// ctlr = devm_spi_alloc_host(dev, sizeof(*spifi));
++//      pr_info("gxp-spi probe\n");
++	ctlr = devm_spi_alloc_master(dev, sizeof(*spifi));
++	if (!ctlr)
++		return -ENOMEM;
++
++	spifi = spi_controller_get_devdata(ctlr);
++	spifi->max_clk = max_clk_rate;
++	platform_set_drvdata(pdev, spifi);
++	spifi->data = data;
++	spifi->dev = dev;
++
++	spifi->reg_base = devm_platform_ioremap_resource(pdev, 0);
++	if (IS_ERR(spifi->reg_base))
++		return PTR_ERR(spifi->reg_base);
++
++	spifi->dat_base = devm_platform_ioremap_resource(pdev, 1);
++	if (IS_ERR(spifi->dat_base))
++		return PTR_ERR(spifi->dat_base);
++
++	spifi->dir_base = devm_platform_ioremap_resource(pdev, 2);
++	if (IS_ERR(spifi->dir_base))
++		return PTR_ERR(spifi->dir_base);
++
++	ctlr->mode_bits = data->mode_bits;
++//      pr_info("spi-gxp: bus id %d\n", pdev->id);
++	// ctlr->bus_num = pdev->id;
++	ctlr->bus_num = 1;
++//      pr_info("spi-gxp: bus id %d\n",ctlr->bus_num);
++	ctlr->mem_ops = &gxp_spi_mem_ops;
++	ctlr->transfer_one_message = gxp_spi_transfer;
++	ctlr->setup = gxp_spi_setup;
++	ctlr->num_chipselect = data->max_cs;
++
++//      pr_info("spi-gxp: chipselect max %d\n", ctlr->num_chipselect);
++	ctlr->dev.of_node = dev->of_node;
++
++	ret = devm_spi_register_controller(dev, ctlr);
++	if (ret) {
++		return dev_err_probe(&pdev->dev, ret,
++				     "failed to register spi controller\n");
++	}
++
++	return 0;
++}
++
++static const struct gxp_spi_data gxp_spifi_data = {
++	.max_cs = 2,
++	.mode_bits = 0,
++};
++
++static const struct of_device_id gxp_spifi_match[] = {
++	{.compatible = "hpe,gxp2-spifi", .data = &gxp_spifi_data },
++	{ /* null */ }
++};
++
++MODULE_DEVICE_TABLE(of, gxp_spifi_match);
++
++static struct platform_driver gxp_spifi_driver = {
++	.probe = gxp_spifi_probe,
++	.driver = {
++		.name = "gxp2-spifi",
++		.of_match_table = gxp_spifi_match,
++	},
++};
++module_platform_driver(gxp_spifi_driver);
++
++MODULE_DESCRIPTION("HPE GXP SPI Flash Interface driver");
++MODULE_AUTHOR("Nick Hawkins <nick.hawkins@hpe.com>");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/spi/spi.c b/drivers/spi/spi.c
+index fc9a59788d2e..05528b20fea1 100644
+--- a/drivers/spi/spi.c
++++ b/drivers/spi/spi.c
+@@ -45,7 +45,7 @@ static DEFINE_IDR(spi_master_idr);
+ 
+ static void spidev_release(struct device *dev)
+ {
+-	struct spi_device	*spi = to_spi_device(dev);
++	struct spi_device       *spi = to_spi_device(dev);
+ 
+ 	/* spi controllers may cleanup for released devices */
+ 	if (spi->controller->cleanup)
+@@ -59,7 +59,7 @@ static void spidev_release(struct device *dev)
+ static ssize_t
+ modalias_show(struct device *dev, struct device_attribute *a, char *buf)
+ {
+-	const struct spi_device	*spi = to_spi_device(dev);
++	const struct spi_device *spi = to_spi_device(dev);
+ 	int len;
+ 
+ 	len = acpi_device_modalias(dev, buf, PAGE_SIZE - 1);
+@@ -115,46 +115,46 @@ static ssize_t driver_override_show(struct device *dev,
+ }
+ static DEVICE_ATTR_RW(driver_override);
+ 
+-#define SPI_STATISTICS_ATTRS(field, file)				\
+-static ssize_t spi_controller_##field##_show(struct device *dev,	\
++#define SPI_STATISTICS_ATTRS(field, file)                               \
++static ssize_t spi_controller_##field##_show(struct device *dev,        \
+ 					     struct device_attribute *attr, \
+-					     char *buf)			\
+-{									\
+-	struct spi_controller *ctlr = container_of(dev,			\
+-					 struct spi_controller, dev);	\
+-	return spi_statistics_##field##_show(&ctlr->statistics, buf);	\
+-}									\
+-static struct device_attribute dev_attr_spi_controller_##field = {	\
+-	.attr = { .name = file, .mode = 0444 },				\
+-	.show = spi_controller_##field##_show,				\
+-};									\
+-static ssize_t spi_device_##field##_show(struct device *dev,		\
+-					 struct device_attribute *attr,	\
+-					char *buf)			\
+-{									\
+-	struct spi_device *spi = to_spi_device(dev);			\
+-	return spi_statistics_##field##_show(&spi->statistics, buf);	\
+-}									\
+-static struct device_attribute dev_attr_spi_device_##field = {		\
+-	.attr = { .name = file, .mode = 0444 },				\
+-	.show = spi_device_##field##_show,				\
++					     char *buf)                 \
++{                                                                       \
++	struct spi_controller *ctlr = container_of(dev,                 \
++					 struct spi_controller, dev);   \
++	return spi_statistics_##field##_show(&ctlr->statistics, buf);   \
++}                                                                       \
++static struct device_attribute dev_attr_spi_controller_##field = {      \
++	.attr = { .name = file, .mode = 0444 },                         \
++	.show = spi_controller_##field##_show,                          \
++};                                                                      \
++static ssize_t spi_device_##field##_show(struct device *dev,            \
++					 struct device_attribute *attr, \
++					char *buf)                      \
++{                                                                       \
++	struct spi_device *spi = to_spi_device(dev);                    \
++	return spi_statistics_##field##_show(&spi->statistics, buf);    \
++}                                                                       \
++static struct device_attribute dev_attr_spi_device_##field = {          \
++	.attr = { .name = file, .mode = 0444 },                         \
++	.show = spi_device_##field##_show,                              \
+ }
+ 
+-#define SPI_STATISTICS_SHOW_NAME(name, file, field, format_string)	\
++#define SPI_STATISTICS_SHOW_NAME(name, file, field, format_string)      \
+ static ssize_t spi_statistics_##name##_show(struct spi_statistics *stat, \
+-					    char *buf)			\
+-{									\
+-	unsigned long flags;						\
+-	ssize_t len;							\
+-	spin_lock_irqsave(&stat->lock, flags);				\
+-	len = sprintf(buf, format_string, stat->field);			\
+-	spin_unlock_irqrestore(&stat->lock, flags);			\
+-	return len;							\
+-}									\
++					    char *buf)                  \
++{                                                                       \
++	unsigned long flags;                                            \
++	ssize_t len;                                                    \
++	spin_lock_irqsave(&stat->lock, flags);                          \
++	len = sprintf(buf, format_string, stat->field);                 \
++	spin_unlock_irqrestore(&stat->lock, flags);                     \
++	return len;                                                     \
++}                                                                       \
+ SPI_STATISTICS_ATTRS(name, file)
+ 
+-#define SPI_STATISTICS_SHOW(field, format_string)			\
+-	SPI_STATISTICS_SHOW_NAME(field, __stringify(field),		\
++#define SPI_STATISTICS_SHOW(field, format_string)                       \
++	SPI_STATISTICS_SHOW_NAME(field, __stringify(field),             \
+ 				 field, format_string)
+ 
+ SPI_STATISTICS_SHOW(messages, "%lu");
+@@ -170,9 +170,9 @@ SPI_STATISTICS_SHOW(bytes, "%llu");
+ SPI_STATISTICS_SHOW(bytes_rx, "%llu");
+ SPI_STATISTICS_SHOW(bytes_tx, "%llu");
+ 
+-#define SPI_STATISTICS_TRANSFER_BYTES_HISTO(index, number)		\
+-	SPI_STATISTICS_SHOW_NAME(transfer_bytes_histo##index,		\
+-				 "transfer_bytes_histo_" number,	\
++#define SPI_STATISTICS_TRANSFER_BYTES_HISTO(index, number)              \
++	SPI_STATISTICS_SHOW_NAME(transfer_bytes_histo##index,           \
++				 "transfer_bytes_histo_" number,        \
+ 				 transfer_bytes_histo[index],  "%lu")
+ SPI_STATISTICS_TRANSFER_BYTES_HISTO(0,  "0-1");
+ SPI_STATISTICS_TRANSFER_BYTES_HISTO(1,  "2-3");
+@@ -341,8 +341,8 @@ EXPORT_SYMBOL_GPL(spi_get_device_id);
+ 
+ static int spi_match_device(struct device *dev, struct device_driver *drv)
+ {
+-	const struct spi_device	*spi = to_spi_device(dev);
+-	const struct spi_driver	*sdrv = to_spi_driver(drv);
++	const struct spi_device *spi = to_spi_device(dev);
++	const struct spi_driver *sdrv = to_spi_driver(drv);
+ 
+ 	/* Check override first, and if set, only use the named driver */
+ 	if (spi->driver_override)
+@@ -364,7 +364,7 @@ static int spi_match_device(struct device *dev, struct device_driver *drv)
+ 
+ static int spi_uevent(struct device *dev, struct kobj_uevent_env *env)
+ {
+-	const struct spi_device		*spi = to_spi_device(dev);
++	const struct spi_device         *spi = to_spi_device(dev);
+ 	int rc;
+ 
+ 	rc = acpi_device_uevent_modalias(dev, env);
+@@ -375,18 +375,18 @@ static int spi_uevent(struct device *dev, struct kobj_uevent_env *env)
+ }
+ 
+ struct bus_type spi_bus_type = {
+-	.name		= "spi",
+-	.dev_groups	= spi_dev_groups,
+-	.match		= spi_match_device,
+-	.uevent		= spi_uevent,
++	.name           = "spi",
++	.dev_groups     = spi_dev_groups,
++	.match          = spi_match_device,
++	.uevent         = spi_uevent,
+ };
+ EXPORT_SYMBOL_GPL(spi_bus_type);
+ 
+ 
+ static int spi_drv_probe(struct device *dev)
+ {
+-	const struct spi_driver		*sdrv = to_spi_driver(dev->driver);
+-	struct spi_device		*spi = to_spi_device(dev);
++	const struct spi_driver         *sdrv = to_spi_driver(dev->driver);
++	struct spi_device               *spi = to_spi_device(dev);
+ 	int ret;
+ 
+ 	ret = of_clk_set_defaults(dev->of_node, false);
+@@ -414,7 +414,7 @@ static int spi_drv_probe(struct device *dev)
+ 
+ static int spi_drv_remove(struct device *dev)
+ {
+-	const struct spi_driver		*sdrv = to_spi_driver(dev->driver);
++	const struct spi_driver         *sdrv = to_spi_driver(dev->driver);
+ 	int ret;
+ 
+ 	ret = sdrv->remove(to_spi_device(dev));
+@@ -425,7 +425,7 @@ static int spi_drv_remove(struct device *dev)
+ 
+ static void spi_drv_shutdown(struct device *dev)
+ {
+-	const struct spi_driver		*sdrv = to_spi_driver(dev->driver);
++	const struct spi_driver         *sdrv = to_spi_driver(dev->driver);
+ 
+ 	sdrv->shutdown(to_spi_device(dev));
+ }
+@@ -461,8 +461,8 @@ EXPORT_SYMBOL_GPL(__spi_register_driver);
+  */
+ 
+ struct boardinfo {
+-	struct list_head	list;
+-	struct spi_board_info	board_info;
++	struct list_head        list;
++	struct spi_board_info   board_info;
+ };
+ 
+ static LIST_HEAD(board_list);
+@@ -500,7 +500,7 @@ static DEFINE_MUTEX(spi_add_lock);
+  */
+ struct spi_device *spi_alloc_device(struct spi_controller *ctlr)
+ {
+-	struct spi_device	*spi;
++	struct spi_device       *spi;
+ 
+ 	if (!spi_controller_get(ctlr))
+ 		return NULL;
+@@ -642,8 +642,8 @@ EXPORT_SYMBOL_GPL(spi_add_device);
+ struct spi_device *spi_new_device(struct spi_controller *ctlr,
+ 				  struct spi_board_info *chip)
+ {
+-	struct spi_device	*proxy;
+-	int			status;
++	struct spi_device       *proxy;
++	int                     status;
+ 
+ 	/* NOTE:  caller did any chip->bus_num checks necessary.
+ 	 *
+@@ -750,7 +750,7 @@ static void spi_match_controller_to_boardinfo(struct spi_controller *ctlr,
+  *
+  * Return: zero on success, else a negative error code.
+  */
+-int spi_register_board_info(struct spi_board_info const *info, unsigned n)
++int spi_register_board_info(struct spi_board_info const *info, unsigned int n)
+ {
+ 	struct boardinfo *bi;
+ 	int i;
+@@ -1534,24 +1534,24 @@ static void spi_pump_messages(struct kthread_work *work)
+ 
+ /**
+  * spi_take_timestamp_pre - helper for drivers to collect the beginning of the
+- *			    TX timestamp for the requested byte from the SPI
+- *			    transfer. The frequency with which this function
+- *			    must be called (once per word, once for the whole
+- *			    transfer, once per batch of words etc) is arbitrary
+- *			    as long as the @tx buffer offset is greater than or
+- *			    equal to the requested byte at the time of the
+- *			    call. The timestamp is only taken once, at the
+- *			    first such call. It is assumed that the driver
+- *			    advances its @tx buffer pointer monotonically.
++ *                          TX timestamp for the requested byte from the SPI
++ *                          transfer. The frequency with which this function
++ *                          must be called (once per word, once for the whole
++ *                          transfer, once per batch of words etc) is arbitrary
++ *                          as long as the @tx buffer offset is greater than or
++ *                          equal to the requested byte at the time of the
++ *                          call. The timestamp is only taken once, at the
++ *                          first such call. It is assumed that the driver
++ *                          advances its @tx buffer pointer monotonically.
+  * @ctlr: Pointer to the spi_controller structure of the driver
+  * @xfer: Pointer to the transfer being timestamped
+  * @progress: How many words (not bytes) have been transferred so far
+  * @irqs_off: If true, will disable IRQs and preemption for the duration of the
+- *	      transfer, for less jitter in time measurement. Only compatible
+- *	      with PIO drivers. If true, must follow up with
+- *	      spi_take_timestamp_post or otherwise system will crash.
+- *	      WARNING: for fully predictable results, the CPU frequency must
+- *	      also be under control (governor).
++ *            transfer, for less jitter in time measurement. Only compatible
++ *            with PIO drivers. If true, must follow up with
++ *            spi_take_timestamp_post or otherwise system will crash.
++ *            WARNING: for fully predictable results, the CPU frequency must
++ *            also be under control (governor).
+  */
+ void spi_take_timestamp_pre(struct spi_controller *ctlr,
+ 			    struct spi_transfer *xfer,
+@@ -1580,11 +1580,11 @@ EXPORT_SYMBOL_GPL(spi_take_timestamp_pre);
+ 
+ /**
+  * spi_take_timestamp_post - helper for drivers to collect the end of the
+- *			     TX timestamp for the requested byte from the SPI
+- *			     transfer. Can be called with an arbitrary
+- *			     frequency: only the first call where @tx exceeds
+- *			     or is equal to the requested word will be
+- *			     timestamped.
++ *                           TX timestamp for the requested byte from the SPI
++ *                           transfer. Can be called with an arbitrary
++ *                           frequency: only the first call where @tx exceeds
++ *                           or is equal to the requested word will be
++ *                           timestamped.
+  * @ctlr: Pointer to the spi_controller structure of the driver
+  * @xfer: Pointer to the transfer being timestamped
+  * @progress: How many words (not bytes) have been transferred so far
+@@ -1774,7 +1774,7 @@ static int spi_start_queue(struct spi_controller *ctlr)
+ static int spi_stop_queue(struct spi_controller *ctlr)
+ {
+ 	unsigned long flags;
+-	unsigned limit = 500;
++	unsigned int limit = 500;
+ 	int ret = 0;
+ 
+ 	spin_lock_irqsave(&ctlr->queue_lock, flags);
+@@ -1894,7 +1894,7 @@ static int spi_controller_initialize_queue(struct spi_controller *ctlr)
+ 
+ /**
+  * spi_flush_queue - Send all pending messages in the queue from the callers'
+- *		     context
++ *                   context
+  * @ctlr: controller to process queue for
+  *
+  * This should be used when one wants to ensure all pending messages have been
+@@ -2045,7 +2045,7 @@ of_register_spi_device(struct spi_controller *ctlr, struct device_node *nc)
+ 
+ /**
+  * of_register_spi_devices() - Register child devices onto the SPI bus
+- * @ctlr:	Pointer to spi_controller device
++ * @ctlr:       Pointer to spi_controller device
+  *
+  * Registers an spi_device for each child node of controller node which
+  * represents a valid SPI slave.
+@@ -2075,12 +2075,12 @@ static void of_register_spi_devices(struct spi_controller *ctlr) { }
+ 
+ #ifdef CONFIG_ACPI
+ struct acpi_spi_lookup {
+-	struct spi_controller 	*ctlr;
+-	u32			max_speed_hz;
+-	u32			mode;
+-	int			irq;
+-	u8			bits_per_word;
+-	u8			chip_select;
++	struct spi_controller   *ctlr;
++	u32                     max_speed_hz;
++	u32                     mode;
++	int                     irq;
++	u8                      bits_per_word;
++	u8                      chip_select;
+ };
+ 
+ static void acpi_spi_parse_apple_properties(struct acpi_device *dev,
+@@ -2184,8 +2184,8 @@ static acpi_status acpi_register_spi_device(struct spi_controller *ctlr,
+ 	    acpi_device_enumerated(adev))
+ 		return AE_OK;
+ 
+-	lookup.ctlr		= ctlr;
+-	lookup.irq		= -1;
++	lookup.ctlr             = ctlr;
++	lookup.irq              = -1;
+ 
+ 	INIT_LIST_HEAD(&resource_list);
+ 	ret = acpi_dev_get_resources(adev, &resource_list,
+@@ -2215,11 +2215,11 @@ static acpi_status acpi_register_spi_device(struct spi_controller *ctlr,
+ 
+ 
+ 	ACPI_COMPANION_SET(&spi->dev, adev);
+-	spi->max_speed_hz	= lookup.max_speed_hz;
+-	spi->mode		|= lookup.mode;
+-	spi->irq		= lookup.irq;
+-	spi->bits_per_word	= lookup.bits_per_word;
+-	spi->chip_select	= lookup.chip_select;
++	spi->max_speed_hz       = lookup.max_speed_hz;
++	spi->mode               |= lookup.mode;
++	spi->irq                = lookup.irq;
++	spi->bits_per_word      = lookup.bits_per_word;
++	spi->chip_select        = lookup.chip_select;
+ 
+ 	acpi_set_modalias(adev, acpi_device_hid(adev), spi->modalias,
+ 			  sizeof(spi->modalias));
+@@ -2252,7 +2252,7 @@ static acpi_status acpi_spi_add_device(acpi_handle handle, u32 level,
+ 	return acpi_register_spi_device(ctlr, adev);
+ }
+ 
+-#define SPI_ACPI_ENUMERATE_MAX_DEPTH		32
++#define SPI_ACPI_ENUMERATE_MAX_DEPTH            32
+ 
+ static void acpi_register_spi_devices(struct spi_controller *ctlr)
+ {
+@@ -2282,16 +2282,16 @@ static void spi_controller_release(struct device *dev)
+ }
+ 
+ static struct class spi_master_class = {
+-	.name		= "spi_master",
+-	.owner		= THIS_MODULE,
+-	.dev_release	= spi_controller_release,
+-	.dev_groups	= spi_master_groups,
++	.name           = "spi_master",
++	.owner          = THIS_MODULE,
++	.dev_release    = spi_controller_release,
++	.dev_groups     = spi_master_groups,
+ };
+ 
+ #ifdef CONFIG_SPI_SLAVE
+ /**
+  * spi_slave_abort - abort the ongoing transfer request on an SPI slave
+- *		     controller
++ *                   controller
+  * @spi: device used for the current transfer
+  */
+ int spi_slave_abort(struct spi_device *spi)
+@@ -2379,25 +2379,25 @@ static const struct attribute_group *spi_slave_groups[] = {
+ };
+ 
+ static struct class spi_slave_class = {
+-	.name		= "spi_slave",
+-	.owner		= THIS_MODULE,
+-	.dev_release	= spi_controller_release,
+-	.dev_groups	= spi_slave_groups,
++	.name           = "spi_slave",
++	.owner          = THIS_MODULE,
++	.dev_release    = spi_controller_release,
++	.dev_groups     = spi_slave_groups,
+ };
+ #else
+-extern struct class spi_slave_class;	/* dummy */
++extern struct class spi_slave_class;    /* dummy */
+ #endif
+ 
+ /**
+  * __spi_alloc_controller - allocate an SPI master or slave controller
+  * @dev: the controller, possibly using the platform_bus
+  * @size: how much zeroed driver-private data to allocate; the pointer to this
+- *	memory is in the driver_data field of the returned device, accessible
+- *	with spi_controller_get_devdata(); the memory is cacheline aligned;
+- *	drivers granting DMA access to portions of their private data need to
+- *	round up @size using ALIGN(size, dma_get_cache_alignment()).
++ *      memory is in the driver_data field of the returned device, accessible
++ *      with spi_controller_get_devdata(); the memory is cacheline aligned;
++ *      drivers granting DMA access to portions of their private data need to
++ *      round up @size using ALIGN(size, dma_get_cache_alignment()).
+  * @slave: flag indicating whether to allocate an SPI master (false) or SPI
+- *	slave (true) controller
++ *      slave (true) controller
+  * Context: can sleep
+  *
+  * This call is used only by SPI controller drivers, which are the
+@@ -2416,7 +2416,7 @@ extern struct class spi_slave_class;	/* dummy */
+ struct spi_controller *__spi_alloc_controller(struct device *dev,
+ 					      unsigned int size, bool slave)
+ {
+-	struct spi_controller	*ctlr;
++	struct spi_controller   *ctlr;
+ 	size_t ctlr_size = ALIGN(sizeof(*ctlr), dma_get_cache_alignment());
+ 
+ 	if (!dev)
+@@ -2621,7 +2621,7 @@ static int spi_controller_check_ops(struct spi_controller *ctlr)
+ /**
+  * spi_register_controller - register SPI master or slave controller
+  * @ctlr: initialized master, originally from spi_alloc_master() or
+- *	spi_alloc_slave()
++ *      spi_alloc_slave()
+  * Context: can sleep
+  *
+  * SPI controllers connect to their drivers using some non-SPI bus,
+@@ -2643,10 +2643,10 @@ static int spi_controller_check_ops(struct spi_controller *ctlr)
+  */
+ int spi_register_controller(struct spi_controller *ctlr)
+ {
+-	struct device		*dev = ctlr->dev.parent;
+-	struct boardinfo	*bi;
+-	int			status;
+-	int			id, first_dynamic;
++	struct device           *dev = ctlr->dev.parent;
++	struct boardinfo        *bi;
++	int                     status;
++	int                     id, first_dynamic;
+ 
+ 	if (!dev)
+ 		return -ENODEV;
+@@ -2788,10 +2788,10 @@ static void devm_spi_unregister(struct device *dev, void *res)
+ 
+ /**
+  * devm_spi_register_controller - register managed SPI master or slave
+- *	controller
++ *      controller
+  * @dev:    device managing SPI controller
+  * @ctlr: initialized controller, originally from spi_alloc_master() or
+- *	spi_alloc_slave()
++ *      spi_alloc_slave()
+  * Context: can sleep
+  *
+  * Register a SPI device as with spi_register_controller() which will
+@@ -2941,8 +2941,8 @@ static int __spi_controller_match(struct device *dev, const void *data)
+  */
+ struct spi_controller *spi_busnum_to_master(u16 bus_num)
+ {
+-	struct device		*dev;
+-	struct spi_controller	*ctlr = NULL;
++	struct device           *dev;
++	struct spi_controller   *ctlr = NULL;
+ 
+ 	dev = class_find_device(&spi_master_class, NULL, &bus_num,
+ 				__spi_controller_match);
+@@ -3077,8 +3077,7 @@ static void __spi_replace_transfers_release(struct spi_controller *ctlr,
+  * Returns: pointer to @spi_replaced_transfers,
+  *          PTR_ERR(...) in case of errors.
+  */
+-struct spi_replaced_transfers *spi_replace_transfers(
+-	struct spi_message *msg,
++struct spi_replaced_transfers *spi_replace_transfers(	struct spi_message *msg,
+ 	struct spi_transfer *xfer_first,
+ 	size_t remove,
+ 	size_t insert,
+@@ -3317,8 +3316,8 @@ static int __spi_validate_bits_per_word(struct spi_controller *ctlr,
+  */
+ int spi_setup(struct spi_device *spi)
+ {
+-	unsigned	bad_bits, ugly_bits;
+-	int		status;
++	unsigned int bad_bits, ugly_bits;
++	int             status;
+ 
+ 	/* check mode to prevent that DUAL and QUAD set at the same time
+ 	 */
+@@ -3536,7 +3535,7 @@ static int __spi_validate(struct spi_device *spi, struct spi_message *message)
+ 	 */
+ 	if ((ctlr->flags & SPI_CONTROLLER_HALF_DUPLEX) ||
+ 	    (spi->mode & SPI_3WIRE)) {
+-		unsigned flags = ctlr->flags;
++		unsigned int flags = ctlr->flags;
+ 
+ 		list_for_each_entry(xfer, &message->transfers, transfer_list) {
+ 			if (xfer->rx_buf && xfer->tx_buf)
+@@ -3643,8 +3642,10 @@ static int __spi_async(struct spi_device *spi, struct spi_message *message)
+ 	 * Some controllers do not support doing regular SPI transfers. Return
+ 	 * ENOTSUPP when this is the case.
+ 	 */
+-	if (!ctlr->transfer)
++	if (!ctlr->transfer) {
++		//pr_info("spi: Transfer not supported\n");
+ 		return -ENOTSUPP;
++	}
+ 
+ 	message->spi = spi;
+ 
+@@ -3755,8 +3756,10 @@ int spi_async_locked(struct spi_device *spi, struct spi_message *message)
+ 	unsigned long flags;
+ 
+ 	ret = __spi_validate(spi, message);
+-	if (ret != 0)
++	if (ret != 0) {
++//              pr_info("spi: Message didn't validate\n");
+ 		return ret;
++	}
+ 
+ 	spin_lock_irqsave(&ctlr->bus_lock_spinlock, flags);
+ 
+@@ -3788,6 +3791,8 @@ static int __spi_sync(struct spi_device *spi, struct spi_message *message)
+ 	struct spi_controller *ctlr = spi->controller;
+ 	unsigned long flags;
+ 
++	//pr_info("spi: sync\n");
++
+ 	status = __spi_validate(spi, message);
+ 	if (status != 0)
+ 		return status;
+@@ -3805,14 +3810,19 @@ static int __spi_sync(struct spi_device *spi, struct spi_message *message)
+ 	 * support for driver implemented message queues.
+ 	 */
+ 	if (ctlr->transfer == spi_queued_transfer) {
++		//pr_info("spi: queue transfer\n");
+ 		spin_lock_irqsave(&ctlr->bus_lock_spinlock, flags);
+ 
+ 		trace_spi_message_submit(message);
+ 
+ 		status = __spi_queued_transfer(spi, message, false);
+ 
++		//pr_info("spi: queue transfer done with %d status\n", status);
++		//pr_info("spi: bus unlock request\n");
+ 		spin_unlock_irqrestore(&ctlr->bus_lock_spinlock, flags);
++		//pr_info("spi: bus unlock done\n");
+ 	} else {
++		//pr_info("spi: async\n");
+ 		status = spi_async_locked(spi, message);
+ 	}
+ 
+@@ -3827,11 +3837,16 @@ static int __spi_sync(struct spi_device *spi, struct spi_message *message)
+ 						       spi_sync_immediate);
+ 			__spi_pump_messages(ctlr, false);
+ 		}
+-
++		// vejmarie ...
++		// Transfer hang here ...
++		// look like it is not complete
++//              pr_info("spi: waiting for completion\n");
+ 		wait_for_completion(&done);
++//              pr_info("spi: all done\n");
+ 		status = message->status;
+ 	}
+ 	message->context = NULL;
++	//pr_info("spi: returning\n");
+ 	return status;
+ }
+ 
+@@ -3860,9 +3875,11 @@ int spi_sync(struct spi_device *spi, struct spi_message *message)
+ {
+ 	int ret;
+ 
++//      pr_info("spi: Getting bus lock\n");
+ 	mutex_lock(&spi->controller->bus_lock_mutex);
+ 	ret = __spi_sync(spi, message);
+ 	mutex_unlock(&spi->controller->bus_lock_mutex);
++//      pr_info("spi: bus lock released\n");
+ 
+ 	return ret;
+ }
+@@ -3886,7 +3903,9 @@ EXPORT_SYMBOL_GPL(spi_sync);
+  */
+ int spi_sync_locked(struct spi_device *spi, struct spi_message *message)
+ {
++	//pr_info("spi: spi sync locked\n");
+ 	return __spi_sync(spi, message);
++
+ }
+ EXPORT_SYMBOL_GPL(spi_sync_locked);
+ 
+@@ -3945,9 +3964,9 @@ int spi_bus_unlock(struct spi_controller *ctlr)
+ EXPORT_SYMBOL_GPL(spi_bus_unlock);
+ 
+ /* portable code must never pass more than 32 bytes */
+-#define	SPI_BUFSIZ	max(32, SMP_CACHE_BYTES)
++#define SPI_BUFSIZ      max(32, SMP_CACHE_BYTES)
+ 
+-static u8	*buf;
++static u8       *buf;
+ 
+ /**
+  * spi_write_then_read - SPI synchronous write followed by read
+@@ -3970,23 +3989,24 @@ static u8	*buf;
+  * Return: zero on success, else a negative error code.
+  */
+ int spi_write_then_read(struct spi_device *spi,
+-		const void *txbuf, unsigned n_tx,
+-		void *rxbuf, unsigned n_rx)
++		const void *txbuf, unsigned int n_tx,
++		void *rxbuf, unsigned int n_rx)
+ {
+ 	static DEFINE_MUTEX(lock);
+ 
+-	int			status;
+-	struct spi_message	message;
+-	struct spi_transfer	x[2];
+-	u8			*local_buf;
++	int                     status;
++	struct spi_message      message;
++	struct spi_transfer     x[2];
++	u8                      *local_buf;
+ 
+ 	/* Use preallocated DMA-safe buffer if we can.  We can't avoid
+ 	 * copying here, (as a pure convenience thing), but we can
+ 	 * keep heap costs out of the hot path unless someone else is
+ 	 * using the pre-allocated buffer or the transfer is too large.
+ 	 */
++	//pr_info("spi: init transfer\n");
+ 	if ((n_tx + n_rx) > SPI_BUFSIZ || !mutex_trylock(&lock)) {
+-		local_buf = kmalloc(max((unsigned)SPI_BUFSIZ, n_tx + n_rx),
++		local_buf = kmalloc(max((unsigned int)SPI_BUFSIZ, n_tx + n_rx),
+ 				    GFP_KERNEL | GFP_DMA);
+ 		if (!local_buf)
+ 			return -ENOMEM;
+@@ -4010,7 +4030,9 @@ int spi_write_then_read(struct spi_device *spi,
+ 	x[1].rx_buf = local_buf + n_tx;
+ 
+ 	/* do the i/o */
++	//pr_info("spi: do transfer\n");
+ 	status = spi_sync(spi, &message);
++	//pr_info("spi: transfer done with %d exit status\n", status);
+ 	if (status == 0)
+ 		memcpy(rxbuf, x[1].rx_buf, n_rx);
+ 
+@@ -4063,7 +4085,7 @@ static int of_spi_notify(struct notifier_block *nb, unsigned long action,
+ 	case OF_RECONFIG_CHANGE_ADD:
+ 		ctlr = of_find_spi_controller_by_node(rd->dn->parent);
+ 		if (ctlr == NULL)
+-			return NOTIFY_OK;	/* not for us */
++			return NOTIFY_OK;       /* not for us */
+ 
+ 		if (of_node_test_and_set_flag(rd->dn, OF_POPULATED)) {
+ 			put_device(&ctlr->dev);
+@@ -4089,7 +4111,7 @@ static int of_spi_notify(struct notifier_block *nb, unsigned long action,
+ 		/* find our device by node */
+ 		spi = of_find_spi_device_by_node(rd->dn);
+ 		if (spi == NULL)
+-			return NOTIFY_OK;	/* no? not meant for us */
++			return NOTIFY_OK;       /* no? not meant for us */
+ 
+ 		/* unregister takes one ref away */
+ 		spi_unregister_device(spi);
+@@ -4179,7 +4201,7 @@ extern struct notifier_block spi_acpi_notifier;
+ 
+ static int __init spi_init(void)
+ {
+-	int	status;
++	int     status;
+ 
+ 	buf = kmalloc(SPI_BUFSIZ, GFP_KERNEL);
+ 	if (!buf) {
+diff --git a/drivers/tty/serial/8250/8250_gxp_vuart.c b/drivers/tty/serial/8250/8250_gxp_vuart.c
+index 134988821542..ab8b57c9922a 100644
+--- a/drivers/tty/serial/8250/8250_gxp_vuart.c
++++ b/drivers/tty/serial/8250/8250_gxp_vuart.c
+@@ -423,8 +423,10 @@ static int gxp_vuart_probe(struct platform_device *pdev)
+ 		port.port.fifosize = prop;
+ 
+ 	/* Check for a fixed line number */
+-	if (of_property_read_u32(np, "serial-line", &prop) == 0)
++	if (of_property_read_u32(np, "serial-line", &prop) == 0) {
++		pr_info("gxp-vuart: serial-line detected %d\n", prop);
+ 		port.port.line = prop;
++	}
+ 
+ 	port.port.irq = irq_of_parse_and_map(np, 0);
+ 	port.port.irqflags = IRQF_SHARED;
+diff --git a/include/linux/i2c.h b/include/linux/i2c.h
+index 56622658b215..1e845d50d800 100644
+--- a/include/linux/i2c.h
++++ b/include/linux/i2c.h
+@@ -183,6 +183,7 @@ s32 i2c_smbus_read_i2c_block_data_or_emulated(const struct i2c_client *client,
+ 					      u8 *values);
+ int i2c_get_device_id(const struct i2c_client *client,
+ 		      struct i2c_device_identity *id);
++u8 i2c_smbus_pec(u8 crc, u8 *p, size_t count);
+ #endif /* I2C */
+ 
+ /**
+-- 
+2.52.0
+

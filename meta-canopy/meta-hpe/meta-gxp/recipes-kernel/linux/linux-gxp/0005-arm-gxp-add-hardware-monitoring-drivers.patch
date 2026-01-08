@@ -1,0 +1,3076 @@
+From 3c2f06e2b7ab36f034831e3639569620005247ec Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 8 Jan 2026 01:21:52 +0100
+Subject: [PATCH 5/8] arm: gxp: add hardware monitoring drivers
+
+Add hardware monitoring (hwmon) drivers for HPE GXP BMC platform:
+
+GXP-specific drivers:
+- gxp-fan-ctrl: Fan controller for thermal management
+- gxp-psu: Power supply monitoring
+- gxp-power: Power consumption monitoring
+- gxp-ddr5: DDR5 memory temperature monitoring
+
+PECI sensor enhancements:
+- peci-cputemp: CPU temperature via PECI interface
+- peci-dimmtemp: DIMM temperature via PECI interface
+
+Additional sensor drivers:
+- emc1403: Temperature sensor updates
+- sbrmi: AMD SBRMI (Sideband Remote Management Interface) driver
+- sbtsi_temp: AMD SB-TSI temperature sensor updates
+- smpro-hwmon: Ampere SMpro hardware monitoring
+- ubm-drv: Universal Back Module driver
+
+Also includes AMD SBRMI device tree binding documentation.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+
+diff --git a/Documentation/devicetree/bindings/hwmon/amd,sbrmi.yaml b/Documentation/devicetree/bindings/hwmon/amd,sbrmi.yaml
+new file mode 100644
+index 000000000000..7598b083979c
+--- /dev/null
++++ b/Documentation/devicetree/bindings/hwmon/amd,sbrmi.yaml
+@@ -0,0 +1,53 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/hwmon/amd,sbrmi.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: >
++  Sideband Remote Management Interface (SB-RMI) compliant
++  AMD SoC power device.
++
++maintainers:
++  - Akshay Gupta <Akshay.Gupta@amd.com>
++
++description: |
++  SB Remote Management Interface (SB-RMI) is an SMBus compatible
++  interface that reports AMD SoC's Power (normalized Power) using,
++  Mailbox Service Request and resembles a typical 8-pin remote power
++  sensor's I2C interface to BMC. The power attributes in hwmon
++  reports power in microwatts.
++
++properties:
++  compatible:
++    enum:
++      - amd,sbrmi
++
++  reg:
++    maxItems: 1
++    description: |
++      I2C bus address of the device as specified in Section SBI SMBus Address
++      of the SoC register reference. The SB-RMI address is normally 78h for
++      socket 0 and 70h for socket 1, but it could vary based on hardware
++      address select pins.
++      \[open source SoC register reference\]
++        https://www.amd.com/en/support/tech-docs?keyword=55898
++
++required:
++  - compatible
++  - reg
++
++additionalProperties: false
++
++examples:
++  - |
++    i2c0 {
++        #address-cells = <1>;
++        #size-cells = <0>;
++
++        sbrmi@3c {
++                compatible = "amd,sbrmi";
++                reg = <0x3c>;
++        };
++    };
++...
+diff --git a/Documentation/hwmon/index.rst b/Documentation/hwmon/index.rst
+index b797db738225..f484dfa94c00 100644
+--- a/Documentation/hwmon/index.rst
++++ b/Documentation/hwmon/index.rst
+@@ -149,6 +149,7 @@ Hardware Monitoring Kernel Drivers
+    pxe1610
+    pwm-fan
+    raspberrypi-hwmon
++   sbrmi
+    sch5627
+    sch5636
+    scpi-hwmon
+diff --git a/Documentation/hwmon/sbrmi.rst b/Documentation/hwmon/sbrmi.rst
+new file mode 100644
+index 000000000000..aaf0f7b776fb
+--- /dev/null
++++ b/Documentation/hwmon/sbrmi.rst
+@@ -0,0 +1,78 @@
++.. SPDX-License-Identifier: GPL-2.0-or-later
++
++Kernel driver sbrmi
++===================
++
++Supported hardware:
++
++  * Sideband Remote Management Interface (SB-RMI) compliant AMD SoC
++    device connected to the BMC via the APML.
++
++    Prefix: 'sbrmi'
++
++    Addresses scanned: This driver doesn't support address scanning.
++
++    To instantiate this driver on an AMD CPU with SB-RMI
++    support, the i2c bus number would be the bus connected from the board
++    management controller (BMC) to the CPU.
++    The SMBus address is really 7 bits. Some vendors and the SMBus
++    specification show the address as 8 bits, left justified with the R/W
++    bit as a write (0) making bit 0. Some vendors use only the 7 bits
++    to describe the address.
++    As mentioned in AMD's APML specification, The SB-RMI address is
++    normally 78h(0111 100W) or 3Ch(011 1100) for socket 0 and 70h(0111 000W)
++    or 38h(011 1000) for socket 1, but it could vary based on hardware
++    address select pins.
++
++    Datasheet: The SB-RMI interface and protocol along with the Advanced
++               Platform Management Link (APML) Specification is available
++               as part of the open source SoC register reference at:
++
++               https://www.amd.com/en/support/tech-docs?keyword=55898
++
++Author: Akshay Gupta <akshay.gupta@amd.com>
++
++Description
++-----------
++
++The APML provides a way to communicate with the SB Remote Management interface
++(SB-RMI) module from the external SMBus master that can be used to report socket
++power on AMD platforms using mailbox command and resembles a typical 8-pin remote
++power sensor's I2C interface to BMC.
++This driver implements current power with power cap and power cap max.
++
++sysfs-Interface
++---------------
++Power sensors can be queried and set via the standard ``hwmon`` interface
++on ``sysfs``, under the directory ``/sys/class/hwmon/hwmonX`` for some value
++of ``X`` (search for the ``X`` such that ``/sys/class/hwmon/hwmonX/name`` has
++content ``sbrmi``)
++
++================ ===== ========================================================
++Name             Perm   Description
++================ ===== ========================================================
++power1_input     RO    Current Power consumed
++power1_cap       RW    Power limit can be set between 0 and power1_cap_max
++power1_cap_max   RO    Maximum powerlimit calculated and reported by the SMU FW
++================ ===== ========================================================
++
++The following example show how the 'Power' attribute from the i2c-addresses
++can be monitored using the userspace utilities like ``sensors`` binary::
++
++  # sensors
++  sbrmi-i2c-1-38
++  Adapter: bcm2835 I2C adapter
++  power1:       61.00 W (cap = 225.00 W)
++
++  sbrmi-i2c-1-3c
++  Adapter: bcm2835 I2C adapter
++  power1:       28.39 W (cap = 224.77 W)
++  #
++
++Also, Below shows how get and set the values from sysfs entries individually::
++  # cat /sys/class/hwmon/hwmon1/power1_cap_max
++  225000000
++
++  # echo 180000000 > /sys/class/hwmon/hwmon1/power1_cap
++  # cat /sys/class/hwmon/hwmon1/power1_cap
++  180000000
+diff --git a/drivers/hwmon/Kconfig b/drivers/hwmon/Kconfig
+index 605874d07e2c..e7634984742b 100644
+--- a/drivers/hwmon/Kconfig
++++ b/drivers/hwmon/Kconfig
+@@ -80,6 +80,15 @@ config SENSORS_ABITUGURU3
+ 	  This driver can also be built as a module. If so, the module
+ 	  will be called abituguru3.
+ 
++config SENSORS_SMPRO
++        tristate "Ampere's Altra SMpro hardware monitoring driver"
++	default y
++        depends on MFD_SMPRO
++        help
++          If you say yes here you get support for the thermal, voltage,
++          current and power sensors of Ampere's Altra processor family SoC
++          with SMpro co-processor.
++
+ config SENSORS_AD7314
+ 	tristate "Analog Devices AD7314 and compatibles"
+ 	depends on SPI
+@@ -1537,6 +1546,35 @@ config SENSORS_SBTSI
+ 	  This driver can also be built as a module. If so, the module will
+ 	  be called sbtsi_temp.
+ 
++config SENSORS_SBRMI
++       tristate "Emulated SB-RMI sensor"
++       depends on I2C
++       help
++         If you say yes here you get support for emulated RMI
++         sensors on AMD SoCs with APML interface connected to a BMC device.
++         This driver can also be built as a module. If so, the module will
++         be called sbrmi.
++config SENSORS_SBRMI_I3C
++       tristate "Emulated SB-RMI sensor over I3C"
++       depends on I3C
++       select REGMAP_I3C
++       default n
++       help
++         If you say yes here you get support for emulated RMI
++         sensors on AMD SoCs with APML interface connected to a BMC device.
++         This driver can also be built as a module. If so, the module will
++         be called sbrmi_i3c.
++config SENSORS_SBTSI_I3C
++       tristate "Emulated SB-TSI temperature sensor over I3C"
++       depends on I3C
++       select REGMAP_I3C
++       default n
++       help
++         If you say yes here you get support for emulated temperature
++         sensors on AMD SoCs with SB-TSI interface connected to a BMC device.
++         This driver can also be built as a module. If so, the module will
++         be called sbtsi_i3c.
++
+ config SENSORS_SHT15
+ 	tristate "Sensiron humidity and temperature sensors. SHT15 and compat."
+ 	depends on GPIOLIB || COMPILE_TEST
+@@ -2151,6 +2189,23 @@ config SENSORS_GXP_PSU
+ 	help
+ 	  If you say yes here you get support for GXP psu function
+ 
++config SENSORS_GXP_DDR5
++        tristate "GXP DDR5 driver"
++        depends on ARCH_HPE_GXP
++        help
++          If you say yes here you get support for GXP ddr5 function
++
++config SENSORS_UBM_DRV
++        tristate "UBM DRIVE driver"
++        help
++          If you say yes here you get support for UBM drv function
++
++config SENSORS_GXP_UBM
++        tristate "GXP UBM driver"
++        depends on ARCH_HPE_GXP
++        help
++          If you say yes here you get support for GXP ubm function
++
+ config SENSORS_GXP_POWER
+ 	tristate "GXP POWER driver"
+ 	depends on ARCH_HPE_GXP
+diff --git a/drivers/hwmon/Makefile b/drivers/hwmon/Makefile
+index 7caebf7df164..7179ff77db32 100644
+--- a/drivers/hwmon/Makefile
++++ b/drivers/hwmon/Makefile
+@@ -163,6 +163,9 @@ obj-$(CONFIG_SENSORS_PWM_FAN)	+= pwm-fan.o
+ obj-$(CONFIG_SENSORS_RASPBERRYPI_HWMON)	+= raspberrypi-hwmon.o
+ obj-$(CONFIG_SENSORS_S3C)	+= s3c-hwmon.o
+ obj-$(CONFIG_SENSORS_SBTSI)	+= sbtsi_temp.o
++obj-$(CONFIG_SENSORS_SBRMI)	+= sbrmi.o
++obj-$(CONFIG_SENSORS_SBTSI_I3C)	+= sbtsi-i3c.o
++obj-$(CONFIG_SENSORS_SBRMI_I3C)	+= sbrmi-i3c.o
+ obj-$(CONFIG_SENSORS_SCH56XX_COMMON)+= sch56xx-common.o
+ obj-$(CONFIG_SENSORS_SCH5627)	+= sch5627.o
+ obj-$(CONFIG_SENSORS_SCH5636)	+= sch5636.o
+@@ -201,7 +204,11 @@ obj-$(CONFIG_SENSORS_XGENE)	+= xgene-hwmon.o
+ obj-$(CONFIG_SENSORS_GXP_FAN_CTRL) += gxp-fan-ctrl.o
+ obj-$(CONFIG_SENSORS_GXP_CORETEMP) += gxp-coretemp.o
+ obj-$(CONFIG_SENSORS_GXP_PSU) += gxp-psu.o
++obj-$(CONFIG_SENSORS_GXP_DDR5) += gxp-ddr5.o
++obj-$(CONFIG_SENSORS_UBM_DRV) += ubm-drv.o
++obj-$(CONFIG_SENSORS_GXP_UBM) += gxp-ubm.o
+ obj-$(CONFIG_SENSORS_GXP_POWER) += gxp-power.o
++obj-$(CONFIG_SENSORS_SMPRO)     += smpro-hwmon.o
+ 
+ obj-$(CONFIG_SENSORS_OCC)	+= occ/
+ obj-$(CONFIG_PMBUS)		+= pmbus/
+diff --git a/drivers/hwmon/emc1403.c b/drivers/hwmon/emc1403.c
+index 314838272049..e25b29638bdf 100644
+--- a/drivers/hwmon/emc1403.c
++++ b/drivers/hwmon/emc1403.c
+@@ -430,7 +430,7 @@ static int emc1403_probe(struct i2c_client *client)
+ }
+ 
+ static const unsigned short emc1403_address_list[] = {
+-	0x18, 0x1c, 0x29, 0x4c, 0x4d, 0x5c, I2C_CLIENT_END
++	0x18, 0x1c, 0x29, 0x4a, 0x4c, 0x4d, 0x5c, I2C_CLIENT_END
+ };
+ 
+ /* Last digit of chip name indicates number of channels */
+diff --git a/drivers/hwmon/gxp-ddr5.c b/drivers/hwmon/gxp-ddr5.c
+new file mode 100644
+index 000000000000..50254a8f03d6
+--- /dev/null
++++ b/drivers/hwmon/gxp-ddr5.c
+@@ -0,0 +1,218 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (C) 2023 Hewlett-Packard Development Company, L.P.
++ *
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ */
++
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_device.h>
++#include <linux/i2c.h>
++#include <linux/hwmon.h>
++#include <linux/hwmon-sysfs.h>
++#include <linux/err.h>
++#include <linux/kthread.h>
++#include <linux/delay.h>
++#include <linux/poll.h>
++#include <linux/debugfs.h>
++#include <linux/bitops.h>
++
++struct gxp_ddr5_drvdata {
++	struct i2c_client *client;
++	u8 low;
++	u8 high;
++	struct mutex update_lock;
++	struct device *hwmon_dev;
++	struct dentry *debugfs;
++};
++
++#define REG_11 0xb
++#define REG_TEMP 0x31
++#define HUB_REG(reg) ((u8) ~0x80 | reg)
++#define SPD_SIZE 1024
++
++struct mutex drv_lock;
++unsigned int currentSpdIndex;
++
++
++unsigned char spd[SPD_SIZE]; // store SPD
++int spd_len;
++
++static ssize_t spd_read(struct file *filp, struct kobject *kobj,
++			struct bin_attribute *bin_attr,
++			char *buf, loff_t off, size_t count);
++
++static const struct bin_attribute spd_attr = {
++	.attr = {
++		.name = "spd",
++		.mode = 0444,
++	},
++	.size = SPD_SIZE,
++	.read = spd_read,
++};
++
++static void gxp_ddr5_fs_init(struct gxp_ddr5_drvdata *drvdata)
++{
++	/* Create the sysfs eeprom file */
++	int err;
++
++	err = sysfs_create_bin_file(&drvdata->client->dev.kobj, &spd_attr);
++}
++
++static ssize_t spd_read(struct file *filp, struct kobject *kobj,
++			struct bin_attribute *bin_attr,
++			char *buf, loff_t off, size_t count)
++{
++	int currentIndex = 0;
++
++	currentSpdIndex = off;
++	while ((currentIndex < count) && (currentSpdIndex != SPD_SIZE)) {
++		buf[currentIndex] = (unsigned char)spd[currentSpdIndex];
++		currentIndex++;
++		currentSpdIndex++;
++	}
++	return currentIndex;
++}
++
++
++static int gxpddr5_update_client(struct device *dev, u8 reg)
++{
++	struct gxp_ddr5_drvdata *drvdata = dev_get_drvdata(dev);
++	u16 ret = 0;
++	switch (reg) {
++	case REG_TEMP:
++		drvdata->low = i2c_smbus_read_byte_data(drvdata->client, REG_TEMP);
++		drvdata->high = i2c_smbus_read_byte_data(drvdata->client, (REG_TEMP + 1));
++		// printk("%x %x\n", drvdata->low, drvdata->high);
++		break;
++	default:
++		dev_err(&drvdata->client->dev, "gxddr5_error_reg 0x%x unknown\n", reg);
++		return -EOPNOTSUPP;
++	}
++
++	return ret;
++}
++
++static ssize_t show_ddr5_temp(struct device *dev,
++		struct device_attribute *attr, char *buf)
++{
++	struct gxp_ddr5_drvdata *drvdata = dev_get_drvdata(dev);
++	int ret = 0;
++	int sign = 0;
++	unsigned char integerV;
++	u8 low;
++
++	ret = gxpddr5_update_client(dev, REG_TEMP);
++	if (ret < 0)
++		return ret;
++	integerV = (unsigned char)((drvdata->low >> 4) | (drvdata->high << 4));
++	if ((drvdata->low >> 2) & 0x1)
++		low = low + 25;
++	if ((drvdata->low >> 3) & 0x1)
++		low = low + 50;
++	sign = (drvdata->high & 0x10);
++	// printk("%02x %0x\n", drvdata->high, drvdata->low);
++	if (sign)
++		return sprintf(buf, "-%d%02d0\n", integerV & 0x7F, low);
++	return sprintf(buf, "%d%02d0\n", integerV & 0x7F, low);
++}
++
++static ssize_t show_ddr5_label(struct device *dev, struct device_attribute *attr,
++			       char *buf)
++{
++	return sprintf(buf, "ddr5\n");
++}
++
++
++static SENSOR_DEVICE_ATTR(temp1_input, 0444, show_ddr5_temp, NULL, 0);
++
++static struct attribute *gxp_ddr5_attrs[] = {
++	&sensor_dev_attr_temp1_input.dev_attr.attr,
++	NULL,
++};
++
++ATTRIBUTE_GROUPS(gxp_ddr5);
++
++static const struct of_device_id gxp_ddr5_of_match[] = {
++	{ .compatible = "hpe,gxp-ddr5" },
++	{},
++};
++MODULE_DEVICE_TABLE(of, gxp_ddr5_of_match);
++
++static int gxp_ddr5_remove(struct i2c_client *client)
++{
++	sysfs_remove_bin_file(&client->dev.kobj, &spd_attr);
++	hwmon_device_unregister(&client->dev);
++	return 0;
++}
++
++static int gxp_ddr5_probe(struct i2c_client *client,
++		const struct i2c_device_id *id)
++{
++	struct gxp_ddr5_drvdata *drvdata;
++	struct device *hwmon_dev;
++	int i, j, index;
++	int ret;
++
++	if (!i2c_check_functionality(client->adapter,
++				I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL)) {
++		return -EIO;
++	}
++
++	drvdata = devm_kzalloc(&client->dev, sizeof(struct gxp_ddr5_drvdata),
++			GFP_KERNEL);
++	if (!drvdata)
++		return -ENOMEM;
++
++	drvdata->client = client;
++	i2c_set_clientdata(client, drvdata);
++
++	mutex_init(&drvdata->update_lock);
++	mutex_init(&drv_lock);
++
++	drvdata->hwmon_dev = NULL;
++
++	ret = i2c_smbus_write_byte_data(drvdata->client, 0xb, 0);
++	if (ret < 0) {
++		printk("gxp-ddr5: device not present aborting init\n");
++		return 0;
++	}
++
++	mutex_lock(&drv_lock);
++	hwmon_dev = devm_hwmon_device_register_with_groups(&client->dev, "spd5118",
++			drvdata, gxp_ddr5_groups);
++	if (IS_ERR(hwmon_dev))
++		return PTR_ERR(hwmon_dev);
++	drvdata->hwmon_dev = hwmon_dev;
++	mutex_unlock(&drv_lock);
++	// We have to update initialize the Hub
++	i2c_smbus_write_byte_data(drvdata->client, 0xb, 0);
++	// We can try to read the spd
++	index = 0;
++	for (j = 0; j < 8; j++) {
++		i2c_smbus_write_byte_data(drvdata->client, 0xb, j);
++		for (i = 0x0; i < 0x80; i++)
++			spd[index++] = i2c_smbus_read_byte_data(client, 0x80 | i);
++	}
++	i2c_smbus_write_byte_data(drvdata->client, 0xb, 0);
++	gxp_ddr5_fs_init(drvdata);
++	return 0;
++}
++
++static struct i2c_driver gxp_ddr5_driver = {
++	.class = I2C_CLASS_HWMON,
++	.probe		= gxp_ddr5_probe,
++	.remove		= gxp_ddr5_remove,
++	.driver = {
++		.name	= "gxp-ddr5",
++		.of_match_table = gxp_ddr5_of_match,
++	},
++};
++module_i2c_driver(gxp_ddr5_driver);
++
++MODULE_AUTHOR("Jean-Marie Verdun <verdun@hpe.com>");
++MODULE_DESCRIPTION("HPE GXP DDR5 driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/hwmon/gxp-fan-ctrl.c b/drivers/hwmon/gxp-fan-ctrl.c
+index 7d950e29f241..79c9aceae768 100644
+--- a/drivers/hwmon/gxp-fan-ctrl.c
++++ b/drivers/hwmon/gxp-fan-ctrl.c
+@@ -31,6 +31,7 @@
+ #define OFFSET_PWM6DUTY	0x16
+ #define OFFSET_PWM7DUTY	0x17
+ 
++#define OFFSET_TACH0 0x80
+ 
+ struct gxp_fan_ctrl_drvdata {
+ 	struct device	*dev;
+@@ -51,8 +52,10 @@ static ssize_t show_fault(struct device *dev, struct device_attribute *attr,
+ 	unsigned int mask = 0x1;
+ 
+ 	// Check Fan present.
+-	regmap_read(drvdata->xreg_map, 0x28, &reg);
+-	reg = reg >> 8;
++	// vejmarie
++	// regmap_read(drvdata->xreg_map, 0x28, &reg);
++	regmap_read(drvdata->xreg_map, 0x7c, &reg);
++//	reg = reg >> 8;
+ 	mask = mask << (nr * 2); // Shift 2 bits per Fan
+ 
+ 	val = (reg & mask) ? 1 : 0;
+@@ -72,9 +75,11 @@ static ssize_t show_in(struct device *dev, struct device_attribute *attr,
+ 	regmap_read(drvdata->fn2_map, 0x70, &reg);
+ 	if (reg & BIT(24)) {
+ 		// Check Fan present
+-		regmap_read(drvdata->xreg_map, 0x24, &reg);
+-		reg = reg >> 24;
+-
++		// vejmarie
++		// regmap_read(drvdata->xreg_map, 0x24, &reg);
++		regmap_read(drvdata->xreg_map, 0x78, &reg);
++		reg = reg >> 16;
++		printk("GXP_FAN: Present register 0x%x\n", reg);
+ 		// If Fan presents, then read it.
+ 		val = (reg & BIT(nr)) ? readb(drvdata->base +
+ 						OFFSET_PWM0DUTY + nr) : 0;
+@@ -121,6 +126,23 @@ static ssize_t store_pwm(struct device *dev, struct device_attribute *attr,
+ 	return count;
+ }
+ 
++static ssize_t show_tach(struct device *dev, struct device_attribute *attr,
++			 char *buf)
++{
++	int nr = (to_sensor_dev_attr(attr))->index;
++	struct gxp_fan_ctrl_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned long val;
++
++	// enable fan tach
++	writel(200, drvdata->base + 0x18);
++	// enable fan reporting
++	writel(0x7f, drvdata->base + 0x1c);
++	val = readl(drvdata->base + OFFSET_TACH0 + 4 * nr);
++	pr_info("Tach value %ld %d\n", val, nr);
++
++	return sprintf(buf, "%d\n", val);
++}
++
+ static SENSOR_DEVICE_ATTR(pwm0, 0200 | 0444, show_pwm, store_pwm, 0);
+ static SENSOR_DEVICE_ATTR(pwm1, 0200 | 0444, show_pwm, store_pwm, 1);
+ static SENSOR_DEVICE_ATTR(pwm2, 0200 | 0444, show_pwm, store_pwm, 2);
+@@ -130,6 +152,18 @@ static SENSOR_DEVICE_ATTR(pwm5, 0200 | 0444, show_pwm, store_pwm, 5);
+ static SENSOR_DEVICE_ATTR(pwm6, 0200 | 0444, show_pwm, store_pwm, 6);
+ static SENSOR_DEVICE_ATTR(pwm7, 0200 | 0444, show_pwm, store_pwm, 7);
+ 
++// vejmarie add tach attribute
++//
++
++static SENSOR_DEVICE_ATTR(tach0, 0200 | 0444, show_tach, NULL, 0);
++static SENSOR_DEVICE_ATTR(tach1, 0200 | 0444, show_tach, NULL, 1);
++static SENSOR_DEVICE_ATTR(tach2, 0200 | 0444, show_tach, NULL, 2);
++static SENSOR_DEVICE_ATTR(tach3, 0200 | 0444, show_tach, NULL, 3);
++static SENSOR_DEVICE_ATTR(tach4, 0200 | 0444, show_tach, NULL, 4);
++static SENSOR_DEVICE_ATTR(tach5, 0200 | 0444, show_tach, NULL, 5);
++static SENSOR_DEVICE_ATTR(tach6, 0200 | 0444, show_tach, NULL, 6);
++static SENSOR_DEVICE_ATTR(tach7, 0200 | 0444, show_tach, NULL, 7);
++
+ static struct sensor_device_attribute sda_in_input[] = {
+ 	SENSOR_ATTR(fan0_input, 0444, show_in, NULL, 0),
+ 	SENSOR_ATTR(fan1_input, 0444, show_in, NULL, 1),
+@@ -178,6 +212,14 @@ static struct attribute *gxp_fan_ctrl_attrs[] = {
+ 	&sensor_dev_attr_pwm5.dev_attr.attr,
+ 	&sensor_dev_attr_pwm6.dev_attr.attr,
+ 	&sensor_dev_attr_pwm7.dev_attr.attr,
++	&sensor_dev_attr_tach0.dev_attr.attr,
++	&sensor_dev_attr_tach1.dev_attr.attr,
++	&sensor_dev_attr_tach2.dev_attr.attr,
++	&sensor_dev_attr_tach3.dev_attr.attr,
++	&sensor_dev_attr_tach4.dev_attr.attr,
++	&sensor_dev_attr_tach5.dev_attr.attr,
++	&sensor_dev_attr_tach6.dev_attr.attr,
++	&sensor_dev_attr_tach7.dev_attr.attr,
+ 	NULL,
+ };
+ 
+diff --git a/drivers/hwmon/gxp-power.c b/drivers/hwmon/gxp-power.c
+index 7db36d825b70..18e8618688ba 100644
+--- a/drivers/hwmon/gxp-power.c
++++ b/drivers/hwmon/gxp-power.c
+@@ -132,3 +132,4 @@ module_platform_driver(gxp_power_driver);
+ 
+ MODULE_AUTHOR("Louis Hsu <kai-hsiang.hsu@hpe.com>");
+ MODULE_DESCRIPTION("HPE GXP POWER driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/hwmon/gxp-psu.c b/drivers/hwmon/gxp-psu.c
+index b2aa36375c72..66b0e2aa934a 100644
+--- a/drivers/hwmon/gxp-psu.c
++++ b/drivers/hwmon/gxp-psu.c
+@@ -1,4 +1,5 @@
+ // SPDX-License-Identifier: GPL-2.0
++
+ /* Copyright (C) 2019 Hewlett-Packard Development Company, L.P.
+  *
+  *
+@@ -14,8 +15,12 @@
+ #include <linux/hwmon.h>
+ #include <linux/hwmon-sysfs.h>
+ #include <linux/err.h>
++#include <linux/kthread.h>
++#include <linux/delay.h>
++#include <linux/poll.h>
+ 
+ #define READ_REG_CMD		0x00
++#define READ_FRU_CMD		0x22
+ #define REG_IN_VOL		0x10
+ #define REG_IN_CUR		0x11
+ #define REG_IN_PWR		0x12
+@@ -24,6 +29,23 @@
+ #define REG_OUT_PWR		0x22
+ #define REG_FAN_SPEED		0x40
+ #define REG_INLET_TEMP		0x42
++#define MAX_PSU			0x08
++
++
++extern wait_queue_head_t gxp_psu;
++extern unsigned int gxp_psu_trigger;
++extern u8 psu_presence;
++
++struct eeprom_data {
++	struct bin_attribute bin;
++	spinlock_t buffer_lock;
++	u16 buffer_idx;
++	u16 address_mask;
++	u8 num_address_bytes;
++	u8 idx_write_cnt;
++	bool read_only;
++	u8 buffer[];
++};
+ 
+ struct gxp_psu_drvdata {
+ 	struct i2c_client *client;
+@@ -35,9 +57,54 @@ struct gxp_psu_drvdata {
+ 	u16 output_current;
+ 	s16 inlet_temp;
+ 	u16 fan_speed;
++	u8 spare_part[10];
++	u8 product_name[26];
++	u8 serial_number[14];
++	u8 product_manufacturer[3];
++	bool present; // in some cases the PSU might have been pulled
+ 	struct mutex update_lock;
++	struct device *hwmon_dev;
++	// We can expose the FRU eeprom through a slave eeprom
++	struct eeprom_data *eeprom;
+ };
+ 
++
++static struct task_struct *psustate_thread;
++EXPORT_SYMBOL(psustate_thread);
++
++// u8 psucount=0; // must be exported and accessible by xreg driver ...
++// struct gxp_psu_drvdata *psus[MAX_PSU] = { NULL };
++
++
++struct mutex drv_lock;
++
++void check_presence(u8 id)
++{
++}
++
++/* static int wait_psu_transition(void *pv)
++{
++	unsigned short int value;
++	int i;
++	// We have to check if the psu we are controlling is up
++	// that is done by accessing the psu_presence value controlled
++	// by xreg driver
++	while (1) {
++		wait_event_interruptible(gxp_psu, gxp_psu_trigger != 0);
++		{
++			// Must be put to 0 when all PSU thread have reached the
++			// validation state otherwise we could face challenges
++			// We have to enable / disable each psu based on psu_presence value
++			for (i = 0; i < psucount; i++) {
++				check_presence(i);
++			}
++			gxp_psu_trigger = 0;
++		}
++	}
++	return 0;
++}
++*/
++
+ static unsigned char cal_checksum(unsigned char *buf, unsigned long size)
+ {
+ 	unsigned char sum = 0;
+@@ -60,6 +127,75 @@ static unsigned char valid_checksum(unsigned char *buf, unsigned long size)
+ 	return sum;
+ }
+ 
++static int psu_read_fru(struct gxp_psu_drvdata *drvdata,
++			u8 offset, u8 length, u8 *value)
++{
++	struct i2c_client *client = drvdata->client;
++	unsigned char buf_tx[4] = {(client->addr << 1), READ_FRU_CMD, offset, length};
++	unsigned char tx[4] = {0};
++	unsigned char chksum = cal_checksum(buf_tx, 4);
++	int ret = 0;
++	struct i2c_msg msgs[2] = {0};
++
++	value[0] = '\0';
++//	if (! drvdata->present )
++//		return -EOPNOTSUPP;
++
++	tx[0] = READ_FRU_CMD;
++	tx[1] = offset;
++	tx[2] = length;
++	tx[3] = chksum;
++	msgs[0].addr = client->addr;
++	msgs[0].flags = 0;
++	msgs[0].buf = tx;
++	msgs[0].len = 4;
++	msgs[1].addr = client->addr;
++	msgs[1].flags = I2C_M_RD;
++	msgs[1].buf = value;
++	msgs[1].len = length;
++	mutex_lock(&drvdata->update_lock);
++	ret = i2c_transfer(client->adapter, msgs, 2);
++	mutex_unlock(&drvdata->update_lock);
++	if (ret < 0) {
++		dev_dbg(&client->dev,
++			"gxppsu_i2c_tx_fail addr:0x%x offest:0x%x length:0x%x chk:0x%x ret:0x%x\n",
++			client->addr, offset, length, chksum, ret);
++		return ret;
++	} else {
++		ret = length;
++	}
++
++	/* if (valid_checksum(buf_rx, 3) != 0) {
++		dev_dbg(&client->dev,
++		"gxppsu_checksum_fail addr:0x%x reg:0x%x, data:%x %x %x\n",
++		client->addr, reg, rx[0], rx[1], rx[2]);
++		return -EAGAIN;
++	} */
++	return ret;
++}
++
++static ssize_t eeprom_file_read(struct file *filp, struct kobject *kobj,
++				struct bin_attribute *bin_attr, char *buf,
++				loff_t off, size_t count)
++{
++	int ret;
++	struct device *dev = kobj_to_dev(kobj);
++	struct gxp_psu_drvdata *drvdata = dev_get_drvdata(dev);
++
++	ret = psu_read_fru(drvdata, off, count, buf);
++	return ret;
++}
++
++static const struct bin_attribute eeprom_attr = {
++	.attr = {
++		.name = "eeprom",
++		.mode = 0444,
++	},
++	.size =  256,
++	.read = eeprom_file_read,
++};
++
++
+ static int psu_read_reg_word(struct gxp_psu_drvdata *drvdata,
+ 		u8 reg, u16 *value)
+ {
+@@ -75,6 +211,7 @@ static int psu_read_reg_word(struct gxp_psu_drvdata *drvdata,
+ 	tx[0] = 0;
+ 	tx[1] = reg;
+ 	tx[2] = chksum;
++
+ 	msgs[0].addr = client->addr;
+ 	msgs[0].flags = 0;
+ 	msgs[0].buf = tx;
+@@ -113,7 +250,8 @@ static int gxppsu_update_client(struct device *dev, u8 reg)
+ {
+ 	struct gxp_psu_drvdata *drvdata = dev_get_drvdata(dev);
+ 	int ret = 0;
+-
++//	if ( !drvdata->present )
++//		return -EOPNOTSUPP;
+ 	switch (reg) {
+ 	case REG_IN_PWR:
+ 		ret = psu_read_reg_word(drvdata, REG_IN_PWR,
+@@ -165,7 +303,6 @@ static ssize_t show_power_input(struct device *dev,
+ 	ret = gxppsu_update_client(dev, reg);
+ 	if (ret < 0)
+ 		return ret;
+-
+ 	return sprintf(buf, "%u\n", drvdata->input_power);
+ }
+ 
+@@ -179,7 +316,7 @@ static ssize_t show_in_input(struct device *dev, struct device_attribute *attr,
+ 	ret = gxppsu_update_client(dev, reg);
+ 	if (ret < 0)
+ 		return ret;
+-
++	// reporting is done through 1/32 or VRMS
+ 	return sprintf(buf, "%u\n", drvdata->input_voltage);
+ }
+ 
+@@ -193,6 +330,7 @@ static ssize_t show_curr_input(struct device *dev,
+ 	ret = gxppsu_update_client(dev, reg);
+ 	if (ret < 0)
+ 		return ret;
++	// reporting is done through 1/64 of amps
+ 	return sprintf(buf, "%u\n", drvdata->input_current);
+ }
+ 
+@@ -221,6 +359,10 @@ static ssize_t show_in_output(struct device *dev, struct device_attribute *attr,
+ 	if (ret < 0)
+ 		return ret;
+ 
++	// out vol is 1/256 of V
++	// but their is a ration of 1/32 on voltage
++	// so divide only by 8
++	drvdata->output_voltage = drvdata->output_voltage / 8;
+ 	return sprintf(buf, "%u\n", drvdata->output_voltage);
+ }
+ 
+@@ -234,7 +376,8 @@ static ssize_t show_curr_output(struct device *dev,
+ 	ret = gxppsu_update_client(dev, reg);
+ 	if (ret < 0)
+ 		return ret;
+-
++	// out current is 1/64 Amps
++	// drvdata->output_current = drvdata->output_current / 64;
+ 	return sprintf(buf, "%u\n", drvdata->output_current);
+ }
+ 
+@@ -243,13 +386,17 @@ static ssize_t show_temp_input(struct device *dev,
+ {
+ 	struct gxp_psu_drvdata *drvdata = dev_get_drvdata(dev);
+ 	int ret = 0;
++	s32 value;
+ 	u8 reg = REG_INLET_TEMP;
+ 
+ 	ret = gxppsu_update_client(dev, reg);
+ 	if (ret < 0)
+ 		return ret;
+ 
+-	return sprintf(buf, "%d\n", drvdata->inlet_temp);
++	// 1/64 of Celsius
++	value = (s32) (drvdata->inlet_temp);
++	// value = ( value / 64) * 1000;
++	return sprintf(buf, "%d\n", value);
+ }
+ 
+ static ssize_t show_fan_input(struct device *dev, struct device_attribute *attr,
+@@ -260,76 +407,228 @@ static ssize_t show_fan_input(struct device *dev, struct device_attribute *attr,
+ 	u8 reg = REG_FAN_SPEED;
+ 
+ 	ret = gxppsu_update_client(dev, reg);
+-	if (ret < 0)
++	if (ret < 0) {
++		// printk("gxp: error while updating client @ %x\n", drvdata->client->addr);
+ 		return ret;
+-
++	}
++	// rpm's
+ 	return sprintf(buf, "%u\n", drvdata->fan_speed);
+ }
+ 
++void swapbytes(void *input, size_t len)
++{
++	unsigned int i;
++	unsigned char *in = (unsigned char *)input, tmp;
++
++	for (i = 0; i < len / 2; i++) {
++		tmp = *(in + i);
++		*(in + i) = *(in + len - i - 1);
++		*(in + len - i - 1) = tmp;
++	}
++}
++
++static ssize_t show_curr2_label(struct device *dev, struct device_attribute *attr,
++				char *buf)
++{
++	return sprintf(buf, "iout1\n");
++}
++
++static ssize_t show_power2_label(struct device *dev, struct device_attribute *attr,
++				 char *buf)
++{
++	return sprintf(buf, "pout1\n");
++}
++
++static ssize_t show_in2_label(struct device *dev, struct device_attribute *attr,
++			      char *buf)
++{
++	return sprintf(buf, "vout1\n");
++}
++
++static ssize_t show_in1_label(struct device *dev, struct device_attribute *attr,
++			      char *buf)
++{
++	return sprintf(buf, "vin1\n");
++}
++
++// that stuff is polled every second
++static ssize_t report_failure(struct device *dev, struct device_attribute *attr,
++			      char *buf)
++{
++	// return sprintf(buf, "1\n");
++	return sprintf(buf, "0\n");
++}
++
++
++bool switchPsu(int psu)
++{
++	return true;
++}
++
++static ssize_t switch1(struct device *dev, struct device_attribute *attr,
++		       char *buf)
++{
++	if (switchPsu(0))
++		return sprintf(buf, "on\n");
++	else
++		return sprintf(buf, "off\n");
++}
++
++static ssize_t switch2(struct device *dev, struct device_attribute *attr,
++		       char *buf)
++{
++	if (switchPsu(1))
++		return sprintf(buf, "on\n");
++	else
++		return sprintf(buf, "off\n");
++}
++
++static ssize_t rescan(struct device *dev, struct device_attribute *attr,
++		      char *buf);
++
+ static SENSOR_DEVICE_ATTR(power1_input, 0444, show_power_input, NULL, 0);
+-static SENSOR_DEVICE_ATTR(in0_input, 0444, show_in_input, NULL, 1);
++static SENSOR_DEVICE_ATTR(in1_input, 0444, show_in_input, NULL, 1);
+ static SENSOR_DEVICE_ATTR(curr1_input, 0444, show_curr_input, NULL, 2);
+ static SENSOR_DEVICE_ATTR(power2_input, 0444, show_power_output, NULL, 3);
+-static SENSOR_DEVICE_ATTR(in1_input, 0444, show_in_output, NULL, 4);
++static SENSOR_DEVICE_ATTR(in2_input, 0444, show_in_output, NULL, 4);
+ static SENSOR_DEVICE_ATTR(curr2_input, 0444, show_curr_output, NULL, 5);
+ static SENSOR_DEVICE_ATTR(temp1_input, 0444, show_temp_input, NULL, 6);
+ static SENSOR_DEVICE_ATTR(fan1_input, 0444, show_fan_input, NULL, 7);
++static SENSOR_DEVICE_ATTR(curr2_label, 0444, show_curr2_label, NULL, 8);
++static SENSOR_DEVICE_ATTR(power2_label, 0444, show_power2_label, NULL, 9);
++static SENSOR_DEVICE_ATTR(in2_label, 0444, show_in2_label, NULL, 10);
++static SENSOR_DEVICE_ATTR(in2_alarm, 0444, report_failure, NULL, 15);
++// vejmarie debug devices
++static SENSOR_DEVICE_ATTR(switch1, 0444, switch1, NULL, 16);
++static SENSOR_DEVICE_ATTR(switch2, 0444, switch2, NULL, 17);
++static SENSOR_DEVICE_ATTR(rescan, 0444, rescan, NULL, 18);
++// Add label
++//
++static SENSOR_DEVICE_ATTR(in1_label, 0444, show_in1_label, NULL, 20);
+ 
+ static struct attribute *gxp_psu_attrs[] = {
+ 	&sensor_dev_attr_power1_input.dev_attr.attr,
+-	&sensor_dev_attr_in0_input.dev_attr.attr,
++	&sensor_dev_attr_in1_input.dev_attr.attr,
+ 	&sensor_dev_attr_curr1_input.dev_attr.attr,
+ 	&sensor_dev_attr_power2_input.dev_attr.attr,
+-	&sensor_dev_attr_in1_input.dev_attr.attr,
++	&sensor_dev_attr_in2_input.dev_attr.attr,
+ 	&sensor_dev_attr_curr2_input.dev_attr.attr,
+ 	&sensor_dev_attr_temp1_input.dev_attr.attr,
+ 	&sensor_dev_attr_fan1_input.dev_attr.attr,
++	&sensor_dev_attr_curr2_label.dev_attr.attr,
++	&sensor_dev_attr_power2_label.dev_attr.attr,
++	&sensor_dev_attr_in2_label.dev_attr.attr,
++	&sensor_dev_attr_in2_alarm.dev_attr.attr,
++	&sensor_dev_attr_switch1.dev_attr.attr,
++	&sensor_dev_attr_switch2.dev_attr.attr,
++	&sensor_dev_attr_rescan.dev_attr.attr,
++	&sensor_dev_attr_in1_label.dev_attr.attr,
+ 	NULL,
+ };
+ 
+ ATTRIBUTE_GROUPS(gxp_psu);
+ 
++static ssize_t rescan(struct device *dev, struct device_attribute *attr,
++		      char *buf)
++{
++	printk("gxp-psu: rescan called");
++	return sprintf(buf, "ok\n");
++}
++
++
++static const struct of_device_id gxp_psu_of_match[] = {
++	{ .compatible = "hpe,gxp-psu" },
++	{},
++};
++MODULE_DEVICE_TABLE(of, gxp_psu_of_match);
++
++
+ static int gxp_psu_probe(struct i2c_client *client,
+-		const struct i2c_device_id *id)
++			 const struct i2c_device_id *id)
+ {
+ 	struct gxp_psu_drvdata *drvdata;
+ 	struct device *hwmon_dev;
++	struct device_node *dn = client->dev.of_node;
+ 
+ 	if (!i2c_check_functionality(client->adapter,
+ 				I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL)) {
+ 		return -EIO;
+ 	}
+ 
++	printk("gxp-psu: node name %s\n", dn->full_name);
++
+ 	drvdata = devm_kzalloc(&client->dev, sizeof(struct gxp_psu_drvdata),
+ 			GFP_KERNEL);
+ 	if (!drvdata)
+ 		return -ENOMEM;
+ 
++
++	printk("gxp-psu: set client\n");
+ 	drvdata->client = client;
+ 	i2c_set_clientdata(client, drvdata);
+ 
++	printk("gxp-psu: init mutex\n");
+ 	mutex_init(&drvdata->update_lock);
+-
+-	hwmon_dev = devm_hwmon_device_register_with_groups(&client->dev, "psu",
++	mutex_init(&drv_lock);
++
++	drvdata->hwmon_dev = NULL;
++	// We need to check if the PSU is really present before registering
++
++	mutex_lock(&drv_lock);
++	printk("gxp-psu: Check psu\n");
++//	psus[psucount]=drvdata;
++	printk("gxp-psu: Check presence\n");
++	// check_presence(psucount);
++	printk("gxp-psu: Check presence done\n");
++	// if ( psus[psucount]->present )
++	{
++		printk("gxp-psu: create hwmon\n");
++		hwmon_dev = devm_hwmon_device_register_with_groups(&client->dev, "PowerSupply",
+ 			drvdata, gxp_psu_groups);
+-	if (IS_ERR(hwmon_dev))
+-		return PTR_ERR(hwmon_dev);
+-
+-	dev_info(&client->dev, "%s:'%s' addr:0x%x\n", dev_name(hwmon_dev),
+-			client->name, client->addr);
+-
++		printk("gxp-psu: registered\n");
++		if (IS_ERR(hwmon_dev))
++			return PTR_ERR(hwmon_dev);
++		printk("gxp-psu: display debug info\n");
++		dev_info(&client->dev, "%s:'%s' addr:0x%x\n", dev_name(hwmon_dev),
++			 client->name, client->addr);
++	}
++	// else
++	//	hwmon_dev = NULL;
++	// Let's create the eeprom entry
++	sysfs_create_bin_file(&client->dev.kobj, &eeprom_attr);
++	printk("gxp-psu: assigning hwmon_dev\n");
++	drvdata->hwmon_dev = hwmon_dev;
++	// psucount++;
++	printk("gxp-psu: unlock\n");
++	mutex_unlock(&drv_lock);
++
++	// let's start the power transition thread
++	// That shall be done exclusively
++	printk("gxp-psu: create psu thread\n");
++/*	if (psustate_thread == NULL) {
++		psustate_thread = kthread_run(wait_psu_transition, drvdata, "PSU transition Thread");
++		if (psustate_thread) {
++			pr_info("PSU Thread Created Successfully...\n");
++		} else {
++			pr_err("Cannot create PSU kthread\n");
++			return -1;
++		}
++	}
++*/
+ 	return 0;
+ }
+ 
+-static const struct of_device_id gxp_psu_of_match[] = {
+-	{ .compatible = "hpe,gxp-psu" },
+-	{},
+-};
+-MODULE_DEVICE_TABLE(of, gxp_psu_of_match);
++static int gxp_psu_remove(struct i2c_client *client)
++{
++	hwmon_device_unregister(&client->dev);
++	sysfs_remove_bin_file(&client->dev.kobj, &eeprom_attr);
++	return 0;
++}
+ 
+ static struct i2c_driver gxp_psu_driver = {
+ 	.class = I2C_CLASS_HWMON,
+ 	.probe		= gxp_psu_probe,
++	.remove		= gxp_psu_remove,
+ 	.driver = {
+ 		.name	= "gxp-psu",
+ 		.of_match_table = gxp_psu_of_match,
+@@ -338,5 +637,6 @@ static struct i2c_driver gxp_psu_driver = {
+ module_i2c_driver(gxp_psu_driver);
+ 
+ MODULE_AUTHOR("Louis Hsu <kai-hsiang.hsu@hpe.com>");
++MODULE_AUTHOR("Jean-Marie Verdun <verdun@hpe.com>");
+ MODULE_DESCRIPTION("HPE GXP PSU driver");
+-
++MODULE_LICENSE("GPL");
+diff --git a/drivers/hwmon/peci-cputemp.c b/drivers/hwmon/peci-cputemp.c
+index c5d92d1d2c25..b8208670fc35 100644
+--- a/drivers/hwmon/peci-cputemp.c
++++ b/drivers/hwmon/peci-cputemp.c
+@@ -313,7 +313,7 @@ static umode_t cputemp_is_visible(const void *data,
+ 	    (priv->temp_config[channel] & BIT(attr)) &&
+ 	    (channel < DEFAULT_CHANNEL_NUMS ||
+ 	     (channel >= DEFAULT_CHANNEL_NUMS &&
+-	      (priv->core_mask & BIT(channel - DEFAULT_CHANNEL_NUMS)))))
++	      (priv->core_mask & BIT_ULL(channel - DEFAULT_CHANNEL_NUMS)))))
+ 		return 0444;
+ 
+ 	return 0;
+@@ -328,10 +328,49 @@ static const struct hwmon_ops cputemp_ops = {
+ static int check_resolved_cores(struct peci_cputemp *priv)
+ {
+ 	struct peci_rd_pci_cfg_local_msg msg;
++	struct peci_rd_end_pt_cfg_msg re_msg;
+ 	int ret;
+ 
+ 	/* Get the RESOLVED_CORES register value */
+ 	switch (priv->gen_info->model) {
++	case INTEL_FAM6_SAPPHIRERAPIDS:
++		re_msg.addr = priv->mgr->client->addr;
++		re_msg.msg_type = PECI_ENDPTCFG_TYPE_LOCAL_PCI;
++		re_msg.params.pci_cfg.seg = 0;
++		re_msg.params.pci_cfg.bus = 31;
++		re_msg.params.pci_cfg.device = 30;
++		re_msg.params.pci_cfg.function = 6;
++		re_msg.params.pci_cfg.reg = 0x84;
++		re_msg.rx_len = 4;
++
++		ret = peci_command(priv->mgr->client->adapter,
++				   PECI_CMD_RD_END_PT_CFG, &re_msg);
++		if (ret || re_msg.cc != PECI_DEV_CC_SUCCESS)
++			ret = -EAGAIN;
++		if (ret)
++			return ret;
++
++		printk("peci: core mask %lx\n", (__le32 *)re_msg.data);
++		priv->core_mask = le32_to_cpup((__le32 *)re_msg.data);
++		// priv->core_mask = (__le32 *)re_msg.data;
++		printk("peci: core mask %llx\n", priv->core_mask);
++		priv->core_mask <<= 32;
++		printk("peci: core mask %llx\n", priv->core_mask);
++
++		re_msg.params.pci_cfg.reg = 0x80;
++
++		ret = peci_command(priv->mgr->client->adapter,
++				   PECI_CMD_RD_END_PT_CFG, &re_msg);
++		if (ret || re_msg.cc != PECI_DEV_CC_SUCCESS)
++			ret = -EAGAIN;
++		if (ret) {
++			priv->core_mask = 0;
++			return ret;
++		}
++
++		priv->core_mask |= le32_to_cpup((__le32 *)re_msg.data);
++		printk("peci: core mask %llx\n", priv->core_mask);
++	break;
+ 	case INTEL_FAM6_ICELAKE_X:
+ 	case INTEL_FAM6_ICELAKE_XD:
+ 		msg.addr = priv->mgr->client->addr;
+@@ -423,7 +462,8 @@ static int create_module_temp_info(struct peci_cputemp *priv)
+ 	for (i = 0; i < MODTEMP_CHANNEL_NUMS; i++) {
+ 		priv->temp_config[priv->config_idx++] = config_table[channel_core];
+ 
+-		if (i < priv->gen_info->core_mask_bits && priv->core_mask & BIT(i)) {
++		if (i < priv->gen_info->core_mask_bits && priv->core_mask & BIT_ULL(i)) {
++			printk("peci: create entry %d\n", i);
+ 			ret = create_module_temp_label(priv, i);
+ 			if (ret)
+ 				return ret;
+@@ -441,6 +481,8 @@ static int peci_cputemp_probe(struct platform_device *pdev)
+ 	struct device *hwmon_dev;
+ 	int ret;
+ 
++	printk("peci-cputemp: Probe start\n");
++
+ 	if ((mgr->client->adapter->cmd_mask &
+ 	    (BIT(PECI_CMD_GET_TEMP) | BIT(PECI_CMD_RD_PKG_CFG))) !=
+ 	    (BIT(PECI_CMD_GET_TEMP) | BIT(PECI_CMD_RD_PKG_CFG)))
+diff --git a/drivers/hwmon/peci-dimmtemp.c b/drivers/hwmon/peci-dimmtemp.c
+index 8b3a265355e0..eaa8c77e5064 100644
+--- a/drivers/hwmon/peci-dimmtemp.c
++++ b/drivers/hwmon/peci-dimmtemp.c
+@@ -42,6 +42,8 @@ static const u8 support_model[] = {
+ 	INTEL_FAM6_SKYLAKE_XD,
+ 	INTEL_FAM6_ICELAKE_X,
+ 	INTEL_FAM6_ICELAKE_XD,
++	INTEL_FAM6_SAPPHIRERAPIDS,
++	INTEL_FAM6_SIERRAFORREST,
+ };
+ 
+ static inline int read_ddr_dimm_temp_config(struct peci_dimmtemp *priv,
+@@ -73,6 +75,72 @@ static int get_dimm_temp(struct peci_dimmtemp *priv, int dimm_no)
+ 	priv->temp[dimm_no].value = cfg_data[dimm_order] * 1000;
+ 
+ 	switch (priv->gen_info->model) {
++	case INTEL_FAM6_SIERRAFORREST:
++	case INTEL_FAM6_SAPPHIRERAPIDS:
++		re_msg.addr = priv->mgr->client->addr;
++		re_msg.rx_len = 4;
++		re_msg.msg_type = PECI_ENDPTCFG_TYPE_LOCAL_PCI;
++		re_msg.params.pci_cfg.seg = 0;
++		re_msg.params.pci_cfg.bus = 30;
++		re_msg.params.pci_cfg.device = 0;
++		re_msg.params.pci_cfg.function = 2;
++		re_msg.params.pci_cfg.reg = 0xd4;
++
++		ret = peci_command(priv->mgr->client->adapter,
++			   PECI_CMD_RD_END_PT_CFG, &re_msg);
++		if (ret || re_msg.cc != PECI_DEV_CC_SUCCESS ||
++		    !(re_msg.data[3] & BIT(7))) {
++			/* Use default or previous value */
++			ret = 0;
++			break;
++		}
++
++		re_msg.params.pci_cfg.reg = 0xd0;
++
++		ret = peci_command(priv->mgr->client->adapter,
++				   PECI_CMD_RD_END_PT_CFG, &re_msg);
++		if (ret || re_msg.cc != PECI_DEV_CC_SUCCESS) {
++			/* Use default or previous value */
++			ret = 0;
++			break;
++		}
++
++		cpu_seg = re_msg.data[2];
++		cpu_bus = re_msg.data[0];
++
++		re_msg.msg_type = PECI_ENDPTCFG_TYPE_MMIO;
++		re_msg.params.mmio.seg = cpu_seg;
++		re_msg.params.mmio.bus = cpu_bus;
++		/*
++		 * Device 26, Offset 219a8: IMC 0 channel 0 -> rank 0
++		 * Device 26, Offset 299a8: IMC 0 channel 1 -> rank 1
++		 * Device 27, Offset 219a8: IMC 1 channel 0 -> rank 2
++		 * Device 27, Offset 299a8: IMC 1 channel 1 -> rank 3
++		 * Device 28, Offset 219a8: IMC 2 channel 0 -> rank 4
++		 * Device 28, Offset 299a8: IMC 2 channel 1 -> rank 5
++		 * Device 29, Offset 219a8: IMC 3 channel 0 -> rank 6
++		 * Device 29, Offset 299a8: IMC 3 channel 1 -> rank 7
++		 */
++		re_msg.params.mmio.device = 0x1a + chan_rank / 2;
++		re_msg.params.mmio.function = 0;
++		re_msg.params.mmio.bar = 0;
++		re_msg.params.mmio.addr_type = PECI_ENDPTCFG_ADDR_TYPE_MMIO_Q;
++		re_msg.params.mmio.offset = 0x219a8 + dimm_order * 4;
++		if (chan_rank % 2)
++			re_msg.params.mmio.offset += 0x8000;
++
++		ret = peci_command(priv->mgr->client->adapter,
++				   PECI_CMD_RD_END_PT_CFG, &re_msg);
++		if (ret || re_msg.cc != PECI_DEV_CC_SUCCESS ||
++		    re_msg.data[1] == 0 || re_msg.data[2] == 0) {
++			/* Use default or previous value */
++			ret = 0;
++			break;
++		}
++
++		priv->temp_max[dimm_no] = re_msg.data[1] * 1000;
++		priv->temp_crit[dimm_no] = re_msg.data[2] * 1000;
++		break;
+ 	case INTEL_FAM6_ICELAKE_X:
+ 	case INTEL_FAM6_ICELAKE_XD:
+ 		re_msg.addr = priv->mgr->client->addr;
+@@ -303,6 +371,7 @@ static int check_populated_dimms(struct peci_dimmtemp *priv)
+ 	u32 dimm_idx_max = priv->gen_info->dimm_idx_max;
+ 	int chan_rank;
+ 	u8  cfg_data[4];
++	int idx;
+ 
+ 	for (chan_rank = 0; chan_rank < chan_rank_max; chan_rank++) {
+ 		int ret, idx;
+@@ -315,10 +384,12 @@ static int check_populated_dimms(struct peci_dimmtemp *priv)
+ 			priv->dimm_mask = 0;
+ 			return ret;
+ 		}
+-
+-		for (idx = 0; idx < dimm_idx_max; idx++) {
+-			if (cfg_data[idx]) {
++		for (idx = 0; idx < 4 ; idx++) {
++			// That approach is stupid as it returns fake value for non present DIMM as long as one DIMM is present within a channel
++			if (cfg_data[idx])
++			{
+ 				uint chan = chan_rank * dimm_idx_max + idx;
++				printk("Channel %x populated\n", chan);
+ 				priv->dimm_mask |= BIT(chan);
+ 				priv->temp_max[chan] = DIMM_TEMP_MAX_DEFAULT;
+ 				priv->temp_crit[chan] = DIMM_TEMP_CRIT_DEFAULT;
+@@ -329,8 +400,6 @@ static int check_populated_dimms(struct peci_dimmtemp *priv)
+ 	if (!priv->dimm_mask)
+ 		return -EAGAIN;
+ 
+-	dev_dbg(priv->dev, "Scanned populated DIMMs: 0x%x\n", priv->dimm_mask);
+-
+ 	return 0;
+ }
+ 
+diff --git a/drivers/hwmon/sbrmi-i3c b/drivers/hwmon/sbrmi-i3c
+new file mode 100644
+index 000000000000..b9a8c9bf9f4e
+--- /dev/null
++++ b/drivers/hwmon/sbrmi-i3c
+@@ -0,0 +1,364 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ * sbrmi-i3c.c - hwmon driver for a SB-RMI mailbox
++ *               compliant AMD SoC device.
++ *
++ * Copyright (C) 2020-2021 Advanced Micro Devices, Inc.
++ */
++
++#include <linux/delay.h>
++#include <linux/err.h>
++#include <linux/hwmon.h>
++#include <linux/i3c/device.h>
++#include <linux/i3c/master.h>
++#include <linux/init.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/of.h>
++#include <linux/regmap.h>
++
++/* Do not allow setting negative power limit */
++#define SBRMI_PWR_MIN  0
++
++/* Mask for Status Register bit[1] */
++#define SW_ALERT_MASK  0x2
++
++/* Software Interrupt for triggering */
++#define START_CMD      0x80
++#define TRIGGER_MAILBOX        0x01
++
++/*
++ * SB-RMI supports soft mailbox service request to MP1 (power management
++ * firmware) through SBRMI inbound/outbound message registers.
++ * SB-RMI message IDs
++ */
++enum sbrmi_msg_id {
++       SBRMI_READ_PKG_PWR_CONSUMPTION = 0x1,
++       SBRMI_WRITE_PKG_PWR_LIMIT,
++       SBRMI_READ_PKG_PWR_LIMIT,
++       SBRMI_READ_PKG_MAX_PWR_LIMIT,
++};
++
++/* SB-RMI registers */
++enum sbrmi_reg {
++       SBRMI_CTRL              = 0x01,
++       SBRMI_STATUS,
++       SBRMI_OUTBNDMSG0        = 0x30,
++       SBRMI_OUTBNDMSG1,
++       SBRMI_OUTBNDMSG2,
++       SBRMI_OUTBNDMSG3,
++       SBRMI_OUTBNDMSG4,
++       SBRMI_OUTBNDMSG5,
++       SBRMI_OUTBNDMSG6,
++       SBRMI_OUTBNDMSG7,
++       SBRMI_INBNDMSG0,
++       SBRMI_INBNDMSG1,
++       SBRMI_INBNDMSG2,
++       SBRMI_INBNDMSG3,
++       SBRMI_INBNDMSG4,
++       SBRMI_INBNDMSG5,
++       SBRMI_INBNDMSG6,
++       SBRMI_INBNDMSG7,
++       SBRMI_SW_INTERRUPT,
++};
++
++/* Each client has this additional data */
++struct sbrmi_i3c_data {
++       struct regmap *regmap;
++       struct mutex lock;
++       u32 pwr_limit_max;
++};
++
++struct sbrmi_mailbox_msg {
++       u8 cmd;
++       bool read;
++       u32 data_in;
++       u32 data_out;
++};
++
++static int sbrmi_enable_alert(struct sbrmi_i3c_data *data)
++{
++       int ctrl, ret;
++
++       /*
++        * Enable the SB-RMI Software alert status
++        * by writing 0 to bit 4 of Control register(0x1)
++        */
++       ret = regmap_read(data->regmap, SBRMI_CTRL, &ctrl);
++       if (ret)
++               return ret;
++
++       if (ctrl & 0x10) {
++               ctrl &= ~0x10;
++               ret = regmap_write(data->regmap, SBRMI_CTRL, ctrl);
++               if (ret)
++                       return ret;
++       }
++
++       return ret;
++}
++
++static int rmi_mailbox_xfer(struct sbrmi_i3c_data *data,
++                           struct sbrmi_mailbox_msg *msg)
++{
++       unsigned int bytes;
++       int i, ret, retry = 10;
++       int sw_status;
++       u8 byte;
++
++       mutex_lock(&data->lock);
++
++       /* Indicate firmware a command is to be serviced */
++       ret = regmap_write(data->regmap, SBRMI_INBNDMSG7, START_CMD);
++       if (ret < 0)
++               goto exit_unlock;
++
++       /* Write the command to SBRMI::InBndMsg_inst0 */
++       ret = regmap_write(data->regmap, SBRMI_INBNDMSG0, msg->cmd);
++       if (ret < 0)
++               goto exit_unlock;
++
++       /*
++        * For both read and write the initiator (BMC) writes
++        * Command Data In[31:0] to SBRMI::InBndMsg_inst[4:1]
++        * SBRMI_x3C(MSB):SBRMI_x39(LSB)
++        */
++       for (i = 0; i < 4; i++) {
++               byte = (msg->data_in >> i * 8) & 0xff;
++               ret = regmap_write(data->regmap, SBRMI_INBNDMSG1 + i, byte);
++               if (ret < 0)
++                       goto exit_unlock;
++       }
++
++       /*
++        * Write 0x01 to SBRMI::SoftwareInterrupt to notify firmware to
++        * perform the requested read or write command
++        */
++       ret = regmap_write(data->regmap, SBRMI_SW_INTERRUPT, TRIGGER_MAILBOX);
++       if (ret < 0)
++               goto exit_unlock;
++
++       /*
++        * Firmware will write SBRMI::Status[SwAlertSts]=1 to generate
++        * an ALERT (if enabled) to initiator (BMC) to indicate completion
++        * of the requested command
++        */
++       do {
++               ret = regmap_read(data->regmap, SBRMI_STATUS, &sw_status);
++               if (ret)
++                       goto exit_unlock;
++               if (sw_status & SW_ALERT_MASK)
++                       break;
++               usleep_range(50, 100);
++       } while (retry--);
++
++       if (retry < 0) {
++               ret = -EIO;
++               goto exit_unlock;
++       }
++
++       /*
++        * For a read operation, the initiator (BMC) reads the firmware
++        * response Command Data Out[31:0] from SBRMI::OutBndMsg_inst[4:1]
++        * {SBRMI_x34(MSB):SBRMI_x31(LSB)}.
++        */
++       if (msg->read) {
++               for (i = 0; i < 4; i++) {
++                       ret = regmap_read(data->regmap, SBRMI_OUTBNDMSG1 + i, &bytes);
++                       if (ret)
++                               goto exit_unlock;
++                       msg->data_out |= bytes << i * 8;
++               }
++       }
++
++       /*
++        * BMC must write 1'b1 to SBRMI::Status[SwAlertSts] to clear the
++        * ALERT to initiator
++        */
++       ret = regmap_write(data->regmap, SBRMI_STATUS,
++                          sw_status | SW_ALERT_MASK);
++
++exit_unlock:
++       mutex_unlock(&data->lock);
++       return ret;
++}
++
++static int sbrmi_i3c_read(struct device *dev, enum hwmon_sensor_types type,
++                         u32 attr, int channel, long *val)
++{
++       struct sbrmi_i3c_data *data = dev_get_drvdata(dev);
++       struct sbrmi_mailbox_msg msg = { 0 };
++       int ret;
++
++       if (type != hwmon_power)
++               return -EINVAL;
++
++       msg.read = true;
++       switch (attr) {
++       case hwmon_power_input:
++               msg.cmd = SBRMI_READ_PKG_PWR_CONSUMPTION;
++               ret = rmi_mailbox_xfer(data, &msg);
++               break;
++       case hwmon_power_cap:
++               msg.cmd = SBRMI_READ_PKG_PWR_LIMIT;
++               ret = rmi_mailbox_xfer(data, &msg);
++               break;
++       case hwmon_power_cap_max:
++               msg.data_out = data->pwr_limit_max;
++               ret = 0;
++               break;
++       default:
++               return -EINVAL;
++       }
++       if (ret < 0)
++               return ret;
++       /* hwmon power attributes are in microWatt */
++       *val = (long)msg.data_out * 1000;
++       return ret;
++}
++
++static int sbrmi_i3c_write(struct device *dev, enum hwmon_sensor_types type,
++                          u32 attr, int channel, long val)
++{
++       struct sbrmi_i3c_data *data = dev_get_drvdata(dev);
++       struct sbrmi_mailbox_msg msg = { 0 };
++
++       if (type != hwmon_power && attr != hwmon_power_cap)
++               return -EINVAL;
++       /*
++        * hwmon power attributes are in microWatt
++        * mailbox read/write is in mWatt
++        */
++       val /= 1000;
++
++       val = clamp_val(val, SBRMI_PWR_MIN, data->pwr_limit_max);
++
++       msg.cmd = SBRMI_WRITE_PKG_PWR_LIMIT;
++       msg.data_in = val;
++       msg.read = false;
++
++       return rmi_mailbox_xfer(data, &msg);
++}
++
++static umode_t sbrmi_i3c_is_visible(const void *data,
++                                   enum hwmon_sensor_types type,
++                                   u32 attr, int channel)
++{
++       switch (type) {
++       case hwmon_power:
++               switch (attr) {
++               case hwmon_power_input:
++               case hwmon_power_cap_max:
++                       return 0444;
++               case hwmon_power_cap:
++                       return 0644;
++               }
++               break;
++       default:
++               break;
++       }
++       return 0;
++}
++
++static const struct hwmon_channel_info *sbrmi_i3c_info[] = {
++       HWMON_CHANNEL_INFO(power,
++                          HWMON_P_INPUT | HWMON_P_CAP | HWMON_P_CAP_MAX),
++       NULL
++};
++
++static const struct hwmon_ops sbrmi_i3c_hwmon_ops = {
++       .is_visible = sbrmi_i3c_is_visible,
++       .read = sbrmi_i3c_read,
++       .write = sbrmi_i3c_write,
++};
++
++static const struct hwmon_chip_info sbrmi_i3c_chip_info = {
++       .ops = &sbrmi_i3c_hwmon_ops,
++       .info = sbrmi_i3c_info,
++};
++
++static int sbrmi_get_max_pwr_limit(struct sbrmi_i3c_data *data)
++{
++       struct sbrmi_mailbox_msg msg = { 0 };
++       int ret;
++
++       msg.cmd = SBRMI_READ_PKG_MAX_PWR_LIMIT;
++       msg.read = true;
++       ret = rmi_mailbox_xfer(data, &msg);
++       if (ret < 0)
++               return ret;
++       data->pwr_limit_max = msg.data_out;
++
++       return ret;
++}
++
++static int sbrmi_i3c_probe(struct i3c_device *i3cdev)
++{
++       struct device *dev = &i3cdev->dev;
++       struct device *hwmon_dev;
++       struct sbrmi_i3c_data *data;
++       struct regmap_config sbrmi_i3c_regmap_config = {
++               .reg_bits = 8,
++               .val_bits = 8,
++       };
++       struct regmap *regmap;
++       int ret;
++
++       regmap = devm_regmap_init_i3c(i3cdev, &sbrmi_i3c_regmap_config);
++       if (IS_ERR(regmap)) {
++               dev_err(&i3cdev->dev, "Failed to register i3c regmap %d\n",
++                       (int)PTR_ERR(regmap));
++               return PTR_ERR(regmap);
++       }
++       data = devm_kzalloc(dev, sizeof(struct sbrmi_i3c_data), GFP_KERNEL);
++       if (!data)
++               return -ENOMEM;
++
++       data->regmap = regmap;
++       mutex_init(&data->lock);
++
++       dev_set_drvdata(dev, (void *)data);
++
++       /* Enable alert for SB-RMI sequence */
++       ret = sbrmi_enable_alert(data);
++       if (ret < 0)
++               return ret;
++
++       /* Cache maximum power limit */
++       ret = sbrmi_get_max_pwr_limit(data);
++       if (ret < 0)
++               return ret;
++
++       hwmon_dev = devm_hwmon_device_register_with_info(dev, "sbrmi_i3c", data,
++                                                        &sbrmi_i3c_chip_info, NULL);
++
++       return PTR_ERR_OR_ZERO(hwmon_dev);
++}
++
++static int sbrmi_i3c_remove(struct i3c_device *i3cdev)
++{
++       dev_info(&i3cdev->dev, "Removed sbrmi_i3c driver\n");
++       return 0;
++}
++
++
++static const struct i3c_device_id sbrmi_i3c_id[] = {
++       I3C_DEVICE_EXTRA_INFO(0x112, 0x0, 0x2, NULL),
++       {}
++};
++MODULE_DEVICE_TABLE(i3c, sbrmi_i3c_id);
++
++static struct i3c_driver sbrmi_i3c_driver = {
++       .driver = {
++               .name = "sbrmi_i3c",
++       },
++       .probe = sbrmi_i3c_probe,
++       .remove = sbrmi_i3c_remove,
++       .id_table = sbrmi_i3c_id,
++};
++
++module_i3c_driver(sbrmi_i3c_driver);
++
++MODULE_AUTHOR("Akshay Gupta <akshay.gupta@amd.com>");
++MODULE_DESCRIPTION("Hwmon driver for AMD SB-RMI emulated sensor");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/hwmon/sbrmi.c b/drivers/hwmon/sbrmi.c
+new file mode 100644
+index 000000000000..fb29021cadce
+--- /dev/null
++++ b/drivers/hwmon/sbrmi.c
+@@ -0,0 +1,359 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ * sbrmi.c - hwmon driver for a SB-RMI mailbox
++ *           compliant AMD SoC device.
++ *
++ * Copyright (C) 2020-2021 Advanced Micro Devices, Inc.
++ */
++
++#include <linux/delay.h>
++#include <linux/err.h>
++#include <linux/hwmon.h>
++#include <linux/i2c.h>
++#include <linux/init.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/of.h>
++
++/* Do not allow setting negative power limit */
++#define SBRMI_PWR_MIN  0
++/* Mask for Status Register bit[1] */
++#define SW_ALERT_MASK  0x2
++
++/* Software Interrupt for triggering */
++#define START_CMD      0x80
++#define TRIGGER_MAILBOX        0x01
++
++/*
++ * SB-RMI supports soft mailbox service request to MP1 (power management
++ * firmware) through SBRMI inbound/outbound message registers.
++ * SB-RMI message IDs
++ */
++enum sbrmi_msg_id {
++	SBRMI_READ_PKG_PWR_CONSUMPTION = 0x1,
++	SBRMI_WRITE_PKG_PWR_LIMIT,
++	SBRMI_READ_PKG_PWR_LIMIT,
++	SBRMI_READ_PKG_MAX_PWR_LIMIT,
++};
++
++/* SB-RMI registers */
++enum sbrmi_reg {
++	SBRMI_CTRL              = 0x01,
++	SBRMI_STATUS,
++	SBRMI_OUTBNDMSG0        = 0x30,
++	SBRMI_OUTBNDMSG1,
++	SBRMI_OUTBNDMSG2,
++	SBRMI_OUTBNDMSG3,
++	SBRMI_OUTBNDMSG4,
++	SBRMI_OUTBNDMSG5,
++	SBRMI_OUTBNDMSG6,
++	SBRMI_OUTBNDMSG7,
++	SBRMI_INBNDMSG0,
++	SBRMI_INBNDMSG1,
++	SBRMI_INBNDMSG2,
++	SBRMI_INBNDMSG3,
++	SBRMI_INBNDMSG4,
++	SBRMI_INBNDMSG5,
++	SBRMI_INBNDMSG6,
++	SBRMI_INBNDMSG7,
++	SBRMI_SW_INTERRUPT,
++};
++
++/* Each client has this additional data */
++struct sbrmi_data {
++	struct i2c_client *client;
++	struct mutex lock;
++	u32 pwr_limit_max;
++};
++
++struct sbrmi_mailbox_msg {
++	u8 cmd;
++	bool read;
++	u32 data_in;
++	u32 data_out;
++};
++
++static int sbrmi_enable_alert(struct i2c_client *client)
++{
++	int ctrl;
++
++	/*
++	 * Enable the SB-RMI Software alert status
++	 * by writing 0 to bit 4 of Control register(0x1)
++	 */
++	ctrl = i2c_smbus_read_byte_data(client, SBRMI_CTRL);
++	if (ctrl < 0)
++		return ctrl;
++
++	if (ctrl & 0x10) {
++		ctrl &= ~0x10;
++		return i2c_smbus_write_byte_data(client,
++						 SBRMI_CTRL, ctrl);
++	}
++
++	return 0;
++}
++
++static int rmi_mailbox_xfer(struct sbrmi_data *data,
++			    struct sbrmi_mailbox_msg *msg)
++{
++	int i, ret, retry = 10;
++	int sw_status;
++	u8 byte;
++
++	mutex_lock(&data->lock);
++
++	/* Indicate firmware a command is to be serviced */
++	ret = i2c_smbus_write_byte_data(data->client,
++					SBRMI_INBNDMSG7, START_CMD);
++	if (ret < 0)
++		goto exit_unlock;
++
++	/* Write the command to SBRMI::InBndMsg_inst0 */
++	ret = i2c_smbus_write_byte_data(data->client,
++					SBRMI_INBNDMSG0, msg->cmd);
++	if (ret < 0)
++		goto exit_unlock;
++
++	/*
++	 * For both read and write the initiator (BMC) writes
++	 * Command Data In[31:0] to SBRMI::InBndMsg_inst[4:1]
++	 * SBRMI_x3C(MSB):SBRMI_x39(LSB)
++	 */
++	for (i = 0; i < 4; i++) {
++		byte = (msg->data_in >> i * 8) & 0xff;
++		ret = i2c_smbus_write_byte_data(data->client,
++						SBRMI_INBNDMSG1 + i, byte);
++		if (ret < 0)
++			goto exit_unlock;
++	}
++
++	/*
++	 * Write 0x01 to SBRMI::SoftwareInterrupt to notify firmware to
++	 * perform the requested read or write command
++	 */
++	ret = i2c_smbus_write_byte_data(data->client,
++					SBRMI_SW_INTERRUPT, TRIGGER_MAILBOX);
++	if (ret < 0)
++		goto exit_unlock;
++
++	/*
++	 * Firmware will write SBRMI::Status[SwAlertSts]=1 to generate
++	 * an ALERT (if enabled) to initiator (BMC) to indicate completion
++	 * of the requested command
++	 */
++	do {
++		sw_status = i2c_smbus_read_byte_data(data->client,
++						     SBRMI_STATUS);
++		if (sw_status < 0) {
++			ret = sw_status;
++			goto exit_unlock;
++		}
++		if (sw_status & SW_ALERT_MASK)
++			break;
++		usleep_range(50, 100);
++	} while (retry--);
++
++	if (retry < 0) {
++		dev_err(&data->client->dev,
++			"Firmware fail to indicate command completion\n");
++		ret = -EIO;
++		goto exit_unlock;
++	}
++
++	/*
++	 * For a read operation, the initiator (BMC) reads the firmware
++	 * response Command Data Out[31:0] from SBRMI::OutBndMsg_inst[4:1]
++	 * {SBRMI_x34(MSB):SBRMI_x31(LSB)}.
++	 */
++	if (msg->read) {
++		for (i = 0; i < 4; i++) {
++			ret = i2c_smbus_read_byte_data(data->client,
++						       SBRMI_OUTBNDMSG1 + i);
++			if (ret < 0)
++				goto exit_unlock;
++			msg->data_out |= ret << i * 8;
++		}
++	}
++
++	/*
++	 * BMC must write 1'b1 to SBRMI::Status[SwAlertSts] to clear the
++	 * ALERT to initiator
++	 */
++	ret = i2c_smbus_write_byte_data(data->client, SBRMI_STATUS,
++					sw_status | SW_ALERT_MASK);
++
++exit_unlock:
++	mutex_unlock(&data->lock);
++	return ret;
++}
++
++static int sbrmi_read(struct device *dev, enum hwmon_sensor_types type,
++		      u32 attr, int channel, long *val)
++{
++	struct sbrmi_data *data = dev_get_drvdata(dev);
++	struct sbrmi_mailbox_msg msg = { 0 };
++	int ret;
++
++	if (type != hwmon_power)
++		return -EINVAL;
++
++	msg.read = true;
++	switch (attr) {
++	case hwmon_power_input:
++		msg.cmd = SBRMI_READ_PKG_PWR_CONSUMPTION;
++		ret = rmi_mailbox_xfer(data, &msg);
++		break;
++	case hwmon_power_cap:
++		msg.cmd = SBRMI_READ_PKG_PWR_LIMIT;
++		ret = rmi_mailbox_xfer(data, &msg);
++		break;
++	case hwmon_power_cap_max:
++		msg.data_out = data->pwr_limit_max;
++		ret = 0;
++		break;
++	default:
++		return -EINVAL;
++	}
++	if (ret < 0)
++		return ret;
++	/* hwmon power attributes are in microWatt */
++	*val = (long)msg.data_out * 1000;
++	return ret;
++}
++
++static int sbrmi_write(struct device *dev, enum hwmon_sensor_types type,
++		       u32 attr, int channel, long val)
++{
++	struct sbrmi_data *data = dev_get_drvdata(dev);
++	struct sbrmi_mailbox_msg msg = { 0 };
++
++	if (type != hwmon_power && attr != hwmon_power_cap)
++		return -EINVAL;
++	/*
++	 * hwmon power attributes are in microWatt
++	 * mailbox read/write is in mWatt
++	 */
++	val /= 1000;
++
++	val = clamp_val(val, SBRMI_PWR_MIN, data->pwr_limit_max);
++
++	msg.cmd = SBRMI_WRITE_PKG_PWR_LIMIT;
++	msg.data_in = val;
++	msg.read = false;
++
++	return rmi_mailbox_xfer(data, &msg);
++}
++
++static umode_t sbrmi_is_visible(const void *data,
++				enum hwmon_sensor_types type,
++				u32 attr, int channel)
++{
++	switch (type) {
++	case hwmon_power:
++		switch (attr) {
++		case hwmon_power_input:
++		case hwmon_power_cap_max:
++			return 0444;
++		case hwmon_power_cap:
++			return 0644;
++		}
++		break;
++	default:
++		break;
++	}
++	return 0;
++}
++
++static const struct hwmon_channel_info *sbrmi_info[] = {
++	HWMON_CHANNEL_INFO(power,
++			   HWMON_P_INPUT | HWMON_P_CAP | HWMON_P_CAP_MAX),
++	NULL
++};
++
++static const struct hwmon_ops sbrmi_hwmon_ops = {
++	.is_visible = sbrmi_is_visible,
++	.read = sbrmi_read,
++	.write = sbrmi_write,
++};
++
++static const struct hwmon_chip_info sbrmi_chip_info = {
++	.ops = &sbrmi_hwmon_ops,
++	.info = sbrmi_info,
++};
++
++static int sbrmi_get_max_pwr_limit(struct sbrmi_data *data)
++{
++	struct sbrmi_mailbox_msg msg = { 0 };
++	int ret;
++
++	msg.cmd = SBRMI_READ_PKG_MAX_PWR_LIMIT;
++	msg.read = true;
++	ret = rmi_mailbox_xfer(data, &msg);
++	if (ret < 0)
++		return ret;
++	data->pwr_limit_max = msg.data_out;
++
++	return ret;
++}
++
++static int sbrmi_probe(struct i2c_client *client,
++		       const struct i2c_device_id *id)
++{
++	struct device *dev = &client->dev;
++	struct device *hwmon_dev;
++	struct sbrmi_data *data;
++	int ret;
++
++	data = devm_kzalloc(dev, sizeof(struct sbrmi_data), GFP_KERNEL);
++	if (!data)
++		return -ENOMEM;
++
++	data->client = client;
++	mutex_init(&data->lock);
++
++	/* Enable alert for SB-RMI sequence */
++	ret = sbrmi_enable_alert(client);
++	if (ret < 0)
++		return ret;
++
++	/* Cache maximum power limit */
++	ret = sbrmi_get_max_pwr_limit(data);
++	if (ret < 0)
++		return ret;
++
++	hwmon_dev = devm_hwmon_device_register_with_info(dev, client->name, data,
++							 &sbrmi_chip_info, NULL);
++
++	return PTR_ERR_OR_ZERO(hwmon_dev);
++}
++
++static const struct i2c_device_id sbrmi_id[] = {
++	{"sbrmi", 0},
++	{}
++};
++MODULE_DEVICE_TABLE(i2c, sbrmi_id);
++
++static const struct of_device_id __maybe_unused sbrmi_of_match[] = {
++	{
++		.compatible = "amd,sbrmi",
++	},
++	{ },
++};
++MODULE_DEVICE_TABLE(of, sbrmi_of_match);
++
++static struct i2c_driver sbrmi_driver = {
++	.class = I2C_CLASS_HWMON,
++	.driver = {
++		.name = "sbrmi",
++		.of_match_table = of_match_ptr(sbrmi_of_match),
++	},
++	.probe = sbrmi_probe,
++	.id_table = sbrmi_id,
++};
++
++module_i2c_driver(sbrmi_driver);
++
++MODULE_AUTHOR("Akshay Gupta <akshay.gupta@amd.com>");
++MODULE_DESCRIPTION("Hwmon driver for AMD SB-RMI emulated sensor");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/hwmon/sbtsi-i3c.c b/drivers/hwmon/sbtsi-i3c.c
+new file mode 100644
+index 000000000000..fa4b8b80c24a
+--- /dev/null
++++ b/drivers/hwmon/sbtsi-i3c.c
+@@ -0,0 +1,272 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ * sbtsi-i3c.c - hwmon driver for a SB-TSI mailbox
++ *               compliant AMD SoC device.
++ *
++ * Copyright (C) 2021-2022 Advanced Micro Devices, Inc.
++ */
++
++#include <linux/delay.h>
++#include <linux/err.h>
++#include <linux/hwmon.h>
++#include <linux/i3c/device.h>
++#include <linux/i3c/master.h>
++#include <linux/init.h>
++#include <linux/module.h>
++#include <linux/minmax.h>
++#include <linux/mutex.h>
++#include <linux/of.h>
++#include <linux/regmap.h>
++
++/*
++ * SB-TSI registers only support SMBus byte data access. "_INT" registers are
++ * the integer part of a temperature value or limit, and "_DEC" registers are
++ * corresponding decimal parts.
++ */
++#define SBTSI_REG_TEMP_INT		0x01 /* RO */
++#define SBTSI_REG_STATUS		0x02 /* RO */
++#define SBTSI_REG_CONFIG		0x03 /* RO */
++#define SBTSI_REG_TEMP_HIGH_INT		0x07 /* RW */
++#define SBTSI_REG_TEMP_LOW_INT		0x08 /* RW */
++#define SBTSI_REG_TEMP_DEC		0x10 /* RW */
++#define SBTSI_REG_TEMP_HIGH_DEC		0x13 /* RW */
++#define SBTSI_REG_TEMP_LOW_DEC		0x14 /* RW */
++
++#define SBTSI_CONFIG_READ_ORDER_SHIFT	5
++
++#define SBTSI_TEMP_MIN 0
++#define SBTSI_TEMP_MAX 255875
++
++/*
++ * SBTSI_STEP_INC Fractional portion of temperature
++ * One increment of these bits is equivalent to a step of 0.125 °C
++ *
++ * SBTSI_INT_OFFSET Integer offset for temperature value
++ *
++ * SBTSI_DEC_OFFSET offset for decimal bits in register[7:5]
++ *
++ * SBTSI_DEC_MASK Mask for decimal value
++ */
++#define SBTSI_STEP_INC		125
++#define SBTSI_INT_OFFSET	3
++#define SBTSI_DEC_OFFSET	5
++#define SBTSI_DEC_MASK		0x7
++/* Each device has this additional data */
++struct sbtsi_i3c_data {
++	struct regmap *regmap;
++	struct mutex lock;
++};
++
++/*
++ * From SB-TSI spec: CPU temperature readings and limit registers encode the
++ * temperature in increments of 0.125 from 0 to 255.875. The "high byte"
++ * register encodes the base-2 of the integer portion, and the upper 3 bits of
++ * the "low byte" encode in base-2 the decimal portion.
++ *
++ * e.g. INT=0x19, DEC=0x20 represents 25.125 degrees Celsius
++ *
++ * Therefore temperature in millidegree Celsius =
++ *   (INT + DEC / 256) * 1000 = (INT * 8 + DEC / 32) * 125
++ */
++static inline int sbtsi_reg_to_mc(s32 integer, s32 decimal)
++{
++	return ((integer << SBTSI_INT_OFFSET) +
++		(decimal >> SBTSI_DEC_OFFSET)) * SBTSI_STEP_INC;
++}
++
++/*
++ * Inversely, given temperature in millidegree Celsius
++ *   INT = (TEMP / 125) / 8
++ *   DEC = ((TEMP / 125) % 8) * 32
++ * Caller have to make sure temp doesn't exceed 255875, the max valid value.
++ */
++static inline void sbtsi_mc_to_reg(s32 temp, unsigned int *integer, unsigned int *decimal)
++{
++	temp /= SBTSI_STEP_INC;
++	*integer = temp >> SBTSI_INT_OFFSET;
++	*decimal = (temp & SBTSI_DEC_MASK) << SBTSI_DEC_OFFSET;
++}
++
++static int sbtsi_i3c_read(struct device *dev, enum hwmon_sensor_types type,
++			  u32 attr, int channel, long *val)
++{
++	struct sbtsi_i3c_data *data = dev_get_drvdata(dev);
++	unsigned int temp_int, temp_dec, cfg;
++	int ret;
++
++	switch (attr) {
++	case hwmon_temp_input:
++		/*
++		 * ReadOrder bit specifies the reading order of integer and
++		 * decimal part of CPU temp for atomic reads. If bit == 0,
++		 * reading integer part triggers latching of the decimal part,
++		 * so integer part should be read first. If bit == 1, read
++		 * order should be reversed.
++		 */
++		ret = regmap_read(data->regmap, SBTSI_REG_CONFIG, &cfg);
++		if (ret < 0)
++			return ret;
++
++		mutex_lock(&data->lock);
++		if (cfg & BIT(SBTSI_CONFIG_READ_ORDER_SHIFT)) {
++			ret = regmap_read(data->regmap, SBTSI_REG_TEMP_DEC, &temp_dec);
++			ret = regmap_read(data->regmap, SBTSI_REG_TEMP_INT, &temp_int);
++		} else {
++			ret = regmap_read(data->regmap, SBTSI_REG_TEMP_INT, &temp_int);
++			ret = regmap_read(data->regmap, SBTSI_REG_TEMP_DEC, &temp_dec);
++		}
++		mutex_unlock(&data->lock);
++		break;
++	case hwmon_temp_max:
++		mutex_lock(&data->lock);
++		ret = regmap_read(data->regmap, SBTSI_REG_TEMP_HIGH_INT, &temp_int);
++		ret = regmap_read(data->regmap, SBTSI_REG_TEMP_HIGH_DEC, &temp_dec);
++		mutex_unlock(&data->lock);
++		break;
++	case hwmon_temp_min:
++		mutex_lock(&data->lock);
++		ret = regmap_read(data->regmap, SBTSI_REG_TEMP_LOW_INT, &temp_int);
++		ret = regmap_read(data->regmap, SBTSI_REG_TEMP_LOW_DEC, &temp_dec);
++		mutex_unlock(&data->lock);
++		break;
++	default:
++		return -EINVAL;
++	}
++
++	if (ret < 0)
++		return ret;
++
++	*val = sbtsi_reg_to_mc(temp_int, temp_dec);
++
++	return 0;
++}
++
++static int sbtsi_i3c_write(struct device *dev, enum hwmon_sensor_types type,
++			   u32 attr, int channel, long val)
++{
++	struct sbtsi_i3c_data *data = dev_get_drvdata(dev);
++	unsigned int temp_int, temp_dec;
++	int reg_int, reg_dec, err;
++
++	switch (attr) {
++	case hwmon_temp_max:
++		reg_int = SBTSI_REG_TEMP_HIGH_INT;
++		reg_dec = SBTSI_REG_TEMP_HIGH_DEC;
++		break;
++	case hwmon_temp_min:
++		reg_int = SBTSI_REG_TEMP_LOW_INT;
++		reg_dec = SBTSI_REG_TEMP_LOW_DEC;
++		break;
++	default:
++		return -EINVAL;
++	}
++
++	val = clamp_val(val, SBTSI_TEMP_MIN, SBTSI_TEMP_MAX);
++	sbtsi_mc_to_reg(val, &temp_int, &temp_dec);
++
++	mutex_lock(&data->lock);
++	err = regmap_write(data->regmap, reg_int, temp_int);
++	if (err)
++		goto exit;
++
++	err = regmap_write(data->regmap, reg_dec, temp_dec);
++exit:
++	mutex_unlock(&data->lock);
++	return err;
++}
++
++static umode_t sbtsi_i3c_is_visible(const void *data,
++				    enum hwmon_sensor_types type,
++				    u32 attr, int channel)
++{
++	switch (type) {
++	case hwmon_temp:
++		switch (attr) {
++		case hwmon_temp_input:
++			return 0444;
++		case hwmon_temp_min:
++			return 0644;
++		case hwmon_temp_max:
++			return 0644;
++		}
++		break;
++	default:
++		break;
++	}
++	return 0;
++}
++
++static const struct hwmon_channel_info *sbtsi_i3c_info[] = {
++	HWMON_CHANNEL_INFO(temp, HWMON_T_INPUT | HWMON_T_MIN | HWMON_T_MAX),
++	NULL
++};
++
++static const struct hwmon_ops sbtsi_i3c_hwmon_ops = {
++	.is_visible = sbtsi_i3c_is_visible,
++	.read = sbtsi_i3c_read,
++	.write = sbtsi_i3c_write,
++};
++
++static const struct hwmon_chip_info sbtsi_i3c_chip_info = {
++	.ops = &sbtsi_i3c_hwmon_ops,
++	.info = sbtsi_i3c_info,
++};
++
++static int sbtsi_i3c_probe(struct i3c_device *i3cdev)
++{
++	struct device *dev = &i3cdev->dev;
++	struct device *hwmon_dev;
++	struct sbtsi_i3c_data *data;
++	struct regmap_config sbtsi_i3c_regmap_config = {
++		.reg_bits = 8,
++		.val_bits = 8,
++	};
++	struct regmap *regmap;
++
++	regmap = devm_regmap_init_i3c(i3cdev, &sbtsi_i3c_regmap_config);
++	if (IS_ERR(regmap)) {
++		dev_err(&i3cdev->dev, "Failed to register i3c regmap %d\n",
++			(int)PTR_ERR(regmap));
++		return PTR_ERR(regmap);
++	}
++
++	data = devm_kzalloc(dev, sizeof(struct sbtsi_i3c_data), GFP_KERNEL);
++	if (!data)
++		return -ENOMEM;
++
++	data->regmap = regmap;
++	mutex_init(&data->lock);
++
++	dev_set_drvdata(dev, (void *)data);
++	hwmon_dev = devm_hwmon_device_register_with_info(dev, "sbtsi_i3c", data,
++							 &sbtsi_i3c_chip_info, NULL);
++
++	return PTR_ERR_OR_ZERO(hwmon_dev);
++}
++
++static int sbtsi_i3c_remove(struct i3c_device *i3cdev)
++{
++	dev_info(&i3cdev->dev, "Removed sbtsi-i3c driver\n");
++	return 0;
++}
++
++static const struct i3c_device_id sbtsi_i3c_id[] = {
++	I3C_DEVICE_EXTRA_INFO(0x112, 0, 0x1, NULL),
++	{}
++};
++MODULE_DEVICE_TABLE(i3c, sbtsi_i3c_id);
++
++static struct i3c_driver sbtsi_i3c_driver = {
++	.driver = {
++		.name = "sbtsi_i3c",
++	},
++	.probe = sbtsi_i3c_probe,
++	.remove = sbtsi_i3c_remove,
++	.id_table = sbtsi_i3c_id,
++};
++
++module_i3c_driver(sbtsi_i3c_driver);
++
++MODULE_AUTHOR("Akshay Gupta <akshay.gupta@amd.com>");
++MODULE_DESCRIPTION("Hwmon driver for AMD SB-TSI emulated sensor");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/hwmon/sbtsi_temp.c b/drivers/hwmon/sbtsi_temp.c
+index 6615edb75eb0..f53395a31370 100644
+--- a/drivers/hwmon/sbtsi_temp.c
++++ b/drivers/hwmon/sbtsi_temp.c
+@@ -221,6 +221,13 @@ static int sbtsi_probe(struct i2c_client *client,
+ 	data->client = client;
+ 	mutex_init(&data->lock);
+ 
++	// Just check if we can read basic things from the CPU
++	{
++		int err = i2c_smbus_read_byte_data(data->client, SBTSI_REG_CONFIG);
++		if (err < 0)
++			return err;
++	}
++
+ 	hwmon_dev =
+ 		devm_hwmon_device_register_with_info(dev, client->name, data,
+ 						     &sbtsi_chip_info, NULL);
+diff --git a/drivers/hwmon/smpro-hwmon.c b/drivers/hwmon/smpro-hwmon.c
+new file mode 100644
+index 000000000000..174d3dc8684a
+--- /dev/null
++++ b/drivers/hwmon/smpro-hwmon.c
+@@ -0,0 +1,465 @@
++// SPDX-License-Identifier: GPL-2.0+
++/*
++ * Ampere Computing SoC's SMPro Hardware Monitoring Driver
++ *
++ * Copyright (c) 2021, Ampere Computing LLC
++ */
++#include <linux/bitfield.h>
++#include <linux/bitops.h>
++#include <linux/hwmon.h>
++#include <linux/hwmon-sysfs.h>
++#include <linux/kernel.h>
++#include <linux/mod_devicetable.h>
++#include <linux/module.h>
++#include <linux/platform_device.h>
++#include <linux/property.h>
++#include <linux/regmap.h>
++
++/* Logical Power Sensor Registers */
++#define SOC_TEMP		0x10
++#define SOC_VRD_TEMP		0x11
++#define DIMM_VRD_TEMP		0x12
++#define CORE_VRD_TEMP		0x13
++#define CH0_DIMM_TEMP		0x14
++#define CH1_DIMM_TEMP		0x15
++#define CH2_DIMM_TEMP		0x16
++#define CH3_DIMM_TEMP		0x17
++#define CH4_DIMM_TEMP		0x18
++#define CH5_DIMM_TEMP		0x19
++#define CH6_DIMM_TEMP		0x1A
++#define CH7_DIMM_TEMP		0x1B
++#define RCA_VRD_TEMP		0x1C
++
++#define CORE_VRD_PWR		0x20
++#define SOC_PWR			0x21
++#define DIMM_VRD1_PWR		0x22
++#define DIMM_VRD2_PWR		0x23
++#define CORE_VRD_PWR_MW		0x26
++#define SOC_PWR_MW		0x27
++#define DIMM_VRD1_PWR_MW	0x28
++#define DIMM_VRD2_PWR_MW	0x29
++#define RCA_VRD_PWR		0x2A
++#define RCA_VRD_PWR_MW		0x2B
++
++#define MEM_HOT_THRESHOLD	0x32
++#define SOC_VR_HOT_THRESHOLD	0x33
++#define CORE_VRD_VOLT		0x34
++#define SOC_VRD_VOLT		0x35
++#define DIMM_VRD1_VOLT		0x36
++#define DIMM_VRD2_VOLT		0x37
++#define RCA_VRD_VOLT		0x38
++
++#define CORE_VRD_CURR		0x39
++#define SOC_VRD_CURR		0x3A
++#define DIMM_VRD1_CURR		0x3B
++#define DIMM_VRD2_CURR		0x3C
++#define RCA_VRD_CURR		0x3D
++
++struct smpro_hwmon {
++	struct regmap *regmap;
++};
++
++struct smpro_sensor {
++	const u8 reg;
++	const u8 reg_ext;
++	const char *label;
++};
++
++static const struct smpro_sensor temperature[] = {
++	{
++		.reg = SOC_TEMP,
++		.label = "temp1 SoC"
++	},
++	{
++		.reg = SOC_VRD_TEMP,
++		.reg_ext = SOC_VR_HOT_THRESHOLD,
++		.label = "temp2 SoC VRD"
++	},
++	{
++		.reg = DIMM_VRD_TEMP,
++		.label = "temp3 DIMM VRD"
++	},
++	{
++		.reg = CORE_VRD_TEMP,
++		.label = "temp4 CORE VRD"
++	},
++	{
++		.reg = CH0_DIMM_TEMP,
++		.reg_ext = MEM_HOT_THRESHOLD,
++		.label = "temp5 CH0 DIMM"
++	},
++	{
++		.reg = CH1_DIMM_TEMP,
++		.reg_ext = MEM_HOT_THRESHOLD,
++		.label = "temp6 CH1 DIMM"
++	},
++	{
++		.reg = CH2_DIMM_TEMP,
++		.reg_ext = MEM_HOT_THRESHOLD,
++		.label = "temp7 CH2 DIMM"
++	},
++	{
++		.reg = CH3_DIMM_TEMP,
++		.reg_ext = MEM_HOT_THRESHOLD,
++		.label = "temp8 CH3 DIMM"
++	},
++	{
++		.reg = CH4_DIMM_TEMP,
++		.reg_ext = MEM_HOT_THRESHOLD,
++		.label = "temp9 CH4 DIMM"
++	},
++	{
++		.reg = CH5_DIMM_TEMP,
++		.reg_ext = MEM_HOT_THRESHOLD,
++		.label = "temp10 CH5 DIMM"
++	},
++	{
++		.reg = CH6_DIMM_TEMP,
++		.reg_ext = MEM_HOT_THRESHOLD,
++		.label = "temp11 CH6 DIMM"
++	},
++	{
++		.reg = CH7_DIMM_TEMP,
++		.reg_ext = MEM_HOT_THRESHOLD,
++		.label = "temp12 CH7 DIMM"
++	},
++	{
++		.reg = RCA_VRD_TEMP,
++		.label = "temp13 RCA VRD"
++	},
++};
++
++static const struct smpro_sensor voltage[] = {
++	{
++		.reg = CORE_VRD_VOLT,
++		.label = "vout0 CORE VRD"
++	},
++	{
++		.reg = SOC_VRD_VOLT,
++		.label = "vout1 SoC VRD"
++	},
++	{
++		.reg = DIMM_VRD1_VOLT,
++		.label = "vout2 DIMM VRD1"
++	},
++	{
++		.reg = DIMM_VRD2_VOLT,
++		.label = "vout3 DIMM VRD2"
++	},
++	{
++		.reg = RCA_VRD_VOLT,
++		.label = "vout4 RCA VRD"
++	},
++};
++
++static const struct smpro_sensor curr_sensor[] = {
++	{
++		.reg = CORE_VRD_CURR,
++		.label = "iout1 CORE VRD"
++	},
++	{
++		.reg = SOC_VRD_CURR,
++		.label = "iout2 SoC VRD"
++	},
++	{
++		.reg = DIMM_VRD1_CURR,
++		.label = "iout3 DIMM VRD1"
++	},
++	{
++		.reg = DIMM_VRD2_CURR,
++		.label = "iout4 DIMM VRD2"
++	},
++	{
++		.reg = RCA_VRD_CURR,
++		.label = "iout5 RCA VRD"
++	},
++};
++
++static const struct smpro_sensor power[] = {
++	{
++		.reg = CORE_VRD_PWR,
++		.reg_ext = CORE_VRD_PWR_MW,
++		.label = "power1 CORE VRD"
++	},
++	{
++		.reg = SOC_PWR,
++		.reg_ext = SOC_PWR_MW,
++		.label = "power2 SoC"
++	},
++	{
++		.reg = DIMM_VRD1_PWR,
++		.reg_ext = DIMM_VRD1_PWR_MW,
++		.label = "power3 DIMM VRD1"
++	},
++	{
++		.reg = DIMM_VRD2_PWR,
++		.reg_ext = DIMM_VRD2_PWR_MW,
++		.label = "power4 DIMM VRD2"
++	},
++	{
++		.reg = RCA_VRD_PWR,
++		.reg_ext = RCA_VRD_PWR_MW,
++		.label = "power5 RCA VRD"
++	},
++};
++
++static int smpro_read_temp(struct device *dev, u32 attr, int channel, long *val)
++{
++	struct smpro_hwmon *hwmon = dev_get_drvdata(dev);
++	unsigned int value;
++	int ret;
++
++	switch (attr) {
++	case hwmon_temp_input:
++		ret = regmap_read(hwmon->regmap, temperature[channel].reg, &value);
++		if (ret)
++			return ret;
++		break;
++	case hwmon_temp_crit:
++		ret = regmap_read(hwmon->regmap, temperature[channel].reg_ext, &value);
++		if (ret)
++			return ret;
++		break;
++	default:
++		return -EOPNOTSUPP;
++	}
++
++	*val = sign_extend32(value, 8) * 1000;
++	return 0;
++}
++
++static int smpro_read_in(struct device *dev, u32 attr, int channel, long *val)
++{
++	struct smpro_hwmon *hwmon = dev_get_drvdata(dev);
++	unsigned int value;
++	int ret;
++
++	switch (attr) {
++	case hwmon_in_input:
++		ret = regmap_read(hwmon->regmap, voltage[channel].reg, &value);
++		if (ret < 0)
++			return ret;
++		/* Scale reported by the hardware is 1mV */
++		*val = value & 0x7fff;
++		return 0;
++	default:
++		return -EOPNOTSUPP;
++	}
++}
++
++static int smpro_read_curr(struct device *dev, u32 attr, int channel, long *val)
++{
++	struct smpro_hwmon *hwmon = dev_get_drvdata(dev);
++	unsigned int value;
++	int ret;
++
++	switch (attr) {
++	case hwmon_curr_input:
++		ret = regmap_read(hwmon->regmap, curr_sensor[channel].reg, &value);
++		if (ret < 0)
++			return ret;
++		/* Scale reported by the hardware is 1mA */
++		*val = value & 0x7fff;
++		return 0;
++	default:
++		return -EOPNOTSUPP;
++	}
++}
++
++static int smpro_read_power(struct device *dev, u32 attr, int channel, long *val_pwr)
++{
++	struct smpro_hwmon *hwmon = dev_get_drvdata(dev);
++	unsigned int val = 0, val_mw = 0;
++	int ret;
++
++	switch (attr) {
++	case hwmon_power_input:
++		ret = regmap_read(hwmon->regmap, power[channel].reg, &val);
++		if (ret)
++			return ret;
++
++		ret = regmap_read(hwmon->regmap, power[channel].reg_ext, &val_mw);
++		if (ret)
++			return ret;
++
++		/* 10-bit value */
++		*val_pwr = (val & 0x3ff) * 1000000 + (val_mw & 0x3ff) * 1000;
++
++		return 0;
++
++	default:
++		return -EOPNOTSUPP;
++	}
++}
++
++static int smpro_read(struct device *dev, enum hwmon_sensor_types type,
++		      u32 attr, int channel, long *val)
++{
++	switch (type) {
++	case hwmon_temp:
++		return smpro_read_temp(dev, attr, channel, val);
++	case hwmon_in:
++		return smpro_read_in(dev, attr, channel, val);
++	case hwmon_power:
++		return smpro_read_power(dev, attr, channel, val);
++	case hwmon_curr:
++		return smpro_read_curr(dev, attr, channel, val);
++	default:
++		return -EOPNOTSUPP;
++	}
++}
++
++static int smpro_read_string(struct device *dev, enum hwmon_sensor_types type,
++			     u32 attr, int channel, const char **str)
++{
++	switch (type) {
++	case hwmon_temp:
++		switch (attr) {
++		case hwmon_temp_label:
++			*str = temperature[channel].label;
++			return 0;
++		default:
++			break;
++		}
++		break;
++
++	case hwmon_in:
++		switch (attr) {
++		case hwmon_in_label:
++			*str = voltage[channel].label;
++			return 0;
++		default:
++			break;
++		}
++		break;
++
++	case hwmon_curr:
++		switch (attr) {
++		case hwmon_curr_label:
++			*str = curr_sensor[channel].label;
++			return 0;
++		default:
++			break;
++		}
++		break;
++
++	case hwmon_power:
++		switch (attr) {
++		case hwmon_power_label:
++			*str = power[channel].label;
++			return 0;
++		default:
++			break;
++		}
++		break;
++	default:
++		break;
++	}
++
++	return -EOPNOTSUPP;
++}
++
++static umode_t smpro_is_visible(const void *data, enum hwmon_sensor_types type,
++				u32 attr, int channel)
++{
++	const struct smpro_hwmon *hwmon = data;
++	unsigned int value;
++	int ret;
++
++	switch (type) {
++	case hwmon_temp:
++		switch (attr) {
++		case hwmon_temp_input:
++		case hwmon_temp_label:
++		case hwmon_temp_crit:
++			ret = regmap_read(hwmon->regmap, temperature[channel].reg, &value);
++			if (ret || value == 0xFFFF)
++				return 0;
++		break;
++		}
++	default:
++		break;
++	}
++
++	return 0444;
++}
++
++static const struct hwmon_channel_info *smpro_info[] = {
++	HWMON_CHANNEL_INFO(temp,
++			   HWMON_T_INPUT | HWMON_T_LABEL,
++			   HWMON_T_INPUT | HWMON_T_LABEL | HWMON_T_CRIT,
++			   HWMON_T_INPUT | HWMON_T_LABEL,
++			   HWMON_T_INPUT | HWMON_T_LABEL,
++			   HWMON_T_INPUT | HWMON_T_LABEL | HWMON_T_CRIT,
++			   HWMON_T_INPUT | HWMON_T_LABEL | HWMON_T_CRIT,
++			   HWMON_T_INPUT | HWMON_T_LABEL | HWMON_T_CRIT,
++			   HWMON_T_INPUT | HWMON_T_LABEL | HWMON_T_CRIT,
++			   HWMON_T_INPUT | HWMON_T_LABEL | HWMON_T_CRIT,
++			   HWMON_T_INPUT | HWMON_T_LABEL | HWMON_T_CRIT,
++			   HWMON_T_INPUT | HWMON_T_LABEL | HWMON_T_CRIT,
++			   HWMON_T_INPUT | HWMON_T_LABEL | HWMON_T_CRIT,
++			   HWMON_T_INPUT | HWMON_T_LABEL),
++	HWMON_CHANNEL_INFO(in,
++			   HWMON_I_INPUT | HWMON_I_LABEL,
++			   HWMON_I_INPUT | HWMON_I_LABEL,
++			   HWMON_I_INPUT | HWMON_I_LABEL,
++			   HWMON_I_INPUT | HWMON_I_LABEL,
++			   HWMON_I_INPUT | HWMON_I_LABEL),
++	HWMON_CHANNEL_INFO(power,
++			   HWMON_P_INPUT | HWMON_P_LABEL,
++			   HWMON_P_INPUT | HWMON_P_LABEL,
++			   HWMON_P_INPUT | HWMON_P_LABEL,
++			   HWMON_P_INPUT | HWMON_P_LABEL,
++			   HWMON_P_INPUT | HWMON_P_LABEL),
++	HWMON_CHANNEL_INFO(curr,
++			   HWMON_C_INPUT | HWMON_C_LABEL,
++			   HWMON_C_INPUT | HWMON_C_LABEL,
++			   HWMON_C_INPUT | HWMON_C_LABEL,
++			   HWMON_C_INPUT | HWMON_C_LABEL,
++			   HWMON_C_INPUT | HWMON_C_LABEL),
++	NULL
++};
++
++static const struct hwmon_ops smpro_hwmon_ops = {
++	.is_visible = smpro_is_visible,
++	.read = smpro_read,
++	.read_string = smpro_read_string,
++};
++
++static const struct hwmon_chip_info smpro_chip_info = {
++	.ops = &smpro_hwmon_ops,
++	.info = smpro_info,
++};
++
++static int smpro_hwmon_probe(struct platform_device *pdev)
++{
++	struct smpro_hwmon *hwmon;
++	struct device *hwmon_dev;
++
++	hwmon = devm_kzalloc(&pdev->dev, sizeof(struct smpro_hwmon), GFP_KERNEL);
++	if (!hwmon)
++		return -ENOMEM;
++
++	hwmon->regmap = dev_get_regmap(pdev->dev.parent, NULL);
++	if (!hwmon->regmap)
++		return -ENODEV;
++
++	hwmon_dev = devm_hwmon_device_register_with_info(&pdev->dev, "smpro_hwmon",
++							 hwmon, &smpro_chip_info, NULL);
++
++	return PTR_ERR_OR_ZERO(hwmon_dev);
++}
++
++static struct platform_driver smpro_hwmon_driver = {
++	.probe		= smpro_hwmon_probe,
++	.driver = {
++		.name	= "smpro-hwmon",
++	},
++};
++
++module_platform_driver(smpro_hwmon_driver);
++
++MODULE_AUTHOR("Thu Nguyen <thu@os.amperecomputing.com>");
++MODULE_AUTHOR("Quan Nguyen <quan@os.amperecomputing.com>");
++MODULE_DESCRIPTION("Ampere Altra SMPro hwmon driver");
++MODULE_LICENSE("GPL v2");
+diff --git a/drivers/hwmon/ubm-drv.c b/drivers/hwmon/ubm-drv.c
+new file mode 100644
+index 000000000000..cbacc07381c7
+--- /dev/null
++++ b/drivers/hwmon/ubm-drv.c
+@@ -0,0 +1,213 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (C) 2023 Hewlett-Packard Development Company, L.P.
++ *
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ */
++
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_device.h>
++#include <linux/i2c.h>
++#include <linux/hwmon.h>
++#include <linux/hwmon-sysfs.h>
++#include <linux/err.h>
++#include <linux/kthread.h>
++#include <linux/delay.h>
++#include <linux/poll.h>
++#include <linux/errno.h>
++#include <linux/bitops.h>
++#include <linux/gpio.h>
++#include <linux/gpio/consumer.h>
++#include <linux/kernel.h>
++#include <linux/leds.h>
++#include <linux/sysfs.h>
++
++struct ubm_drv_drvdata {
++	struct i2c_client *client;
++	u8 low;
++	u8 high;
++	char device[256];
++	struct kobject *kobj;
++	struct mutex update_lock;
++	struct device *hwmon_dev;
++	struct device *dev;
++};
++
++static struct device *sysroot;
++
++struct gpio_led_data {
++	struct led_classdev cdev;
++	struct gpio_desc *gpiod;
++	u8 can_sleep;
++	u8 blinking;
++	gpio_blink_set_t platform_gpio_blink_set;
++};
++
++struct gpio_leds_priv {
++	int num_leds;
++	struct gpio_led_data leds[];
++};
++
++#define REG_TEMP 0x5
++
++struct mutex drv_lock;
++unsigned int currentSpdIndex;
++
++
++static int ubmdrv_update_client(struct device *dev, u8 reg)
++{
++	struct ubm_drv_drvdata *drvdata = dev_get_drvdata(dev);
++	u16 ret = 0;
++	u16 value = 0;
++	switch (reg) {
++	case REG_TEMP:
++		value = i2c_smbus_read_word_data(drvdata->client, REG_TEMP);
++		drvdata->high = value & 0xFF;
++		drvdata->low = (value & 0xFF00) >> 8;
++		break;
++	default:
++		dev_err(&drvdata->client->dev, "ubmdrv_error_reg 0x%x unknown\n", reg);
++		return -EOPNOTSUPP;
++	}
++
++	return ret;
++}
++
++static ssize_t show_drv_temp(struct device *dev,
++		struct device_attribute *attr, char *buf)
++{
++	struct ubm_drv_drvdata *drvdata = dev_get_drvdata(dev);
++	int ret = 0;
++	int sign = 0;
++	unsigned char integerV;
++	u8 low;
++
++	ret = ubmdrv_update_client(dev, REG_TEMP);
++	if (ret < 0)
++		return ret;
++	integerV = (unsigned char)((drvdata->low >> 4) | (drvdata->high << 4));
++	if ((drvdata->low >> 2) & 0x1)
++		low = low + 25;
++	if ((drvdata->low >> 3) & 0x1)
++		low = low + 50;
++	sign = (drvdata->high & 0x10);
++	if (sign)
++		return sprintf(buf, "-%d%02d0\n", integerV & 0x7F, low);
++	return sprintf(buf, "%d%02d0\n", integerV & 0x7F, low);
++}
++
++static ssize_t show_drv_label(struct device *dev, struct device_attribute *attr,
++			      char *buf)
++{
++	return sprintf(buf, "drv\n");
++}
++
++
++static SENSOR_DEVICE_ATTR(temp1_input, 0444, show_drv_temp, NULL, 0);
++
++static struct attribute *ubm_drv_attrs[] = {
++	&sensor_dev_attr_temp1_input.dev_attr.attr,
++	NULL,
++};
++
++ATTRIBUTE_GROUPS(ubm_drv);
++
++static const struct of_device_id ubm_drv_of_match[] = {
++	{ .compatible = "ubm-drv" },
++	{},
++};
++MODULE_DEVICE_TABLE(of, ubm_drv_of_match);
++
++static int ubm_drv_remove(struct i2c_client *client)
++{
++	struct ubm_drv_drvdata *drvdata = i2c_get_clientdata(client);;
++	hwmon_device_unregister(&client->dev);
++	printk("gxp-drv: Remove %s\n", drvdata->device);
++	sysfs_remove_link(drvdata->kobj, &drvdata->device[0]);
++
++	return 0;
++}
++
++static int ubm_drv_probe(struct i2c_client *client,
++		const struct i2c_device_id *id)
++{
++	struct ubm_drv_drvdata *drvdata;
++	struct device *hwmon_dev;
++	struct device *dev = &client->dev;
++	struct device_node *np;
++	struct platform_device *pdev;
++	int i, j, index, ret, value;
++	struct gpio_leds_priv *leds;
++
++	if (!i2c_check_functionality(client->adapter,
++				I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL)) {
++		return -EIO;
++	}
++
++	drvdata = devm_kzalloc(&client->dev, sizeof(struct ubm_drv_drvdata),
++			GFP_KERNEL);
++	if (!drvdata)
++		return -ENOMEM;
++
++	drvdata->client = client;
++	i2c_set_clientdata(client, drvdata);
++
++	// We shall check if the device exist otherwise return -ENODEV
++
++	value = i2c_smbus_read_word_data(drvdata->client, REG_TEMP);
++	if (value < 0) {
++		dev_info(dev, "ubm-drv: device %02x not present %s\n", drvdata->client->addr, drvdata->client->name);
++		return -ENODEV;
++	}
++
++	mutex_init(&drvdata->update_lock);
++	mutex_init(&drv_lock);
++
++	drvdata->hwmon_dev = NULL;
++
++	mutex_lock(&drv_lock);
++	hwmon_dev = devm_hwmon_device_register_with_groups(&client->dev, "hpenvmesensor",
++			drvdata, ubm_drv_groups);
++	if (IS_ERR(hwmon_dev))
++		return PTR_ERR(hwmon_dev);
++	drvdata->hwmon_dev = hwmon_dev;
++
++	np = of_parse_phandle((&client->dev)->of_node, "uid-led", 0);
++	pdev = of_find_device_by_node(np);
++	of_node_put(np);
++	if (!pdev)
++		goto fin;
++	leds = platform_get_drvdata(pdev);
++	if (!leds)
++		platform_device_put(pdev);
++	if (sysroot == NULL) {
++		sysroot = root_device_register("ubm-drives");
++		drvdata->dev = sysroot;
++	}
++	memset(&drvdata->device[0], 0, 256);
++
++	sprintf(&drvdata->device[0], "%d", client->adapter->nr);
++	drvdata->kobj = &(sysroot->kobj);
++	sysfs_create_link(&(sysroot->kobj), &(pdev->dev.kobj), &drvdata->device[0]);
++fin:
++	mutex_unlock(&drv_lock);
++	return 0;
++}
++
++static struct i2c_driver ubm_drv_driver = {
++	.class = I2C_CLASS_HWMON,
++	.probe		= ubm_drv_probe,
++	.remove		= ubm_drv_remove,
++	.driver = {
++		.name	= "ubm-drv",
++		.of_match_table = ubm_drv_of_match,
++	},
++};
++module_i2c_driver(ubm_drv_driver);
++
++MODULE_AUTHOR("Jean-Marie Verdun <verdun@hpe.com>");
++MODULE_DESCRIPTION("HPE UBM Drives driver");
++MODULE_LICENSE("GPL");
+-- 
+2.52.0
+

@@ -1,0 +1,1667 @@
+From 331266e370cc92bb2a2880902b195b13a8ef7466 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 8 Jan 2026 01:19:04 +0100
+Subject: [PATCH 2/8] arm: gxp: add HPE GXP SoC platform support
+
+Add platform support for the HPE GXP SoC used in HPE ProLiant BMCs.
+
+SoC drivers added:
+- gxp-xreg: Extended register GPIO for LEDs, fans, PSUs, and system control
+- gxp-fn2: Embedded management processor support
+- gxp-csm: Slave instrumentation and system support
+- gxp-chif: Channel interface for host communication
+- gxp-cpu: CPU presence interface
+- gxp-dbg: Host debug POST code capture
+- gxp-srom: System ROM offset configuration
+- gxp-v-eeprom: Virtual EEPROM support
+
+Also includes updates to the base device tree (gxp.dts) and ARM machine
+code (gxp.c).
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+
+diff --git a/arch/arm/boot/dts/gxp.dts b/arch/arm/boot/dts/gxp.dts
+index 8f305227e8b0..1353a4923129 100644
+--- a/arch/arm/boot/dts/gxp.dts
++++ b/arch/arm/boot/dts/gxp.dts
+@@ -109,6 +109,19 @@ usb1: ohci@cefe0100 {
+       interrupt-parent = <&vic0>;
+     };
+ 
++    spifi2: spifi@c0000280 {
++      compatible = "hpe,gxp-spifi";
++      reg = <0xc0000280 0x20>, <0xc000e000 0x100>, <0xf0000000 0x4000000>;
++      interrupts = <20>;
++      interrupt-parent = <&vic0>;
++      #address-cells = <1>;
++      #size-cells = <0>;
++      flash@2 {
++        compatible = "jedec,spi-nor";
++        reg = <0>;
++      };
++    };
++
+     spifi0: spifi@c0000200 {
+       compatible = "hpe,gxp-spifi";
+       reg = <0xc0000200 0x80>, <0xc000c000 0x100>, <0xf8000000 0x8000000>;
+diff --git a/arch/arm/mach-hpe/gxp.c b/arch/arm/mach-hpe/gxp.c
+index 1c20b937c912..6e2e96695d0c 100644
+--- a/arch/arm/mach-hpe/gxp.c
++++ b/arch/arm/mach-hpe/gxp.c
+@@ -15,6 +15,7 @@
+ #include <linux/of_platform.h>
+ #include <linux/clk-provider.h>
+ #include <linux/clocksource.h>
++#include <linux/delay.h>
+ 
+ #define IOP_REGS_PHYS_BASE 0xc0000000
+ #define IOP_REGS_VIRT_BASE 0xf0000000
+@@ -46,7 +47,15 @@ static void __init gxp_dt_init(void)
+ 
+ static void gxp_restart(enum reboot_mode mode, const char *cmd)
+ {
++	int i;
+ 	pr_info("gpx restart");
++	printk("Restarting GXP\n");
++//	__raw_writel(0x10084, (void __iomem *) IOP_REGS_VIRT_BASE + 0xc0);
++	__raw_writel(0x180FC, (void __iomem *) IOP_REGS_VIRT_BASE + 0xc0);
++	for ( i = 0 ; i < 1000 ; i++ )
++		udelay(1000);
++	__raw_writel(0x00, (void __iomem *) IOP_REGS_VIRT_BASE + 0xc0);
++	printk("UMAC reset done\n");
+ 	__raw_writel(1, (void __iomem *) IOP_REGS_VIRT_BASE);
+ }
+ 
+diff --git a/drivers/soc/hpe/Kconfig b/drivers/soc/hpe/Kconfig
+index 4fe1a0400478..69c6817ee669 100644
+--- a/drivers/soc/hpe/Kconfig
++++ b/drivers/soc/hpe/Kconfig
+@@ -16,6 +16,13 @@ config HPE_GXP_XREG
+ 	help
+ 	  Say yes here to add support for the XREG.
+ 
++config HPE_GXP_VIRT_EEPROM
++	bool "GXP Virtual EEPROM Support"
++	depends on ARCH_HPE_GXP
++	select HPE_GXP_SOCLIB
++	help
++	  Say yes here to add support for the Virtual EEPROM.
++
+ config HPE_GXP_FN2
+ 	bool "GXP FN2 (Embedded Management Processor Support And Configuration) Support"
+ 	depends on ARCH_HPE_GXP
+@@ -23,6 +30,13 @@ config HPE_GXP_FN2
+ 	help
+ 	  Say yes here to add support for FN2 Embedded Management Processor Support and Configuration.
+ 
++config HPE_GXP_CPU
++        bool "GXP CPU Presence GPIO driver"
++        depends on ARCH_HPE_GXP
++        select HPE_GXP_SOCLIB
++        help
++          Say yes here to add support for CPU Presence
++
+ config HPE_GXP_CSM
+ 	bool "GXP CSM (Slave Instrumentation and System Support) Support"
+ 	depends on ARCH_HPE_GXP
+diff --git a/drivers/soc/hpe/Makefile b/drivers/soc/hpe/Makefile
+index 9faedee034ea..ea994d7e71e6 100644
+--- a/drivers/soc/hpe/Makefile
++++ b/drivers/soc/hpe/Makefile
+@@ -1,7 +1,9 @@
+ obj-$(CONFIG_HPE_GXP_SOCLIB) += gxp-soclib.o
+ obj-$(CONFIG_HPE_GXP_XREG) += gxp-xreg.o
+ obj-$(CONFIG_HPE_GXP_FN2) += gxp-fn2.o
++obj-$(CONFIG_HPE_GXP_CPU) += gxp-cpu.o
+ obj-$(CONFIG_HPE_GXP_CSM) += gxp-csm.o
+ obj-$(CONFIG_HPE_GXP_SROM) += gxp-srom.o
+ obj-$(CONFIG_HPE_GXP_CHIF) += gxp-chif.o
+ obj-$(CONFIG_HPE_GXP_DBG) += gxp-dbg.o
++obj-$(CONFIG_HPE_GXP_VIRT_EEPROM) += gxp-v-eeprom.o
+diff --git a/drivers/soc/hpe/gxp-chif.c b/drivers/soc/hpe/gxp-chif.c
+index 18be62b1da83..8bc9d3f6b72e 100644
+--- a/drivers/soc/hpe/gxp-chif.c
++++ b/drivers/soc/hpe/gxp-chif.c
+@@ -142,8 +142,11 @@ struct chif_queue chif24_queue;
+ #define QUEUE_RC_EMPTY 3
+ #define QUEUE_RC_BUF_TOO_SMALL 4
+ 
+-static int chif_queue_push(struct chif_queue *q, uint8_t *pkt, uint32_t len)
++static int chif_queue_push(struct chif_drvdata *drvdata, struct chif_queue *q, uint8_t *pkt, uint32_t len)
+ {
++
++	struct chif_pkthdr *header;
++
+ 	if (q->size == q->max_size)
+ 		return -QUEUE_RC_FULL;
+ 
+@@ -152,6 +155,10 @@ static int chif_queue_push(struct chif_queue *q, uint8_t *pkt, uint32_t len)
+ 
+ 
+ 	//dev_info(drvdata->dev, "push: at %d! len = 0x%08x\n", q->tail, len);
++
++	header = (struct chif_pkthdr *) pkt;
++	//dev_info(drvdata->dev, "pkt_size = %d, sequence = 0x%04x\n", header->pkt_size, header->sequence);
++
+ 	memcpy(q->pkt[q->tail], pkt, len);
+ 	q->pkt_len[q->tail] = len;
+ 	q->size++;
+@@ -303,21 +310,21 @@ static ssize_t chif_read(struct file *file, char __user *buf, size_t count,
+ 
+ 	//steps to read chif packet from fifo
+ 	//1.check queue.
+-	//	if queue is non empty
+-	//		goto step2
+-	//	if queue is empty, set user space process to sleep state
+-	//		chif irq handler would copy entry to queue and waked up the user space process
+-	//		user space process is waked up by IRQ handler, goto step 1.
++	//      if queue is non empty
++	//              goto step2
++	//      if queue is empty, set user space process to sleep state
++	//              chif irq handler would copy entry to queue and waked up the user space process
++	//              user space process is waked up by IRQ handler, goto step 1.
+ 	//2.copy the entry to user space
+ 
+ 	//IRQ handler
+-	//	get interrupt due to host's door bell
+-	//		test each entry in the fifo
+-	//	if o bit is asserted then process the fifo with smaller seq# first
+-	//		get packet id and len
+-	//		get desc for packet addr
+-	//		copy to user space, set c bit
+-	//		wake up user space process
++	//      get interrupt due to host's door bell
++	//              test each entry in the fifo
++	//      if o bit is asserted then process the fifo with smaller seq# first
++	//              get packet id and len
++	//              get desc for packet addr
++	//              copy to user space, set c bit
++	//              wake up user space process
+ 
+ 	//find the entry in fifo to process
+ 
+@@ -334,11 +341,11 @@ static ssize_t chif_read(struct file *file, char __user *buf, size_t count,
+ 		add_wait_queue(&drvdata->wait[channel], &wait);
+ 		drvdata->waiting[channel] = true;
+ 		while (pkt_len < 0) {
+-			//dev_info(drvdata->dev, "read: sleep\n");
++			// dev_info(drvdata->dev, "read: sleep\n");
+ 			set_current_state(TASK_INTERRUPTIBLE);
+ 			schedule();
+ 
+-			//dev_info(drvdata->dev, "read: waked up!\n");
++			// dev_info(drvdata->dev, "read: waked up!\n");
+ 			if (signal_pending(current)) {
+ 				set_current_state(TASK_RUNNING);
+ 				remove_wait_queue(&drvdata->wait[channel],
+@@ -355,10 +362,10 @@ static ssize_t chif_read(struct file *file, char __user *buf, size_t count,
+ 
+ 	if (pkt_len > 0) {
+ 		if (copy_to_user(buf, pkt_buf, pkt_len)) {
+-			dev_err(drvdata->dev, "error when copy_to_user( length=%d)\n", pkt_len);
++			dev_err(drvdata->dev, "error when copy_to_user(length=%d)\n", pkt_len);
+ 			return -EFAULT;
+ 		}
+-		//dev_info(drvdata->dev, "copy_to_user( length=%d  f_pos=%d)\n", pkt_len, *f_pos);
++		//dev_info(drvdata->dev, "copy_to_user(length=%d  f_pos=%d)\n", pkt_len, *f_pos);
+ 	}
+ 
+ 	return pkt_len;
+@@ -429,7 +436,7 @@ static ssize_t chif_write(struct file *file, const char __user *buf,
+ 			dev_err(drvdata->dev, "error: wait ecv fifo for empty but timeout\n");
+ 			return -EIO;
+ 		}
+-		//dev_info(drvdata->dev, "info: wait ecv fifo empty for %d00ms\n", 100 - timeout);
++		// dev_info(drvdata->dev, "info: wait ecv fifo empty for %d00ms\n", 100 - timeout);
+ 	}
+ 
+ 	if (count > SHARED_MEM_CHIF_DESCRIPTOR_SIZE) {
+@@ -445,7 +452,7 @@ static ssize_t chif_write(struct file *file, const char __user *buf,
+ 	}
+ 
+ 	memset(&recv_desc[desc_idx], 0, round_len);
+-	//dev_info(drvdata->dev, "write: count=%d round=%d\n", count, round_len);
++	// dev_info(drvdata->dev, "write: count=%d round=%d\n", count, round_len);
+ 
+ 	if (copy_from_user(&recv_desc[desc_idx], buf, count)) {
+ 		dev_err(drvdata->dev, "write: copy_from_user() failed\n");
+@@ -545,9 +552,10 @@ static int ConsumePacket(struct chif_drvdata *drvdata, int channel)
+ 	for (i = 0; i < SHARED_MEM_CHIF_DESCRIPTOR_NUM; i++) {
+ 		if ((send_fifo[i].Occupied == 1) &&
+ 		    (send_fifo[i].Consumed == 0)) {
+-			if (send_fifo[i].QWords == 0)
++			if (send_fifo[i].QWords == 0) {
+ 				send_fifo[i].Consumed = 1;
+-			else
++				//dev_info(drvdata->dev,"Empty Packet detected\n");
++			} else
+ 				nonEmptyPackets++;
+ 		}
+ 	}
+@@ -559,7 +567,10 @@ static int ConsumePacket(struct chif_drvdata *drvdata, int channel)
+ 			desc_idx = send_fifo[i].DescriptorNum;
+ 			desc_len = send_fifo[i].QWords << 3;
+ 			//dev_info(drvdata->dev, "Consume fifo idx:%d,Desc:%d,Len:0x%08x,QWords:0x%08x\n", i, desc_idx, desc_len, send_fifo[i].QWords);
+-			ret = chif_queue_push(&chif24_queue, send_desc[desc_idx].data,
++			//dev_info(drvdata->dev, "HDR: %02x %02x %02x %02x %02x %02x %02x %02x\n", send_desc[desc_idx].data[0],
++			//              send_desc[desc_idx].data[1], send_desc[desc_idx].data[2], send_desc[desc_idx].data[3], send_desc[desc_idx].data[4],
++			//              send_desc[desc_idx].data[5], send_desc[desc_idx].data[6], send_desc[desc_idx].data[7]);
++			ret = chif_queue_push(drvdata, &chif24_queue, send_desc[desc_idx].data,
+ 					desc_len);
+ 			switch (ret) {
+ 			case -QUEUE_RC_FULL:
+@@ -603,10 +614,10 @@ static irqreturn_t chif_irq_handle(int irq, void *_drvdata)
+ 			//dev_info(drvdata->dev, "chif_irq_handle: channel%d doorbell=0x%08x\n", i, doorbell);
+ 			if (ConsumePacket(drvdata, i) > 0) {
+ 				//there is packet with data need to process, wait user space daemon
++				//dev_info(drvdata->dev, "Packet arrived\n");
+ 				if (drvdata->waiting[i]) {
+ 					//dev_info(drvdata->dev, "channel%d wake up!\n", i);
+-					wake_up_interruptible(
+-						&drvdata->wait[i]);
++					wake_up_interruptible(&drvdata->wait[i]);
+ 				}
+ 			}
+ 		}
+diff --git a/drivers/soc/hpe/gxp-cpu.c b/drivers/soc/hpe/gxp-cpu.c
+new file mode 100644
+index 000000000000..201b4c4c04ec
+--- /dev/null
++++ b/drivers/soc/hpe/gxp-cpu.c
+@@ -0,0 +1,255 @@
++// SPDX-License-Identifier: GPL-2.0
++/* Copyright (C) 2023 Hewlett-Packard Development Company, L.P.
++ *
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ */
++
++#include <linux/device.h>
++#include <linux/gpio.h>
++#include <linux/io.h>
++#include <linux/irq.h>
++#include <linux/interrupt.h>
++#include <linux/mutex.h>
++#include <linux/mfd/core.h>
++#include <linux/mfd/syscon.h>
++#include <linux/module.h>
++#include <linux/of_device.h>
++#include <linux/platform_device.h>
++#include <linux/regmap.h>
++#include <linux/reset.h>
++#include <linux/sysfs.h>
++#include <linux/wait.h>
++#include <linux/sched.h>
++
++#include "gxp-soclib.h"
++
++#define GPIO_DIR_OUT 0
++#define GPIO_DIR_IN  1
++
++DECLARE_WAIT_QUEUE_HEAD(gxp_cpu);
++extern short int serverID;
++
++enum xreg_gpio_pn {
++	CPU1_PRST,
++	CPU2_PRST,
++	CPU3_PRST,
++	CPU4_PRST
++	};
++
++struct gxp_cpu_drvdata {
++	void __iomem *base;
++	struct gpio_chip gpio_chip;
++	struct regmap *cpu_map;
++	int irq;
++};
++
++static int gxp_cpu_gpio_get(struct gpio_chip *chip, unsigned int offset)
++{
++	struct gxp_cpu_drvdata *drvdata = dev_get_drvdata(chip->parent);
++	unsigned int val;
++	int ret = 0;
++	// reset scan chain
++	regmap_write(drvdata->cpu_map, 0, 0);
++	regmap_read(drvdata->cpu_map, 0, &val);
++	regmap_read(drvdata->cpu_map, 0, &val);
++	regmap_read(drvdata->cpu_map, 0, &val);
++	regmap_read(drvdata->cpu_map, 0, &val);
++	//  That is a scan chain so we must read address 0x4 by issuing 5 read command
++	regmap_read(drvdata->cpu_map, 0, &val);
++
++	switch (offset) {
++	case CPU1_PRST:
++		ret = (val&BIT(0))?1:0;
++		break;
++	case CPU2_PRST:
++		ret = (val&BIT(1))?1:0;
++		break;
++	case CPU3_PRST:
++		ret = (val&BIT(2))?1:0;
++		break;
++	case CPU4_PRST:
++		ret = (val&BIT(3))?1:0;
++		break;
++	default:
++		break;
++	}
++
++	return ret;
++}
++
++static void gxp_cpu_gpio_set(struct gpio_chip *chip, unsigned int offset,
++		int value)
++{
++	return;
++}
++
++static int gxp_cpu_gpio_get_direction(struct gpio_chip *chip,
++		unsigned int offset)
++{
++	int ret = GPIO_DIR_IN;
++
++	return ret;
++}
++
++static int gxp_cpu_gpio_direction_input(struct gpio_chip *chip,
++		unsigned int offset)
++{
++	int ret = -ENOTSUPP;
++
++	switch (offset) {
++	case CPU1_PRST:
++	case CPU2_PRST:
++	case CPU3_PRST:
++	case CPU4_PRST:
++		ret = 0;
++		break;
++	default:
++		break;
++	}
++
++	return ret;
++}
++
++static int gxp_cpu_gpio_direction_output(struct gpio_chip *chip,
++		unsigned int offset, int value)
++{
++	int ret = -ENOTSUPP;
++
++	return ret;
++}
++
++static void gxp_cpu_gpio_irq_ack(struct irq_data *d)
++{
++}
++
++static void gxp_cpu_gpio_irq_set_mask(struct irq_data *d, bool set)
++{
++}
++
++static void gxp_cpu_gpio_irq_mask(struct irq_data *d)
++{
++}
++
++static void gxp_cpu_gpio_irq_unmask(struct irq_data *d)
++{
++}
++
++static int gxp_cpu_gpio_set_type(struct irq_data *d, unsigned int type)
++{
++	if (type & IRQ_TYPE_LEVEL_MASK)
++		irq_set_handler_locked(d, handle_level_irq);
++	else
++		irq_set_handler_locked(d, handle_edge_irq);
++
++	return 0;
++}
++
++static irqreturn_t gxp_cpu_irq_handle(int irq, void *_drvdata)
++{
++	struct gxp_cpu_drvdata *drvdata = (struct gxp_cpu_drvdata *)_drvdata;
++	unsigned int val, girq;
++
++	return IRQ_HANDLED;
++}
++
++const static struct gpio_chip cpu_chip = {
++	.label                  = "gxp-cpu",
++	.owner                  = THIS_MODULE,
++	.get                    = gxp_cpu_gpio_get,
++	.set                    = gxp_cpu_gpio_set,
++	.get_direction = gxp_cpu_gpio_get_direction,
++	.direction_input = gxp_cpu_gpio_direction_input,
++	.direction_output = gxp_cpu_gpio_direction_output,
++	.base = -1,
++	//.can_sleep            = true,
++};
++
++static struct irq_chip gxp_gpio_irqchip = {
++	.name           = "gxp-cpu",
++	.irq_ack        = gxp_cpu_gpio_irq_ack,
++	.irq_mask       = gxp_cpu_gpio_irq_mask,
++	.irq_unmask     = gxp_cpu_gpio_irq_unmask,
++	.irq_set_type   = gxp_cpu_gpio_set_type,
++};
++
++static const struct of_device_id gxp_cpu_of_match[] = {
++	{ .compatible = "hpe,gxp-cpu" },
++	{},
++};
++MODULE_DEVICE_TABLE(of, gxp_cpu_of_match);
++
++static int gxp_cpu_probe(struct platform_device *pdev)
++{
++	int ret;
++	struct gxp_cpu_drvdata *drvdata;
++	struct resource *res;
++
++	drvdata = devm_kzalloc(&pdev->dev, sizeof(struct gxp_cpu_drvdata),
++				GFP_KERNEL);
++	if (!drvdata)
++		return -ENOMEM;
++
++	platform_set_drvdata(pdev, drvdata);
++
++	pr_info("gxp-cpu: Loading gxp-cpu driver\n");
++
++	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	drvdata->base = devm_ioremap_resource(&pdev->dev, res);
++	if (IS_ERR(drvdata->base))
++		return PTR_ERR(drvdata->base);
++
++	drvdata->cpu_map = syscon_regmap_lookup_by_compatible("hpe,gxp-cpu");
++	if (IS_ERR(drvdata->cpu_map)) {
++		dev_err(&pdev->dev, "Unable to find fn2 regmap\n");
++		return PTR_ERR(drvdata->cpu_map);
++	}
++
++	drvdata->gpio_chip = cpu_chip;
++	drvdata->gpio_chip.ngpio = 16;
++	drvdata->gpio_chip.parent = &pdev->dev;
++	pr_info("Max GPIOS %d\n", ARCH_NR_GPIOS);
++
++	ret = devm_gpiochip_add_data(&pdev->dev, &drvdata->gpio_chip, NULL);
++	if (ret < 0)
++		dev_err(&pdev->dev, "Could not register gpiochip for cpu presence, %d\n", ret);
++
++/*      ret = gpiochip_irqchip_add(&drvdata->gpio_chip,
++	&gxp_gpio_irqchip, 0, handle_edge_irq, IRQ_TYPE_NONE);
++	if (ret) {
++		dev_info(&pdev->dev, "Could not add irqchip - %d\n", ret);
++		gpiochip_remove(&drvdata->gpio_chip);
++		return ret;
++	}
++
++	ret = platform_get_irq(pdev, 0);
++	if (ret < 0) {
++		dev_err(&pdev->dev, "Get irq from platform fail - %d\n", ret);
++		return ret;
++	}
++	drvdata->irq = ret;
++
++	ret = devm_request_irq(&pdev->dev, drvdata->irq, gxp_cpu_irq_handle,
++							IRQF_SHARED, "gxp-cpu", drvdata);
++	if (ret < 0) {
++		dev_err(&pdev->dev, "IRQ handler failed - %d\n", ret);
++		return ret;
++	}
++*/
++
++	return 0;
++}
++
++static struct platform_driver gxp_cpu_driver = {
++	.probe = gxp_cpu_probe,
++	.driver = {
++		.name = "gxp-cpu",
++		.of_match_table = of_match_ptr(gxp_cpu_of_match),
++	},
++};
++module_platform_driver(gxp_cpu_driver);
++
++MODULE_AUTHOR("Jean-Marie Verdun <verdun@hpe.com>");
++MODULE_DESCRIPTION("HPE GXP CPU Presence Driver");
+diff --git a/drivers/soc/hpe/gxp-csm.c b/drivers/soc/hpe/gxp-csm.c
+index 9e0919cd642e..7d7f0e978361 100644
+--- a/drivers/soc/hpe/gxp-csm.c
++++ b/drivers/soc/hpe/gxp-csm.c
+@@ -21,12 +21,12 @@
+ 
+ #include "gxp-soclib.h"
+ 
+-#define GXP_CSM_CELLS	1
+-#define ASRSTAT		0x5c
+-#define ASRESTAT	0x5d
+-#define AFUNEN2		0xde
+-#define AFUNEN2_EHCIEN	0x40
+-#define SHUTDOWN	0xe7
++#define GXP_CSM_CELLS   1
++#define ASRSTAT         0x5c
++#define ASRESTAT        0x5d
++#define AFUNEN2         0xde
++#define AFUNEN2_EHCIEN  0x40
++#define SHUTDOWN        0xe7
+ 
+ struct gxp_csm_drvdata {
+ 	void __iomem *base;
+@@ -77,7 +77,7 @@ static ssize_t vehci_enable_store(struct device *dev,
+ }
+ static DEVICE_ATTR_RW(vehci_enable);
+ 
+-static ssize_t sw_reset_show(struct device *dev,
++/* static ssize_t sw_reset_show(struct device *dev,
+ 			struct device_attribute *attr, char *buf)
+ {
+ 	struct gxp_csm_drvdata *drvdata = dev_get_drvdata(dev);
+@@ -119,6 +119,7 @@ static ssize_t sw_reset_store(struct device *dev,
+ 	return count;
+ }
+ static DEVICE_ATTR_RW(sw_reset);
++*/
+ 
+ static ssize_t sw_shutdown_store(struct device *dev,
+ 				struct device_attribute *attr,
+@@ -143,7 +144,7 @@ static DEVICE_ATTR_WO(sw_shutdown);
+ 
+ 
+ static struct attribute *csm_attrs[] = {
+-	&dev_attr_sw_reset.attr,
++//      &dev_attr_sw_reset.attr,
+ 	&dev_attr_sw_shutdown.attr,
+ 	&dev_attr_vehci_enable.attr,
+ 	NULL,
+diff --git a/drivers/soc/hpe/gxp-dbg.c b/drivers/soc/hpe/gxp-dbg.c
+index afc046f56458..e1518538d7fd 100644
+--- a/drivers/soc/hpe/gxp-dbg.c
++++ b/drivers/soc/hpe/gxp-dbg.c
+@@ -40,8 +40,8 @@
+ #include "gxp-soclib.h"
+ #include "gxp-dbg.h"
+ 
+-#define DBG_POST_PORTDATA		0x4
+-#define DBG_POST_CSR			0x1E
++#define DBG_POST_PORTDATA               0x4
++#define DBG_POST_CSR                    0x1E
+ 
+ struct gxp_dbg_drvdata {
+ 	struct platform_device *pdev;
+@@ -114,11 +114,11 @@ static __poll_t post_poll(struct file *file,
+ }
+ 
+ static const struct file_operations post_fops = {
+-	.owner		= THIS_MODULE,
+-	.open		= post_open,
+-	.read		= post_read,
+-	.poll		= post_poll,
+-	.release	= post_release,
++	.owner          = THIS_MODULE,
++	.open           = post_open,
++	.read           = post_read,
++	.poll           = post_poll,
++	.release        = post_release,
+ };
+ 
+ 
+@@ -230,6 +230,7 @@ static int gxp_dbg_probe(struct platform_device *pdev)
+ {
+ 	struct resource *res;
+ 	int ret;
++	int i;
+ 	struct device *dev_ret;
+ 
+ 	drvdata = devm_kzalloc(&pdev->dev, sizeof(struct gxp_dbg_drvdata),
+@@ -246,8 +247,29 @@ static int gxp_dbg_probe(struct platform_device *pdev)
+ 	drvdata->initialvalue = 0x00;
+ 	drvdata->count = 0x00;
+ 
+-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+-	drvdata->base = devm_ioremap_resource(&pdev->dev, res);
++//      res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++//      drvdata->base = devm_ioremap_resource(&pdev->dev, res);
++
++	pr_info("gxp-dbg: num resources %d\n",  pdev->num_resources);
++	for (i = 0 ; i < (pdev->num_resources - 1) ; i++) {
++		pr_info("gxp-dbg: processing %d resource\n", i);
++		res = platform_get_resource(pdev, IORESOURCE_MEM, i);
++		pr_info("gxp-dbg: %d : caught\n", i);
++		if (i == 0) {
++			drvdata->base = devm_ioremap_resource(&pdev->dev, res);
++			pr_info("gxp-dbg: %d : attached\n", i);
++			if (IS_ERR(drvdata->base))
++				return PTR_ERR(drvdata->base);
++		} else {
++			void __iomem *tmp;
++
++			tmp = devm_ioremap_resource(&pdev->dev, res);
++			pr_info("gxp-dbg: %d : attached\n", i);
++			if (IS_ERR(tmp))
++				return PTR_ERR(tmp);
++		}
++	}
++
+ 	if (IS_ERR(drvdata->base))
+ 		return PTR_ERR(drvdata->base);
+ 	// let's retrieve the driver irq
+diff --git a/drivers/soc/hpe/gxp-fn2.c b/drivers/soc/hpe/gxp-fn2.c
+index ff5d19d9c2d2..a87cc9e136f0 100644
+--- a/drivers/soc/hpe/gxp-fn2.c
++++ b/drivers/soc/hpe/gxp-fn2.c
+@@ -29,20 +29,24 @@
+ #define GPIO_DIR_OUT 0
+ #define GPIO_DIR_IN  1
+ 
+-#define FN2_VPBTN	0x46
+-#define FN2_SEVSTAT	0x70
++#define FN2_VPBTN       0x46
++#define FN2_SEVSTAT     0x70
+ #define PGOOD_MASK 0x01
+ #define PERST_MASK 0x02
+-#define FN2_SEVMASK	0x74
++#define FN2_SEVMASK     0x74
+ 
+ DECLARE_WAIT_QUEUE_HEAD(gxp_fn2);
+ unsigned int gxp_pgood_trigger;
++int btn_state;
++int virtual_irq =  -1;
++extern short int serverID;
+ 
+ enum xreg_gpio_pn {
+-	VPBTN = 0,			//out
+-	PGOOD,					//in
+-	PERST,					//in
+-	POST_COMPLETE,	//in
++	VPBTN = 0,                      //out
++	PGOOD,                                  //in
++	PERST,                                  //in
++	POST_COMPLETE,  //in
++	BTN_STATE, // in
+ };
+ 
+ struct gxp_fn2_drvdata {
+@@ -60,22 +64,48 @@ static int gxp_fn2_gpio_get(struct gpio_chip *chip, unsigned int offset)
+ 	int ret = 0;
+ 
+ 	switch (offset) {
++	case VPBTN:
++		pr_info("Returning VPBTN\n");
++		break;
++	case BTN_STATE:
++		pr_info("Returning BTN_STATE");
++		ret = btn_state;
++		break;
+ 	case PGOOD:
+ 		//offset 0x70 bit 24
+ 		regmap_read(drvdata->fn2_map, FN2_SEVSTAT, &val);
+ 		ret = (val&BIT(24))?1:0;
+ 		if (ret) {
+ 			// We signal the transition to power good
++			pr_info("FN2: PGOOD enabled\n");
+ 			gxp_pgood_trigger = 1;
+ 			wake_up_interruptible(&gxp_fn2);
+ 		} else {
+ 			// We signal the transition to power down
++			pr_info("FN2: PGOOD disabled\n");
++
++			void __iomem *SoCHold = ioremap(0xD100011A, 1);
++																writeb(0x00, SoCHold);
++			unsigned char Reg = readb(SoCHold);
++
++			Reg |= 1 << 3;
++			pr_info("Release SoC %x\n", Reg);
++			writeb(Reg, SoCHold);
++			iounmap(SoCHold);
++
++			SoCHold = ioremap(0x80000074, 2);
++									uint16_t status;
++			status = readw(SoCHold);
++			pr_info("Reset reason: %x\n", status);
++			iounmap(SoCHold);
++
+ 			gxp_pgood_trigger = 2;
+ 			wake_up_interruptible(&gxp_fn2);
+ 		}
+ 		break;
+ 	case PERST:
+ 		//offset 0x70 bit 25
++		pr_info("PERST handling\n");
+ 		regmap_read(drvdata->fn2_map, FN2_SEVSTAT, &val);
+ 		ret = (val&BIT(25))?1:0;
+ 		break;
+@@ -93,14 +123,69 @@ static void gxp_fn2_gpio_set(struct gpio_chip *chip, unsigned int offset,
+ {
+ 	struct gxp_fn2_drvdata *drvdata = dev_get_drvdata(chip->parent);
+ 
++	unsigned int val;
++
+ 	switch (offset) {
+ 	case VPBTN:
+ 		//offset 0xF=0x04
+-		regmap_update_bits(drvdata->xreg_map, 0x0c,
+-				0xFF000000, 0x04000000);
++
++		// vejmarie Gen10
++	//      regmap_update_bits(drvdata->xreg_map, 0x0c,
++	//                              0xFF000000, 0x04000000);
++		pr_info("FN2: Virtual Button Pressed event %d\n", VPBTN);
++		// vejmarie
++		// That stuff re-arms Firmware validate
++		// It is now done in user space
++		//
++//              regmap_update_bits(drvdata->xreg_map, 0x08,
++//                              0x0000FF00, 0x00002400);
++		if (serverID != 0x250) {
++		// Due to ME bugs on Intel platform we need to reset eSPI OOB ctrl register
++		void __iomem *eSPIreg = ioremap(0x80FE1040, 4);
++
++		writel(0x00060001, eSPIreg);
++		iounmap(eSPIreg);
++		}
++		void __iomem *SoCHold = ioremap(0x80000074, 2);
++		uint16_t status;
++
++		status = readw(SoCHold);
++		pr_info("Reset reason: %x\n", status);
++		iounmap(SoCHold);
++		// WARNING: Lion specific
++		//
++	/*      void __iomem *SoCHold = ioremap(0xD100011A, 1);
++		writeb(0x00, SoCHold);
++		unsigned char Reg = readb(SoCHold);
++		Reg |= 1 << 3;
++		pr_info("Release SoC %x\n", Reg);
++		writeb(Reg, SoCHold);
++		iounmap(SoCHold);
++	*/
+ 		//offset 0x44 bit 16
+ 		regmap_update_bits(drvdata->fn2_map, 0x44, BIT(16),
+ 				value == 0?0:BIT(16));
++		regmap_read(drvdata->fn2_map, 0x44, &val);
++		btn_state = (val & 0x10000) >> 16;
++		pr_info("virtual button state %d val %x\n", btn_state, val);
++		// We must raise a soft irq to release potential process waiting for
++		// As state has changed and they can read the line
++		// This code crash everything and prevent PGOOD to rise
++		int irq;
++
++		irq = irq_find_mapping(drvdata->gpio_chip.irq.domain, 0x4);
++		if (virtual_irq == -1)
++			virtual_irq = irq;
++		if (irq) {
++			pr_info("IRQ number %d\n", irq);
++			unsigned long flags;
++
++			local_irq_save(flags);
++			generic_handle_irq_desc(irq_to_desc(irq));
++			local_irq_restore(flags);
++//                       generic_handle_irq_safe(irq);
++		}
++		// Ok but the challenge is now that PGood doesn't transition
+ 		break;
+ 	default:
+ 		break;
+@@ -131,6 +216,7 @@ static int gxp_fn2_gpio_direction_input(struct gpio_chip *chip,
+ 	switch (offset) {
+ 	case PGOOD:
+ 	case PERST:
++	case BTN_STATE:
+ 	case POST_COMPLETE:
+ 		ret = 0;
+ 		break;
+@@ -158,6 +244,7 @@ static int gxp_fn2_gpio_direction_output(struct gpio_chip *chip,
+ 	return ret;
+ }
+ 
++int max_irq;
+ static void gxp_fn2_gpio_irq_ack(struct irq_data *d)
+ {
+ 	struct gpio_chip *chip = irq_data_get_irq_chip_data(d);
+@@ -165,9 +252,15 @@ static void gxp_fn2_gpio_irq_ack(struct irq_data *d)
+ 	unsigned int val;
+ 
+ 	// Read latched interrupt
+-	regmap_read(drvdata->fn2_map, FN2_SEVSTAT, &val);
++	if (d->irq != virtual_irq)
++		regmap_read(drvdata->fn2_map, FN2_SEVSTAT, &val);
++	if (max_irq < 100) {
++		pr_info("FN2 interrupt %d\n", d->irq);
++		pr_info("FN2 interrupt %x %d\n", val, max_irq++);
++	}
+ 
+ 	//Clear latched interrupt
++	if (d->irq != virtual_irq)
+ 	regmap_update_bits(drvdata->fn2_map, FN2_SEVSTAT,
+ 			0xFFFF, 0xFFFF);
+ }
+@@ -201,6 +294,8 @@ static int gxp_fn2_gpio_set_type(struct irq_data *d, unsigned int type)
+ 	return 0;
+ }
+ 
++static unsigned long interruptCount;
++
+ static irqreturn_t gxp_fn2_irq_handle(int irq, void *_drvdata)
+ {
+ 	struct gxp_fn2_drvdata *drvdata = (struct gxp_fn2_drvdata *)_drvdata;
+@@ -211,35 +306,49 @@ static irqreturn_t gxp_fn2_irq_handle(int irq, void *_drvdata)
+ 
+ 	if (val & PGOOD_MASK) {
+ 		girq = irq_find_mapping(drvdata->gpio_chip.irq.domain, PGOOD);
+-		generic_handle_irq(girq);
++		if (girq)
++			generic_handle_irq(girq);
++		else {
++				interruptCount++;
++			pr_info("PGOOD interrupt detected but no handler\n");
++			regmap_update_bits(drvdata->fn2_map, FN2_SEVSTAT,
++			0xFFFF, 0xFFFF);
++			}
+ 	}
+-/*
+- *	if (val & PERST_MASK) {
+- *		girq = irq_find_mapping(drvdata->gpio_chip.irq.domain, PERST);
+- *		generic_handle_irq(girq);
+- *	}
+- */
++
++	if (val & PERST_MASK) {
++		girq = irq_find_mapping(drvdata->gpio_chip.irq.domain, PERST);
++		if (girq)
++			generic_handle_irq(girq);
++		else {
++				interruptCount++;
++			pr_info("PERST interrupt detected but no handler\n");
++			regmap_update_bits(drvdata->fn2_map, FN2_SEVSTAT,
++			0xFFFF, 0xFFFF);
++		}
++	}
++
+ 	return IRQ_HANDLED;
+ }
+ 
+ const static struct gpio_chip fn2_chip = {
+-	.label			= "gxp-fn2",
+-	.owner			= THIS_MODULE,
+-	.get			= gxp_fn2_gpio_get,
+-	.set			= gxp_fn2_gpio_set,
++	.label                  = "gxp-fn2",
++	.owner                  = THIS_MODULE,
++	.get                    = gxp_fn2_gpio_get,
++	.set                    = gxp_fn2_gpio_set,
+ 	.get_direction = gxp_fn2_gpio_get_direction,
+ 	.direction_input = gxp_fn2_gpio_direction_input,
+ 	.direction_output = gxp_fn2_gpio_direction_output,
+ 	.base = -1,
+-	//.can_sleep		= true,
++	//.can_sleep            = true,
+ };
+ 
+ static struct irq_chip gxp_gpio_irqchip = {
+-	.name		= "gxp-fn2",
+-	.irq_ack	= gxp_fn2_gpio_irq_ack,
+-	.irq_mask	= gxp_fn2_gpio_irq_mask,
+-	.irq_unmask	= gxp_fn2_gpio_irq_unmask,
+-	.irq_set_type	= gxp_fn2_gpio_set_type,
++	.name           = "gxp-fn2",
++	.irq_ack        = gxp_fn2_gpio_irq_ack,
++	.irq_mask       = gxp_fn2_gpio_irq_mask,
++	.irq_unmask     = gxp_fn2_gpio_irq_unmask,
++	.irq_set_type   = gxp_fn2_gpio_set_type,
+ };
+ 
+ static const struct of_device_id gxp_fn2_of_match[] = {
+@@ -254,6 +363,7 @@ static int gxp_fn2_probe(struct platform_device *pdev)
+ 	struct gxp_fn2_drvdata *drvdata;
+ 	struct resource *res;
+ 
++	pr_info("gxp-fn2: Init module\n");
+ 	drvdata = devm_kzalloc(&pdev->dev, sizeof(struct gxp_fn2_drvdata),
+ 				GFP_KERNEL);
+ 	if (!drvdata)
+@@ -262,6 +372,7 @@ static int gxp_fn2_probe(struct platform_device *pdev)
+ 	platform_set_drvdata(pdev, drvdata);
+ 
+ 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	pr_info("gxp-fn2: resource retrieved\n");
+ 	drvdata->base = devm_ioremap_resource(&pdev->dev, res);
+ 	if (IS_ERR(drvdata->base))
+ 		return PTR_ERR(drvdata->base);
+@@ -271,6 +382,7 @@ static int gxp_fn2_probe(struct platform_device *pdev)
+ 		dev_err(&pdev->dev, "Unable to find fn2 regmap\n");
+ 		return PTR_ERR(drvdata->fn2_map);
+ 	}
++	pr_info("gxp-fn2: reg mapping done\n");
+ 
+ 	drvdata->xreg_map = syscon_regmap_lookup_by_phandle(pdev->dev.of_node,
+ 							"xreg_handle");
+@@ -280,12 +392,13 @@ static int gxp_fn2_probe(struct platform_device *pdev)
+ 	}
+ 
+ 	drvdata->gpio_chip = fn2_chip;
+-	drvdata->gpio_chip.ngpio = 100;
++	drvdata->gpio_chip.ngpio = 50;
+ 	drvdata->gpio_chip.parent = &pdev->dev;
+ 
+ 	ret = devm_gpiochip_add_data(&pdev->dev, &drvdata->gpio_chip, NULL);
+ 	if (ret < 0)
+ 		dev_err(&pdev->dev, "Could not register gpiochip for fn2, %d\n", ret);
++	pr_info("gxp-fn2: gpio initialized\n");
+ 
+ 	ret = gpiochip_irqchip_add(&drvdata->gpio_chip,
+ 	&gxp_gpio_irqchip, 0, handle_edge_irq, IRQ_TYPE_NONE);
+@@ -294,6 +407,7 @@ static int gxp_fn2_probe(struct platform_device *pdev)
+ 		gpiochip_remove(&drvdata->gpio_chip);
+ 		return ret;
+ 	}
++	pr_info("gxp-fn2: gpio irq chip initialized\n");
+ 
+ 	// Set up interrupt from fn2 system event reg
+ 
+@@ -310,6 +424,8 @@ static int gxp_fn2_probe(struct platform_device *pdev)
+ 		dev_err(&pdev->dev, "IRQ handler failed - %d\n", ret);
+ 		return ret;
+ 	}
++	pr_info("gxp-fn2: gpio irq handler initialized\n");
++	pr_info("gxp-fn2: init done\n");
+ 
+ 	return 0;
+ }
+diff --git a/drivers/soc/hpe/gxp-srom.c b/drivers/soc/hpe/gxp-srom.c
+index 611e6ca9234b..ee0d782da674 100644
+--- a/drivers/soc/hpe/gxp-srom.c
++++ b/drivers/soc/hpe/gxp-srom.c
+@@ -22,7 +22,7 @@
+ 
+ #include "gxp-soclib.h"
+ 
+-#define SROM_LOC		0xf4
++#define SROM_LOC                0xf4
+ 
+ struct gxp_srom_drvdata {
+ 	struct platform_device *pdev;
+diff --git a/drivers/soc/hpe/gxp-v-eeprom.c b/drivers/soc/hpe/gxp-v-eeprom.c
+new file mode 100644
+index 000000000000..c58a381c9048
+--- /dev/null
++++ b/drivers/soc/hpe/gxp-v-eeprom.c
+@@ -0,0 +1,199 @@
++#include <linux/module.h>
++#include <linux/init.h>
++#include <linux/i2c.h>
++#include <linux/mod_devicetable.h>
++#include <linux/property.h>
++#include <linux/mutex.h>
++#include <linux/nvmem-provider.h>
++#include <linux/regmap.h>
++
++/* Meta Information */
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("Grant OConnor");
++MODULE_DESCRIPTION("Kernel module to parse the device tree for a specific device and its properties");
++
++#define V_EEPROM_EEPROM_MAX_SIZE 256
++
++struct v_eeprom_data {
++	struct mutex lock;
++	struct nvmem_device *nvmem;
++	struct regmap *regmap;
++	struct i2c_client *client;
++	u32 byte_len;
++	u16 page_size;
++	u8 flags;
++};
++
++static int v_eeprom_read(void *priv, unsigned int offset, void *buf,
++			 size_t size)
++{
++	struct v_eeprom_data *v_eeprom = priv;
++	void *p;
++
++	mutex_lock(&v_eeprom->lock);
++
++	p = memremap(0xA0017F00, 256, MEMREMAP_WB);
++	if (!p) {
++		pr_err("gxp-v-eeprom cannot map memory block\n");
++		mutex_unlock(&v_eeprom->lock);
++		return -ENOMEM;
++	}
++	if (offset + size > V_EEPROM_EEPROM_MAX_SIZE) {
++		pr_err("gxp-v-eeprom read exceeded capacity\n");
++		memunmap(p);
++		mutex_unlock(&v_eeprom->lock);
++		return -EINVAL;
++	}
++	memcpy(buf, p + offset, size);
++	memunmap(p);
++	mutex_unlock(&v_eeprom->lock);
++
++	return size;
++}
++static ssize_t v_eeprom_file_read(struct file *filp, struct kobject *kobj,
++				  struct bin_attribute *bin_attr, char *buf,
++				  loff_t off, size_t count)
++{
++	struct device *dev = kobj_to_dev(kobj);
++	struct i2c_client *client = to_i2c_client(dev);
++	struct v_eeprom_data *v = i2c_get_clientdata(client);
++
++	return v_eeprom_read(v, off, buf, count);
++}
++
++static const struct of_device_id v_eeprom_match[] = {
++	{ .compatible = "hpe,gxp-v-eeprom" },
++	{ /* null */ },
++};
++
++static const struct bin_attribute eeprom_attr = {
++	.attr = {
++		.name = "eeprom",
++		.mode = 0444,
++	},
++	.size =  V_EEPROM_EEPROM_MAX_SIZE,
++	.read = v_eeprom_file_read,
++};
++/**
+++ * @brief This function is called probing the driver
+++ */
++
++static int v_eeprom_probe(struct i2c_client *client)
++{
++	struct regmap_config regmap_config = {};
++	struct nvmem_config nvmem_config = {};
++	struct device *dev = &client->dev;
++	struct v_eeprom_data *v_eeprom;
++	struct regmap *regmap;
++	int err;
++	uint8_t buffer[256];
++	int k;
++	u32 page_size;
++
++	dev_info(dev, "gxp-v-eeprom probe - Probing function!\n");
++	pr_info("gxp-v-eeprom: probe\n");
++
++	v_eeprom = devm_kzalloc(dev, sizeof(struct v_eeprom_data), GFP_KERNEL);
++	if (!v_eeprom)
++		return -ENOMEM;
++
++	/* Check for device properties */
++
++	if (device_property_read_u32(dev, "pagesize", &page_size)) {
++		dev_info(dev, "gxp-v-eeprom probe - Error! Device property 'page_size' not found!\n");
++		return -1;
++	}
++
++	regmap_config.val_bits = 8;
++	regmap_config.reg_bits = 8;
++
++	regmap = devm_regmap_init_i2c(client, &regmap_config);
++	if (IS_ERR(regmap))
++		return PTR_ERR(regmap);
++
++	mutex_init(&v_eeprom->lock);
++
++	v_eeprom->page_size = page_size;
++	v_eeprom->byte_len = 256;
++	v_eeprom->flags = 0;
++	v_eeprom->regmap = regmap;
++	v_eeprom->client = client;
++
++	if (device_property_present(dev, "label")) {
++		nvmem_config.id = NVMEM_DEVID_NONE;
++		err = device_property_read_string(dev, "label",
++						  &nvmem_config.name);
++		if (err)
++			return err;
++	} else {
++		nvmem_config.id = NVMEM_DEVID_AUTO;
++		nvmem_config.name = dev_name(dev);
++	}
++
++	nvmem_config.read_only = true;
++	nvmem_config.dev = dev;
++	nvmem_config.owner = THIS_MODULE;
++	nvmem_config.reg_read = v_eeprom_read;
++	nvmem_config.priv = v_eeprom;
++	nvmem_config.stride = 1;
++	nvmem_config.word_size = 1;
++	nvmem_config.size = V_EEPROM_EEPROM_MAX_SIZE;
++
++	i2c_set_clientdata(client, v_eeprom);
++	v_eeprom->nvmem = devm_nvmem_register(dev, &nvmem_config);
++	if (IS_ERR(v_eeprom->nvmem)) {
++		dev_info(dev, "gxp-v-eeprom probe - Error Register\n");
++		return PTR_ERR(v_eeprom->nvmem);
++	}
++	err = sysfs_create_bin_file(&client->dev.kobj, &eeprom_attr);
++	if (err)
++		return err;
++	dev_info(dev, "gxp-v-eeprom probe - Register OK\n");
++
++	return 0;
++}
++
++/**
++ * @brief This function is called unloading the driver
++ */
++static int v_eeprom_remove(struct i2c_client *client)
++{
++	sysfs_remove_bin_file(&client->dev.kobj, &eeprom_attr);
++	return 0;
++}
++MODULE_DEVICE_TABLE(of, v_eeprom_match);
++
++static struct i2c_driver v_eeprom_driver = {
++	.probe_new = v_eeprom_probe,
++	.remove = v_eeprom_remove,
++	.driver = {
++		.name = "hpe,gxp-v-eeprom", //match .compatible entry in .dts
++		.of_match_table = v_eeprom_match,
++	},
++
++};
++/**
++ * @brief This function is called when the module is loaded into the kernel
++ */
++static int __init v_eeprom_init(void)
++{
++	pr_info("Init the gxp-v-eeprom driver...\n");
++	pr_info("gxp-v-eeprom: init\n");
++	if (i2c_add_driver(&v_eeprom_driver)) {
++		pr_err("gxp-v-eeprom  driver init - Error! Could not load driver\n");
++		return -1;
++	}
++	pr_info("gxp-v-eeprom driver init -OK\n");
++	return 0;
++}
++
++/**
++ * @brief This function is called when the module is removed from the kernel
++ */
++static void __exit v_eeprom_exit(void)
++{
++	i2c_del_driver(&v_eeprom_driver);
++}
++
++module_init(v_eeprom_init);
++module_exit(v_eeprom_exit);
+diff --git a/drivers/soc/hpe/gxp-xreg.c b/drivers/soc/hpe/gxp-xreg.c
+index 4ec9196ba891..bc9d2ade6f84 100644
+--- a/drivers/soc/hpe/gxp-xreg.c
++++ b/drivers/soc/hpe/gxp-xreg.c
+@@ -1,4 +1,3 @@
+-// SPDX-License-Identifier: GPL-2.0
+ /* Copyright (C) 2019 Hewlett-Packard Development Company, L.P.
+  *
+  *
+@@ -27,15 +26,44 @@
+ #define GPIO_DIR_OUT 0
+ #define GPIO_DIR_IN  1
+ 
+-#define XREG_SIDEBAND_SEL	0x40
++// vejmarie gen10
++// #define XREG_INT_GRP_STAT_MASK       0x88
++#define XREG_INT_GRP_STAT_MASK  0x94
+ 
+-#define XREG_INT_GRP_STAT_MASK	0x88
+-#define XREG_INT_HI_PRI_EN	0x8C
+-#define XREG_INT_GRP5_BASE	0xB0
+-#define XREG_INT_GRP5_FLAG	0xB0
+-#define XREG_INT_GRP5_MASK	0xB1
+-#define XREG_INT_GRP5_STAT	0xB2
+-#define XREG_INT_GRP5_PIN_BASE	59
++//vejmarie gen10
++//#define XREG_INT_HI_PRI_EN    0x8C
++#define XREG_INT_HI_PRI_EN      0xA0
++
++//vejmarie gen10
++//#define XREG_INT_GRP5_BASE    0xB0
++#define XREG_INT_GRP5_BASE      0xC0 // required for power button handling
++#define XREG_INT_GRP6_BASE      0xC4 // required for PSU presence or event
++
++// vejmarie gen10
++// #define XREG_INT_GRP5_FLAG   0xB0
++#define XREG_INT_GRP5_FLAG      0xC0
++#define XREG_INT_GRP6_FLAG      0xC4
++
++// vejmarie gen10
++// #define XREG_INT_GRP5_MASK   0xB1
++#define XREG_INT_GRP5_MASK      0xC1
++#define XREG_INT_GRP6_MASK      0xC5
++
++// vejmarie gen10
++// #define XREG_INT_GRP5_STAT   0xB2
++#define XREG_INT_GRP5_STAT      0xC2
++#define XREG_INT_GRP6_STAT      0xC6
++
++#define XREG_INT_GRP5_PIN_BASE  59
++#define XREG_INT_GRP6_PIN_BASE  90
++
++u8 psu_presence;
++DECLARE_WAIT_QUEUE_HEAD(gxp_psu);
++unsigned int gxp_psu_trigger;
++
++EXPORT_SYMBOL(gxp_psu_trigger);
++EXPORT_SYMBOL(psu_presence);
++EXPORT_SYMBOL(gxp_psu);
+ 
+ enum xreg_gpio_pn {
+ 	IOP_LED1 = 0,
+@@ -102,7 +130,31 @@ enum xreg_gpio_pn {
+ 	SLP_INT,
+ 	ACM_FORCE_OFF = 70,
+ 	ACM_REMOVED,
+-	ACM_REQ_N
++	ACM_REQ_N,
++	PSU1_INST = 90,
++	PSU2_INST,
++	PSU3_INST,
++	PSU4_INST,
++	PSU5_INST,
++	PSU6_INST,
++	PSU7_INST,
++	PSU8_INST,
++	PSU1_AC = 100,
++	PSU2_AC,
++	PSU3_AC,
++	PSU4_AC,
++	PSU5_AC,
++	PSU6_AC,
++	PSU7_AC,
++	PSU8_AC,
++	PSU1_DC = 110,
++	PSU2_DC,
++	PSU3_DC,
++	PSU4_DC,
++	PSU5_DC,
++	PSU6_DC,
++	PSU7_DC,
++	PSU8_DC
+ };
+ 
+ struct gxp_xreg_drvdata {
+@@ -112,6 +164,9 @@ struct gxp_xreg_drvdata {
+ 	int irq;
+ };
+ 
++short int serverID;
++EXPORT_SYMBOL(serverID);
++
+ static ssize_t server_id_show(struct device *dev,
+ 				struct device_attribute *attr, char *buf)
+ {
+@@ -193,39 +248,71 @@ static int gxp_gpio_xreg_get(struct gpio_chip *chip, unsigned int offset)
+ 		break;
+ 	case FAN1_INST ...FAN8_INST:
+ 		//0x26 fan[8:1]_inst
+-		regmap_read(drvdata->xreg_map, 0x24, &val);
+-		ret = (val&BIT((offset - FAN1_INST) + 24))?1:0;
++		// regmap_read(drvdata->xreg_map, 0x24, &val);
++		regmap_read(drvdata->xreg_map, 0x78, &val);
++		ret = (val&BIT((offset - FAN1_INST) + 16))?1:0;
++	/*      if (ret == 0) {
++			pr_info("Fan has been pulled off\n");
++		}
++		*/
+ 		break;
+ 	case FAN9_INST ... FAN16_INST:
+ 		//0x27 fan[16:9]_inst
+-		regmap_read(drvdata->xreg_map, 0x28, &val);
+-		ret = (val&BIT(offset - FAN9_INST))?1:0;
++		// regmap_read(drvdata->xreg_map, 0x28, &val);
++		regmap_read(drvdata->xreg_map, 0x78, &val);
++		ret = (val&BIT(offset - FAN9_INST)+24)?1:0;
++		break;
++	case PSU1_INST ... PSU8_INST:
++		pr_info("PSU event\n");
++		regmap_read(drvdata->xreg_map, 0x40, &val);
++		ret = (val&BIT((offset - PSU1_INST) + 16))?1:0;
++		break;
++	case PSU1_AC ... PSU8_AC:
++		regmap_read(drvdata->xreg_map, 0x44, &val);
++		ret = (val&BIT((offset)))?1:0;
++		break;
++	case PSU1_DC ... PSU8_DC:
++		regmap_read(drvdata->xreg_map, 0x44, &val);
++		ret = (val&BIT((offset - PSU1_DC) + 8))?1:0;
+ 		break;
+ 	case FAN1_FAIL ... FAN16_FAIL:
+ 		//0x29 fan[8:1]_fail
+ 		//0x2A fan[16:9]_fail
+-		regmap_read(drvdata->xreg_map, 0x28, &val);
+-		ret = (val&BIT((offset - FAN1_FAIL) + 8))?1:0;
++		// regmap_read(drvdata->xreg_map, 0x28, &val);
++
++		regmap_read(drvdata->xreg_map, 0x7c, &val);
++		// In the case of dual motor fans which is common we need to use
++		// x2 bits
++		ret = (val&BIT(2*(offset - FAN1_FAIL)))?1:0;
+ 		break;
+ 	case FAN1_ID ... FAN8_ID:
+ 		//0x2B fan[8:1]_id
+-		regmap_read(drvdata->xreg_map, 0x28, &val);
++		// regmap_read(drvdata->xreg_map, 0x28, &val);
++		regmap_read(drvdata->xreg_map, 0x7c, &val);
+ 		ret = (val&BIT((offset - FAN1_ID) + 24))?1:0;
+ 		break;
+ 	case FAN9_ID ... FAN16_ID:
+ 		//0x2C fan[16:9]_id
+-		regmap_read(drvdata->xreg_map, 0x2c, &val);
++		// regmap_read(drvdata->xreg_map, 0x2c, &val);
++		regmap_read(drvdata->xreg_map, 0x80, &val);
+ 		ret = (val&BIT(offset - FAN9_ID))?1:0;
+ 		break;
+ 	case PWR_BTN_INT ... SLP_INT:
+-		regmap_read(drvdata->xreg_map, XREG_INT_GRP5_FLAG, &val);
++	//      pr_info("xreg: PWR interrupt checking bit %d\n", (offset - PWR_BTN_INT) + 16);
++		val = readl(drvdata->base + XREG_INT_GRP5_FLAG);
++////            regmap_read(drvdata->xreg_map, XREG_INT_GRP5_FLAG, &val);
++//              if (offset == 60)
++//                      pr_info("Polling UID button BITS %d %x\n", offset - PWR_BTN_INT, val);
+ 		ret = (val&BIT((offset - PWR_BTN_INT) + 16))?0:1;  // Active_low for default
+ 		break;
+ 	case 62 ... 65:
+ 		// Placehold for NMI_BUTTON/RESET_BUTTON/SIO_S5/SIO_ONCONTROL
++		pr_info("xreg: GPIO interrupt %d\n", offset);
++
+ 		break;
+ 	case ACM_FORCE_OFF ... ACM_REQ_N:
+ 		//0x0a bit0 ... bit2
++		pr_info("xreg: ACM interrupt checking bit %d\n", (offset - ACM_FORCE_OFF) + 16);
+ 		regmap_read(drvdata->xreg_map, 0x08, &val);
+ 		ret = (val&BIT((offset - ACM_FORCE_OFF) + 16))?0:1;
+ 		break;
+@@ -264,11 +351,13 @@ static void gxp_gpio_xreg_set(struct gpio_chip *chip,
+ 		break;
+ 	case ACM_FORCE_OFF:
+ 		//offset 0x0a bit0 = 0x08 bit16
++		pr_info("ACM: enforcing\n");
+ 		regmap_update_bits(drvdata->xreg_map, 0x08, BIT(16),
+ 				value == 0?0:BIT(16));
+ 		break;
+ 	case ACM_REQ_N:
+ 		//offset 0x0a bit2 = 0x08 bit18
++		pr_info("ACM: Interrupt\n");
+ 		regmap_update_bits(drvdata->xreg_map, 0x08, BIT(18),
+ 				value == 0?0:BIT(18));
+ 		break;
+@@ -307,6 +396,9 @@ static int gxp_gpio_xreg_direction_input(struct gpio_chip *chip,
+ 	case 59 ... 65:
+ 		ret = 0;
+ 		break;
++	case 90 ... 118:
++		ret = 0;
++		break;
+ 	default:
+ 		break;
+ 	}
+@@ -341,11 +433,25 @@ static void gxp_gpio_irq_ack(struct irq_data *d)
+ 	unsigned int val;
+ 
+ 	// Read latched interrupt
+-	regmap_read(drvdata->xreg_map, XREG_INT_GRP5_BASE, &val);
++	// val = readl(drvdata->base + XREG_INT_GRP5_BASE);
++	// regmap_read(drvdata->xreg_map, XREG_INT_GRP5_BASE, &val);
+ 
+ 	//Clear latched interrupt
+-	regmap_update_bits(drvdata->xreg_map, XREG_INT_GRP5_BASE,
+-			0xFF, 0xFF);
++	unsigned int tmp;
++
++	val = readl(drvdata->base + XREG_INT_GRP5_BASE);
++	tmp = val & ~0xFF;
++	tmp |= 0xFF & 0xFF;
++	writel(tmp, drvdata->base + XREG_INT_GRP5_BASE);
++
++	// vejmarie clear interrupt for group 6 too
++	val = readl(drvdata->base + XREG_INT_GRP6_BASE);
++	tmp = val & ~0xFF;
++	tmp |= 0xFF & 0xFF;
++	writel(tmp, drvdata->base + XREG_INT_GRP6_BASE);
++
++	//regmap_update_bits(drvdata->xreg_map, XREG_INT_GRP5_BASE,
++	//              0xFF, 0xFF);
+ }
+ 
+ static void gxp_gpio_irq_set_mask(struct irq_data *d, bool set)
+@@ -353,10 +459,43 @@ static void gxp_gpio_irq_set_mask(struct irq_data *d, bool set)
+ 	struct gpio_chip *chip = irq_data_get_irq_chip_data(d);
+ 	struct gxp_xreg_drvdata *drvdata = dev_get_drvdata(chip->parent);
+ 
+-	regmap_update_bits(drvdata->xreg_map, XREG_INT_GRP5_BASE,
+-			BIT(8)|BIT(10), set == true ? 0:BIT(8)|BIT(10));
+-	regmap_update_bits(drvdata->xreg_map, XREG_INT_GRP5_BASE,
+-			0xFF, 0xFF);
++
++	unsigned int val, tmp;
++
++	val = readl(drvdata->base + XREG_INT_GRP5_BASE);
++	tmp = val & ~BIT(8)|BIT(10);
++	if (set == true)
++		tmp |= 0x0 & BIT(8)|BIT(10);
++	else
++		tmp |= BIT(8)|BIT(10) & BIT(8)|BIT(10);
++
++	writel(tmp, drvdata->base + XREG_INT_GRP5_BASE);
++
++//      regmap_update_bits(drvdata->xreg_map, XREG_INT_GRP5_BASE,
++//                      BIT(8)|BIT(10), set == true ? 0:BIT(8)|BIT(10));
++	val = readl(drvdata->base + XREG_INT_GRP5_BASE);
++	tmp = val & ~0xFF;
++	tmp |= 0xFF & 0xFF;
++	writel(tmp, drvdata->base + XREG_INT_GRP5_BASE);
++
++	// We must take care of mask for Group 6 too
++	val = readl(drvdata->base + XREG_INT_GRP6_BASE);
++	tmp = val & ~BIT(10);
++	if (set == true)
++		tmp |= 0x0 & BIT(10);
++	else
++		tmp |= BIT(10);
++
++	writel(tmp, drvdata->base + XREG_INT_GRP6_BASE);
++
++	val = readl(drvdata->base + XREG_INT_GRP6_BASE);
++	tmp = val & ~0xFF;
++	tmp |= 0xFF & 0xFF;
++	writel(tmp, drvdata->base + XREG_INT_GRP6_BASE);
++
++
++//      regmap_update_bits(drvdata->xreg_map, XREG_INT_GRP5_BASE,
++//                      0xFF, 0xFF);
+ }
+ 
+ static void gxp_gpio_irq_mask(struct irq_data *d)
+@@ -385,35 +524,83 @@ static irqreturn_t gxp_xreg_irq_handle(int irq, void *_drvdata)
+ 	unsigned int val, girq, i;
+ 
+ 	//handle xreg interrupt group5
++	val = 0;
+ 	val = readb(drvdata->base + XREG_INT_GRP5_FLAG);
+ 
+ 	for_each_set_bit(i, (unsigned long *)&val, 3) {
+ 		girq = irq_find_mapping(drvdata->gpio_chip.irq.domain,
+-											i + XREG_INT_GRP5_PIN_BASE);
+-		generic_handle_irq(girq);
++					i + XREG_INT_GRP5_PIN_BASE);
++		if (girq)
++			generic_handle_irq(girq);
++	}
++	val = 0;
++	val = readb(drvdata->base + XREG_INT_GRP6_FLAG);
++
++	for_each_set_bit(i, (unsigned long *)&val, 3) {
++		if (i == 2) {
++			// PSU config change interrupt
++			u8 old_psu;
++
++			old_psu = psu_presence;
++			// We shall check every PSU and which one has been modified only
++			psu_presence = readb(drvdata->base+0x42);
++			if (old_psu != psu_presence) {
++				// We need to identify all bits which differs
++				u8 currentVal = psu_presence;
++				u8 oldVal = old_psu;
++
++				for (i = 0 ; i < 8 ; i++) {
++					if ((currentVal & 0x1) != (oldVal & 0x1)) {
++						// psu state has changed
++						girq = irq_find_mapping(drvdata->gpio_chip.irq.domain,
++																																									i+XREG_INT_GRP6_PIN_BASE);
++						if (girq)
++							generic_handle_irq(girq);
++					}
++					currentVal = currentVal >> 1;
++					oldVal = oldVal >> 1;
++				}
++				// We have to release the kernel thread which are
++				// looking for such events
++				gxp_psu_trigger = 1;
++																								wake_up_interruptible(&gxp_psu);
++			}
++		}
+ 	}
++	unsigned int tmp;
++
++	val = readl(drvdata->base + XREG_INT_GRP5_BASE);
++	tmp = val & ~0xFF;
++	tmp |= 0xFF & 0xFF;
++	writel(tmp, drvdata->base + XREG_INT_GRP5_BASE);
++
++	// vejmarie clear interrupt for group 6 too
++	val = readl(drvdata->base + XREG_INT_GRP6_BASE);
++	tmp = val & ~0xFF;
++	tmp |= 0xFF & 0xFF;
++	writel(tmp, drvdata->base + XREG_INT_GRP6_BASE);
+ 
+ 	return IRQ_HANDLED;
+ }
+ 
+ const static struct gpio_chip xreg_chip = {
+-	.label			= "gxp-xreg",
+-	.owner			= THIS_MODULE,
+-	.get			= gxp_gpio_xreg_get,
+-	.set			= gxp_gpio_xreg_set,
++	.label                  = "gxp-xreg",
++	.owner                  = THIS_MODULE,
++	.get                    = gxp_gpio_xreg_get,
++	.set                    = gxp_gpio_xreg_set,
+ 	.get_direction = gxp_gpio_xreg_get_direction,
+ 	.direction_input = gxp_gpio_xreg_direction_input,
+ 	.direction_output = gxp_gpio_xreg_direction_output,
+ 	.base = -1,
+-	//.can_sleep		= true,
++	//.can_sleep            = true,
+ };
+ 
+ static struct irq_chip gxp_gpio_irqchip = {
+-	.name		= "gxp-xreg",
+-	.irq_ack	= gxp_gpio_irq_ack,
+-	.irq_mask	= gxp_gpio_irq_mask,
+-	.irq_unmask	= gxp_gpio_irq_unmask,
+-	.irq_set_type	= gxp_gpio_set_type,
++	.name           = "gxp-xreg",
++	.irq_ack        = gxp_gpio_irq_ack,
++	.irq_mask       = gxp_gpio_irq_mask,
++	.irq_unmask     = gxp_gpio_irq_unmask,
++	.irq_set_type   = gxp_gpio_set_type,
+ };
+ 
+ static const struct of_device_id gxp_xreg_of_match[] = {
+@@ -427,6 +614,8 @@ static int gxp_xreg_probe(struct platform_device *pdev)
+ 	int ret;
+ 	struct gxp_xreg_drvdata *drvdata;
+ 	struct resource *res;
++	unsigned int i;
++	int value;
+ 
+ 	drvdata = devm_kzalloc(&pdev->dev,
+ 				sizeof(struct gxp_xreg_drvdata), GFP_KERNEL);
+@@ -435,21 +624,44 @@ static int gxp_xreg_probe(struct platform_device *pdev)
+ 
+ 	platform_set_drvdata(pdev, drvdata);
+ 
+-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+-	drvdata->base = devm_ioremap_resource(&pdev->dev, res);
+-	if (IS_ERR(drvdata->base))
+-		return PTR_ERR(drvdata->base);
++	// res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	// drvdata->base = devm_ioremap_resource(&pdev->dev, res);
++	//
++	//
++	pr_info("gxp-xreg: resource number %d\n", pdev->num_resources);
++	// All resources are not from IORESOURCE_MEM type
++	i = 0;
++	while ((res = platform_get_resource(pdev, IORESOURCE_MEM, i)) > 0) {
++		pr_info("gxp-xreg: Resource start %x end %x\n", res->start, res->end);
++		if (i == 0) {
++			pr_info("Ioremap 0\n");
++			drvdata->base = devm_ioremap_resource(&pdev->dev, res);
++			if (IS_ERR(drvdata->base))
++				return PTR_ERR(drvdata->base);
++		} else {
++			void __iomem *tmp;
++
++			pr_info("Ioremap\n");
++			tmp = devm_ioremap_resource(&pdev->dev, res);
++			if (IS_ERR(tmp))
++				return PTR_ERR(tmp);
++		}
++		i++;
++	}
+ 
++	pr_info("regmap\n");
+ 	drvdata->xreg_map = syscon_regmap_lookup_by_compatible("hpe,gxp-xreg");
++	regmap_read(drvdata->xreg_map, 0x0, &value);
++	serverID = (value&0xffff00)>>8;
+ 	if (IS_ERR(drvdata->xreg_map)) {
+ 		dev_err(&pdev->dev, "Unable to find xreg regmap\n");
+ 		return PTR_ERR(drvdata->xreg_map);
+ 	}
+ 
+ 	drvdata->gpio_chip = xreg_chip;
+-	drvdata->gpio_chip.ngpio = 100;
++	drvdata->gpio_chip.ngpio = 150;
+ 	drvdata->gpio_chip.parent = &pdev->dev;
+-
++	pr_info("Max GPIOS %d\n", ARCH_NR_GPIOS);
+ 	ret = devm_gpiochip_add_data(&pdev->dev, &drvdata->gpio_chip, NULL);
+ 	if (ret < 0)
+ 		dev_err(&pdev->dev, "Could not register gpiochip for xreg, %d\n", ret);
+@@ -462,16 +674,31 @@ static int gxp_xreg_probe(struct platform_device *pdev)
+ 		return ret;
+ 	}
+ 
++	// Initialize PSU presence
++	psu_presence = readb(drvdata->base+0x42);
++
+ 	// Set up interrupt from XReg
+ 	// Group5 Mask
+-	regmap_update_bits(drvdata->xreg_map, XREG_INT_HI_PRI_EN, BIT(4), 0x10);
+-	regmap_update_bits(drvdata->xreg_map, XREG_INT_GRP_STAT_MASK, BIT(4), 0x00);
++	pr_info("Setting mask %x int size %d\n", drvdata->base, sizeof(unsigned int));
++	unsigned int val, tmp;
++
++	val = readl(drvdata->base + XREG_INT_HI_PRI_EN);
++	tmp = val & ~BIT(4) & ~BIT(5);
++	tmp |= 0x30 & (BIT(4) | BIT(5));
++	writel(tmp, drvdata->base + XREG_INT_HI_PRI_EN);
++//      regmap_update_bits(drvdata->xreg_map, XREG_INT_HI_PRI_EN, BIT(4), 0x10);
++	val = readl(drvdata->base + XREG_INT_GRP_STAT_MASK);
++	tmp = val & ~BIT(4) & ~BIT(5);
++	tmp |= 0x00 & (BIT(4) | BIT(5));
++	writel(tmp, drvdata->base + XREG_INT_GRP_STAT_MASK);
++//      regmap_update_bits(drvdata->xreg_map, XREG_INT_GRP_STAT_MASK, BIT(4), 0x00);
+ 
+ 	ret = platform_get_irq(pdev, 0);
+ 	if (ret < 0) {
+ 		dev_err(&pdev->dev, "Get irq from platform fail - %d\n", ret);
+ 		return ret;
+ 	}
++	pr_info("gxp-xreg: irq %d\n", ret);
+ 	drvdata->irq = ret;
+ 
+ 	ret = devm_request_irq(&pdev->dev, drvdata->irq, gxp_xreg_irq_handle,
+-- 
+2.52.0
+

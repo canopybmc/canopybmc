@@ -1,0 +1,357 @@
+From 5c16a7604e60faf0df5e16b853da939bfb158745 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 8 Jan 2026 01:22:50 +0100
+Subject: [PATCH 6/8] arm: gxp: add PECI bus driver and MFD updates
+
+Add PECI (Platform Environment Control Interface) bus driver for the
+HPE GXP BMC and related MFD (Multi-Function Device) updates:
+
+PECI:
+- peci-gxp: GXP PECI bus controller driver for communication with
+  Intel/AMD CPUs for temperature and power monitoring
+- peci-core: Core PECI subsystem updates
+
+MFD:
+- intel-peci-client: Intel PECI client driver updates
+- smpro-mfd: Ampere SMpro multi-function device driver for Ampere
+  processor monitoring
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+
+diff --git a/drivers/mfd/Kconfig b/drivers/mfd/Kconfig
+index 8406f067d877..032fe5e75cc0 100644
+--- a/drivers/mfd/Kconfig
++++ b/drivers/mfd/Kconfig
+@@ -51,6 +51,19 @@ config MFD_ACT8945A
+ 	  linear regulators, along with a complete ActivePath battery
+ 	  charger.
+ 
++config MFD_SMPRO
++        tristate "Ampere Computing MFD SMpro core driver"
++	default y
++        depends on I2C
++        select MFD_CORE
++        select REGMAP_I2C
++        help
++          Say yes here to enable SMpro driver support for Ampere's Altra
++          processor family.
++
++          Ampere's Altra SMpro exposes an I2C regmap interface that can
++          be accessed by child devices.
++
+ config MFD_SUN4I_GPADC
+ 	tristate "Allwinner sunxi platforms' GPADC MFD driver"
+ 	select MFD_CORE
+diff --git a/drivers/mfd/Makefile b/drivers/mfd/Makefile
+index 97839bb64234..3f1361f4ac63 100644
+--- a/drivers/mfd/Makefile
++++ b/drivers/mfd/Makefile
+@@ -38,6 +38,7 @@ obj-$(CONFIG_MFD_T7L66XB)	+= t7l66xb.o tmio_core.o
+ obj-$(CONFIG_MFD_TC6387XB)	+= tc6387xb.o tmio_core.o
+ obj-$(CONFIG_MFD_TC6393XB)	+= tc6393xb.o tmio_core.o
+ obj-$(CONFIG_MFD_TQMX86)	+= tqmx86.o
++obj-$(CONFIG_MFD_SMPRO)         += smpro-mfd.o
+ 
+ obj-$(CONFIG_MFD_LOCHNAGAR)	+= lochnagar-i2c.o
+ 
+diff --git a/drivers/mfd/intel-peci-client.c b/drivers/mfd/intel-peci-client.c
+index 3eb2c59a2424..4973af870112 100644
+--- a/drivers/mfd/intel-peci-client.c
++++ b/drivers/mfd/intel-peci-client.c
+@@ -62,6 +62,24 @@ static const struct cpu_gen_info cpu_gen_info_table[] = {
+ 		.core_mask_bits = CORE_MASK_BITS_ON_ICXD,
+ 		.chan_rank_max  = CHAN_RANK_MAX_ON_ICXD,
+ 		.dimm_idx_max   = DIMM_IDX_MAX_ON_ICXD },
++	{ /* Sapphire Rapids */
++		.family         = INTEL_FAM6,
++		.model          = INTEL_FAM6_SAPPHIRERAPIDS,
++		.core_mask_bits = CORE_MASK_BITS_ON_SPR,
++		.chan_rank_max  = CHAN_RANK_MAX_ON_SPR,
++		.dimm_idx_max   = DIMM_IDX_MAX_ON_SPR },
++	{ /* Sierra Forrest */
++		.family         = INTEL_FAM6,
++		.model          = INTEL_FAM6_SIERRAFORREST,
++		.core_mask_bits = CORE_MASK_BITS_ON_SFR,
++		.chan_rank_max  = CHAN_RANK_MAX_ON_SFR,
++		.dimm_idx_max   = DIMM_IDX_MAX_ON_SFR },
++	{ /* Sierra Forrest 2 */
++		.family         = INTEL_FAM6,
++		.model          = INTEL_FAM6_SIERRAFORREST2,
++		.core_mask_bits = CORE_MASK_BITS_ON_SFR,
++		.chan_rank_max  = CHAN_RANK_MAX_ON_SFR,
++		.dimm_idx_max   = DIMM_IDX_MAX_ON_SFR },
+ };
+ 
+ static int peci_client_get_cpu_gen_info(struct peci_client_manager *priv)
+@@ -78,6 +96,7 @@ static int peci_client_get_cpu_gen_info(struct peci_client_manager *priv)
+ 	if (ret)
+ 		return ret;
+ 
++
+ 	family = FIELD_PREP(LOWER_BYTE_MASK,
+ 			    FIELD_GET(CPU_ID_FAMILY_MASK, cpu_id)) |
+ 		 FIELD_PREP(UPPER_BYTE_MASK,
+@@ -87,6 +106,8 @@ static int peci_client_get_cpu_gen_info(struct peci_client_manager *priv)
+ 		FIELD_PREP(UPPER_NIBBLE_MASK,
+ 			   FIELD_GET(CPU_ID_EXT_MODEL_MASK, cpu_id));
+ 
++	printk("intel-peci: Looking for %x family %x model\n", family, model);
++
+ 	for (i = 0; i < ARRAY_SIZE(cpu_gen_info_table); i++) {
+ 		const struct cpu_gen_info *cpu_info = &cpu_gen_info_table[i];
+ 
+@@ -101,6 +122,7 @@ static int peci_client_get_cpu_gen_info(struct peci_client_manager *priv)
+ 		ret = -ENODEV;
+ 	}
+ 
++
+ 	return ret;
+ }
+ 
+@@ -111,6 +133,7 @@ static int peci_client_probe(struct peci_client *client)
+ 	int device_id;
+ 	int ret;
+ 
++	printk("peci-client: peci client probe\n");
+ 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
+ 	if (!priv)
+ 		return -ENOMEM;
+@@ -123,6 +146,7 @@ static int peci_client_probe(struct peci_client *client)
+ 		return ret;
+ 
+ 	device_id = (client->adapter->nr << 4) | (client->addr - PECI_BASE_ADDR);
++	printk("peci-client: device id %d\n", device_id);
+ 
+ 	ret = devm_mfd_add_devices(dev, device_id, peci_functions,
+ 				   ARRAY_SIZE(peci_functions), NULL, 0, NULL);
+diff --git a/drivers/mfd/smpro-mfd.c b/drivers/mfd/smpro-mfd.c
+new file mode 100644
+index 000000000000..ff100d46f581
+--- /dev/null
++++ b/drivers/mfd/smpro-mfd.c
+@@ -0,0 +1,134 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Ampere Altra Family SMPro MFD - I2C
++ *
++ * Copyright (c) 2022, Ampere Computing LLC
++ * Author: Quan Nguyen <quan@os.amperecomputing..com>
++ */
++
++#include <linux/i2c.h>
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/of_platform.h>
++#include <linux/mfd/core.h>
++#include <linux/regmap.h>
++
++/* Identification Registers */
++#define MANUFACTURER_ID_REG     0x02
++#define AMPERE_MANUFACTURER_ID  0xCD3A
++
++static int smpro_mfd_write(void *context, const void *data, size_t count)
++{
++	struct device *dev = context;
++	struct i2c_client *i2c = to_i2c_client(dev);
++	int ret;
++
++	ret = i2c_master_send(i2c, data, count);
++	if (ret == count)
++		return 0;
++	else if (ret < 0)
++		return ret;
++	else
++		return -EIO;
++}
++
++static int smpro_mfd_read(void *context, const void *reg, size_t reg_size,
++			  void *val, size_t val_size)
++{
++	struct device *dev = context;
++	struct i2c_client *i2c = to_i2c_client(dev);
++	struct i2c_msg xfer[2];
++	unsigned char buf[2];
++	int ret;
++
++	xfer[0].addr = i2c->addr;
++	xfer[0].flags = 0;
++
++	buf[0] = *(u8 *)reg;
++	buf[1] = val_size;
++	xfer[0].len = 2;
++	xfer[0].buf = buf;
++
++	xfer[1].addr = i2c->addr;
++	xfer[1].flags = I2C_M_RD;
++	xfer[1].len = val_size;
++	xfer[1].buf = val;
++
++	ret = i2c_transfer(i2c->adapter, xfer, 2);
++	if (ret == 2)
++		return 0;
++	else if (ret < 0)
++		return ret;
++	else
++		return -EIO;
++}
++
++static const struct regmap_bus smpro_regmap_bus = {
++	.read = smpro_mfd_read,
++	.write = smpro_mfd_write,
++	.val_format_endian_default = REGMAP_ENDIAN_BIG,
++};
++
++static bool smpro_mfd_readable_noinc_reg(struct device *dev, unsigned int reg)
++{
++	return  (reg == 0x82 || reg == 0x85 || reg == 0x92 || reg == 0x95 ||
++		 reg == 0xC2 || reg == 0xC5 || reg == 0xD2 || reg == 0xDA);
++}
++
++static const struct regmap_config smpro_regmap_config = {
++	.reg_bits = 8,
++	.val_bits = 16,
++	.readable_noinc_reg = smpro_mfd_readable_noinc_reg,
++};
++
++static const struct mfd_cell smpro_devs[] = {
++	MFD_CELL_NAME("smpro-hwmon"),
++	MFD_CELL_NAME("smpro-errmon"),
++	MFD_CELL_NAME("smpro-misc"),
++};
++
++static int smpro_mfd_probe(struct i2c_client *i2c)
++{
++	const struct regmap_config *config;
++	struct regmap *regmap;
++	unsigned int val;
++	int ret;
++
++	config = device_get_match_data(&i2c->dev);
++	if (!config)
++		config = &smpro_regmap_config;
++
++	regmap = devm_regmap_init(&i2c->dev, &smpro_regmap_bus, &i2c->dev, config);
++	if (IS_ERR(regmap))
++		return PTR_ERR(regmap);
++
++	/* Check for valid ID */
++	ret = regmap_read(regmap, MANUFACTURER_ID_REG, &val);
++	if (ret)
++		return ret;
++
++	if (val != AMPERE_MANUFACTURER_ID)
++		return -ENODEV;
++
++	return devm_mfd_add_devices(&i2c->dev, PLATFORM_DEVID_AUTO,
++				    smpro_devs, ARRAY_SIZE(smpro_devs), NULL, 0, NULL);
++}
++
++static const struct of_device_id smpro_mfd_of_match[] = {
++	{ .compatible = "ampere,smpro", .data = &smpro_regmap_config },
++	{}
++};
++MODULE_DEVICE_TABLE(of, smpro_mfd_of_match);
++
++static struct i2c_driver smpro_mfd_driver = {
++	.probe_new = smpro_mfd_probe,
++	.driver = {
++		.name = "smpro-mfd-i2c",
++		.of_match_table = smpro_mfd_of_match,
++	},
++};
++module_i2c_driver(smpro_mfd_driver);
++
++MODULE_AUTHOR("Quan Nguyen <quan@os.amperecomputing.com>");
++MODULE_DESCRIPTION("SMPRO MFD - I2C driver");
++MODULE_LICENSE("GPL v2");
+diff --git a/drivers/peci/busses/peci-gxp.c b/drivers/peci/busses/peci-gxp.c
+index f759b897a819..9335d2918f17 100644
+--- a/drivers/peci/busses/peci-gxp.c
++++ b/drivers/peci/busses/peci-gxp.c
+@@ -169,9 +169,12 @@ static int gxp_peci_probe(struct platform_device *pdev)
+ 	struct gxp_peci *priv;
+ 	int ret;
+ 
++	dev_info(&pdev->dev, "gxp-peci: driver probe\n", NULL);
++	printk("gxp-peci: driver probe\n");
+ 	adapter = peci_alloc_adapter(&pdev->dev, sizeof(*priv));
+ 	if (!adapter)
+ 		return -ENOMEM;
++	printk("gxp-peci: adapter allocated\n");
+ 
+ 	priv = peci_get_adapdata(adapter);
+ 	priv->adapter = adapter;
+@@ -190,6 +193,7 @@ static int gxp_peci_probe(struct platform_device *pdev)
+ 		ret = -ENODEV;
+ 		goto err_put_adapter_dev;
+ 	}
++	printk("gxp-peci: irq identified\n");
+ 
+ 	ret = devm_request_irq(&pdev->dev, priv->irq, gxp_peci_irq_handler,
+ 			       0, "peci-gxp-irq", priv);
+@@ -205,6 +209,7 @@ static int gxp_peci_probe(struct platform_device *pdev)
+ 	priv->adapter->xfer = gxp_peci_xfer;
+ 	priv->adapter->use_dma = false;
+ 
++	printk("peci:adding adapter\n");
+ 	ret = peci_add_adapter(priv->adapter);
+ 	if (ret)
+ 		goto err_put_adapter_dev;
+@@ -223,7 +228,7 @@ static int gxp_peci_probe(struct platform_device *pdev)
+ static int gxp_peci_remove(struct platform_device *pdev)
+ {
+ 	struct gxp_peci *priv = dev_get_drvdata(&pdev->dev);
+-
++	printk("peci: removing driver\n");
+ 	peci_del_adapter(priv->adapter);
+ 	of_node_put(priv->adapter->dev.of_node);
+ 
+diff --git a/drivers/peci/peci-core.c b/drivers/peci/peci-core.c
+index f4c89d9e94f2..6469016100bb 100644
+--- a/drivers/peci/peci-core.c
++++ b/drivers/peci/peci-core.c
+@@ -1403,6 +1403,7 @@ static struct peci_client *peci_new_device(struct peci_adapter *adapter,
+ 	int ret;
+ 
+ 	/* Increase reference count for the adapter assigned */
++	printk("peci-core: new peci client %x\n", info->addr);
+ 	if (!peci_get_adapter(adapter->nr))
+ 		return NULL;
+ 
+diff --git a/include/linux/mfd/intel-peci-client.h b/include/linux/mfd/intel-peci-client.h
+index 55dec5be3245..1d035ffb02ae 100644
+--- a/include/linux/mfd/intel-peci-client.h
++++ b/include/linux/mfd/intel-peci-client.h
+@@ -20,6 +20,9 @@
+ #define INTEL_FAM6_SKYLAKE_XD		0x56
+ #define INTEL_FAM6_ICELAKE_X		0x6A
+ #define INTEL_FAM6_ICELAKE_XD		0x6C
++#define INTEL_FAM6_SAPPHIRERAPIDS	0x8F
++#define INTEL_FAM6_SIERRAFORREST	0xAD
++#define INTEL_FAM6_SIERRAFORREST2	0xAF
+ #endif
+ 
+ #define INTEL_FAM6             6 /* P6 (Pentium Pro and later) */
+@@ -47,8 +50,18 @@
+ #define CORE_MASK_BITS_ON_ICXD 64
+ #define CHAN_RANK_MAX_ON_ICXD  4  /* Max number of channel ranks on Icelake D */
+ #define DIMM_IDX_MAX_ON_ICXD   2  /* Max DIMM index per channel on Icelake D */
+-
+ #define CORE_MASK_BITS_MAX     CORE_MASK_BITS_ON_ICX
++
++#define CORE_MASK_BITS_ON_SPR  64
++#define CHAN_RANK_MAX_ON_SPR   8  /* Max number of channel ranks on Sapphire Rapids */
++#define DIMM_IDX_MAX_ON_SPR    2  /* Max DIMM index per channel on Sapphire Rapids */
++#define CORE_MASK_BITS_MAX     CORE_MASK_BITS_ON_SPR
++
++#define CORE_MASK_BITS_ON_SFR  144
++#define CHAN_RANK_MAX_ON_SFR   8  /* Max number of channel ranks on Sierra Forrest */
++#define DIMM_IDX_MAX_ON_SFR    2  /* Max DIMM index per channel on Sierra Forrest */
++#define CORE_MASK_BITS_MAX     CORE_MASK_BITS_ON_SFR
++
+ #define CHAN_RANK_MAX          CHAN_RANK_MAX_ON_HSX
+ #define DIMM_IDX_MAX           DIMM_IDX_MAX_ON_HSX
+ #define DIMM_NUMS_MAX          (CHAN_RANK_MAX * DIMM_IDX_MAX)
+-- 
+2.52.0
+
