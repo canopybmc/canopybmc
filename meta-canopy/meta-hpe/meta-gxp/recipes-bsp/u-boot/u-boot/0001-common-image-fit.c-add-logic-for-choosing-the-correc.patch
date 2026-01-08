@@ -1,0 +1,97 @@
+From 217a7a67c140d83d6574922a92c462c0f69a1da0 Mon Sep 17 00:00:00 2001
+From: Michal Gorlas <michal.gorlas@9elements.com>
+Date: Thu, 8 Jan 2026 11:27:21 +0100
+Subject: [PATCH] common/image-fit.c: add logic for choosing the correct dtb
+ for GXP
+
+Signed-off-by: Michal Gorlas <michal.gorlas@9elements.com>
+---
+
+Upstream-Status: Pending
+
+ common/image-fit.c | 47 +++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 46 insertions(+), 1 deletion(-)
+
+diff --git a/common/image-fit.c b/common/image-fit.c
+index d54eff9033..1feca0b8b2 100644
+--- a/common/image-fit.c
++++ b/common/image-fit.c
+@@ -34,6 +34,23 @@ DECLARE_GLOBAL_DATA_PTR;
+ #include <u-boot/sha256.h>
+ #include <u-boot/sha512.h>
+ 
++/* Temporary solution based on AMDESE OpenBMC fork:
++   https://github.com/AMDESE/OpenBMC/blob/master/meta-amd/meta-common/recipes-bsp/u-boot/files/0004-u-boot-aspeed-sdk-modify-Platform-based-device-tree-selection.patch
++*/
++#ifdef CONFIG_ARCH_GXP
++#define GXP_XREG_BASE 0xD1000000
++#define GXP_DL385 0x0243
++#define GXP_DL360 0x0235
++#define GXP_DL380 0x0236
++int read_server_id(void)
++{
++    u32 value = readl(GXP_XREG_BASE + 0x0);
++    int server_id = (value & 0xffff00) >> 8;
++
++    return server_id;
++}
++#endif /* CONFIG_ARCH_GXP */
++
+ /*****************************************************************************/
+ /* New uImage format routines */
+ /*****************************************************************************/
+@@ -1896,6 +1913,10 @@ int fit_image_load(bootm_headers_t *images, ulong addr,
+ 	uint8_t os, comp;
+ #ifndef USE_HOSTCC
+ 	uint8_t os_arch;
++#endif
++#ifdef CONFIG_ARCH_GXP
++	int serverid;
++	const int conf_name_size = 64;
+ #endif
+ 	const char *prop_name;
+ 	int ret;
+@@ -1928,6 +1949,29 @@ int fit_image_load(bootm_headers_t *images, ulong addr,
+ 		if (IMAGE_ENABLE_BEST_MATCH && !fit_uname_config) {
+ 			cfg_noffset = fit_conf_find_compat(fit, gd_fdt_blob());
+ 		} else {
++#ifdef CONFIG_ARCH_GXP
++			fit_uname_config = (char *) malloc(conf_name_size);
++			serverid = read_server_id();
++			// for debug only
++			// printf("SERVER ID %x\n", serverid);
++			// printf("expected %x\n", GXP_DL380);
++
++			switch (serverid)
++			{
++				case GXP_DL385:
++					sprintf((char *)fit_uname_config, "conf-gxp_proliant_0x0243.dtb");
++					break;
++				case GXP_DL360:
++					sprintf((char *)fit_uname_config, "conf-gxp_proliant_0x0235.dtb");
++					break;
++				case GXP_DL380:
++					sprintf((char *)fit_uname_config, "conf-gxp_proliant_0x0236.dtb");
++					break;
++				default :
++					sprintf((char *)fit_uname_config, "conf-gxp.dtb");
++					break;
++			}
++#endif /* CONFIG_ARCH_GXP */
+ 			cfg_noffset = fit_conf_get_node(fit,
+ 							fit_uname_config);
+ 		}
+@@ -2207,8 +2251,9 @@ int boot_get_fdt_fit(bootm_headers_t *images, ulong addr,
+ 
+ 	/* single blob, or error just return as well */
+ 	count = fit_conf_get_prop_node_count(fit, cfg_noffset, FIT_FDT_PROP);
+-	if (count <= 1 && !next_config)
++	if (count <= 1 && !next_config) {
+ 		goto out;
++	}
+ 
+ 	/* we need to apply overlays */
+ 
+-- 
+2.51.2
+
