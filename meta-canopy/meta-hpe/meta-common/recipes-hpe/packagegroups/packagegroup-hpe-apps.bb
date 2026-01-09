@@ -10,4 +10,7 @@ PROVIDES += "virtual/obmc-system-mgmt"
 RPROVIDES:${PN}-system += "virtual-obmc-system-mgmt"
 
 SUMMARY:${PN}-system = "HPE System"
-RDEPENDS:${PN}-system = ""
+RDEPENDS:${PN}-system = " \
+        entity-manager \
+        dbus-sensors \
+        "

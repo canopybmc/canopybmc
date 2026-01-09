@@ -1,0 +1,43 @@
+[
+    {
+        "Exposes": [
+            {
+                "Address": "$CPU_ADDRESS",
+                "Bus": "$CPU_BUS",
+                "CpuID": "$CPUID",
+                "DtsCritOffset": -2,
+                "Name": "CPU $CPUID",
+                "PowerState": "On",
+                "PresenceGpioName": "CPU$CPUID_PRSNT",
+                "PresenceGpioPolarity": "High",
+                "TempScaleFactor": 0.001,
+                "Thresholds": [
+                    {
+                        "Direction": "greater than",
+                        "Label": "CPU $CPUID Temp",
+                        "Name": "upper critical",
+                        "Severity": 1,
+                        "Value": 99
+                    },
+                    {
+                        "Direction": "greater than",
+                        "Label": "CPU $CPUID Temp",
+                        "Name": "upper non critical",
+                        "Severity": 0,
+                        "Value": 90
+                    }
+                ],
+                "Type": "SBTSI"
+            }
+        ],
+        "Name": "CPU $CPUID",
+        "Probe": "xyz.openbmc_project.FruDevice({'PRODUCT_NAME': 'AMD GENOA'})",
+        "Type": "Chassis",
+        "xyz.openbmc_project.Inventory.Decorator.Asset": {
+            "Manufacturer": "AMD",
+            "Model": "GENOA",
+            "PartNumber": "NA",
+            "SerialNumber": "NA"
+        }
+    }
+]

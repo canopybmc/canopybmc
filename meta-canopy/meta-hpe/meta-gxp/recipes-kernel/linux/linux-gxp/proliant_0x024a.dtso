@@ -2,6 +2,12 @@
 /plugin/;
 / {
     fragment@0 {
+        target-path = "/";
+        __overlay__ {
+            model = "ProLiant-DL380A-G11";
+        };
+    };
+    fragment@1 {
     target-path = "/ahb@80000000";
     __overlay__ {
 /* i2cmux3: i2cmux@3 {

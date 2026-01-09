@@ -174,11 +174,11 @@
           };
           rofs@540000 {
             label = "rofs";
-            reg = <0x540000 0x1900000>;
+            reg = <0x540000 0x1a00000>;
           };
-          rwfs@1e40000 {
+          rwfs@1f40000 {
             label = "rwfs";
-            reg = <0x1e40000 0x130000>;
+            reg = <0x1f40000 0x30000>;
           };
           section@1f70000 {
             label = "section";
