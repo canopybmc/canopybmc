@@ -1,9 +1,5 @@
-IMAGE_FEATURES:remove = " \
-    obmc-ikvm \
-    obmc-system-mgmt \
-"
+IMAGE_FEATURES:remove = "obmc-ikvm"
 
-# Fixed partition offsets
 FLASH_ROFS_OFFSET = "5376"
 FLASH_RWFS_OFFSET = "30976"
 FLASH_HPE_OFFSET = "32192"

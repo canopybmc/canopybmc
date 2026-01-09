@@ -20,3 +20,6 @@ UBOOT_ENTRYPOINT ?= "0x40100000"
 UBOOT_LOADADDRESS ?= "0x40100000"
 
 SERIAL_CONSOLES ?= "115200;ttyS0"
+
+# HPE packagegroup provider
+PREFERRED_PROVIDER_virtual/obmc-system-mgmt = "packagegroup-hpe-apps"
