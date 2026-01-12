@@ -1,5 +1,6 @@
 FILESEXTRAPATHS:prepend := "${THISDIR}/u-boot:"
-SRC_URI += " file://gxp.cfg file://0001-common-image-fit.c-add-logic-for-choosing-the-correc.patch"
+SRC_URI += " file://gxp.cfg"
+#file://0001-common-image-fit.c-add-logic-for-choosing-the-correc.patch"
 
 # The GXP bootloader requires that u-boot be exactly 384 KB in size for signature verification.
 GXP_UBOOT_SIZE = "393216"
