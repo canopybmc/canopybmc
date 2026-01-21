@@ -49,7 +49,7 @@ do_build_hpe_section() {
         > ${S}/gxp-uboot.sig
 
     # Create HPE section
-    truncate -s 576 ${S}/${HPE_SECTION_NAME}
+    truncate -s 576K ${S}/${HPE_SECTION_NAME}
 
     # Add HPE section header
     dd bs=1k conv=notrunc seek=0 \

@@ -180,9 +180,13 @@
             label = "rwfs";
             reg = <0x1f40000 0x30000>;
           };
-          section@1f70000 {
-            label = "section";
-            reg = <0x1f70000 0x90000>;
+          uboot-sig@1f70000 {
+            label = "uboot-sig";
+            reg = <0x1f70000 0x10000>;
+          };
+          gxp-bootblock@1f80000 {
+            label = "gxp-bootblock";
+            reg = <0x1f80000 0x80000>;
           };
         };
       };
