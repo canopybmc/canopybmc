@@ -158,7 +158,7 @@
 
           bmc@0 {
             label = "bmc";
-            reg = <0x0 0x2000000>;
+            reg = <0x0 0x1fc0000>;
           };
           u-boot@0 {
             label = "u-boot";
@@ -184,9 +184,18 @@
             label = "uboot-sig";
             reg = <0x1f70000 0x10000>;
           };
+          gxp@1f80000 {
+            label = "gxp";
+            reg = <0x1f80000 0x80000>;
+          };
           gxp-bootblock@1f80000 {
             label = "gxp-bootblock";
-            reg = <0x1f80000 0x80000>;
+            reg = <0x1f80000 0x40000>;
+          };
+          gxp-ckb@1fc0000 {
+            label = "gxp-ckb";
+            reg = <0x1fc0000 0x40000>;
+            read-only;
           };
         };
       };
