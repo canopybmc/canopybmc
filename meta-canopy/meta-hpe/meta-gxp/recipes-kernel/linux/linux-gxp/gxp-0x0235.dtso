@@ -1,0 +1,1569 @@
+/dts-v1/;
+/plugin/;
+&{/} {
+	model = "HPE ProLiant DL360 Gen11";
+	compatible = "hpe,gxp-dl360gen11", "hpe,gxp";
+};
+&{/ahb@80000000} {
+	i2cmux3: i2cmux@3 {
+		compatible = "i2c-mux-reg";
+		i2c-parent = <&i2c3>;
+		reg = <0xd1000087 1>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		/* 5 7 9 b */
+		i2c3_1: i2c3@1 {
+			reg = <1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom1: piceeprom@1 {
+				compatible = "atmel,24c02";
+				label = "piceeprom1";
+				reg = <0x57>;
+			};
+			ubm1: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom1>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "1_DRV1_PRESENCE", "1_DRV1_UUID", "1_DRV1_ACT",
+				"1_DRV2_PRESENCE", "1_DRV2_UUID", "1_DRV2_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom1@53 {
+						compatible = "atmel,24c02";
+						label = "drv1";
+						reg = <0x53>;
+					};
+					thermsensor1@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv1>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom2@53 {
+						compatible = "atmel,24c02";
+						label = "drv2";
+						reg = <0x53>;
+					};
+					thermsensor2@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv2>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c3_2: i2c3@2 {
+			reg = <2>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom2: piceeprom@2 {
+				compatible = "atmel,24c02";
+				label = "piceeprom2";
+				reg = <0x57>;
+			};
+			ubm2: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom2>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "2_DRV3_PRESENCE", "2_DRV3_UUID", "2_DRV3_ACT",
+				"2_DRV4_PRESENCE", "2_DRV4_UUID", "2_DRV4_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom3@53 {
+						compatible = "atmel,24c02";
+						label = "drv3";
+						reg = <0x53>;
+					};
+					thermsensor3@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv3>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom4@53 {
+						compatible = "atmel,24c02";
+						label = "drv4";
+						reg = <0x53>;
+					};
+					thermsensor4@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv4>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c3_3: i2c3@3 {
+			reg = <3>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom3: piceeprom@3 {
+				compatible = "atmel,24c02";
+				label = "piceeprom3";
+				reg = <0x57>;
+			};
+			ubm3: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom3>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "3_DRV5_PRESENCE", "3_DRV5_UUID", "3_DRV5_ACT",
+				"3_DRV6_PRESENCE", "3_DRV6_UUID", "3_DRV6_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom5@53 {
+						compatible = "atmel,24c02";
+						label = "drv5";
+						reg = <0x53>;
+					};
+					thermsensor5@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv5>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom6@53 {
+						compatible = "atmel,24c02";
+						label = "drv6";
+						reg = <0x53>;
+					};
+					thermsensor6@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv6>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c3_4: i2c3@4 {
+			reg = <4>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom4: piceeprom@4 {
+				compatible = "atmel,24c02";
+				label = "piceeprom4";
+				reg = <0x57>;
+			};
+			ubm4: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom4>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "4_DRV7_PRESENCE", "4_DRV7_UUID", "4_DRV7_ACT",
+				"4_DRV8_PRESENCE", "4_DRV8_UUID", "4_DRV8_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom7@53 {
+						compatible = "atmel,24c02";
+						label = "drv7";
+						reg = <0x53>;
+					};
+					thermsensor7@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv7>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom8@53 {
+						compatible = "atmel,24c02";
+						label = "drv8";
+						reg = <0x53>;
+					};
+					thermsensor8@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv8>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c3_5: i2c3@5 {
+			reg = <5>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom5: piceeprom@5 {
+				compatible = "atmel,24c02";
+				label = "piceeprom5";
+				reg = <0x57>;
+			};
+			ubm5: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom5>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "5_DRV9_PRESENCE", "5_DRV9_UUID", "5_DRV9_ACT",
+				"5_DRV10_PRESENCE", "5_DRV10_UUID", "5_DRV10_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom9@53 {
+						compatible = "atmel,24c02";
+						label = "drv9";
+						reg = <0x53>;
+					};
+					thermsensor9@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv9>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom10@53 {
+						compatible = "atmel,24c02";
+						label = "drv10";
+						reg = <0x53>;
+					};
+					thermsensor10@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv10>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c3_6: i2c3@6 {
+			reg = <6>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom6: piceeprom@6 {
+				compatible = "atmel,24c02";
+				label = "piceeprom6";
+				reg = <0x57>;
+			};
+			ubm6: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom6>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "6_DRV11_PRESENCE", "6_DRV11_UUID", "6_DRV11_ACT",
+				"6_DRV12_PRESENCE", "6_DRV12_UUID", "6_DRV12_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom11@53 {
+						compatible = "atmel,24c02";
+						label = "drv11";
+						reg = <0x53>;
+					};
+					thermsensor11@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv11>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom12@53 {
+						compatible = "atmel,24c02";
+						label = "drv12";
+						reg = <0x53>;
+					};
+					thermsensor12@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv12>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c3_7: i2c3@7 {
+			reg = <7>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom7: piceeprom@7 {
+				compatible = "atmel,24c02";
+				label = "piceeprom7";
+				reg = <0x57>;
+			};
+			ubm7: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom7>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "7_DRV13_PRESENCE", "7_DRV13_UUID", "7_DRV13_ACT",
+				"7_DRV14_PRESENCE", "7_DRV14_UUID", "7_DRV14_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom13@53 {
+						compatible = "atmel,24c02";
+						label = "drv13";
+						reg = <0x53>;
+					};
+					thermsensor13@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv13>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom14@53 {
+						compatible = "atmel,24c02";
+						label = "drv14";
+						reg = <0x53>;
+					};
+					thermsensor14@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv14>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c3_8: i2c3@8 {
+			reg = <8>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom8: piceeprom@8 {
+				compatible = "atmel,24c02";
+				label = "piceeprom8";
+				reg = <0x57>;
+			};
+			ubm8: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom8>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "8_DRV15_PRESENCE", "8_DRV15_UUID", "8_DRV15_ACT",
+				"8_DRV16_PRESENCE", "8_DRV16_UUID", "8_DRV16_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom15@53 {
+						compatible = "atmel,24c02";
+						label = "drv15";
+						reg = <0x53>;
+					};
+					thermsensor15@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv15>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom16@53 {
+						compatible = "atmel,24c02";
+						label = "drv16";
+						reg = <0x53>;
+					};
+					thermsensor16@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv16>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c3_9: i2c3@9 {
+			reg = <9>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom9: piceeprom@9 {
+				compatible = "atmel,24c02";
+				label = "piceeprom9";
+				reg = <0x57>;
+			};
+			ubm9: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom9>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "9_DRV17_PRESENCE", "9_DRV17_UUID", "9_DRV17_ACT",
+				"9_DRV18_PRESENCE", "9_DRV18_UUID", "9_DRV18_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom17@53 {
+						compatible = "atmel,24c02";
+						label = "drv17";
+						reg = <0x53>;
+					};
+					thermsensor17@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv17>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom18@53 {
+						compatible = "atmel,24c02";
+						label = "drv18";
+						reg = <0x53>;
+					};
+					thermsensor18@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv18>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c3_a: i2c3@a {
+			reg = <0x0a>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom10: piceeprom@10 {
+				compatible = "atmel,24c02";
+				label = "piceeprom10";
+				reg = <0x57>;
+			};
+			ubm10: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom10>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "10_DRV19_PRESENCE", "10_DRV19_UUID", "10_DRV19_ACT",
+				"10_DRV20_PRESENCE", "10_DRV20_UUID", "10_DRV20_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom19@53 {
+						compatible = "atmel,24c02";
+						label = "drv19";
+						reg = <0x53>;
+					};
+					thermsensor19@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv19>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom20@53 {
+						compatible = "atmel,24c02";
+						label = "drv20";
+						reg = <0x53>;
+					};
+					thermsensor20@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv20>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c3_b: i2c3@b {
+			reg = <0x0b>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom11: piceeprom@11 {
+				compatible = "atmel,24c02";
+				label = "piceeprom11";
+				reg = <0x57>;
+			};
+			ubm11: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom11>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "11_DRV21_PRESENCE", "11_DRV21_UUID", "11_DRV21_ACT",
+				"11_DRV22_PRESENCE", "11_DRV22_UUID", "11_DRV22_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom21@53 {
+						compatible = "atmel,24c02";
+						label = "drv21";
+						reg = <0x53>;
+					};
+					thermsensor21@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv21>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom22@53 {
+						compatible = "atmel,24c02";
+						label = "drv22";
+						reg = <0x53>;
+					};
+					thermsensor22@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv22>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c3_c: i2c3@c {
+			reg = <0x0c>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom12: piceeprom@12 {
+				compatible = "atmel,24c02";
+				label = "piceeprom12";
+				reg = <0x57>;
+			};
+			ubm12: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom12>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "12_DRV23_PRESENCE", "12_DRV23_UUID", "12_DRV23_ACT",
+				"12_DRV24_PRESENCE", "12_DRV24_UUID", "12_DRV24_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom23@53 {
+						compatible = "atmel,24c02";
+						label = "drv23";
+						reg = <0x53>;
+					};
+					thermsensor23@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv23>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom24@53 {
+						compatible = "atmel,24c02";
+						label = "drv24";
+						reg = <0x53>;
+					};
+					thermsensor24@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv24>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c3_d: i2c3@d {
+			reg = <0x0d>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom13: piceeprom@13 {
+				compatible = "atmel,24c02";
+				label = "piceeprom13";
+				reg = <0x57>;
+			};
+			ubm13: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom13>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "13_DRV25_PRESENCE", "13_DRV25_UUID", "13_DRV25_ACT",
+				"13_DRV26_PRESENCE", "13_DRV26_UUID", "13_DRV26_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom25@53 {
+						compatible = "atmel,24c02";
+						label = "drv25";
+						reg = <0x53>;
+					};
+					thermsensor25@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv25>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom26@53 {
+						compatible = "atmel,24c02";
+						label = "drv26";
+						reg = <0x53>;
+					};
+					thermsensor26@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv26>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c3_e: i2c3@e {
+			reg = <0x0e>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom14: piceeprom@14 {
+				compatible = "atmel,24c02";
+				label = "piceeprom14";
+				reg = <0x57>;
+			};
+			ubm14: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom14>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "14_DRV27_PRESENCE", "14_DRV27_UUID", "14_DRV27_ACT",
+				"14_DRV28_PRESENCE", "14_DRV28_UUID", "14_DRV28_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom27@53 {
+						compatible = "atmel,24c02";
+						label = "drv27";
+						reg = <0x53>;
+					};
+					thermsensor27@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv27>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom28@53 {
+						compatible = "atmel,24c02";
+						label = "drv28";
+						reg = <0x53>;
+					};
+					thermsensor28@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv28>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c3_f: i2c3@f {
+			reg = <0x0f>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom15: piceeprom@15 {
+				compatible = "atmel,24c02";
+				label = "piceeprom15";
+				reg = <0x57>;
+			};
+			ubm15: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom15>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "15_DRV29_PRESENCE", "15_DRV29_UUID", "15_DRV29_ACT",
+				"15_DRV30_PRESENCE", "15_DRV30_UUID", "15_DRV30_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom29@53 {
+						compatible = "atmel,24c02";
+						label = "drv29";
+						reg = <0x53>;
+					};
+					thermsensor29@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv29>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom30@53 {
+						compatible = "atmel,24c02";
+						label = "drv30";
+						reg = <0x53>;
+					};
+					thermsensor30@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv30>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c3_10: i2c3@10 {
+			reg = <0x10>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom16: piceeprom@16 {
+				compatible = "atmel,24c02";
+				label = "piceeprom16";
+				reg = <0x57>;
+			};
+			ubm16: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom16>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "16_DRV31_PRESENCE", "16_DRV31_UUID", "16_DRV31_ACT",
+				"16_DRV32_PRESENCE", "16_DRV32_UUID", "16_DRV32_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom31@53 {
+						compatible = "atmel,24c02";
+						label = "drv31";
+						reg = <0x53>;
+					};
+					thermsensor31@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv31>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom32@53 {
+						compatible = "atmel,24c02";
+						label = "drv32";
+						reg = <0x53>;
+					};
+					thermsensor32@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv32>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+	};
+	i2cmux4: i2cmux@4 {
+		compatible = "i2c-mux-reg";
+		i2c-parent = <&i2c4>;
+		reg = <0xd1000088 1>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		i2c4_3: i2c4@3 {
+			reg = <3>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom17: piceeprom@17 {
+				compatible = "atmel,24c02";
+				label = "piceeprom17";
+				reg = <0x57>;
+			};
+			ubm17: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom17>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "17_DRV33_PRESENCE", "17_DRV33_UUID", "17_DRV33_ACT",
+				"17_DRV34_PRESENCE", "17_DRV34_UUID", "17_DRV34_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom33@53 {
+						compatible = "atmel,24c02";
+						label = "drv33";
+						reg = <0x53>;
+					};
+					thermsensor33@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv33>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom34@53 {
+						compatible = "atmel,24c02";
+						label = "drv34";
+						reg = <0x53>;
+					};
+					thermsensor34@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv34>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c4_4: i2c4@4 {
+			reg = <4>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom18: piceeprom@18 {
+				compatible = "atmel,24c02";
+				label = "piceeprom18";
+				reg = <0x57>;
+			};
+			ubm18: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom18>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "18_DRV35_PRESENCE", "18_DRV35_UUID", "18_DRV35_ACT",
+				"18_DRV36_PRESENCE", "18_DRV36_UUID", "18_DRV36_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom35@53 {
+						compatible = "atmel,24c02";
+						label = "drv35";
+						reg = <0x53>;
+					};
+					thermsensor35@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv35>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom36@53 {
+						compatible = "atmel,24c02";
+						label = "drv36";
+						reg = <0x53>;
+					};
+					thermsensor36@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv36>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+	};
+	i2cmux6: i2cmux@6 {
+		compatible = "i2c-mux-reg";
+		i2c-parent = <&i2c6>;
+		reg = <0xd100008a 1>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		i2c6_11: i2c6@11 {
+			reg = <11>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom19: piceeprom@19 {
+				compatible = "atmel,24c02";
+				label = "piceeprom19";
+				reg = <0x57>;
+			};
+			ubm19: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom19>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "19_DRV37_PRESENCE", "19_DRV37_UUID", "19_DRV37_ACT",
+				"19_DRV38_PRESENCE", "19_DRV38_UUID", "19_DRV38_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom37@53 {
+						compatible = "atmel,24c02";
+						label = "drv37";
+						reg = <0x53>;
+					};
+					thermsensor37@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv37>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom38@53 {
+						compatible = "atmel,24c02";
+						label = "drv38";
+						reg = <0x53>;
+					};
+					thermsensor38@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv38>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c6_12: i2c6@12 {
+			reg = <12>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom20: piceeprom@20 {
+				compatible = "atmel,24c02";
+				label = "piceeprom20";
+				reg = <0x57>;
+			};
+			ubm20: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom20>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "20_DRV39_PRESENCE", "20_DRV39_UUID", "20_DRV39_ACT",
+				"20_DRV40_PRESENCE", "20_DRV40_UUID", "20_DRV40_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom39@53 {
+						compatible = "atmel,24c02";
+						label = "drv39";
+						reg = <0x53>;
+					};
+					thermsensor39@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv39>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom40@53 {
+						compatible = "atmel,24c02";
+						label = "drv40";
+						reg = <0x53>;
+					};
+					thermsensor40@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv40>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c6_13: i2c6@13 {
+			reg = <13>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom21: piceeprom@21 {
+				compatible = "atmel,24c02";
+				label = "piceeprom21";
+				reg = <0x57>;
+			};
+			ubm21: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom21>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "21_DRV41_PRESENCE", "21_DRV41_UUID", "21_DRV41_ACT",
+				"21_DRV42_PRESENCE", "21_DRV42_UUID", "21_DRV42_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom41@53 {
+						compatible = "atmel,24c02";
+						label = "drv41";
+						reg = <0x53>;
+					};
+					thermsensor41@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv41>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom42@53 {
+						compatible = "atmel,24c02";
+						label = "drv42";
+						reg = <0x53>;
+					};
+					thermsensor42@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv42>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+		i2c6_14: i2c6@14 {
+			reg = <14>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			piceeprom22: piceeprom@22 {
+				compatible = "atmel,24c02";
+				label = "piceeprom22";
+				reg = <0x57>;
+			};
+			ubm22: ubm@40 {
+				compatible = "hpe,ubm4";
+				eeprom_phandle = <&piceeprom22>;
+				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "22_DRV43_PRESENCE", "22_DRV43_UUID", "22_DRV43_ACT",
+				"22_DRV44_PRESENCE", "22_DRV44_UUID", "22_DRV44_ACT";
+			};
+			switch@72 {
+				compatible = "nxp,pca9546";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x72>;
+				i2c@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+					drveeprom43@53 {
+						compatible = "atmel,24c02";
+						label = "drv43";
+						reg = <0x53>;
+					};
+					thermsensor43@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv43>;
+						reg = < 0x1b>;
+					};
+				};
+				i2c@1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <1>;
+					drveeprom44@53 {
+						compatible = "atmel,24c02";
+						label = "drv44";
+						reg = <0x53>;
+					};
+					thermsensor44@1b {
+						compatible = "ubm-drv";
+						uid-led = <&leddrv44>;
+						reg = < 0x1b>;
+					};
+				};
+			};
+		};
+	};
+	/* add PSU mux */
+	i2cmux@7 {
+		compatible = "i2c-mux-reg";
+		i2c-parent = <&i2c7>;
+		reg = <0xd100008b 1>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		i2c7@1 {
+			reg = <1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			psu1: psu@58 {
+				compatible = "hpe,gxp-psu";
+				reg = <0x58>;
+			};
+		};
+		i2c7@2 {
+			reg = <2>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			psu2: psu@59 {
+				compatible = "hpe,gxp-psu";
+				reg = <0x59>;
+			};
+		};
+	};
+	kcs_conf: kcs_conf@80fc0430 {
+		compatible = "hpe,gxp-kcs-bmc-cfg", "simple-mfd", "syscon";
+		reg = <0x80fc0430 0x100>;
+	};
+	kcs_reg: kcs_reg@80fd0400 {
+		compatible = "hpe,gxp-kcs-bmc";
+		reg = <0x80fd0400 0x8>;
+		interrupts = <6>;
+		interrupt-parent = <&vic1>;
+		kcs_chan = <1>;
+		status = "okay";
+		kcs-bmc-cfg = <&kcs_conf>;
+	};
+	syspower: syspower {
+		compatible = "hpe,gxp-power";
+		psu_phandle = <&psu1>, <&psu2>;
+	};
+	leddrv1: leddrv1 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm1 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv2: leddrv2 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm1 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv3: leddrv3 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm2 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv4: leddrv4 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm2 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv5: leddrv5 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm3 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv6: leddrv6 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm3 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv7: leddrv7 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm4 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv8: leddrv8 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm4 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv9: leddrv9 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm5 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv10: leddrv10 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm5 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv11: leddrv11 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm6 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv12: leddrv12 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm6 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv13: leddrv13 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm7 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv14: leddrv14 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm7 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv15: leddrv15 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm8 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv16: leddrv16 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm8 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv17: leddrv17 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm9 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv18: leddrv18 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm9 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv19: leddrv19 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm10 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv20: leddrv20 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm10 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv21: leddrv21 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm11 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv22: leddrv22 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm11 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv23: leddrv23 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm12 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv24: leddrv24 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm12 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv25: leddrv25 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm13 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv26: leddrv26 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm13 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv27: leddrv27 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm14 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv28: leddrv28 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm14 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv29: leddrv29 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm15 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv30: leddrv30 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm15 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv31: leddrv31 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm16 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv32: leddrv32 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm16 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv33: leddrv33 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm17 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv34: leddrv34 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm17 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv35: leddrv35 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm18 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv36: leddrv36 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm18 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv37: leddrv37 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm19 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv38: leddrv38 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm19 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv39: leddrv39 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm20 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv40: leddrv40 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm20 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv41: leddrv41 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm21 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv42: leddrv42 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm21 4 0>;
+			default-state = "off";
+		};
+	};
+	leddrv43: leddrv43 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm22 1 0>;
+			default-state = "off";
+		};
+	};
+	leddrv44: leddrv44 {
+		compatible = "gpio-leds";
+		uid {
+			gpios = <&ubm22 4 0>;
+			default-state = "off";
+		};
+	};
+};

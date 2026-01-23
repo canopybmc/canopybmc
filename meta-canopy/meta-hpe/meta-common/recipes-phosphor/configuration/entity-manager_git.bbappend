@@ -1,0 +1,42 @@
+FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
+
+SRC_URI = "git://github.com/canopybmc/entity-manager.git;protocol=https;branch=${UBRANCH}"
+UBRANCH = "hpe-gxp"
+SRCREV = "330c0d82ef0a3122eb1d83f3af7379aeedfb49bb"
+
+# Enable devicetree VPD parser for platform identification
+PACKAGECONFIG:append = " dts-vpd"
+
+# HPE ProLiant Gen11 baseboard configurations
+SRC_URI += " \
+    file://blocklist.json \
+    file://dl110g11_baseboard.json \
+    file://dl110g11_baseboard.json \
+    file://dl145g11_baseboard.json \
+    file://dl320g11_baseboard.json \
+    file://dl325g11_baseboard.json \
+    file://dl345g11_baseboard.json \
+    file://dl360g11_baseboard.json \
+    file://dl365g11_baseboard.json \
+    file://dl380ag11_baseboard.json \
+    file://dl380g11_baseboard.json \
+    file://dl385g11_baseboard.json \
+    file://dl560g11_baseboard.json \
+    file://rl300g11_baseboard.json \
+"
+
+do_install:append() {
+    install -D ${UNPACKDIR}/blocklist.json ${D}${datadir}/${BPN}/blacklist.json
+    install -D ${UNPACKDIR}/dl110g11_baseboard.json ${D}${datadir}/${BPN}/configurations/hpe/dl110g11_baseboard.json
+    install -D ${UNPACKDIR}/dl145g11_baseboard.json ${D}${datadir}/${BPN}/configurations/hpe/dl145g11_baseboard.json
+    install -D ${UNPACKDIR}/dl320g11_baseboard.json ${D}${datadir}/${BPN}/configurations/hpe/dl320g11_baseboard.json
+    install -D ${UNPACKDIR}/dl325g11_baseboard.json ${D}${datadir}/${BPN}/configurations/hpe/dl325g11_baseboard.json
+    install -D ${UNPACKDIR}/dl345g11_baseboard.json ${D}${datadir}/${BPN}/configurations/hpe/dl345g11_baseboard.json
+    install -D ${UNPACKDIR}/dl360g11_baseboard.json ${D}${datadir}/${BPN}/configurations/hpe/dl360g11_baseboard.json
+    install -D ${UNPACKDIR}/dl365g11_baseboard.json ${D}${datadir}/${BPN}/configurations/hpe/dl365g11_baseboard.json
+    install -D ${UNPACKDIR}/dl380ag11_baseboard.json ${D}${datadir}/${BPN}/configurations/hpe/dl380ag11_baseboard.json
+    install -D ${UNPACKDIR}/dl380g11_baseboard.json ${D}${datadir}/${BPN}/configurations/hpe/dl380g11_baseboard.json
+    install -D ${UNPACKDIR}/dl385g11_baseboard.json ${D}${datadir}/${BPN}/configurations/hpe/dl385g11_baseboard.json
+    install -D ${UNPACKDIR}/dl560g11_baseboard.json ${D}${datadir}/${BPN}/configurations/hpe/dl560g11_baseboard.json
+    install -D ${UNPACKDIR}/rl300g11_baseboard.json ${D}${datadir}/${BPN}/configurations/hpe/rl300g11_baseboard.json
+}
