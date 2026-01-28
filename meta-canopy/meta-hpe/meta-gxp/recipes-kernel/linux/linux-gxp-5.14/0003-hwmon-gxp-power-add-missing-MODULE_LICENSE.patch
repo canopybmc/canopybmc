@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Mon, 27 Jan 2026 16:00:00 +0100
+Subject: [PATCH 3/3] hwmon: gxp-power: add missing MODULE_LICENSE
+
+The gxp-power module is missing the MODULE_LICENSE macro, causing
+build failures with modpost error:
+
+  FATAL: modpost: missing MODULE_LICENSE() in drivers/hwmon/gxp-power.o
+
+Add MODULE_LICENSE("GPL") to fix the build.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/hwmon/gxp-power.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/hwmon/gxp-power.c b/drivers/hwmon/gxp-power.c
+--- a/drivers/hwmon/gxp-power.c
++++ b/drivers/hwmon/gxp-power.c
+@@ -118,3 +118,4 @@ module_platform_driver(gxp_power_driver);
+
+ MODULE_AUTHOR("Louis Hsu <kai-hsiang.hsu@hpe.com>");
+ MODULE_DESCRIPTION("HPE GXP POWER driver");
++MODULE_LICENSE("GPL");
