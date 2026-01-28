@@ -21,7 +21,7 @@ UBOOT_LOADADDRESS ?= "0x40100000"
 UBOOT_DTB_LOADADDRESS ?= "0x48000000"
 UBOOT_DTBO_LOADADDRESS ?= "0x48100000"
 
-SERIAL_CONSOLES ?= "115200;ttyS0"
+SERIAL_CONSOLES ?= "115200;ttyS2"
 
 # HPE packagegroup provider
 PREFERRED_PROVIDER_virtual/obmc-system-mgmt = "packagegroup-hpe-apps"

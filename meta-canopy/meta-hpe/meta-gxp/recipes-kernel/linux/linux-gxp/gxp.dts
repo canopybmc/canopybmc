@@ -6,7 +6,7 @@
   model = "GXP";
 
   chosen {
-    bootargs = "earlyprintk console=ttyS0,115200 user_debug=31";
+    bootargs = "earlyprintk console=ttyS2,115200 user_debug=31";
   };
 
   aliases {
