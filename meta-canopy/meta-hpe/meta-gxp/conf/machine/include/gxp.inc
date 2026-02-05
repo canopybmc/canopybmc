@@ -3,6 +3,7 @@
 #@DESCRIPTION: Common machine configuration for the HPE GXP Chip
 
 require conf/machine/include/hpe_soc.inc
+require conf/machine/include/gxp-flash-layout.inc
 
 UBOOT_ARCH ?= "arm"
 
