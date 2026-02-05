@@ -16,33 +16,33 @@ python do_gxp_generate_flash_layout() {
 
     # All values in KB
     uboot_off     = var('FLASH_UBOOT_OFFSET')
-    uboot_sz      = var('GXP_FLASH_UBOOT_SIZE')
-    env_off       = var('GXP_FLASH_UBOOT_ENV_OFFSET')
-    env_sz        = var('GXP_FLASH_UBOOT_ENV_SIZE')
+    uboot_sz      = var('FLASH_UBOOT_SIZE')
+    env_off       = var('FLASH_UBOOT_ENV_OFFSET')
+    env_sz        = var('FLASH_UBOOT_ENV_SIZE')
     kernel_off    = var('FLASH_KERNEL_OFFSET')
     rofs_off      = var('FLASH_ROFS_OFFSET')
     rwfs_off      = var('FLASH_RWFS_OFFSET')
-    gxp_off       = var('FLASH_GXP_OFFSET')
-    gxp_end       = var('FLASH_GXP_END')
-    sig_sz        = var('GXP_FLASH_UBOOT_SIG_SIZE')
-    bootblock_sz  = var('GXP_FLASH_BOOTBLOCK_SIZE')
-    ckb_sz        = var('GXP_FLASH_CKB_SIZE')
+    sig_sz        = var('FLASH_UBOOT_SIG_SIZE')
+    bootblock_sz  = var('FLASH_GXP_BOOTBLOCK_SIZE')
+    ckb_sz        = var('FLASH_GXP_CKB_SIZE')
 
-    # Sizes derived from adjacent partition offsets
+    # Derived offsets and sizes
+    sig_off       = var('FLASH_UBOOT_SIG_OFFSET')
+    bootblock_off = var('FLASH_GXP_OFFSET')
+    ckb_off       = bootblock_off + bootblock_sz
+    bmc_sz        = var('FLASH_SIZE')
+    gxp_hw_sz     = bootblock_sz + ckb_sz
+
     kernel_sz     = rofs_off - kernel_off
     rofs_sz       = rwfs_off - rofs_off
-    rwfs_sz       = gxp_off - rwfs_off
-    bmc_sz        = gxp_end
-    bootblock_off = gxp_off + sig_sz
-    ckb_off       = gxp_end
-    gxp_hw_sz     = bootblock_sz + ckb_sz
+    rwfs_sz       = sig_off - rwfs_off
 
     # Validate tunable partition ordering (fixed SoC partitions may
     # intentionally overlap and are not checked)
-    if not (kernel_off < rofs_off < rwfs_off < gxp_off):
+    if not (kernel_off < rofs_off < rwfs_off < sig_off):
         bb.fatal("Flash partition ordering violated: "
-                 "kernel(%d) < rofs(%d) < rwfs(%d) < gxp(%d)"
-                 % (kernel_off, rofs_off, rwfs_off, gxp_off))
+                 "kernel(%d) < rofs(%d) < rwfs(%d) < uboot-sig(%d)"
+                 % (kernel_off, rofs_off, rwfs_off, sig_off))
 
     for name, size in [("kernel", kernel_sz), ("rofs", rofs_sz), ("rwfs", rwfs_sz)]:
         if size <= 0:
@@ -56,7 +56,7 @@ python do_gxp_generate_flash_layout() {
         ("kernel",        kernel_off,    kernel_sz,     {}),
         ("rofs",          rofs_off,      rofs_sz,       {}),
         ("rwfs",          rwfs_off,      rwfs_sz,       {}),
-        ("uboot-sig",     gxp_off,       sig_sz,        {}),
+        ("uboot-sig",     sig_off,       sig_sz,        {}),
         ("gxp",           bootblock_off, gxp_hw_sz,     {}),
         ("gxp-bootblock", bootblock_off, bootblock_sz,  {}),
         ("gxp-ckb",       ckb_off,       ckb_sz,        {"read-only": True}),
@@ -98,8 +98,9 @@ python do_gxp_generate_flash_layout() {
 addtask gxp_generate_flash_layout after do_patch before do_compile
 do_gxp_generate_flash_layout[vardeps] += "\
     FLASH_UBOOT_OFFSET FLASH_KERNEL_OFFSET FLASH_ROFS_OFFSET \
-    FLASH_RWFS_OFFSET FLASH_GXP_OFFSET FLASH_GXP_END \
-    GXP_FLASH_UBOOT_SIZE GXP_FLASH_UBOOT_ENV_OFFSET \
-    GXP_FLASH_UBOOT_ENV_SIZE GXP_FLASH_UBOOT_SIG_SIZE \
-    GXP_FLASH_BOOTBLOCK_SIZE GXP_FLASH_CKB_SIZE \
+    FLASH_RWFS_OFFSET FLASH_GXP_OFFSET FLASH_SIZE \
+    FLASH_UBOOT_SIZE FLASH_UBOOT_ENV_OFFSET \
+    FLASH_UBOOT_ENV_SIZE FLASH_UBOOT_SIG_SIZE \
+    FLASH_UBOOT_SIG_OFFSET \
+    FLASH_GXP_BOOTBLOCK_SIZE FLASH_GXP_CKB_SIZE \
 "
