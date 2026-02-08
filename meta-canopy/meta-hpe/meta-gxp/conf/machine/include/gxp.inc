@@ -24,5 +24,20 @@ UBOOT_DTBO_LOADADDRESS ?= "0x48100000"
 
 SERIAL_CONSOLES ?= "115200;ttyS2"
 
-# HPE packagegroup provider
+MACHINE_FEATURES += "\
+    obmc-phosphor-chassis-mgmt \
+    obmc-phosphor-fan-mgmt \
+    obmc-phosphor-flash-mgmt \
+    obmc-host-state-mgmt \
+    obmc-chassis-state-mgmt \
+    obmc-bmc-state-mgmt \
+    "
+
+VIRTUAL-RUNTIME_obmc-host-state-manager ?= "x86-power-control"
+VIRTUAL-RUNTIME_obmc-chassis-state-manager ?= "x86-power-control"
+
+# HPE packagegroup providers
+PREFERRED_PROVIDER_virtual/obmc-chassis-mgmt = "packagegroup-hpe-apps"
+PREFERRED_PROVIDER_virtual/obmc-fan-mgmt = "packagegroup-hpe-apps"
+PREFERRED_PROVIDER_virtual/obmc-flash-mgmt = "packagegroup-hpe-apps"
 PREFERRED_PROVIDER_virtual/obmc-system-mgmt = "packagegroup-hpe-apps"
