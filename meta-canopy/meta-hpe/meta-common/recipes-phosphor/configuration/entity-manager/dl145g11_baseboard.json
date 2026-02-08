@@ -36,69 +36,93 @@
         },
         {
             "Connector": {
-                "Fail": "FAN1_FAIL",
-                "Inst": "FAN1_INST",
+                "Fail": "fan1-fail",
+                "Inst": "fan1-installed",
                 "Name": "Fan Connector 1",
                 "Pwm": 0
             },
             "Name": "Fan 1",
             "Type": "HPEFan",
-            "Index": 0
+            "Index": 0,
+            "Presence": {
+                "PinName": "fan1-installed",
+                "Polarity": "High"
+            }
         },
         {
             "Connector": {
-                "Fail": "FAN2_FAIL",
-                "Inst": "FAN2_INST",
+                "Fail": "fan2-fail",
+                "Inst": "fan2-installed",
                 "Name": "Fan Connector 2",
                 "Pwm": 1
             },
             "Name": "Fan 2",
             "Type": "HPEFan",
-            "Index": 1
+            "Index": 1,
+            "Presence": {
+                "PinName": "fan2-installed",
+                "Polarity": "High"
+            }
         },
         {
             "Connector": {
-                "Fail": "FAN3_FAIL",
-                "Inst": "FAN3_INST",
+                "Fail": "fan3-fail",
+                "Inst": "fan3-installed",
                 "Name": "Fan Connector 3",
                 "Pwm": 2
             },
             "Name": "Fan 3",
             "Type": "HPEFan",
-            "Index": 2
+            "Index": 2,
+            "Presence": {
+                "PinName": "fan3-installed",
+                "Polarity": "High"
+            }
         },
         {
             "Connector": {
-                "Fail": "FAN4_FAIL",
-                "Inst": "FAN4_INST",
+                "Fail": "fan4-fail",
+                "Inst": "fan4-installed",
                 "Name": "Fan Connector 4",
                 "Pwm": 3
             },
             "Name": "Fan 4",
             "Type": "HPEFan",
-            "Index": 3
+            "Index": 3,
+            "Presence": {
+                "PinName": "fan4-installed",
+                "Polarity": "High"
+            }
         },
         {
             "Connector": {
-                "Fail": "FAN5_FAIL",
-                "Inst": "FAN5_INST",
+                "Fail": "fan5-fail",
+                "Inst": "fan5-installed",
                 "Name": "Fan Connector 5",
                 "Pwm": 4
             },
             "Name": "Fan 5",
             "Type": "HPEFan",
-            "Index": 4
+            "Index": 4,
+            "Presence": {
+                "PinName": "fan5-installed",
+                "Polarity": "High"
+            }
         },
         {
             "Connector": {
-                "Fail": "FAN6_FAIL",
-                "Inst": "FAN6_INST",
+                "Fail": "fan6-fail",
+                "Inst": "fan6-installed",
                 "Name": "Fan Connector 6",
                 "Pwm": 6
             },
             "Name": "Fan 6",
             "Type": "HPEFan",
-            "Index": 6
+            "Index": 6,
+            "Presence": {
+                "PinName": "fan6-installed",
+                "Polarity": "High"
+            }
         },
         {
             "Name": "GXP Temp",
