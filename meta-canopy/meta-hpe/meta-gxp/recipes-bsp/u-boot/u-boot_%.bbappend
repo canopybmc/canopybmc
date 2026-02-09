@@ -2,7 +2,7 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 
 SRC_URI = "git://github.com/canopybmc/u-boot.git;protocol=https;branch=${UBRANCH}"
 UBRANCH = "v2026.01-hpe-gxp"
-SRCREV = "93ffb8e06c36e740fb14877c4c79f5d34a04051e"
+SRCREV = "8ac647a4dcc046ea30eb318b0cbdb56f52356c2d"
 PV = "v2026.01+git${SRCPV}"
 
 SRC_URI += "file://gxp.cfg"
