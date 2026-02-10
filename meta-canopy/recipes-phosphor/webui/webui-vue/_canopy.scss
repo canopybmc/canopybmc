@@ -1,0 +1,197 @@
+// Canopy "Violet Future" theme for webui-vue
+// Overrides default BMC colors before Bootstrap consumes them.
+
+// ---------------------------------------------------------------------------
+// Canopy palette
+// ---------------------------------------------------------------------------
+$purple-grape:   #6C4AB6;
+$electric-lilac: #B983FF;
+$mint-cream:     #EFFFFD;
+$midnight:       #1E1E2F;
+
+// ---------------------------------------------------------------------------
+// Bootstrap theme color overrides
+// SCSS captures values at assignment time, so we must redefine
+// $theme-colors after overriding the individual color variables.
+// $light and $gray-* are already defined by BMC _colors.scss helpers.
+// ---------------------------------------------------------------------------
+$primary:   $purple-grape;
+$info:      $electric-lilac;
+$success:   #22C55E;
+$danger:    #EF4444;
+$warning:   #F59E0B;
+$secondary: #6B7280;
+$dark:      $midnight;
+
+$theme-colors: (
+  "danger":    $danger,
+  "dark":      $dark,
+  "info":      $info,
+  "light":     $light,
+  "primary":   $primary,
+  "secondary": $secondary,
+  "success":   $success,
+  "warning":   $warning,
+);
+
+// ---------------------------------------------------------------------------
+// Global button overrides
+// The main Bootstrap stylesheet re-imports bmc/_colors.scss which resets
+// $primary back to blue after our variable override.  The only reliable
+// way to get purple buttons is explicit CSS.
+// ---------------------------------------------------------------------------
+.btn-primary {
+  background-color: $purple-grape !important;
+  border-color: $purple-grape !important;
+  color: $white !important;
+
+  &:hover, &:not(:disabled):not(.disabled):active {
+    background-color: darken($purple-grape, 8%) !important;
+    border-color: darken($purple-grape, 8%) !important;
+  }
+  &:focus, &:not(:disabled):not(.disabled):active:focus {
+    box-shadow: 0 0 0 0.2rem rgba($purple-grape, 0.5) !important;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// WebUI-specific variables
+// ---------------------------------------------------------------------------
+$navbar-color:  $purple-grape;
+$loading-color: $purple-grape;
+
+// ---------------------------------------------------------------------------
+// Loading bar — animated purple gradient (like IBM's but in Canopy colors)
+// ---------------------------------------------------------------------------
+$loading-color-0:   #4A2D8A;
+$loading-color-50:  $purple-grape;
+$loading-color-100: $electric-lilac;
+
+.progress-bar {
+  background: linear-gradient(
+    90deg,
+    $loading-color-0,
+    $loading-color-50,
+    $loading-color-100
+  );
+  background-size: 200% 200%;
+  animation: canopy-gradient 3s $standard-easing--productive infinite;
+}
+
+@keyframes canopy-gradient {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+// ---------------------------------------------------------------------------
+// Login splash — full-bleed purple gradient
+// ---------------------------------------------------------------------------
+.login-container {
+  background: linear-gradient(135deg, $purple-grape 0%, $electric-lilac 100%) !important;
+  max-width: none !important;
+}
+
+.login-main {
+  background: transparent !important;
+  color: $white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  h1 {
+    color: $white;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  // Center the brand logo
+  .login-brand {
+    text-align: center;
+
+    svg {
+      max-width: 220px;
+      width: 100%;
+      height: auto;
+    }
+  }
+}
+
+// Form styling on the purple background
+.login-form {
+  // Form background card — semi-transparent white panel
+  &.form-background {
+    background: rgba($white, 0.12);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba($white, 0.2);
+    border-radius: 8px;
+    padding: 2rem;
+  }
+
+  // Labels
+  label,
+  .form-label {
+    color: rgba($white, 0.9) !important;
+  }
+
+  // Input fields — white background with dark text
+  .form-control,
+  .form-select {
+    background-color: rgba($white, 0.95);
+    border: 1px solid rgba($white, 0.3);
+    color: $midnight;
+
+    &:focus {
+      background-color: $white;
+      border-color: $electric-lilac;
+      box-shadow: 0 0 0 0.2rem rgba($electric-lilac, 0.4);
+    }
+
+    &::placeholder {
+      color: $gray-500;
+    }
+  }
+
+  // Submit button — white on purple
+  .btn-primary {
+    background-color: $white !important;
+    border-color: $white !important;
+    color: $purple-grape !important;
+    font-weight: 600;
+    width: 100%;
+    padding: 0.6rem;
+
+    &:hover {
+      background-color: $mint-cream !important;
+      border-color: $mint-cream !important;
+      color: $purple-grape !important;
+    }
+
+    &:focus {
+      box-shadow: 0 0 0 0.2rem rgba($white, 0.5) !important;
+    }
+
+    &:active {
+      background-color: darken($white, 5%) !important;
+    }
+  }
+
+  // Error alert styling for purple background
+  .login-error {
+    border-radius: 8px;
+  }
+
+  // Validation feedback
+  .invalid-feedback {
+    color: #FCA5A5;
+  }
+}
+
+// "Built on OpenBMC" aside — bottom-right, white
+.login-aside {
+  svg {
+    path, g, rect, polygon {
+      fill: rgba($white, 0.7) !important;
+    }
+  }
+}

@@ -1,0 +1,5 @@
+NODE_ENV=production
+VUE_APP_ENV_NAME=canopy
+VUE_APP_COMPANY_NAME=Canopy
+VUE_APP_GUI_NAME="Open. Stable. Ready."
+CUSTOM_STYLES=true
