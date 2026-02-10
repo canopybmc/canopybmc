@@ -1,0 +1,25 @@
+---
+name: hpe-proliant-g11 Build
+
+on:
+  push:
+    branches:
+      - hpe/main
+  pull_request:
+    branches:
+      - hpe/main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: [self-hosted, Hydra, Large]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build
+        uses: ./.github/actions/build
+        with:
+          board: hpe-proliant-g11
