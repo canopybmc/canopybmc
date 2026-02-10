@@ -1,0 +1,39 @@
+---
+name: 'Build OpenBMC'
+description: 'Build OpenBMC for a given board'
+inputs:
+  board:
+    description: 'The target machine name (e.g., hpe-proliant-g11)'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Configure bitbake shared folders
+      shell: bash
+      run: |
+        mkdir -p /home/runner/data/bitbake.downloads
+        mkdir -p /home/runner/data/bitbake.sstate
+
+    - name: Init git submodules
+      shell: bash
+      run: git submodule update --init --recursive --checkout
+
+    - name: Build OpenBMC
+      shell: bash
+      env:
+        BB_ENV_PASSTHROUGH_ADDITIONS: "DL_DIR SSTATE_DIR"
+        DL_DIR: "/home/runner/data/bitbake.downloads"
+        SSTATE_DIR: "/home/runner/data/bitbake.sstate"
+      run: . setup ${{ inputs.board }} && bitbake obmc-phosphor-image
+
+    - name: Upload firmware image
+      uses: actions/upload-artifact@v4
+      with:
+        name: obmc-phosphor-image-${{ inputs.board }}.static.mtd
+        path: build/${{ inputs.board }}/tmp/deploy/images/${{ inputs.board }}/obmc-phosphor-image-${{ inputs.board }}.static.mtd
+
+    - name: Upload firmware image tar
+      uses: actions/upload-artifact@v4
+      with:
+        name: obmc-phosphor-image-${{ inputs.board }}.static.mtd.tar
+        path: build/${{ inputs.board }}/tmp/deploy/images/${{ inputs.board }}/obmc-phosphor-image-${{ inputs.board }}.static.mtd.tar
