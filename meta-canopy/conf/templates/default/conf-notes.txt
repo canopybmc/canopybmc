@@ -1,0 +1,15 @@
+Common targets are:
+
+     obmc-phosphor-image: Includes OpenBMC Phosphor userspace and Web UI
+
+     core-image-minimal: A small image just capable of allowing a device to boot
+
+To run in QEMU after building:
+
+     runqemu canopy-qemu nographic slirp
+
+To access the WebUI from the host browser, add port forwarding:
+
+     runqemu canopy-qemu nographic slirp "hostfwd=tcp::8443-:443"
+
+Then open https://localhost:8443 in your browser.
