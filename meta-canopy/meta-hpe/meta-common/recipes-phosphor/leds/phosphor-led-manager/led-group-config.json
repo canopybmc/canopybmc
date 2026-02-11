@@ -1,0 +1,14 @@
+{
+    "leds": [
+        {
+            "group": "enclosure_identify",
+            "members": [
+                {
+                    "Name": "identify_platform",
+                    "Action": "On",
+                    "Priority": "On"
+                }
+            ]
+        }
+    ]
+}
