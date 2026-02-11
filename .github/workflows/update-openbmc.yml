@@ -1,0 +1,33 @@
+name: Update openbmc submodule
+
+on:
+  schedule:
+    - cron: '0 8 * * 1' # Every Monday at 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-submodule:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: hpe/main
+          submodules: true
+
+      - name: Update openbmc submodule to latest master
+        run: git submodule update --remote openbmc
+
+      - uses: peter-evans/create-pull-request@v8
+        with:
+          branch: auto/update-openbmc
+          base: hpe/main
+          title: "Update openbmc submodule"
+          commit-message: "Update openbmc submodule to latest master"
+          body: |
+            Automated weekly update of the `openbmc` submodule
+            to the latest upstream `master` commit.
+          delete-branch: true
