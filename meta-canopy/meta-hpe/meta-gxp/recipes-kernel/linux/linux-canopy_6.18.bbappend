@@ -1,7 +1,7 @@
 FILESEXTRAPATHS:prepend := "${THISDIR}/${BPN}:"
 
 KBRANCH = "v6.18-hpe-gxp"
-SRCREV = "9c48ad66ee2f0aaf99b948c5e3c0495c22130e3e"
+SRCREV = "3f52de66badeb20909463d521abbc742df468660"
 
 KBUILD_DEFCONFIG = "gxp_defconfig"
 KERNEL_DEVICETREE = "hpe/hpe-gxp.dtb"
