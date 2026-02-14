@@ -7,6 +7,9 @@ ERROR_QA:remove = "patch-status"
 # Enable devicetree VPD parser for platform identification
 PACKAGECONFIG:append = " dts-vpd"
 
+# Baseboard (PCA) VPD support for devicetree-vpd-parser
+SRC_URI += "file://0001-devicetree-vpd-parser-add-baseboard-PCA-VPD-support.patch"
+
 # HPE ProLiant Gen11 baseboard configurations
 SRC_URI += " \
     file://blocklist.json \

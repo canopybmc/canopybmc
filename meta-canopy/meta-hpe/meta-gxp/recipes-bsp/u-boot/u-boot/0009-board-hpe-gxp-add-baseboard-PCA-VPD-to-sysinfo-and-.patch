@@ -1,0 +1,141 @@
+From 32695be70ae44fc4f9e953f4bd312ad5d86468a6 Mon Sep 17 00:00:00 2001
+From: Christian Walter <christian.walter@9elements.com>
+Date: Thu, 12 Feb 2026 21:34:02 +0100
+Subject: [PATCH] board: hpe: gxp: add baseboard (PCA) VPD to sysinfo and
+ device tree
+
+Expose baseboard-level Vital Product Data (PCA serial number and PCA
+part number) through the GXP sysinfo driver and populate them into a
+dedicated device tree subnode during ft_board_setup().
+
+The EEPROM driver already defines nvmem cells for PCA data at offsets
+0x90 (serial) and 0xa0 (part number), but the sysinfo driver was not
+reading them and ft_board_setup() was not writing them to the DTB.
+
+Changes:
+- Wire PCA nvmem cells into the sysinfo DT node
+- Add SYSID_SM_BASEBOARD_SERIAL and SYSID_SM_BASEBOARD_PRODUCT cases
+  to the sysinfo driver for PCA serial and PCA part number
+- Fix system part number to use SYSID_SM_SYSTEM_PRODUCT instead of
+  SYSID_SM_BASEBOARD_PRODUCT (which is the SMBIOS Type 2 baseboard
+  product, not the Type 1 system product)
+- Create a /baseboard subnode in the DTB with compatible
+  "hpe,gxp-baseboard" containing the PCA serial-number and
+  part-number properties, keeping system-level VPD at the root node
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ arch/arm/dts/hpe-gxp.dtsi |  6 ++++--
+ board/hpe/gxp/gxp_board.c | 19 ++++++++++++++++++-
+ drivers/sysinfo/gxp.c     | 22 +++++++++++++++++++---
+ 3 files changed, 41 insertions(+), 6 deletions(-)
+
+diff --git a/arch/arm/dts/hpe-gxp.dtsi b/arch/arm/dts/hpe-gxp.dtsi
+index a2855a75237a..9e13e941ff08 100644
+--- a/arch/arm/dts/hpe-gxp.dtsi
++++ b/arch/arm/dts/hpe-gxp.dtsi
+@@ -12,8 +12,10 @@
+
+ 	sysinfo {
+ 		compatible = "hpe,gxp-sysinfo";
+-		nvmem-cells = <&serial_number>, <&part_number>;
+-		nvmem-cell-names = "serial-number", "part-number";
++		nvmem-cells = <&serial_number>, <&part_number>,
++			      <&pca_serial_number>, <&pca_part_number>;
++		nvmem-cell-names = "serial-number", "part-number",
++				   "pca-serial-number", "pca-part-number";
+ 		bootph-all;
+ 	};
+
+diff --git a/board/hpe/gxp/gxp_board.c b/board/hpe/gxp/gxp_board.c
+index 4f80e47ba747..b085cad22df8 100644
+--- a/board/hpe/gxp/gxp_board.c
++++ b/board/hpe/gxp/gxp_board.c
+@@ -106,10 +106,27 @@ int ft_board_setup(void *blob, struct bd_info *bd)
+ 	if (!ret)
+ 		fdt_setprop_string(blob, 0, "serial-number", str);
+
+-	ret = sysinfo_get_str(dev, SYSID_SM_BASEBOARD_PRODUCT, sizeof(str), str);
++	ret = sysinfo_get_str(dev, SYSID_SM_SYSTEM_PRODUCT, sizeof(str), str);
+ 	if (!ret)
+ 		fdt_setprop_string(blob, 0, "part-number", str);
+
++	/* Populate baseboard (PCA) properties in a subnode */
++	int bb_off = fdt_add_subnode(blob, 0, "baseboard");
++	if (bb_off >= 0) {
++		fdt_setprop_string(blob, bb_off, "compatible",
++				   "hpe,gxp-baseboard");
++
++		ret = sysinfo_get_str(dev, SYSID_SM_BASEBOARD_SERIAL,
++				      sizeof(str), str);
++		if (!ret)
++			fdt_setprop_string(blob, bb_off, "serial-number", str);
++
++		ret = sysinfo_get_str(dev, SYSID_SM_BASEBOARD_PRODUCT,
++				      sizeof(str), str);
++		if (!ret)
++			fdt_setprop_string(blob, bb_off, "part-number", str);
++	}
++
+ skip_sysinfo:
+ #if CONFIG_IS_ENABLED(DISPLAY_BOARDINFO)
+ 	ft_board_show_product(blob);
+diff --git a/drivers/sysinfo/gxp.c b/drivers/sysinfo/gxp.c
+index a1f33be11df7..1d242239eb4f 100644
+--- a/drivers/sysinfo/gxp.c
++++ b/drivers/sysinfo/gxp.c
+@@ -15,12 +15,16 @@
+
+ /**
+  * struct gxp_sysinfo_priv - GXP sysinfo private data
+- * @serial_cell: NVMEM cell for serial number
+- * @part_cell: NVMEM cell for part number
++ * @serial_cell: NVMEM cell for system serial number
++ * @part_cell: NVMEM cell for system part number
++ * @pca_serial_cell: NVMEM cell for baseboard (PCA) serial number
++ * @pca_part_cell: NVMEM cell for baseboard (PCA) part number
+  */
+ struct gxp_sysinfo_priv {
+ 	struct nvmem_cell serial_cell;
+ 	struct nvmem_cell part_cell;
++	struct nvmem_cell pca_serial_cell;
++	struct nvmem_cell pca_part_cell;
+ };
+
+ static int gxp_sysinfo_detect(struct udevice *dev)
+@@ -47,11 +51,21 @@ static int gxp_sysinfo_get_str(struct udevice *dev, int id, size_t size,
+ 			return -ENODEV;
+ 		cell = &priv->serial_cell;
+ 		break;
+-	case SYSID_SM_BASEBOARD_PRODUCT:
++	case SYSID_SM_SYSTEM_PRODUCT:
+ 		if (!priv->part_cell.nvmem)
+ 			return -ENODEV;
+ 		cell = &priv->part_cell;
+ 		break;
++	case SYSID_SM_BASEBOARD_SERIAL:
++		if (!priv->pca_serial_cell.nvmem)
++			return -ENODEV;
++		cell = &priv->pca_serial_cell;
++		break;
++	case SYSID_SM_BASEBOARD_PRODUCT:
++		if (!priv->pca_part_cell.nvmem)
++			return -ENODEV;
++		cell = &priv->pca_part_cell;
++		break;
+ 	default:
+ 		return -EINVAL;
+ 	}
+@@ -74,6 +88,8 @@ static int gxp_sysinfo_probe(struct udevice *dev)
+
+ 	nvmem_cell_get_by_name(dev, "serial-number", &priv->serial_cell);
+ 	nvmem_cell_get_by_name(dev, "part-number", &priv->part_cell);
++	nvmem_cell_get_by_name(dev, "pca-serial-number", &priv->pca_serial_cell);
++	nvmem_cell_get_by_name(dev, "pca-part-number", &priv->pca_part_cell);
+
+ 	return 0;
+ }
+--
+2.48.1
+
