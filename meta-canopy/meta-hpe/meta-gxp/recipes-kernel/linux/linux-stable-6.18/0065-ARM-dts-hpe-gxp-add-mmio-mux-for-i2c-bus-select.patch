@@ -1,0 +1,58 @@
+From: Christian Walter <christian.walter@9elements.com>
+Date: Mon, 17 Feb 2026 00:00:00 +0000
+Subject: [PATCH] ARM: dts: hpe-gxp: add mmio-mux for i2c bus mux select
+ registers
+
+The GXP SoC has i2c bus mux select registers at xreg offsets 0x84-0x8b.
+These registers are accessed via the xreg syscon regmap, shared with
+the xreg GPIO and interrupt controller.
+
+Add an mmio-mux child node inside the xreg node so that per-platform
+device tree overlays can reference mux-controls = <&i2c_mux_ctrl N>
+from generic i2c-mux nodes (driven by i2c-mux-gpmux).
+
+This replaces the previous approach of using i2c-mux-reg, which
+required splitting xreg's reg property to avoid -EBUSY conflicts.
+The mmio-mux driver shares the syscon regmap without exclusive MMIO
+claims, keeping xreg's register range contiguous and preserving
+syscon max_register for all xreg offsets.
+
+Register layout (32-bit regmap stride, little-endian):
+  offset 0x84 bits[7:0]   = i2c0 mux select
+  offset 0x84 bits[15:8]  = i2c1 mux select
+  offset 0x84 bits[23:16] = i2c2 mux select (unused)
+  offset 0x84 bits[31:24] = i2c3 mux select
+  offset 0x88 bits[7:0]   = i2c4 mux select
+  offset 0x88 bits[15:8]  = i2c5 mux select (unused)
+  offset 0x88 bits[23:16] = i2c6 mux select
+  offset 0x88 bits[31:24] = i2c7 mux select
+
+Upstream-Status: Pending
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -175,5 +175,19 @@
+ 				"psu5-dc-ok", "psu6-dc-ok",
+ 				"psu7-dc-ok", "psu8-dc-ok";
++
++			i2c_mux_ctrl: mux-controller {
++				compatible = "mmio-mux";
++				#mux-control-cells = <1>;
++				mux-reg-masks =
++					<0x84 0x000000ff>,  /* 0: i2c0 mux select */
++					<0x84 0x0000ff00>,  /* 1: i2c1 mux select */
++					<0x84 0x00ff0000>,  /* 2: i2c2 (unused) */
++					<0x84 0xff000000>,  /* 3: i2c3 mux select */
++					<0x88 0x000000ff>,  /* 4: i2c4 mux select */
++					<0x88 0x0000ff00>,  /* 5: i2c5 (unused) */
++					<0x88 0x00ff0000>,  /* 6: i2c6 mux select */
++					<0x88 0xff000000>;  /* 7: i2c7 mux select */
++			};
+ 		};
+
+ 		fn2: fn2@80200000 {

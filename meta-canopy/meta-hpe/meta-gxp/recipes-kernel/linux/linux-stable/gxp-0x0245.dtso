@@ -14,9 +14,9 @@
 		"", "", "", "", "", "", "", "";
 	};
 	i2cmux@0 {
-		compatible = "i2c-mux-reg";
+		compatible = "i2c-mux";
 		i2c-parent = <&i2c0>;
-		reg = <0xd1000084 1>;
+		mux-controls = <&i2c_mux_ctrl 0>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 		i2c0@5 {
@@ -137,9 +137,9 @@
 		};
 	};
 	i2cmux@1 {
-		compatible = "i2c-mux-reg";
+		compatible = "i2c-mux";
 		i2c-parent = <&i2c1>;
-		reg = <0xd1000085 1>;
+		mux-controls = <&i2c_mux_ctrl 1>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 		i2c1@1 {
@@ -174,9 +174,9 @@
 		};
 	};
 	i2cmux3: i2cmux@3 {
-		compatible = "i2c-mux-reg";
+		compatible = "i2c-mux";
 		i2c-parent = <&i2c3>;
-		reg = <0xd1000087 1>;
+		mux-controls = <&i2c_mux_ctrl 3>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 		/* 5 7 9 b */
@@ -1370,9 +1370,9 @@
 		};
 	};
 	i2cmux4: i2cmux@4 {
-		compatible = "i2c-mux-reg";
+		compatible = "i2c-mux";
 		i2c-parent = <&i2c4>;
-		reg = <0xd1000088 1>;
+		mux-controls = <&i2c_mux_ctrl 4>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 		i2c4_5: i2c4@5 {
@@ -1593,9 +1593,9 @@
 		};
 	};
 	i2cmux6: i2cmux@6 {
-		compatible = "i2c-mux-reg";
+		compatible = "i2c-mux";
 		i2c-parent = <&i2c6>;
-		reg = <0xd100008a 1>;
+		mux-controls = <&i2c_mux_ctrl 6>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 		i2c6_1: i2c6@1 {
@@ -1817,9 +1817,9 @@
 	};
 	/* add PSU mux */
 	i2cmux@7 {
-		compatible = "i2c-mux-reg";
+		compatible = "i2c-mux";
 		i2c-parent = <&i2c7>;
-		reg = <0xd100008b 1>;
+		mux-controls = <&i2c_mux_ctrl 7>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 		i2c7@1 {

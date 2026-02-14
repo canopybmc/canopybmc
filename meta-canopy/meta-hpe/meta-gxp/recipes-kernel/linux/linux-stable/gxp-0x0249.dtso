@@ -6,9 +6,9 @@
 };
 &{/ahb@80000000} {
 	i2cmux3: i2cmux@3 {
-		compatible = "i2c-mux-reg";
+		compatible = "i2c-mux";
 		i2c-parent = <&i2c3>;
-		reg = <0xd1000087 1>;
+		mux-controls = <&i2c_mux_ctrl 3>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 		/* 5 7 9 b */
@@ -447,9 +447,9 @@
 	};
 	/* add PSU mux */
 	i2cmux@7 {
-		compatible = "i2c-mux-reg";
+		compatible = "i2c-mux";
 		i2c-parent = <&i2c7>;
-		reg = <0xd100008b 1>;
+		mux-controls = <&i2c_mux_ctrl 7>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 		i2c7@1 {
