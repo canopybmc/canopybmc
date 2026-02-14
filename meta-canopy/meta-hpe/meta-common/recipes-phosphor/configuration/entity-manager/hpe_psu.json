@@ -2,6 +2,16 @@
     {
         "Exposes": [
             {
+                "Name": "GenericPowerPort",
+                "PortType": "powering",
+                "Type": "Port"
+            },
+            {
+                "Name": "GenericContainPort",
+                "PortType": "contained_by",
+                "Type": "Port"
+            },
+            {
                 "Address": "$ADDRESS",
                 "Bus": "$BUS",
                 "CurrScaleFactor": 64,
@@ -13,12 +23,8 @@
                     "power2",
                     "curr1",
                     "curr2",
-                    "iout1",
-                    "vout1",
-                    "pout1",
-                    "vin1",
-                    "in1",
-                    "in2"
+                    "in0",
+                    "in1"
                 ],
                 "Name": "PSU_$ADDRESS - 87",
                 "PollRate": 10,
@@ -33,63 +39,63 @@
                 "Thresholds": [
                     {
                         "Direction": "greater than",
-                        "Label": "vin1",
+                        "Label": "in0",
                         "Name": "upper critical",
                         "Severity": 1,
                         "Value": 240
                     },
                     {
                         "Direction": "less than",
-                        "Label": "vin1",
+                        "Label": "in0",
                         "Name": "lower critical",
                         "Severity": 1,
                         "Value": 90
                     },
                     {
                         "Direction": "greater than",
-                        "Label": "iout1",
+                        "Label": "curr2",
                         "Name": "upper critical",
                         "Severity": 1,
                         "Value": 66.7
                     },
                     {
                         "Direction": "greater than",
-                        "Label": "iout1",
+                        "Label": "curr2",
                         "Name": "upper non critical",
                         "Severity": 0,
                         "Value": 60
                     },
                     {
                         "Direction": "greater than",
-                        "Label": "pout1",
+                        "Label": "power2",
                         "Name": "upper critical",
                         "Severity": 1,
                         "Value": 800
                     },
                     {
                         "Direction": "greater than",
-                        "Label": "pout1",
+                        "Label": "power2",
                         "Name": "upper non critical",
                         "Severity": 0,
                         "Value": 720
                     },
                     {
                         "Direction": "greater than",
-                        "Label": "vout1",
+                        "Label": "in1",
                         "Name": "upper critical",
                         "Severity": 1,
                         "Value": 14
                     },
                     {
                         "Direction": "less than",
-                        "Label": "vout1",
+                        "Label": "in1",
                         "Name": "lower non critical",
                         "Severity": 0,
                         "Value": 11.5
                     },
                     {
                         "Direction": "less than",
-                        "Label": "vout1",
+                        "Label": "in1",
                         "Name": "lower critical",
                         "Severity": 1,
                         "Value": 11
@@ -130,19 +136,19 @@
                         "Value": 20300
                     }
                 ],
-                "Type": "PowerSupply",
+                "Type": "gxp_psu",
                 "curr1_Name": "IINPUT_PSU$ADDRESS - 87",
                 "curr2_Name": "IOUTPUT_PSU$ADDRESS - 87",
                 "fan1_Name": "FAN1_PSU$ADDRESS - 87",
-                "in1_Name": "VINPUT_PSU$ADDRESS - 87",
-                "in2_Name": "VOUTPUT_PSU$ADDRESS - 87",
+                "in0_Name": "VINPUT_PSU$ADDRESS - 87",
+                "in1_Name": "VOUTPUT_PSU$ADDRESS - 87",
                 "power1_Name": "PINPUT_PSU$ADDRESS - 87",
                 "power2_Name": "POUTPUT_PSU$ADDRESS - 87",
                 "temp1_Name": "TEMP1_PSU$ADDRESS - 87"
             }
         ],
         "Name": "HPE POWER SUPPLY $ADDRESS - 87",
-        "Probe": "xyz.openbmc_project.FruDevice({'PRODUCT_PRODUCT_NAME': 'HPE POWER SUPPLY          '})",
+        "Probe": "xyz.openbmc_project.FruDevice({'PRODUCT_PRODUCT_NAME': 'HPE POWER SUPPLY*'})",
         "Type": "PowerSupply",
         "xyz.openbmc_project.Inventory.Decorator.Asset": {
             "Manufacturer": "$PRODUCT_MANUFACTURER",

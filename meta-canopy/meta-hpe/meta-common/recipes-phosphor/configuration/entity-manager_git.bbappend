@@ -25,6 +25,7 @@ SRC_URI += " \
     file://dl385g11_baseboard.json \
     file://dl560g11_baseboard.json \
     file://rl300g11_baseboard.json \
+    file://hpe_psu.json \
 "
 
 do_install:append() {
@@ -41,4 +42,5 @@ do_install:append() {
     install -D ${UNPACKDIR}/dl385g11_baseboard.json ${D}${datadir}/${BPN}/configurations/hpe/dl385g11_baseboard.json
     install -D ${UNPACKDIR}/dl560g11_baseboard.json ${D}${datadir}/${BPN}/configurations/hpe/dl560g11_baseboard.json
     install -D ${UNPACKDIR}/rl300g11_baseboard.json ${D}${datadir}/${BPN}/configurations/hpe/rl300g11_baseboard.json
+    install -D ${UNPACKDIR}/hpe_psu.json ${D}${datadir}/${BPN}/configurations/hpe/hpe_psu.json
 }
