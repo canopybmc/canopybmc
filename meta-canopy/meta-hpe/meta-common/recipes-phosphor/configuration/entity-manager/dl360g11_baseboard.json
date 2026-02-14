@@ -338,6 +338,16 @@
                 }
             ],
             "Type": "XeonCPU"
+        },
+        {
+            "Name": "GenericPowerPort",
+            "PortType": "powered_by",
+            "Type": "Port"
+        },
+        {
+            "Name": "GenericContainPort",
+            "PortType": "containing",
+            "Type": "Port"
         }
     ],
     "Name": "chassis",
