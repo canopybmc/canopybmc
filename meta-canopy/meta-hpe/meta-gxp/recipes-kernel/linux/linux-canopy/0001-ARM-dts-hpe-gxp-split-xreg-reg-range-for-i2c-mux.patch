@@ -1,0 +1,37 @@
+From: Christian Walter <christian.walter@9elements.com>
+Date: Thu, 13 Feb 2026 00:00:00 +0000
+Subject: [PATCH] ARM: dts: hpe-gxp: split xreg reg range for i2c mux
+ registers
+
+The xreg node claims a single contiguous region at 0xd1000000 size
+0x11c, which covers the i2c mux select registers at offsets 0x84-0x93.
+This prevents i2c-mux-reg from requesting those addresses, causing all
+four i2c mux instances to fail probe with -EBUSY.
+
+Split the xreg reg property into two ranges with a gap at 0x84-0x93
+so that i2c-mux-reg can claim the mux select registers:
+  0xd1000000-0xd1000083 (0x84 bytes)
+  0xd1000094-0xd10000ff (0x6c bytes)
+
+Upstream-Status: Pending
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index 1234567..abcdefg 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -105,7 +105,8 @@
+
+ 		xreg: xreg@d1000000 {
+ 			compatible = "hpe,gxp-xreg", "simple-mfd", "syscon";
+-			reg = <0xd1000000 0x11c>;
++			/* gap at 0x84-0x93 reserved for i2c mux select registers */
++			reg = <0xd1000000 0x84>, <0xd1000094 0x6c>;
+ 			interrupts = <26>;
+ 			interrupt-parent = <&vic0>;
+ 			interrupt-controller;
+--
+2.43.0
