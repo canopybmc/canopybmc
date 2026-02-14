@@ -13,6 +13,7 @@ SRC_URI += "file://0005-board-hpe-gxp-dynamic-dtb-configuration-based-on-ser.pat
 SRC_URI += "file://0006-board-hpe-gxp-add-boardinfo-support.patch"
 SRC_URI += "file://0007-board-hpe-gxp-display-product-name.patch"
 SRC_URI += "file://0008-board-hpe-gxp-configure-PCIe-device-ID-in-board_init.patch"
+SRC_URI += "file://0009-board-hpe-gxp-add-baseboard-PCA-VPD-to-sysinfo-and-.patch"
 ERROR_QA:remove = "patch-status"
 
 # GXP bootloader requires u-boot to be exactly 384 KB for signature verification
