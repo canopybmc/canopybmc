@@ -75,3 +75,4 @@ SRC_URI += "file://0062-hwmon-gxp-fan-ctrl-restore-fan-speed-on-kernel-panic.pat
 SRC_URI += "file://0063-peci-core-serialize-device-creation-with-per-control.patch"
 SRC_URI += "file://0064-regulator-gxp-cpld-debounce-PGOOD-IRQ-before-notifyi.patch"
 SRC_URI += "file://0065-ARM-dts-hpe-gxp-add-mmio-mux-for-i2c-bus-select.patch"
+SRC_URI += "file://0066-hwmon-add-HPE-GXP-PSU-driver.patch"
