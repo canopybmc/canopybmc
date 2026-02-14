@@ -9,6 +9,7 @@ KERNEL_DTBVENDORED = "1"
 
 SRC_URI:append = " file://gxp.cfg"
 SRC_URI += "file://0001-ARM-dts-hpe-gxp-split-xreg-reg-range-for-i2c-mux.patch"
+SRC_URI += "file://0002-hwmon-add-HPE-GXP-PSU-driver.patch"
 
 require linux-gxp-flash-layout.inc
 require linux-gxp-multi-dtb.inc
