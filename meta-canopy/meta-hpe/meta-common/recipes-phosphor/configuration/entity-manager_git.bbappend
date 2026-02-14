@@ -7,6 +7,9 @@ SRCREV = "330c0d82ef0a3122eb1d83f3af7379aeedfb49bb"
 # Enable devicetree VPD parser for platform identification
 PACKAGECONFIG:append = " dts-vpd"
 
+# Baseboard (PCA) VPD support for devicetree-vpd-parser
+SRC_URI += "file://0001-devicetree-vpd-parser-add-baseboard-PCA-VPD-support.patch"
+
 # HPE ProLiant Gen11 baseboard configurations
 SRC_URI += " \
     file://blocklist.json \

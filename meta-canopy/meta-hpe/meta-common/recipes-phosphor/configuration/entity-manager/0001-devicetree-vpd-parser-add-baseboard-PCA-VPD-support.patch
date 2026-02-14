@@ -1,0 +1,167 @@
+From 9d1b3e4fc8655791bd0b3b02a18c7465c806a561 Mon Sep 17 00:00:00 2001
+From: Christian Walter <christian.walter@9elements.com>
+Date: Fri, 13 Feb 2026 11:33:03 +0100
+Upstream-Status: Pending
+Subject: [PATCH] devicetree-vpd-parser: add baseboard (PCA) VPD support
+
+Expose baseboard-level Vital Product Data (PCA serial number and PCA
+part number) on D-Bus at /xyz/openbmc_project/MachineContext/Baseboard.
+
+U-Boot's ft_board_setup() populates a /baseboard subnode in the Linux
+device tree with PCA serial-number and part-number properties. This
+change makes the devicetree-vpd-parser read those properties and
+expose them via the Inventory.Decorator.Asset D-Bus interface.
+
+The MachineContext class is updated to accept a configurable device
+tree base path, allowing multiple instances: one for system-level VPD
+(root node) and one for baseboard-level PCA VPD (/baseboard subnode).
+
+The baseboard object is only created when the DT node exists, so this
+is backward-compatible with systems that lack PCA data.
+
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ .../devicetree_vpd_parser.cpp                 | 25 +++++++++++++++----
+ src/devicetree_vpd_parser/machine_context.cpp | 18 ++++++-------
+ src/devicetree_vpd_parser/machine_context.hpp | 12 ++++++---
+ 3 files changed, 36 insertions(+), 19 deletions(-)
+
+diff --git a/src/devicetree_vpd_parser/devicetree_vpd_parser.cpp b/src/devicetree_vpd_parser/devicetree_vpd_parser.cpp
+index 87bd2d7..1cf0d0c 100644
+--- a/src/devicetree_vpd_parser/devicetree_vpd_parser.cpp
++++ b/src/devicetree_vpd_parser/devicetree_vpd_parser.cpp
+@@ -1,11 +1,16 @@
+ #include "machine_context.hpp"
+ 
+ #include <memory>
++#include <string>
+ 
+ int main()
+ {
+     static constexpr auto reqDBusPath = "/xyz/openbmc_project/MachineContext";
+     static constexpr auto reqDBusName = "xyz.openbmc_project.MachineContext";
++    static constexpr auto bbDBusPath =
++        "/xyz/openbmc_project/MachineContext/Baseboard";
++    static constexpr auto systemDtPath = "/proc/device-tree/";
++    static constexpr auto baseboardDtPath = "/proc/device-tree/baseboard/";
+ 
+     /*Note: OpenBMC convention typically has service name = bus name,
+     where the bus name is representative of the underlying hardware.
+@@ -25,11 +30,21 @@ int main()
+     sdbusplus::async::context ctx;
+     sdbusplus::server::manager_t manager{ctx, reqDBusPath};
+ 
+-    std::unique_ptr<MachineContext> mc = nullptr;
+-    if (MachineContext::keyNodeExists())
++    std::unique_ptr<MachineContext> system = nullptr;
++    if (MachineContext::nodeExists(std::string(systemDtPath) + "model"))
+     {
+-        mc = std::make_unique<MachineContext>(ctx, reqDBusPath);
+-        mc->populateFromDeviceTree();
++        system = std::make_unique<MachineContext>(ctx, reqDBusPath,
++                                                  systemDtPath);
++        system->populateFromDeviceTree();
++    }
++
++    std::unique_ptr<MachineContext> baseboard = nullptr;
++    if (MachineContext::nodeExists(
++            std::string(baseboardDtPath) + "serial-number"))
++    {
++        baseboard = std::make_unique<MachineContext>(ctx, bbDBusPath,
++                                                     baseboardDtPath);
++        baseboard->populateFromDeviceTree();
+     }
+ 
+     // NOLINTNEXTLINE(readability-static-accessed-through-instance)
+@@ -41,4 +56,4 @@ int main()
+     ctx.run();
+ 
+     return 0;
+-};
++}
+diff --git a/src/devicetree_vpd_parser/machine_context.cpp b/src/devicetree_vpd_parser/machine_context.cpp
+index 34358eb..660258b 100644
+--- a/src/devicetree_vpd_parser/machine_context.cpp
++++ b/src/devicetree_vpd_parser/machine_context.cpp
+@@ -9,38 +9,36 @@
+ void MachineContext::populateFromDeviceTree()
+ {
+     std::string nodeVal;
+-    std::ifstream vpdStream(nodeBasePath + std::string("model"));
++    std::ifstream vpdStream(dtBasePath + "model");
+     if (vpdStream && std::getline(vpdStream, nodeVal))
+     {
+         MachineContext::Asset::model(nodeVal);
+         vpdStream.close();
+     }
+ 
+-    vpdStream.open(nodeBasePath + std::string("serial-number"));
++    vpdStream.open(dtBasePath + "serial-number");
+     if (vpdStream && std::getline(vpdStream, nodeVal))
+     {
+         MachineContext::Asset::serial_number(nodeVal);
+         vpdStream.close();
+     }
+ 
+-    vpdStream.open(nodeBasePath + std::string("part-number"));
++    vpdStream.open(dtBasePath + "part-number");
+     if (vpdStream && std::getline(vpdStream, nodeVal))
+     {
+         MachineContext::Asset::part_number(nodeVal);
+         vpdStream.close();
+     }
+ 
+-    vpdStream.open(nodeBasePath + std::string("manufacturer"));
++    vpdStream.open(dtBasePath + "manufacturer");
+     if (vpdStream && std::getline(vpdStream, nodeVal))
+     {
+         MachineContext::Asset::manufacturer(nodeVal);
+         vpdStream.close();
+     }
+-};
++}
+ 
+-bool MachineContext::keyNodeExists()
++bool MachineContext::nodeExists(const std::string& path)
+ {
+-    std::filesystem::path nodePath{nodeBasePath + std::string("model")};
+-
+-    return std::filesystem::exists(nodePath);
+-};
++    return std::filesystem::exists(std::filesystem::path{path});
++}
+diff --git a/src/devicetree_vpd_parser/machine_context.hpp b/src/devicetree_vpd_parser/machine_context.hpp
+index 3945b58..cedf22d 100644
+--- a/src/devicetree_vpd_parser/machine_context.hpp
++++ b/src/devicetree_vpd_parser/machine_context.hpp
+@@ -6,19 +6,23 @@
+ #include <sdbusplus/async.hpp>
+ #include <xyz/openbmc_project/Inventory/Decorator/Asset/aserver.hpp>
+ 
++#include <string>
++
+ class MachineContext :
+     public sdbusplus::aserver::xyz::openbmc_project::inventory::decorator::
+         Asset<MachineContext>
+ {
+   public:
+-    explicit MachineContext(sdbusplus::async::context& ctx, auto path) :
++    explicit MachineContext(sdbusplus::async::context& ctx, auto path,
++                           std::string dtBasePath) :
+         sdbusplus::aserver::xyz::openbmc_project::inventory::decorator::Asset<
+-            MachineContext>(ctx, path) {};
++            MachineContext>(ctx, path),
++        dtBasePath(std::move(dtBasePath)) {};
+ 
+     void populateFromDeviceTree();
+ 
+-    static bool keyNodeExists();
++    static bool nodeExists(const std::string& path);
+ 
+   private:
+-    static constexpr auto nodeBasePath = "/proc/device-tree/";
++    std::string dtBasePath;
+ };
+-- 
+2.53.0
+
