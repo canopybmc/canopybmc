@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Canopy BMC <canopy@canopybmc.com>
+Date: Thu, 13 Feb 2026 12:00:00 +0000
+Subject: [PATCH] psusensor: add gxp_psu to sensorTypes whitelist
+
+Add the HPE GXP PSU hwmon driver ("gxp_psu") to psusensor's
+sensorTypes map so that it discovers hwmon sensors exported by the
+gxp-psu kernel driver. The driver is not PMBus-based.
+
+Upstream-Status: Pending
+Signed-off-by: Canopy BMC <canopy@canopybmc.com>
+---
+ src/psu/PSUSensorMain.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/psu/PSUSensorMain.cpp b/src/psu/PSUSensorMain.cpp
+index 1234567..abcdefg 100644
+--- a/src/psu/PSUSensorMain.cpp
++++ b/src/psu/PSUSensorMain.cpp
+@@ -79,6 +79,7 @@ static const I2CDeviceTypeMap sensorTypes{
+     {"CRPS185", I2CDeviceType{"crps185", true}},
+     {"DPS800", I2CDeviceType{"dps800", true}},
+     {"INA219", I2CDeviceType{"ina219", true}},
++    {"gxp_psu", I2CDeviceType{"gxp_psu", false}},
+     {"INA226", I2CDeviceType{"ina226", true}},
+     {"INA230", I2CDeviceType{"ina230", true}},
+     {"INA233", I2CDeviceType{"ina233", true}},
+--
+2.53.0
+
