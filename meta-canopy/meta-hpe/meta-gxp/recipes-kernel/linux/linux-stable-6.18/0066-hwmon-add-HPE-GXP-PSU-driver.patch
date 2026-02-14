@@ -1,0 +1,469 @@
+From de50238ee22638f32a2baed04e6423cc5f37e414 Mon Sep 17 00:00:00 2001
+From: Christian Walter <christian.walter@9elements.com>
+Date: Fri, 13 Feb 2026 20:12:17 +0100
+Subject: [PATCH] hwmon: add HPE GXP PSU driver
+
+Add a hardware monitoring driver for HPE GXP Power Supply Units. The
+driver communicates with PSUs over I2C using a proprietary command-based
+protocol with byte-sum checksums, and exposes sensor readings (input/
+output voltage, current, power, temperature, fan speed) via the hwmon
+subsystem.
+
+A read-only binary sysfs attribute "eeprom" provides access to the 256-
+byte FRU EEPROM contents using the PSU's proprietary read command (0x22).
+
+The driver uses the modern devm_hwmon_device_register_with_info() API
+with hwmon_ops callbacks.
+
+Upstream-Status: Pending
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ arch/arm/configs/gxp_defconfig |   1 +
+ drivers/hwmon/Kconfig          |   8 +
+ drivers/hwmon/Makefile         |   1 +
+ drivers/hwmon/gxp-psu.c        | 390 +++++++++++++++++++++++++++++++++
+ 4 files changed, 400 insertions(+)
+ create mode 100644 drivers/hwmon/gxp-psu.c
+
+diff --git a/arch/arm/configs/gxp_defconfig b/arch/arm/configs/gxp_defconfig
+index f07f4bb8082f..a164e64d4cfc 100644
+--- a/arch/arm/configs/gxp_defconfig
++++ b/arch/arm/configs/gxp_defconfig
+@@ -63,6 +63,7 @@ CONFIG_SPI_GXP=y
+ CONFIG_GPIOLIB=y
+ CONFIG_GPIO_GXP=y
+ CONFIG_SENSORS_GXP_FAN_CTRL=y
++CONFIG_SENSORS_GXP_PSU=m
+ CONFIG_WATCHDOG=y
+ CONFIG_GXP_WATCHDOG=y
+ CONFIG_REGULATOR=y
+diff --git a/drivers/hwmon/Kconfig b/drivers/hwmon/Kconfig
+index 18d5d4d9589c..05a45d6d1898 100644
+--- a/drivers/hwmon/Kconfig
++++ b/drivers/hwmon/Kconfig
+@@ -821,6 +821,14 @@ config SENSORS_GXP_FAN_CTRL
+ 	  The GXP controls fan function via the CPLD through the use of PWM
+ 	  registers. This driver reports status and pwm setting of the fans.
+ 
++config SENSORS_GXP_PSU
++	tristate "HPE GXP PSU driver"
++	depends on I2C
++	depends on ARCH_HPE_GXP || COMPILE_TEST
++	help
++	  If you say yes here you get support for HPE GXP power supply unit
++	  monitoring via I2C including sensor readings and FRU EEPROM access.
++
+ config SENSORS_HIH6130
+ 	tristate "Honeywell Humidicon HIH-6130 humidity/temperature sensor"
+ 	depends on I2C
+diff --git a/drivers/hwmon/Makefile b/drivers/hwmon/Makefile
+index 73b2abdcc6dd..2bf83cfe864e 100644
+--- a/drivers/hwmon/Makefile
++++ b/drivers/hwmon/Makefile
+@@ -91,6 +91,7 @@ obj-$(CONFIG_SENSORS_GSC)	+= gsc-hwmon.o
+ obj-$(CONFIG_SENSORS_GPD)	+= gpd-fan.o
+ obj-$(CONFIG_SENSORS_GPIO_FAN)	+= gpio-fan.o
+ obj-$(CONFIG_SENSORS_GXP_FAN_CTRL) += gxp-fan-ctrl.o
++obj-$(CONFIG_SENSORS_GXP_PSU)	+= gxp-psu.o
+ obj-$(CONFIG_SENSORS_HIH6130)	+= hih6130.o
+ obj-$(CONFIG_SENSORS_HS3001)	+= hs3001.o
+ obj-$(CONFIG_SENSORS_HTU31)	+= htu31.o
+diff --git a/drivers/hwmon/gxp-psu.c b/drivers/hwmon/gxp-psu.c
+new file mode 100644
+index 000000000000..e3c77e73ec6a
+--- /dev/null
++++ b/drivers/hwmon/gxp-psu.c
+@@ -0,0 +1,390 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * HPE GXP PSU (Power Supply Unit) hwmon driver
++ *
++ * Copyright (C) 2019 Hewlett-Packard Development Company, L.P.
++ *
++ * This driver communicates with HPE power supply units over I2C using a
++ * proprietary command-based protocol with byte-sum checksums. It exposes
++ * sensor readings (voltage, current, power, temperature, fan speed) via
++ * the hwmon subsystem and FRU EEPROM contents via a binary sysfs attribute.
++ *
++ * Protocol overview:
++ *   Register read: TX [0x00, reg, checksum] -> RX [lo, hi, checksum]
++ *   FRU read:      TX [0x22, offset, length, checksum] -> RX [data...]
++ *   Checksum:      byte-sum of all bytes in the message equals zero
++ */
++
++#include <linux/module.h>
++#include <linux/mod_devicetable.h>
++#include <linux/i2c.h>
++#include <linux/hwmon.h>
++#include <linux/err.h>
++#include <linux/mutex.h>
++#include <linux/sysfs.h>
++
++#define GXP_PSU_FRU_CMD		0x22
++#define GXP_PSU_FRU_SIZE	256
++
++/* Sensor register addresses */
++#define GXP_PSU_REG_IN_VOL	0x10
++#define GXP_PSU_REG_IN_CUR	0x11
++#define GXP_PSU_REG_IN_PWR	0x12
++#define GXP_PSU_REG_OUT_VOL	0x20
++#define GXP_PSU_REG_OUT_CUR	0x21
++#define GXP_PSU_REG_OUT_PWR	0x22
++#define GXP_PSU_REG_FAN	0x40
++#define GXP_PSU_REG_TEMP	0x42
++
++struct gxp_psu_drvdata {
++	struct i2c_client *client;
++	struct mutex lock; /* protects I2C transactions */
++};
++
++static u8 gxp_psu_checksum(const u8 *buf, size_t len)
++{
++	u8 sum = 0;
++	size_t i;
++
++	for (i = 0; i < len; i++)
++		sum += buf[i];
++	return sum;
++}
++
++/**
++ * gxp_psu_read_reg() - Read a 16-bit sensor register from the PSU.
++ * @drvdata: driver private data
++ * @reg: register address
++ * @val: output value
++ *
++ * Protocol: TX [0x00, reg, checksum] -> RX [lo, hi, checksum]
++ * Both TX and RX checksums are chosen so that the byte-sum of
++ * [slave_addr_byte, payload...] equals zero.
++ *
++ * Return: 0 on success, negative errno on failure.
++ */
++static int gxp_psu_read_reg(struct gxp_psu_drvdata *drvdata, u8 reg, u16 *val)
++{
++	struct i2c_client *client = drvdata->client;
++	u8 tx_chk[3] = { client->addr << 1, 0x00, reg };
++	u8 tx[3] = { 0x00, reg, 0 };
++	u8 rx[3] = {};
++	struct i2c_msg msgs[2] = {
++		{
++			.addr = client->addr,
++			.flags = 0,
++			.buf = tx,
++			.len = sizeof(tx),
++		},
++		{
++			.addr = client->addr,
++			.flags = I2C_M_RD,
++			.buf = rx,
++			.len = sizeof(rx),
++		},
++	};
++	int ret;
++
++	tx[2] = -gxp_psu_checksum(tx_chk, sizeof(tx_chk));
++
++	guard(mutex)(&drvdata->lock);
++
++	ret = i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs));
++	if (ret < 0)
++		return ret;
++	if (ret != ARRAY_SIZE(msgs))
++		return -EIO;
++
++	if (gxp_psu_checksum(rx, sizeof(rx)) != 0) {
++		dev_dbg(&client->dev,
++			"checksum fail reg:0x%02x data:%02x %02x %02x\n",
++			reg, rx[0], rx[1], rx[2]);
++		return -EIO;
++	}
++
++	*val = rx[0] | (rx[1] << 8);
++	return 0;
++}
++
++/**
++ * gxp_psu_read_fru() - Read FRU EEPROM data from the PSU.
++ * @drvdata: driver private data
++ * @offset: byte offset into the FRU EEPROM
++ * @buf: output buffer
++ * @count: number of bytes to read
++ *
++ * Protocol: TX [0x22, offset, length, checksum] -> RX [data...]
++ * The TX checksum is computed over [slave_addr_byte, 0x22, offset, length].
++ *
++ * Return: number of bytes read on success, negative errno on failure.
++ */
++static int gxp_psu_read_fru(struct gxp_psu_drvdata *drvdata,
++			     u8 offset, u8 count, u8 *buf)
++{
++	struct i2c_client *client = drvdata->client;
++	u8 chk_buf[4] = { client->addr << 1, GXP_PSU_FRU_CMD, offset, count };
++	u8 tx[4] = { GXP_PSU_FRU_CMD, offset, count, 0 };
++	struct i2c_msg msgs[2] = {
++		{
++			.addr = client->addr,
++			.flags = 0,
++			.buf = tx,
++			.len = sizeof(tx),
++		},
++		{
++			.addr = client->addr,
++			.flags = I2C_M_RD,
++			.buf = buf,
++			.len = count,
++		},
++	};
++	int ret;
++
++	tx[3] = -gxp_psu_checksum(chk_buf, sizeof(chk_buf));
++
++	guard(mutex)(&drvdata->lock);
++
++	ret = i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs));
++	if (ret < 0)
++		return ret;
++	if (ret != ARRAY_SIZE(msgs))
++		return -EIO;
++
++	return count;
++}
++
++/* hwmon channel definitions */
++
++static const u32 gxp_psu_in_config[] = {
++	HWMON_I_INPUT,	/* vin */
++	HWMON_I_INPUT,	/* vout */
++	0,
++};
++
++static const u32 gxp_psu_curr_config[] = {
++	HWMON_I_INPUT,	/* iin */
++	HWMON_I_INPUT,	/* iout */
++	0,
++};
++
++static const u32 gxp_psu_power_config[] = {
++	HWMON_P_INPUT,	/* pin */
++	HWMON_P_INPUT,	/* pout */
++	0,
++};
++
++static const u32 gxp_psu_temp_config[] = {
++	HWMON_T_INPUT,
++	0,
++};
++
++static const u32 gxp_psu_fan_config[] = {
++	HWMON_F_INPUT,
++	0,
++};
++
++static const struct hwmon_channel_info gxp_psu_in = {
++	.type = hwmon_in,
++	.config = gxp_psu_in_config,
++};
++
++static const struct hwmon_channel_info gxp_psu_curr = {
++	.type = hwmon_curr,
++	.config = gxp_psu_curr_config,
++};
++
++static const struct hwmon_channel_info gxp_psu_power = {
++	.type = hwmon_power,
++	.config = gxp_psu_power_config,
++};
++
++static const struct hwmon_channel_info gxp_psu_temp = {
++	.type = hwmon_temp,
++	.config = gxp_psu_temp_config,
++};
++
++static const struct hwmon_channel_info gxp_psu_fan = {
++	.type = hwmon_fan,
++	.config = gxp_psu_fan_config,
++};
++
++static const struct hwmon_channel_info * const gxp_psu_info[] = {
++	&gxp_psu_in,
++	&gxp_psu_curr,
++	&gxp_psu_power,
++	&gxp_psu_temp,
++	&gxp_psu_fan,
++	NULL,
++};
++
++static umode_t gxp_psu_is_visible(const void *data,
++				   enum hwmon_sensor_types type,
++				   u32 attr, int channel)
++{
++	return 0444;
++}
++
++static int gxp_psu_read(struct device *dev, enum hwmon_sensor_types type,
++			u32 attr, int channel, long *val)
++{
++	struct gxp_psu_drvdata *drvdata = dev_get_drvdata(dev);
++	u16 raw;
++	u8 reg;
++	int ret;
++
++	switch (type) {
++	case hwmon_in:
++		reg = channel == 0 ? GXP_PSU_REG_IN_VOL : GXP_PSU_REG_OUT_VOL;
++		break;
++	case hwmon_curr:
++		reg = channel == 0 ? GXP_PSU_REG_IN_CUR : GXP_PSU_REG_OUT_CUR;
++		break;
++	case hwmon_power:
++		reg = channel == 0 ? GXP_PSU_REG_IN_PWR : GXP_PSU_REG_OUT_PWR;
++		break;
++	case hwmon_temp:
++		reg = GXP_PSU_REG_TEMP;
++		break;
++	case hwmon_fan:
++		reg = GXP_PSU_REG_FAN;
++		break;
++	default:
++		return -EOPNOTSUPP;
++	}
++
++	ret = gxp_psu_read_reg(drvdata, reg, &raw);
++	if (ret)
++		return ret;
++
++	/*
++	 * Return raw register values; psusensor applies ScaleFactors
++	 * from entity-manager config to convert to display units:
++	 *   voltage:     raw units 1/32 V   (InScaleFactor: 32)
++	 *   output volt: raw units 1/256 V, normalized to 1/32 V by /8
++	 *   current:     raw units 1/64 A   (CurrScaleFactor: 64)
++	 *   power:       raw units 1 W      (PowerScaleFactor: 1)
++	 *   temperature: raw units 1/64 C   (TempScaleFactor: 64)
++	 *   fan:         raw RPM
++	 */
++	switch (type) {
++	case hwmon_in:
++		if (channel == 0)
++			*val = raw;
++		else
++			*val = raw / 8; /* normalize 1/256 V to 1/32 V */
++		break;
++	case hwmon_curr:
++	case hwmon_power:
++	case hwmon_fan:
++		*val = raw;
++		break;
++	case hwmon_temp:
++		*val = (s16)raw;
++		break;
++	default:
++		return -EOPNOTSUPP;
++	}
++
++	return 0;
++}
++
++static const struct hwmon_ops gxp_psu_hwmon_ops = {
++	.is_visible = gxp_psu_is_visible,
++	.read = gxp_psu_read,
++};
++
++static const struct hwmon_chip_info gxp_psu_chip_info = {
++	.ops = &gxp_psu_hwmon_ops,
++	.info = gxp_psu_info,
++};
++
++/* FRU EEPROM binary attribute */
++
++static ssize_t gxp_psu_eeprom_read(struct file *filp, struct kobject *kobj,
++				    const struct bin_attribute *attr, char *buf,
++				    loff_t off, size_t count)
++{
++	struct device *dev = kobj_to_dev(kobj);
++	struct gxp_psu_drvdata *drvdata = dev_get_drvdata(dev);
++
++	if (off >= GXP_PSU_FRU_SIZE)
++		return 0;
++
++	if (off + count > GXP_PSU_FRU_SIZE)
++		count = GXP_PSU_FRU_SIZE - off;
++
++	/* FRU protocol uses u8 count; cap to avoid overflow (256 -> 0) */
++	if (count > 255)
++		count = 255;
++
++	return gxp_psu_read_fru(drvdata, off, count, buf);
++}
++
++static const struct bin_attribute gxp_psu_eeprom_attr = {
++	.attr = {
++		.name = "eeprom",
++		.mode = 0444,
++	},
++	.size = GXP_PSU_FRU_SIZE,
++	.read = gxp_psu_eeprom_read,
++};
++
++static void gxp_psu_cleanup_eeprom(void *data)
++{
++	struct i2c_client *client = data;
++
++	device_remove_bin_file(&client->dev, &gxp_psu_eeprom_attr);
++}
++
++static int gxp_psu_probe(struct i2c_client *client)
++{
++	struct gxp_psu_drvdata *drvdata;
++	struct device *hwmon_dev;
++	int ret;
++
++	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C))
++		return -EOPNOTSUPP;
++
++	drvdata = devm_kzalloc(&client->dev, sizeof(*drvdata), GFP_KERNEL);
++	if (!drvdata)
++		return -ENOMEM;
++
++	drvdata->client = client;
++	mutex_init(&drvdata->lock);
++	dev_set_drvdata(&client->dev, drvdata);
++
++	hwmon_dev = devm_hwmon_device_register_with_info(&client->dev,
++							 "gxp_psu", drvdata,
++							 &gxp_psu_chip_info,
++							 NULL);
++	if (IS_ERR(hwmon_dev))
++		return PTR_ERR(hwmon_dev);
++
++	ret = device_create_bin_file(&client->dev, &gxp_psu_eeprom_attr);
++	if (ret)
++		return ret;
++
++	return devm_add_action_or_reset(&client->dev,
++					gxp_psu_cleanup_eeprom, client);
++}
++
++static const struct of_device_id gxp_psu_of_match[] = {
++	{ .compatible = "hpe,gxp-psu" },
++	{},
++};
++MODULE_DEVICE_TABLE(of, gxp_psu_of_match);
++
++static struct i2c_driver gxp_psu_driver = {
++	.probe	= gxp_psu_probe,
++	.driver = {
++		.name		= "gxp-psu",
++		.of_match_table	= gxp_psu_of_match,
++	},
++};
++
++module_i2c_driver(gxp_psu_driver);
++
++MODULE_AUTHOR("Louis Hsu <kai-hsiang.hsu@hpe.com>");
++MODULE_AUTHOR("Jean-Marie Verdun <verdun@hpe.com>");
++MODULE_DESCRIPTION("HPE GXP PSU driver");
++MODULE_LICENSE("GPL");
+-- 
+2.53.0
+
