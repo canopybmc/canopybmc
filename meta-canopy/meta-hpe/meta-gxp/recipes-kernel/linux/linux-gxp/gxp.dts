@@ -426,9 +426,7 @@
 
     xreg: xreg@d1000000 {
       compatible = "hpe,gxp-xreg", "simple-mfd", "syscon";
-      /* i2c mux are not part of xreg driver control */
-      reg = <0xd1000000 0x84>, <0xd1000094 0x6c>;
-      /* reg = <0xd1000000 0x8b>, <0xd100008c 0x74>; */
+      reg = <0xd1000000 0x11c>;
       interrupts = <26>;
       interrupt-parent = <&vic0>;
       #gpio-cells = <2>;
@@ -448,6 +446,20 @@
       "", "", "", "", "", "", "", "", "", "",
       "", "", "", "", "", "", "", "", "", "",
       "", "", "", "", "", "", "", "", "", "";
+
+      i2c_mux_ctrl: mux-controller {
+        compatible = "mmio-mux";
+        #mux-control-cells = <1>;
+        mux-reg-masks =
+          <0x84 0x000000ff>,  /* 0: i2c0 mux select */
+          <0x84 0x0000ff00>,  /* 1: i2c1 mux select */
+          <0x84 0x00ff0000>,  /* 2: i2c2 (unused) */
+          <0x84 0xff000000>,  /* 3: i2c3 mux select */
+          <0x88 0x000000ff>,  /* 4: i2c4 mux select */
+          <0x88 0x0000ff00>,  /* 5: i2c5 (unused) */
+          <0x88 0x00ff0000>,  /* 6: i2c6 mux select */
+          <0x88 0xff000000>;  /* 7: i2c7 mux select */
+      };
     };
 
     fanctrl: fanctrl@c1000c00 {
