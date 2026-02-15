@@ -152,9 +152,13 @@
         "Type": "PowerSupply",
         "xyz.openbmc_project.Inventory.Decorator.Asset": {
             "Manufacturer": "$PRODUCT_MANUFACTURER",
-            "Model": "$PRODUCT_PART_NUMBER",
+            "Model": "$BOARD_PART_NUMBER",
             "PartNumber": "$PRODUCT_PART_NUMBER",
-            "SerialNumber": "$PRODUCT_SERIAL_NUMBER"
+            "SerialNumber": "$PRODUCT_SERIAL_NUMBER",
+            "SparePartNumber": "$PRODUCT_PART_NUMBER"
+        },
+        "xyz.openbmc_project.Inventory.Decorator.Revision": {
+            "Version": "$PRODUCT_VERSION"
         }
     }
 ]
