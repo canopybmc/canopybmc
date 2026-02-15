@@ -1,0 +1,107 @@
+[
+    {
+        "name": "Fan_1",
+        "path": "/system/chassis/chassis/Fan_1",
+        "methods": [
+            {
+                "type": "gpio",
+                "key": 1,
+                "physpath": "/sys/devices/platform/ahb@80000000/d1000000.xreg",
+                "devpath": "/dev/input/by-path/platform-ahb@80000000:fan-keys-event"
+            }
+        ],
+        "rpolicy": {
+            "type": "anyof"
+        }
+    },
+    {
+        "name": "Fan_2",
+        "path": "/system/chassis/chassis/Fan_2",
+        "methods": [
+            {
+                "type": "gpio",
+                "key": 2,
+                "physpath": "/sys/devices/platform/ahb@80000000/d1000000.xreg",
+                "devpath": "/dev/input/by-path/platform-ahb@80000000:fan-keys-event"
+            }
+        ],
+        "rpolicy": {
+            "type": "anyof"
+        }
+    },
+    {
+        "name": "Fan_3",
+        "path": "/system/chassis/chassis/Fan_3",
+        "methods": [
+            {
+                "type": "gpio",
+                "key": 3,
+                "physpath": "/sys/devices/platform/ahb@80000000/d1000000.xreg",
+                "devpath": "/dev/input/by-path/platform-ahb@80000000:fan-keys-event"
+            }
+        ],
+        "rpolicy": {
+            "type": "anyof"
+        }
+    },
+    {
+        "name": "Fan_4",
+        "path": "/system/chassis/chassis/Fan_4",
+        "methods": [
+            {
+                "type": "gpio",
+                "key": 4,
+                "physpath": "/sys/devices/platform/ahb@80000000/d1000000.xreg",
+                "devpath": "/dev/input/by-path/platform-ahb@80000000:fan-keys-event"
+            }
+        ],
+        "rpolicy": {
+            "type": "anyof"
+        }
+    },
+    {
+        "name": "Fan_5",
+        "path": "/system/chassis/chassis/Fan_5",
+        "methods": [
+            {
+                "type": "gpio",
+                "key": 5,
+                "physpath": "/sys/devices/platform/ahb@80000000/d1000000.xreg",
+                "devpath": "/dev/input/by-path/platform-ahb@80000000:fan-keys-event"
+            }
+        ],
+        "rpolicy": {
+            "type": "anyof"
+        }
+    },
+    {
+        "name": "Fan_6",
+        "path": "/system/chassis/chassis/Fan_6",
+        "methods": [
+            {
+                "type": "gpio",
+                "key": 6,
+                "physpath": "/sys/devices/platform/ahb@80000000/d1000000.xreg",
+                "devpath": "/dev/input/by-path/platform-ahb@80000000:fan-keys-event"
+            }
+        ],
+        "rpolicy": {
+            "type": "anyof"
+        }
+    },
+    {
+        "name": "Fan_7",
+        "path": "/system/chassis/chassis/Fan_7",
+        "methods": [
+            {
+                "type": "gpio",
+                "key": 7,
+                "physpath": "/sys/devices/platform/ahb@80000000/d1000000.xreg",
+                "devpath": "/dev/input/by-path/platform-ahb@80000000:fan-keys-event"
+            }
+        ],
+        "rpolicy": {
+            "type": "anyof"
+        }
+    }
+]

@@ -1,0 +1,163 @@
+[
+    {
+        "path": "system/chassis/chassis/Fan_1",
+        "endpoints": [
+            {
+                "types": {
+                    "rType": "inventory",
+                    "fType": "sensors"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/sensors/fan_pwm/Pwm_1"
+                ]
+            },
+            {
+                "types": {
+                    "rType": "cooled_by",
+                    "fType": "cooling"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/inventory/system/chassis/chassis"
+                ]
+            }
+        ]
+    },
+    {
+        "path": "system/chassis/chassis/Fan_2",
+        "endpoints": [
+            {
+                "types": {
+                    "rType": "inventory",
+                    "fType": "sensors"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/sensors/fan_pwm/Pwm_2"
+                ]
+            },
+            {
+                "types": {
+                    "rType": "cooled_by",
+                    "fType": "cooling"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/inventory/system/chassis/chassis"
+                ]
+            }
+        ]
+    },
+    {
+        "path": "system/chassis/chassis/Fan_3",
+        "endpoints": [
+            {
+                "types": {
+                    "rType": "inventory",
+                    "fType": "sensors"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/sensors/fan_pwm/Pwm_3"
+                ]
+            },
+            {
+                "types": {
+                    "rType": "cooled_by",
+                    "fType": "cooling"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/inventory/system/chassis/chassis"
+                ]
+            }
+        ]
+    },
+    {
+        "path": "system/chassis/chassis/Fan_4",
+        "endpoints": [
+            {
+                "types": {
+                    "rType": "inventory",
+                    "fType": "sensors"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/sensors/fan_pwm/Pwm_4"
+                ]
+            },
+            {
+                "types": {
+                    "rType": "cooled_by",
+                    "fType": "cooling"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/inventory/system/chassis/chassis"
+                ]
+            }
+        ]
+    },
+    {
+        "path": "system/chassis/chassis/Fan_5",
+        "endpoints": [
+            {
+                "types": {
+                    "rType": "inventory",
+                    "fType": "sensors"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/sensors/fan_pwm/Pwm_5"
+                ]
+            },
+            {
+                "types": {
+                    "rType": "cooled_by",
+                    "fType": "cooling"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/inventory/system/chassis/chassis"
+                ]
+            }
+        ]
+    },
+    {
+        "path": "system/chassis/chassis/Fan_6",
+        "endpoints": [
+            {
+                "types": {
+                    "rType": "inventory",
+                    "fType": "sensors"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/sensors/fan_pwm/Pwm_6"
+                ]
+            },
+            {
+                "types": {
+                    "rType": "cooled_by",
+                    "fType": "cooling"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/inventory/system/chassis/chassis"
+                ]
+            }
+        ]
+    },
+    {
+        "path": "system/chassis/chassis/Fan_7",
+        "endpoints": [
+            {
+                "types": {
+                    "rType": "inventory",
+                    "fType": "sensors"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/sensors/fan_pwm/Pwm_7"
+                ]
+            },
+            {
+                "types": {
+                    "rType": "cooled_by",
+                    "fType": "cooling"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/inventory/system/chassis/chassis"
+                ]
+            }
+        ]
+    }
+]
