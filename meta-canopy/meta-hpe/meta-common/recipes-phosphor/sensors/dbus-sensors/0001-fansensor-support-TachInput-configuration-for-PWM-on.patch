@@ -1,0 +1,70 @@
+From 105fa83ffb397955709aba001ce52018254a0792 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Sun, 15 Feb 2026 13:16:07 +0100
+Subject: [PATCH] fansensor: support TachInput configuration for PWM-only fans
+
+Skip TachSensor creation when Entity Manager sets TachInput=false. Fan
+controllers without tachometer hardware (e.g., HPE GXP) expose PWM duty
+via fan_input sysfs instead of RPM, and only need the PwmSensor
+published. Defaults to true for backward compatibility.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ src/fan/FanMain.cpp | 34 ++++++++++++++++++++++++++--------
+ 1 file changed, 26 insertions(+), 8 deletions(-)
+
+diff --git a/src/fan/FanMain.cpp b/src/fan/FanMain.cpp
+index 8db8a52..fde89f6 100644
+--- a/src/fan/FanMain.cpp
++++ b/src/fan/FanMain.cpp
+@@ -412,6 +412,18 @@ void createSensors(
+             std::string sensorName =
+                 std::get<std::string>(findSensorName->second);
+ 
++            bool hasTachInput = true;
++            auto findTachInput = baseConfiguration->second.find("TachInput");
++            if (findTachInput != baseConfiguration->second.end())
++            {
++                const auto* ptrTach =
++                    std::get_if<bool>(&findTachInput->second);
++                if (ptrTach != nullptr)
++                {
++                    hasTachInput = *ptrTach;
++                }
++            }
++
+             // on rescans, only update sensors we were signaled by
+             auto findSensor = tachSensors.find(sensorName);
+             if (!firstScan && findSensor != tachSensors.end())
+@@ -626,14 +638,20 @@ void createSensors(
+ 
+             enableFanInput(path);
+ 
+-            auto& tachSensor = tachSensors[sensorName];
+-            tachSensor = nullptr;
+-            tachSensor = std::make_shared<TachSensor>(
+-                path.string(), baseType, objectServer, dbusConnection,
+-                presenceGpio, redundancy, io, sensorName,
+-                std::move(sensorThresholds), *interfacePath, limits, powerState,
+-                led);
+-            tachSensor->setupRead();
++            // Some fan controllers lack a tachometer and expose raw
++            // PWM duty via fan_input instead of RPM.  Skip TachSensor
++            // for those so only the PwmSensor (0-100 %) is published.
++            if (hasTachInput)
++            {
++                auto& tachSensor = tachSensors[sensorName];
++                tachSensor = nullptr;
++                tachSensor = std::make_shared<TachSensor>(
++                    path.string(), baseType, objectServer, dbusConnection,
++                    presenceGpio, redundancy, io, sensorName,
++                    std::move(sensorThresholds), *interfacePath, limits,
++                    powerState, led);
++                tachSensor->setupRead();
++            }
+ 
+             if (!pwmPath.empty() && std::filesystem::exists(pwmPath) &&
+                 (pwmSensors.count(pwmPath) == 0U))
+-- 
+2.52.0
+
