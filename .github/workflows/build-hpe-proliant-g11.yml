@@ -5,9 +5,17 @@ on:
   push:
     branches:
       - hpe/main
+    paths:
+      - 'openbmc/**'
+      - 'meta-canopy/**'
+      - '.github/**'
   pull_request:
     branches:
       - hpe/main
+    paths:
+      - 'openbmc/**'
+      - 'meta-canopy/**'
+      - '.github/**'
   workflow_dispatch:
 
 jobs:
