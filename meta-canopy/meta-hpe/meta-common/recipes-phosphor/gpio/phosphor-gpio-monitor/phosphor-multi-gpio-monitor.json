@@ -1,0 +1,9 @@
+[
+    {
+        "Name": "UidButton",
+        "LineName": "uid-button",
+        "EventMon": "FALLING",
+        "Target": "uid-button-toggle.service",
+        "Continue": true
+    }
+]
