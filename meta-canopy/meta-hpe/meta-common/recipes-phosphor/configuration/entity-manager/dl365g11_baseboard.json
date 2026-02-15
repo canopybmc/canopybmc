@@ -44,10 +44,7 @@
             "Name": "Fan 1",
             "Type": "HPEFan",
             "Index": 0,
-            "Presence": {
-                "PinName": "fan1-installed",
-                "Polarity": "High"
-            }
+            "TachInput": false
         },
         {
             "Connector": {
@@ -59,10 +56,7 @@
             "Name": "Fan 2",
             "Type": "HPEFan",
             "Index": 1,
-            "Presence": {
-                "PinName": "fan2-installed",
-                "Polarity": "High"
-            }
+            "TachInput": false
         },
         {
             "Connector": {
@@ -74,10 +68,7 @@
             "Name": "Fan 3",
             "Type": "HPEFan",
             "Index": 2,
-            "Presence": {
-                "PinName": "fan3-installed",
-                "Polarity": "High"
-            }
+            "TachInput": false
         },
         {
             "Connector": {
@@ -89,10 +80,7 @@
             "Name": "Fan 4",
             "Type": "HPEFan",
             "Index": 3,
-            "Presence": {
-                "PinName": "fan4-installed",
-                "Polarity": "High"
-            }
+            "TachInput": false
         },
         {
             "Connector": {
@@ -104,10 +92,7 @@
             "Name": "Fan 5",
             "Type": "HPEFan",
             "Index": 4,
-            "Presence": {
-                "PinName": "fan5-installed",
-                "Polarity": "High"
-            }
+            "TachInput": false
         },
         {
             "Connector": {
@@ -119,10 +104,7 @@
             "Name": "Fan 6",
             "Type": "HPEFan",
             "Index": 5,
-            "Presence": {
-                "PinName": "fan6-installed",
-                "Polarity": "High"
-            }
+            "TachInput": false
         },
         {
             "Connector": {
@@ -134,10 +116,7 @@
             "Name": "Fan 7",
             "Type": "HPEFan",
             "Index": 6,
-            "Presence": {
-                "PinName": "fan7-installed",
-                "Polarity": "High"
-            }
+            "TachInput": false
         },
         {
             "Name": "GXP Temp",
@@ -167,7 +146,132 @@
                     "Value": 0
                 }
             ],
-            "Type": "GxpTempSensor"
+            "Type": "GxpTempSensor",
+            "DeviceName": "coretemp"
+        },
+        {
+            "Class": "fan",
+            "FFGainCoefficient": 1,
+            "FFOffCoefficient": 0,
+            "ICoefficient": 0,
+            "ILimitMax": 0,
+            "ILimitMin": 0,
+            "Inputs": [
+                "Pwm 1",
+                "Pwm 2",
+                "Pwm 3",
+                "Pwm 4",
+                "Pwm 5",
+                "Pwm 6",
+                "Pwm 7"
+            ],
+            "Name": "Fan 1-7",
+            "NegativeHysteresis": 0,
+            "OutLimitMax": 100,
+            "OutLimitMin": 30,
+            "Outputs": [
+                "Pwm 1",
+                "Pwm 2",
+                "Pwm 3",
+                "Pwm 4",
+                "Pwm 5",
+                "Pwm 6",
+                "Pwm 7"
+            ],
+            "PCoefficient": 0,
+            "PositiveHysteresis": 0,
+            "SlewNeg": 0,
+            "SlewPos": 0,
+            "Type": "Pid",
+            "Zones": [
+                "Zone 1"
+            ]
+        },
+        {
+            "Class": "temp",
+            "FFGainCoefficient": 0,
+            "FFOffCoefficient": 0,
+            "ICoefficient": -2.0,
+            "ILimitMax": 100,
+            "ILimitMin": 30,
+            "Inputs": [
+                "CPU 1"
+            ],
+            "Name": "CPU 1",
+            "NegativeHysteresis": 2,
+            "OutLimitMax": 100,
+            "OutLimitMin": 30,
+            "Outputs": [],
+            "PCoefficient": -0.3,
+            "PositiveHysteresis": 0,
+            "SetPoint": -12,
+            "SetPointOffset": "WarningHigh",
+            "SlewNeg": -3,
+            "SlewPos": 0,
+            "Type": "Pid",
+            "Zones": [
+                "Zone 1"
+            ],
+            "InputUnavailableAsFailed": false
+        },
+        {
+            "Class": "temp",
+            "FFGainCoefficient": 0,
+            "FFOffCoefficient": 0,
+            "ICoefficient": -2.0,
+            "ILimitMax": 100,
+            "ILimitMin": 30,
+            "Inputs": [
+                "CPU 2"
+            ],
+            "Name": "CPU 2",
+            "NegativeHysteresis": 2,
+            "OutLimitMax": 100,
+            "OutLimitMin": 30,
+            "Outputs": [],
+            "PCoefficient": -0.3,
+            "PositiveHysteresis": 0,
+            "SetPoint": -12,
+            "SetPointOffset": "WarningHigh",
+            "SlewNeg": -3,
+            "SlewPos": 0,
+            "Type": "Pid",
+            "Zones": [
+                "Zone 1"
+            ],
+            "InputUnavailableAsFailed": false
+        },
+        {
+            "Class": "temp",
+            "FFGainCoefficient": 0,
+            "FFOffCoefficient": 0,
+            "ICoefficient": -1.0,
+            "ILimitMax": 100,
+            "ILimitMin": 10,
+            "InputUnavailableAsFailed": false,
+            "Inputs": [
+                "GXP Temp"
+            ],
+            "Name": "GXP Temp",
+            "NegativeHysteresis": 2,
+            "OutLimitMax": 100,
+            "OutLimitMin": 10,
+            "Outputs": [],
+            "PCoefficient": -10.0,
+            "PositiveHysteresis": 0,
+            "SetPoint": 65,
+            "SlewNeg": -5,
+            "SlewPos": 0,
+            "Type": "Pid",
+            "Zones": [
+                "Zone 1"
+            ]
+        },
+        {
+            "FailSafePercent": 50,
+            "MinThermalOutput": 5,
+            "Name": "Zone 1",
+            "Type": "Pid.Zone"
         },
         {
             "Address": "0x50",
