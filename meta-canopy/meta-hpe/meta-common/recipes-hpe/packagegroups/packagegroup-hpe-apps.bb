@@ -38,6 +38,7 @@ RDEPENDS:${PN}-flash = " \
 
 SUMMARY:${PN}-system = "HPE System"
 RDEPENDS:${PN}-system = " \
+        phosphor-virtual-sensor \
         entity-manager \
         dbus-sensors \
         "

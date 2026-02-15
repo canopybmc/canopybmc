@@ -1,0 +1,50 @@
+[
+    {
+        "Desc":
+        {
+            "Name": "total_power",
+            "SensorType": "power",
+            "MinValue": 0,
+            "MaxValue": 1200
+        },
+        "Threshold":
+        {
+        },
+        "Associations":
+        [
+            [
+                "chassis",
+                "all_sensors",
+                "/xyz/openbmc_project/inventory/system/chassis/chassis"
+            ],
+            [
+                "inventory",
+                "sensors",
+                "/xyz/openbmc_project/inventory/system/chassis/chassis"
+            ]
+        ],
+        "Params":
+        {
+            "DbusParam":
+            [
+                {
+                    "ParamName": "P0",
+                    "Desc":
+                    {
+                        "Name": "PINPUT_PSU1",
+                        "SensorType": "power"
+                    }
+                },
+                {
+                    "ParamName": "P1",
+                    "Desc":
+                    {
+                        "Name": "PINPUT_PSU2",
+                        "SensorType": "power"
+                    }
+                }
+            ]
+        },
+        "Expression": "( P0 == P0 ) ? (P1 == P1) ? (P0 + P1) : P0 : (P1 == P1) ? P1 : NULL"
+    }
+]
