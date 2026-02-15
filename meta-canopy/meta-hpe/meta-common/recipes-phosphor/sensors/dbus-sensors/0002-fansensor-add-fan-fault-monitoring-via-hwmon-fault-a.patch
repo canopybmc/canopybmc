@@ -1,0 +1,320 @@
+From a8dbfca41277fc2d91f1ae860bea091c676b8a66 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Sun, 15 Feb 2026 13:17:26 +0100
+Subject: [PATCH] fansensor: add fan fault monitoring via hwmon fault attribute
+
+Poll hwmon fan*_fault sysfs attributes every 5 seconds and update
+OperationalStatus.Functional in phosphor inventory on state changes.
+Emit Redfish ResourceEvent log entries for fault and recovery events.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ src/fan/FanFault.cpp | 138 +++++++++++++++++++++++++++++++++++++++++++
+ src/fan/FanFault.hpp |  48 +++++++++++++++
+ src/fan/FanMain.cpp  |  25 +++++++-
+ src/fan/meson.build  |   1 +
+ 4 files changed, 210 insertions(+), 2 deletions(-)
+ create mode 100644 src/fan/FanFault.cpp
+ create mode 100644 src/fan/FanFault.hpp
+
+diff --git a/src/fan/FanFault.cpp b/src/fan/FanFault.cpp
+new file mode 100644
+index 0000000..be7ab75
+--- /dev/null
++++ b/src/fan/FanFault.cpp
+@@ -0,0 +1,138 @@
++/*
++// Copyright (c) 2026 9elements GmbH
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//      http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++*/
++
++#include "FanFault.hpp"
++
++#include <boost/asio/error.hpp>
++#include <phosphor-logging/lg2.hpp>
++#include <sdbusplus/message.hpp>
++
++#include <chrono>
++#include <fstream>
++#include <map>
++#include <string>
++#include <variant>
++
++FanFault::FanFault(boost::asio::io_context& io,
++                   std::shared_ptr<sdbusplus::asio::connection>& conn,
++                   const std::string& faultPath,
++                   const std::string& inventoryPath) :
++    timer(io), conn(conn), faultPath(faultPath), inventoryPath(inventoryPath)
++{}
++
++void FanFault::start()
++{
++    poll();
++}
++
++void FanFault::poll()
++{
++    std::ifstream file(faultPath);
++    if (!file.good())
++    {
++        lg2::error("Failed to read fan fault file '{PATH}'", "PATH",
++                   faultPath);
++    }
++    else
++    {
++        int value = 0;
++        file >> value;
++
++        bool functional = (value == 0);
++        if (lastFunctional != functional)
++        {
++            lastFunctional = functional;
++            notify(functional);
++        }
++    }
++
++    std::weak_ptr<FanFault> weakRef = weak_from_this();
++    timer.expires_after(std::chrono::milliseconds(pollIntervalMs));
++    timer.async_wait([weakRef](const boost::system::error_code& ec) {
++        if (ec == boost::asio::error::operation_aborted)
++        {
++            return;
++        }
++        auto self = weakRef.lock();
++        if (self)
++        {
++            self->poll();
++        }
++    });
++}
++
++void FanFault::notify(bool functional)
++{
++    using Property = std::string;
++    using Value = std::variant<bool>;
++    using PropertyMap = std::map<Property, Value>;
++
++    using Interface = std::string;
++    using InterfaceMap = std::map<Interface, PropertyMap>;
++
++    using Object = sdbusplus::message::object_path;
++    using ObjectMap = std::map<Object, InterfaceMap>;
++
++    ObjectMap objectMap;
++    InterfaceMap interfaceMap;
++    PropertyMap propertyMap;
++
++    propertyMap.emplace("Functional", functional);
++    interfaceMap.emplace(
++        "xyz.openbmc_project.State.Decorator.OperationalStatus",
++        std::move(propertyMap));
++    objectMap.emplace(inventoryPath, std::move(interfaceMap));
++
++    // Derive fan name from inventory path for log messages
++    std::string fanName = inventoryPath;
++    auto pos = fanName.rfind('/');
++    if (pos != std::string::npos)
++    {
++        fanName = fanName.substr(pos + 1);
++    }
++
++    // Create Redfish event log entry for the state change
++    if (!functional)
++    {
++        lg2::error("{FAN} health status changed to Critical", "FAN", fanName,
++                   "REDFISH_MESSAGE_ID",
++                   std::string("ResourceEvent.1.0."
++                               "ResourceStatusChangedCritical"),
++                   "REDFISH_MESSAGE_ARGS", fanName + ",Critical");
++    }
++    else
++    {
++        lg2::info("{FAN} health status changed to OK", "FAN", fanName,
++                  "REDFISH_MESSAGE_ID",
++                  std::string("ResourceEvent.1.0.ResourceStatusChangedOK"),
++                  "REDFISH_MESSAGE_ARGS", fanName + ",OK");
++    }
++
++    conn->async_method_call(
++        [this, functional](const boost::system::error_code& ec) {
++            if (ec)
++            {
++                lg2::error(
++                    "Failed to update fan inventory functional state "
++                    "for '{PATH}': '{ERROR}'",
++                    "PATH", inventoryPath, "ERROR", ec.message());
++            }
++        },
++        "xyz.openbmc_project.Inventory.Manager",
++        "/xyz/openbmc_project/inventory",
++        "xyz.openbmc_project.Inventory.Manager", "Notify",
++        std::move(objectMap));
++}
+diff --git a/src/fan/FanFault.hpp b/src/fan/FanFault.hpp
+new file mode 100644
+index 0000000..bfcf629
+--- /dev/null
++++ b/src/fan/FanFault.hpp
+@@ -0,0 +1,48 @@
++/*
++// Copyright (c) 2026 9elements GmbH
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//      http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++*/
++
++#pragma once
++
++#include <boost/asio/io_context.hpp>
++#include <boost/asio/steady_timer.hpp>
++#include <sdbusplus/asio/connection.hpp>
++
++#include <memory>
++#include <optional>
++#include <string>
++
++class FanFault : public std::enable_shared_from_this<FanFault>
++{
++  public:
++    FanFault(boost::asio::io_context& io,
++             std::shared_ptr<sdbusplus::asio::connection>& conn,
++             const std::string& faultPath,
++             const std::string& inventoryPath);
++
++    void start();
++
++  private:
++    void poll();
++    void notify(bool functional);
++
++    boost::asio::steady_timer timer;
++    std::shared_ptr<sdbusplus::asio::connection> conn;
++    std::string faultPath;
++    std::string inventoryPath;
++    std::optional<bool> lastFunctional;
++
++    static constexpr unsigned int pollIntervalMs = 5000;
++};
+diff --git a/src/fan/FanMain.cpp b/src/fan/FanMain.cpp
+index fde89f6..0615b83 100644
+--- a/src/fan/FanMain.cpp
++++ b/src/fan/FanMain.cpp
+@@ -14,6 +14,7 @@
+ // limitations under the License.
+ */
+ 
++#include "FanFault.hpp"
+ #include "PresenceGpio.hpp"
+ #include "PwmSensor.hpp"
+ #include "TachSensor.hpp"
+@@ -35,6 +36,7 @@
+ #include <sdbusplus/bus/match.hpp>
+ #include <sdbusplus/message.hpp>
+ 
++#include <algorithm>
+ #include <array>
+ #include <chrono>
+ #include <cstddef>
+@@ -280,6 +282,7 @@ void createSensors(
+         pwmSensors,
+     boost::container::flat_map<std::string, std::weak_ptr<PresenceGpio>>&
+         presenceGpios,
++    std::vector<std::shared_ptr<FanFault>>& faultSensors,
+     std::shared_ptr<sdbusplus::asio::connection>& dbusConnection,
+     const std::shared_ptr<boost::container::flat_set<std::string>>&
+         sensorsChanged,
+@@ -289,11 +292,13 @@ void createSensors(
+         GetSensorConfiguration>(dbusConnection, [&io, &objectServer,
+                                                  &tachSensors, &pwmSensors,
+                                                  &presenceGpios,
++                                                 &faultSensors,
+                                                  &dbusConnection,
+                                                  sensorsChanged](
+                                                     const ManagedObjectType&
+                                                         sensorConfigurations) {
+         bool firstScan = sensorsChanged == nullptr;
++        faultSensors.clear();
+         std::vector<std::filesystem::path> paths;
+         if (!findFiles(std::filesystem::path("/sys/class/hwmon"),
+                        R"(fan\d+_input)", paths))
+@@ -660,6 +665,20 @@ void createSensors(
+                     pwmName, pwmPath, dbusConnection, objectServer,
+                     *interfacePath, "Fan", isValueMutable);
+             }
++
++            // Monitor fan fault status via hwmon fan*_fault attribute
++            auto faultFile = directory / ("fan" + indexStr + "_fault");
++            if (std::filesystem::exists(faultFile))
++            {
++                std::string invName = sensorName;
++                std::replace(invName.begin(), invName.end(), ' ', '_');
++
++                auto fault = std::make_shared<FanFault>(
++                    io, dbusConnection, faultFile.string(),
++                    "/system/chassis/chassis/" + invName);
++                fault->start();
++                faultSensors.push_back(fault);
++            }
+         }
+ 
+         createRedundancySensor(tachSensors, dbusConnection, objectServer);
+@@ -685,12 +704,13 @@ int main()
+         pwmSensors;
+     boost::container::flat_map<std::string, std::weak_ptr<PresenceGpio>>
+         presenceGpios;
++    std::vector<std::shared_ptr<FanFault>> faultSensors;
+     auto sensorsChanged =
+         std::make_shared<boost::container::flat_set<std::string>>();
+ 
+     boost::asio::post(io, [&]() {
+         createSensors(io, objectServer, tachSensors, pwmSensors, presenceGpios,
+-                      systemBus, nullptr);
++                      faultSensors, systemBus, nullptr);
+     });
+ 
+     boost::asio::steady_timer filterTimer(io);
+@@ -712,7 +732,8 @@ int main()
+                     return;
+                 }
+                 createSensors(io, objectServer, tachSensors, pwmSensors,
+-                              presenceGpios, systemBus, sensorsChanged, 5);
++                              presenceGpios, faultSensors, systemBus,
++                              sensorsChanged, 5);
+             });
+         };
+ 
+diff --git a/src/fan/meson.build b/src/fan/meson.build
+index 1de6634..146a9f9 100644
+--- a/src/fan/meson.build
++++ b/src/fan/meson.build
+@@ -4,6 +4,7 @@ endif
+ 
+ executable(
+     'fansensor',
++    'FanFault.cpp',
+     'FanMain.cpp',
+     'PresenceGpio.cpp',
+     'TachSensor.cpp',
+-- 
+2.52.0
+
