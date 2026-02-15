@@ -1,0 +1,44 @@
+From 47f4b50d6e89a0bdeadb73581d14a191c7c15ba9 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Sun, 15 Feb 2026 13:18:18 +0100
+Subject: [PATCH] dbus: skip zone rebuild on sensor removal
+
+Skip zone rebuilds triggered by InterfacesRemoved signals on sensor
+paths. When PECI sensors disappear from D-Bus (e.g. during host power
+transitions), the running PID loop already handles missing sensors
+gracefully via timeout and InputUnavailableAsFailed. Rebuilding the
+zone on sensor removal destroys the running control loop, leaving fans
+uncontrolled until the rebuild completes.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ dbus/dbusconfiguration.cpp | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/dbus/dbusconfiguration.cpp b/dbus/dbusconfiguration.cpp
+index da8d316..47b3c1b 100644
+--- a/dbus/dbusconfiguration.cpp
++++ b/dbus/dbusconfiguration.cpp
+@@ -189,7 +189,18 @@ int eventHandler(sd_bus_message* m, void* context, sd_bus_error*)
+             interface};
+ 
+     sdbusplus::message_t message(m);
+-    if (std::string(message.get_member()) == "InterfacesAdded")
++    std::string member = message.get_member();
++
++    // Sensor removal does not require a zone rebuild — the PID loop
++    // handles missing sensors gracefully via timeout and
++    // InputUnavailableAsFailed.  Rebuilding on removal causes unnecessary
++    // fan speed spikes during PECI sensor flicker.
++    if (member == "InterfacesRemoved")
++    {
++        return 1;
++    }
++
++    if (member == "InterfacesAdded")
+     {
+         sdbusplus::message::object_path path;
+         std::unordered_map<
+-- 
+2.52.0
+

@@ -1,0 +1,48 @@
+From dd213049a02329abe20dc0a3f2a401b480c97ba3 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Sun, 15 Feb 2026 13:18:00 +0100
+Subject: [PATCH] main: add configurable zone rebuild retry delay
+
+Add a --retry-delay CLI option (default 10 seconds, range 1-60) for
+the zone rebuild retry interval. Platforms where 10 seconds is too
+conservative can lower it via a systemd drop-in override.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ main.cpp | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/main.cpp b/main.cpp
+index c924123..cdd5b09 100644
+--- a/main.cpp
++++ b/main.cpp
+@@ -73,6 +73,7 @@ static std::optional<SensorManager> mgmr;
+ } // namespace pid_control
+ 
+ std::filesystem::path configPath = "";
++static unsigned int retryDelaySec = 10;
+ 
+ /* async io context for operation */
+ boost::asio::io_context io;
+@@ -187,7 +188,7 @@ void restartControlLoops()
+ 
+ void tryRestartControlLoops(bool first)
+ {
+-    static const auto delayTime = std::chrono::seconds(10);
++    const auto delayTime = std::chrono::seconds(retryDelaySec);
+     static boost::asio::steady_timer timer(io);
+ 
+     auto restartLbd = [](const boost::system::error_code& error) {
+@@ -322,6 +323,9 @@ int main(int argc, char* argv[])
+     app.add_flag("-d,--debug", debugEnabled, "Enable or disable debug mode");
+     app.add_flag("-g,--corelogging", coreLoggingEnabled,
+                  "Enable or disable logging of core PID loop computations");
++    app.add_option("-r,--retry-delay", retryDelaySec,
++                   "Zone rebuild retry delay in seconds")
++        ->check(CLI::Range(1u, 60u));
+ 
+     CLI11_PARSE(app, argc, argv);
+ 
+-- 
+2.52.0
+
