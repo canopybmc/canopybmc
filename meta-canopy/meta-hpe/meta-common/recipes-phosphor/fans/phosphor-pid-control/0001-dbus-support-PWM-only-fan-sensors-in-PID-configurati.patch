@@ -1,0 +1,105 @@
+From 486d84907b0d597a9f437d18122a7a1ea737062d Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 13 Feb 2026 16:32:13 +0100
+Subject: [PATCH] dbus: support PWM-only fan sensors in PID configuration
+
+Fan controllers without tachometer hardware expose PWM duty readback
+through Sensor.Value objects at fan_pwm paths. These paths also appear
+as Control.FanPwm objects, causing interface mismatches and doubled
+sensor names in logs.
+
+Remove the filter that excluded Sensor.Value objects whose path
+contains "pwm", add post-collection filtering to keep only the
+expected interface per direction, and deduplicate fan/PWM index names
+when input and output sensor names are identical.
+
+Also suppress the log message when querying the optional Availability
+interface on sensors that do not implement it.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ dbus/dbusconfiguration.cpp | 25 ++++++++++++++++++-------
+ dbus/dbushelper.cpp        | 15 ++++++++++-----
+ 2 files changed, 28 insertions(+), 12 deletions(-)
+
+diff --git a/dbus/dbusconfiguration.cpp b/dbus/dbusconfiguration.cpp
+index 9640f9a..da8d316 100644
+--- a/dbus/dbusconfiguration.cpp
++++ b/dbus/dbusconfiguration.cpp
+@@ -513,12 +513,6 @@ bool init(sdbusplus::bus_t& bus, boost::asio::steady_timer& timer,
+                 if (interface == SensorValue::interface ||
+                     interface == ControlFanPwm::interface)
+                 {
+-                    // we're not interested in pwm sensors, just pwm control
+-                    if (interface == SensorValue::interface &&
+-                        objectPair.first.find("pwm") != std::string::npos)
+-                    {
+-                        continue;
+-                    }
+                     sensors[objectPair.first] = interface;
+                 }
+             }
+@@ -826,6 +820,20 @@ bool init(sdbusplus::bus_t& bus, boost::asio::steady_timer& timer,
+                                 missingAcceptableSensorInterfaces);
+                 }
+ 
++                // When a sensor name matches both Sensor.Value and
++                // Control.FanPwm paths (e.g. PWM-only fans without tach),
++                // keep only the expected interface for each direction.
++                std::erase_if(inputSensorInterfaces, [](const auto& si) {
++                    return si.second != SensorValue::interface;
++                });
++                std::erase_if(outputSensorInterfaces, [](const auto& si) {
++                    return si.second != ControlFanPwm::interface;
++                });
++                std::erase_if(missingAcceptableSensorInterfaces,
++                              [](const auto& si) {
++                    return si.second != SensorValue::interface;
++                });
++
+                 for (const SensorInterfaceType& inputSensorInterface :
+                      inputSensorInterfaces)
+                 {
+@@ -958,7 +966,10 @@ bool init(sdbusplus::bus_t& bus, boost::asio::steady_timer& timer,
+                             inputSensorInterfaces.at(idx).first;
+                         fanSensorName = getSensorNameFromPath(fanPath);
+                         pwmSensorName = getSensorNameFromPath(pwmPath);
+-                        std::string fanPwmIndex = fanSensorName + pwmSensorName;
++                        std::string fanPwmIndex =
++                            (fanSensorName == pwmSensorName)
++                                ? fanSensorName
++                                : (fanSensorName + pwmSensorName);
+                         archivedInputSensorNames.push_back(fanPwmIndex);
+                         auto& fanConfig = sensorConfig[fanPwmIndex];
+                         fanConfig.type = pidClass;
+diff --git a/dbus/dbushelper.cpp b/dbus/dbushelper.cpp
+index 1d03967..961fd11 100644
+--- a/dbus/dbushelper.cpp
++++ b/dbus/dbushelper.cpp
+@@ -132,13 +132,18 @@ void DbusHelper::getProperties(const std::string& service,
+     bool available = true;
+     try
+     {
+-        getProperty(service, path, StateDecoratorAvailability::interface,
+-                    StateDecoratorAvailability::property_names::available,
+-                    available);
++        auto availMsg = _bus.new_method_call(
++            service.c_str(), path.c_str(), propertiesintf, "Get");
++        availMsg.append(StateDecoratorAvailability::interface,
++                        StateDecoratorAvailability::property_names::available);
++        std::variant<bool> result;
++        auto responseMsg = _bus.call(availMsg);
++        responseMsg.read(result);
++        available = std::get<bool>(result);
+     }
+-    catch (const sdbusplus::exception_t& ex)
++    catch (const sdbusplus::exception_t&)
+     {
+-        // unsupported Available property, leaving reading at 'True'
++        // Optional interface — sensors without it are assumed available
+     }
+     prop->available = available;
+ 
+-- 
+2.52.0
+
