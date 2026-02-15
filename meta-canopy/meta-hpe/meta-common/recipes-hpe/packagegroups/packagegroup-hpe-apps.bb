@@ -23,6 +23,7 @@ RPROVIDES:${PN}-system += "virtual-obmc-system-mgmt"
 
 SUMMARY:${PN}-chassis = "HPE Chassis"
 RDEPENDS:${PN}-chassis = " \
+        phosphor-gpio-monitor-monitor \
         x86-power-control \
         "
 
