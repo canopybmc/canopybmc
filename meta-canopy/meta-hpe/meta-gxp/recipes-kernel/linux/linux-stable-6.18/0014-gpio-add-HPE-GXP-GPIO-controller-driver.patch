@@ -1,0 +1,418 @@
+From bcbf0008c599ae0175f1451dd803f65e11d47983 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Sun, 8 Feb 2026 22:20:24 +0100
+Subject: [PATCH] gpio: add HPE GXP GPIO controller driver
+
+Add a GPIO driver providing 300 lines through the GXP CSM GPI/GPO
+chains and VUHC register blocks. Uses of_iomap for the CSM region
+to avoid resource conflicts with the CSM syscon node.
+
+Co-developed-by: Gilbert Chen <gilbert.chen@hpe.com>
+Signed-off-by: Gilbert Chen <gilbert.chen@hpe.com>
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/gpio/Kconfig    |  10 ++
+ drivers/gpio/Makefile   |   1 +
+ drivers/gpio/gpio-gxp.c | 357 ++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 368 insertions(+)
+ create mode 100644 drivers/gpio/gpio-gxp.c
+
+diff --git a/drivers/gpio/Kconfig b/drivers/gpio/Kconfig
+index e053524c5e35..61bc255088b8 100644
+--- a/drivers/gpio/Kconfig
++++ b/drivers/gpio/Kconfig
+@@ -370,6 +370,16 @@ config GPIO_GRGPIO
+ 	  Select this to support Aeroflex Gaisler GRGPIO cores from the GRLIB
+ 	  VHDL IP core library.
+ 
++config GPIO_GXP
++	tristate "HPE GXP GPIO support"
++	depends on ARCH_HPE_GXP || COMPILE_TEST
++	select MFD_SYSCON
++	help
++	  Select this to enable GPIO support for the HPE GXP BMC SoC.
++	  The driver provides 300 GPIO lines through the CSM (Slave
++	  Instrumentation and System Support) and VUHC (Virtual USB
++	  Host Controller) register blocks.
++
+ config GPIO_HISI
+ 	tristate "HiSilicon GPIO controller driver"
+ 	depends on ARM64 || COMPILE_TEST
+diff --git a/drivers/gpio/Makefile b/drivers/gpio/Makefile
+index ec296fa14bfd..e20d4c4d365c 100644
+--- a/drivers/gpio/Makefile
++++ b/drivers/gpio/Makefile
+@@ -76,6 +76,7 @@ obj-$(CONFIG_GPIO_GPIO_MM)		+= gpio-gpio-mm.o
+ obj-$(CONFIG_GPIO_GRANITERAPIDS)	+= gpio-graniterapids.o
+ obj-$(CONFIG_GPIO_GRGPIO)		+= gpio-grgpio.o
+ obj-$(CONFIG_GPIO_GW_PLD)		+= gpio-gw-pld.o
++obj-$(CONFIG_GPIO_GXP)			+= gpio-gxp.o
+ obj-$(CONFIG_GPIO_HISI)                 += gpio-hisi.o
+ obj-$(CONFIG_GPIO_HLWD)			+= gpio-hlwd.o
+ obj-$(CONFIG_HTC_EGPIO)			+= gpio-htc-egpio.o
+diff --git a/drivers/gpio/gpio-gxp.c b/drivers/gpio/gpio-gxp.c
+new file mode 100644
+index 000000000000..7dfbfb4998be
+--- /dev/null
++++ b/drivers/gpio/gpio-gxp.c
+@@ -0,0 +1,357 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * HPE GXP GPIO driver
++ *
++ * Copyright (C) 2019 Hewlett Packard Enterprise Development LP.
++ * Copyright (C) 2026 9elements GmbH
++ *
++ * This driver provides GPIO functionality for the HPE GXP BMC SoC through
++ * the CSM (Slave Instrumentation and System Support) and VUHC (Virtual USB
++ * Host Controller) register blocks.
++ *
++ * GPIO layout:
++ *   0-63:    CSM GPI (General Purpose Input)
++ *   64-127:  CSM GPO chain 1 (General Purpose Output)
++ *   128-191: CSM GPO chain 2 (General Purpose Output)
++ *   192-199: CSM miscellaneous (SW_RESET, NMI_OUT, etc.)
++ *   200-249: Reserved for FN2
++ *   250-299: VUHC miscellaneous
++ */
++
++#include <linux/gpio/driver.h>
++#include <linux/io.h>
++#include <linux/mfd/syscon.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/platform_device.h>
++#include <linux/regmap.h>
++#include <linux/soc/hpe/gxp-regs.h>
++
++/*
++ * The GPIO node's reg maps the ASRSTAT/ASRESTAT pair at CSM offset 0x5C.
++ * These local offsets are relative to the GPIO node's own register base.
++ */
++#define GPIO_ASRSTAT_OFS	0
++#define GPIO_ASRESTAT_OFS	1
++
++struct gxp_gpio_drvdata {
++	struct regmap *csm_map;
++	struct regmap *vuhc0_map;
++	void __iomem *base;
++	struct gpio_chip chip;
++};
++
++static int csm_gpio_get(struct gpio_chip *chip, unsigned int offset)
++{
++	struct gxp_gpio_drvdata *drvdata = gpiochip_get_data(chip);
++	unsigned int val;
++	int ret = 0;
++
++	switch (offset) {
++	case 0 ... 31:
++		/* GPI LOW */
++		regmap_read(drvdata->csm_map, CSM_GPIDATL, &val);
++		ret = !!(val & BIT(offset));
++		break;
++	case 32 ... 63:
++		/* GPI HIGH */
++		regmap_read(drvdata->csm_map, CSM_GPIDATH, &val);
++		ret = !!(val & BIT(offset - 32));
++		break;
++	case 64 ... 95:
++		/* GPO chain 1 LOW */
++		regmap_read(drvdata->csm_map, CSM_GPODATL, &val);
++		ret = !!(val & BIT(offset - 64));
++		break;
++	case 96 ... 127:
++		/* GPO chain 1 HIGH */
++		regmap_read(drvdata->csm_map, CSM_GPODATH, &val);
++		ret = !!(val & BIT(offset - 96));
++		break;
++	case 128 ... 159:
++		/* GPO chain 2 LOW */
++		regmap_read(drvdata->csm_map, CSM_GPODAT2L, &val);
++		ret = !!(val & BIT(offset - 128));
++		break;
++	case 160 ... 191:
++		/* GPO chain 2 HIGH */
++		regmap_read(drvdata->csm_map, CSM_GPODAT2H, &val);
++		ret = !!(val & BIT(offset - 160));
++		break;
++	case 192:
++		/* SW_RESET */
++		val = readb(drvdata->base + GPIO_ASRESTAT_OFS);
++		ret = !!(val & CSM_ASRESTAT_SW_RESET);
++		break;
++	default:
++		break;
++	}
++
++	return ret;
++}
++
++static int csm_gpio_set(struct gpio_chip *chip, unsigned int offset, int value)
++{
++	struct gxp_gpio_drvdata *drvdata = gpiochip_get_data(chip);
++	unsigned int own;
++
++	switch (offset) {
++	case 64 ... 95:
++		/* GPO chain 1 LOW - preserve ownership setting */
++		regmap_read(drvdata->csm_map, CSM_GPOOWNL, &own);
++		own = !!(own & BIT(offset - 64));
++
++		regmap_update_bits(drvdata->csm_map, CSM_GPOOWNL,
++				   BIT(offset - 64), BIT(offset - 64));
++		regmap_update_bits(drvdata->csm_map, CSM_GPODATL,
++				   BIT(offset - 64),
++				   value ? BIT(offset - 64) : 0);
++		regmap_update_bits(drvdata->csm_map, CSM_GPOOWNL,
++				   BIT(offset - 64),
++				   own ? BIT(offset - 64) : 0);
++		break;
++	case 96 ... 127:
++		/* GPO chain 1 HIGH */
++		regmap_read(drvdata->csm_map, CSM_GPOOWNH, &own);
++		own = !!(own & BIT(offset - 96));
++
++		regmap_update_bits(drvdata->csm_map, CSM_GPOOWNH,
++				   BIT(offset - 96), BIT(offset - 96));
++		regmap_update_bits(drvdata->csm_map, CSM_GPODATH,
++				   BIT(offset - 96),
++				   value ? BIT(offset - 96) : 0);
++		regmap_update_bits(drvdata->csm_map, CSM_GPOOWNH,
++				   BIT(offset - 96),
++				   own ? BIT(offset - 96) : 0);
++		break;
++	case 128 ... 159:
++		/* GPO chain 2 LOW */
++		regmap_read(drvdata->csm_map, CSM_GPOOWN2L, &own);
++		own = !!(own & BIT(offset - 128));
++
++		regmap_update_bits(drvdata->csm_map, CSM_GPOOWN2L,
++				   BIT(offset - 128), BIT(offset - 128));
++		regmap_update_bits(drvdata->csm_map, CSM_GPODAT2L,
++				   BIT(offset - 128),
++				   value ? BIT(offset - 128) : 0);
++		regmap_update_bits(drvdata->csm_map, CSM_GPOOWN2L,
++				   BIT(offset - 128),
++				   own ? BIT(offset - 128) : 0);
++		break;
++	case 160 ... 191:
++		/* GPO chain 2 HIGH */
++		regmap_read(drvdata->csm_map, CSM_GPOOWN2H, &own);
++		own = !!(own & BIT(offset - 160));
++
++		regmap_update_bits(drvdata->csm_map, CSM_GPOOWN2H,
++				   BIT(offset - 160), BIT(offset - 160));
++		regmap_update_bits(drvdata->csm_map, CSM_GPODAT2H,
++				   BIT(offset - 160),
++				   value ? BIT(offset - 160) : 0);
++		regmap_update_bits(drvdata->csm_map, CSM_GPOOWN2H,
++				   BIT(offset - 160),
++				   own ? BIT(offset - 160) : 0);
++		break;
++	case 192:
++		/* SW_RESET */
++		if (value) {
++			writeb(0x00, drvdata->base + GPIO_ASRSTAT_OFS);
++			writeb(CSM_ASRESTAT_SW_RESET,
++			       drvdata->base + GPIO_ASRESTAT_OFS);
++		} else {
++			writeb(0x00, drvdata->base + GPIO_ASRESTAT_OFS);
++		}
++		break;
++	default:
++		break;
++	}
++
++	return 0;
++}
++
++static int csm_gpio_get_direction(struct gpio_chip *chip, unsigned int offset)
++{
++	switch (offset) {
++	case 0 ... 63:
++		return GPIO_LINE_DIRECTION_IN;
++	case 64 ... 191:
++		return GPIO_LINE_DIRECTION_OUT;
++	case 192 ... 193:
++		return GPIO_LINE_DIRECTION_OUT;
++	case 194:
++		return GPIO_LINE_DIRECTION_IN;
++	default:
++		return GPIO_LINE_DIRECTION_IN;
++	}
++}
++
++static int csm_gpio_direction_input(struct gpio_chip *chip, unsigned int offset)
++{
++	switch (offset) {
++	case 0 ... 63:
++	case 194:
++		return 0;
++	default:
++		return -EOPNOTSUPP;
++	}
++}
++
++static int csm_gpio_direction_output(struct gpio_chip *chip,
++				      unsigned int offset, int value)
++{
++	switch (offset) {
++	case 64 ... 191:
++	case 192 ... 193:
++		csm_gpio_set(chip, offset, value);
++		return 0;
++	default:
++		return -EOPNOTSUPP;
++	}
++}
++
++static int vuhc_gpio_get(struct gpio_chip *chip, unsigned int offset)
++{
++	struct gxp_gpio_drvdata *drvdata = gpiochip_get_data(chip);
++	unsigned int val;
++
++	if (offset < 8) {
++		regmap_read(drvdata->vuhc0_map, 0x64 + 4 * offset, &val);
++		return !!(val & BIT(13));
++	}
++
++	return 0;
++}
++
++static int vuhc_gpio_get_direction(struct gpio_chip *chip, unsigned int offset)
++{
++	return GPIO_LINE_DIRECTION_IN;
++}
++
++static int gxp_gpio_get(struct gpio_chip *chip, unsigned int offset)
++{
++	if (offset < 200)
++		return csm_gpio_get(chip, offset);
++	else if (offset >= 250 && offset < 300)
++		return vuhc_gpio_get(chip, offset - 250);
++
++	return 0;
++}
++
++static int gxp_gpio_set(struct gpio_chip *chip, unsigned int offset, int value)
++{
++	if (offset < 200)
++		return csm_gpio_set(chip, offset, value);
++
++	/* VUHC GPIOs are read-only */
++	return 0;
++}
++
++static int gxp_gpio_get_direction(struct gpio_chip *chip, unsigned int offset)
++{
++	if (offset < 200)
++		return csm_gpio_get_direction(chip, offset);
++	else if (offset >= 250 && offset < 300)
++		return vuhc_gpio_get_direction(chip, offset - 250);
++
++	return GPIO_LINE_DIRECTION_IN;
++}
++
++static int gxp_gpio_direction_input(struct gpio_chip *chip, unsigned int offset)
++{
++	if (offset < 200)
++		return csm_gpio_direction_input(chip, offset);
++	else if (offset >= 250 && offset < 300)
++		return 0; /* VUHC GPIOs are input only */
++
++	return -EOPNOTSUPP;
++}
++
++static int gxp_gpio_direction_output(struct gpio_chip *chip,
++				      unsigned int offset, int value)
++{
++	if (offset < 200)
++		return csm_gpio_direction_output(chip, offset, value);
++
++	return -EOPNOTSUPP;
++}
++
++static void gxp_gpio_iounmap(void *base)
++{
++	iounmap(base);
++}
++
++static int gxp_gpio_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct gxp_gpio_drvdata *drvdata;
++	int ret;
++
++	drvdata = devm_kzalloc(dev, sizeof(*drvdata), GFP_KERNEL);
++	if (!drvdata)
++		return -ENOMEM;
++
++	platform_set_drvdata(pdev, drvdata);
++
++	drvdata->csm_map = syscon_regmap_lookup_by_phandle(dev->of_node,
++							   "hpe,csm");
++	if (IS_ERR(drvdata->csm_map))
++		return dev_err_probe(dev, PTR_ERR(drvdata->csm_map),
++				     "failed to find hpe,csm syscon\n");
++
++	drvdata->vuhc0_map = syscon_regmap_lookup_by_phandle(dev->of_node,
++							     "hpe,vuhc");
++	if (IS_ERR(drvdata->vuhc0_map))
++		return dev_err_probe(dev, PTR_ERR(drvdata->vuhc0_map),
++				     "failed to find hpe,vuhc syscon\n");
++
++	/*
++	 * Direct register access for SW_RESET (ASRSTAT/ASRESTAT at
++	 * CSM offset 0x5C). The GPIO reg falls within the CSM syscon
++	 * region, so use of_iomap to avoid a resource reservation
++	 * conflict.
++	 */
++	drvdata->base = of_iomap(dev->of_node, 0);
++	if (!drvdata->base)
++		return -ENOMEM;
++	ret = devm_add_action_or_reset(dev, gxp_gpio_iounmap, drvdata->base);
++	if (ret)
++		return ret;
++
++	drvdata->chip.label = "gxp-gpio";
++	drvdata->chip.parent = dev;
++	drvdata->chip.owner = THIS_MODULE;
++	drvdata->chip.get = gxp_gpio_get;
++	drvdata->chip.set = gxp_gpio_set;
++	drvdata->chip.get_direction = gxp_gpio_get_direction;
++	drvdata->chip.direction_input = gxp_gpio_direction_input;
++	drvdata->chip.direction_output = gxp_gpio_direction_output;
++	drvdata->chip.base = -1;
++	drvdata->chip.ngpio = 300;
++
++	ret = devm_gpiochip_add_data(dev, &drvdata->chip, drvdata);
++	if (ret < 0)
++		return dev_err_probe(dev, ret, "could not register gpiochip\n");
++
++	return 0;
++}
++
++static const struct of_device_id gxp_gpio_of_match[] = {
++	{ .compatible = "hpe,gxp-gpio" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, gxp_gpio_of_match);
++
++static struct platform_driver gxp_gpio_driver = {
++	.driver = {
++		.name = "gxp-gpio",
++		.of_match_table = gxp_gpio_of_match,
++	},
++	.probe = gxp_gpio_probe,
++};
++module_platform_driver(gxp_gpio_driver);
++
++MODULE_AUTHOR("Gilbert Chen <gilbert.chen@hpe.com>");
++MODULE_AUTHOR("Marcello Sylvester Bauer <marcello.bauer@9elements.com>");
++MODULE_DESCRIPTION("HPE GXP GPIO driver");
++MODULE_LICENSE("GPL");
+-- 
+2.52.0
+

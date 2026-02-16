@@ -1,0 +1,554 @@
+From 5e1c13071773237a63f0447cb07f2bfa10c6a3ab Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Sun, 8 Feb 2026 22:21:26 +0100
+Subject: [PATCH] soc: hpe: add GXP host power controller driver
+
+Add a virtual GPIO controller wrapping FN2 VPBTN/PGOOD with
+CPLD-mediated host boot sequence management. Uses direct MMIO
+for byte-offset XREG registers, provides IRQ chip for PGOOD
+event forwarding, and implements platform-aware eSPI OOB reset.
+Exposes three GPIO lines: power-ctrl-out, power-ctrl-good, and
+reset-out.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/soc/hpe/Kconfig          |  16 +
+ drivers/soc/hpe/Makefile         |   1 +
+ drivers/soc/hpe/gxp-power-ctrl.c | 491 +++++++++++++++++++++++++++++++
+ 3 files changed, 508 insertions(+)
+ create mode 100644 drivers/soc/hpe/gxp-power-ctrl.c
+
+diff --git a/drivers/soc/hpe/Kconfig b/drivers/soc/hpe/Kconfig
+index cada2f39340c..b3094d2460bd 100644
+--- a/drivers/soc/hpe/Kconfig
++++ b/drivers/soc/hpe/Kconfig
+@@ -58,4 +58,20 @@ config SOC_HPE_GXP_FN2
+ 	  provides GPIO lines for power state control (VPBTN,
+ 	  PGOOD, PERST) and interrupt handling.
+ 
++config SOC_HPE_GXP_POWER_CTRL
++	tristate "HPE GXP host power controller"
++	depends on ARCH_HPE_GXP || COMPILE_TEST
++	depends on GPIOLIB
++	depends on SOC_HPE_GXP_FN2
++	depends on SOC_HPE_GXP_XREG
++	select MFD_SYSCON
++	select REGMAP_MMIO
++	help
++	  Say Y here to add support for the HPE GXP host power
++	  controller. This wraps the FN2 virtual power button and
++	  power good GPIO lines, injecting CPLD register
++	  configuration during host power state transitions.
++	  It exposes two GPIO lines (power-button and power-good)
++	  for integration with x86-power-control.
++
+ endif # SOC_HPE
+diff --git a/drivers/soc/hpe/Makefile b/drivers/soc/hpe/Makefile
+index a7e25539f99d..62994d7b35ee 100644
+--- a/drivers/soc/hpe/Makefile
++++ b/drivers/soc/hpe/Makefile
+@@ -7,3 +7,4 @@ obj-$(CONFIG_SOC_HPE_GXP)		+= gxp-soclib.o
+ obj-$(CONFIG_SOC_HPE_GXP_CSM)		+= gxp-csm.o
+ obj-$(CONFIG_SOC_HPE_GXP_XREG)		+= gxp-xreg.o
+ obj-$(CONFIG_SOC_HPE_GXP_FN2)		+= gxp-fn2.o
++obj-$(CONFIG_SOC_HPE_GXP_POWER_CTRL)	+= gxp-power-ctrl.o
+diff --git a/drivers/soc/hpe/gxp-power-ctrl.c b/drivers/soc/hpe/gxp-power-ctrl.c
+new file mode 100644
+index 000000000000..9a8c0cbc50f5
+--- /dev/null
++++ b/drivers/soc/hpe/gxp-power-ctrl.c
+@@ -0,0 +1,491 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * HPE GXP host power controller driver
++ *
++ * Copyright (C) 2026 9elements GmbH
++ *
++ * This driver manages the CPLD-mediated host boot sequence for HPE
++ * ProLiant Gen11 servers. It acts as a GPIO controller that wraps
++ * the FN2 virtual power button (VPBTN) and power good (PGOOD) lines,
++ * injecting required CPLD register writes during power state transitions.
++ *
++ * Exposed GPIO lines:
++ *   Line 0: power-button (output) - wraps FN2 VPBTN
++ *   Line 1: power-good (input) - wraps FN2 PGOOD
++ *   Line 2: reset-out (output) - warm reset control
++ *
++ * On power-button assertion (when PGOOD is low, i.e. power-on):
++ *   1. Set flash_select to 0x5D (UEFI EV store via SPI ctrl1)
++ *   2. Set SoC release bit 3
++ *   3. Reset eSPI OOB controller (Intel/AMD only)
++ *   4. Set boot_control to 0x24 (release host boot gate)
++ *   5. Clear shutdown reason
++ *   6. Forward VPBTN to FN2
++ *
++ * On PGOOD falling edge (host powered off):
++ *   1. Set boot_control to 0x00 (hold host boot gate)
++ *   2. SoC release cycle: clear byte, then re-set bit 3
++ *
++ * On probe (BMC boot):
++ *   1. Set PSU enable to 0xFF
++ *   2. Set power state to 0x08 (exit S5)
++ *   3. Set boot_control to 0x24 (release)
++ *
++ * Register sources:
++ *   flash_select:    XREG offset 0x119 (direct readb/writeb)
++ *   soc_release:     XREG offset 0x11A (direct readb/writeb)
++ *   boot_control:    XREG offset 0x09 (direct readb/writeb)
++ *   psu_enable:      XREG offset 0x41 (direct readb/writeb)
++ *   power_state:     XREG offset 0x4B (direct readb/writeb)
++ *   shutdown_reason: CSM offset 0x74 (direct writeb)
++ *   espi_oob_ctrl:   eSPI offset 0x1040 (Intel/AMD only, via regmap)
++ */
++
++#include <linux/device.h>
++#include <linux/gpio/consumer.h>
++#include <linux/gpio/driver.h>
++#include <linux/interrupt.h>
++#include <linux/io.h>
++#include <linux/mfd/syscon.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/platform_device.h>
++#include <linux/regmap.h>
++#include <linux/soc/hpe/gxp-regs.h>
++
++/* GPIO line indices */
++#define POWER_CTRL_POWER_BUTTON	0
++#define POWER_CTRL_POWER_GOOD	1
++#define POWER_CTRL_RESET_OUT	2
++#define POWER_CTRL_NUM_GPIOS	3
++
++struct gxp_power_ctrl {
++	struct gpio_chip gc;
++	struct gpio_desc *vpbtn_gpio;
++	struct gpio_desc *pgood_gpio;
++	struct regmap *espi_map;	/* optional, Intel/AMD only */
++	void __iomem *xreg_base;	/* XREG register base */
++	void __iomem *shutdown_reason_reg;
++	u16 server_id;
++	int pgood_irq;
++	u32 irq_mask;		/* bitmask of enabled virtual IRQs */
++};
++
++/*
++ * Prepare-boot sequence: configure CPLD for host boot.
++ * Called when the power button is asserted and PGOOD is low,
++ * or when reset-out is deasserted to release the host.
++ *
++ * This replicates the register writes from HPE's proliantStart.sh and
++ * gxp-fn2.c:120-166: flash_select = 0x5D, soc_release bit 3,
++ * boot_control = 0x24, clear shutdown reason.
++ */
++static void gxp_power_ctrl_prepare_boot(struct gxp_power_ctrl *pctrl)
++{
++	u8 val;
++
++	/* Flash select: expose UEFI EV variable store via SPI ctrl1 */
++	writeb(XREG_FLASH_SELECT_UEFI_EV,
++	       pctrl->xreg_base + XREG_FLASH_SELECT);
++
++	/* SoC release: set bit 3 to release the host SoC */
++	val = readb(pctrl->xreg_base + XREG_SOC_RELEASE);
++	val |= XREG_SOC_RELEASE_BIT;
++	writeb(val, pctrl->xreg_base + XREG_SOC_RELEASE);
++
++	/*
++	 * Reset the eSPI OOB controller before host power-on. Only
++	 * performed when an eSPI syscon is provided in the device tree
++	 * (Intel/AMD platforms use eSPI; Ampere uses SSIF instead).
++	 */
++	if (pctrl->espi_map)
++		regmap_write(pctrl->espi_map, GXP_ESPI_OOB_CTRL,
++			     GXP_ESPI_OOB_RESET);
++
++	/* Boot control: release the host boot gate */
++	writeb(XREG_BOOT_CONTROL_RELEASE,
++	       pctrl->xreg_base + XREG_BOOT_CONTROL);
++
++	/* Clear shutdown reason so fresh boot starts clean */
++	if (pctrl->shutdown_reason_reg)
++		writeb(0x00, pctrl->shutdown_reason_reg);
++}
++
++/*
++ * Shutdown acknowledgment: hold boot gate and cycle soc_release.
++ * Called on PGOOD falling edge (host powered off).
++ *
++ * This replicates HPE's gxp-fn2.c:84-93:
++ *   1. Hold boot gate (boot_control = 0x00)
++ *   2. Clear soc_release byte to 0x00
++ *   3. Re-set soc_release bit 3
++ *
++ * The soc_release cycle is critical — without it, the CPLD enters a
++ * fault state that prevents subsequent power-on without an AC cycle.
++ */
++static void gxp_power_ctrl_shutdown_ack(struct gxp_power_ctrl *pctrl)
++{
++	u8 val;
++
++	/* Hold host boot gate */
++	writeb(XREG_BOOT_CONTROL_HOLD,
++	       pctrl->xreg_base + XREG_BOOT_CONTROL);
++
++	/* SoC release cycle: clear byte, then re-set bit 3 */
++	writeb(0x00, pctrl->xreg_base + XREG_SOC_RELEASE);
++	val = readb(pctrl->xreg_base + XREG_SOC_RELEASE);
++	val |= XREG_SOC_RELEASE_BIT;
++	writeb(val, pctrl->xreg_base + XREG_SOC_RELEASE);
++}
++
++/*
++ * Initial platform configuration on BMC boot.
++ * Only runs if the host is not already powered on.
++ *
++ * This replicates HPE's host-boot-enable script:
++ *   PSU enable = 0xFF, exit S5 = 0x08, boot_control = 0x24
++ */
++static void gxp_power_ctrl_init_platform(struct gxp_power_ctrl *pctrl)
++{
++	int pgood;
++
++	pgood = gpiod_get_value(pctrl->pgood_gpio);
++	if (pgood > 0) {
++		dev_info(pctrl->gc.parent,
++			 "host already powered on, skipping init\n");
++		return;
++	}
++
++	/* Enable all PSUs */
++	writeb(0xFF, pctrl->xreg_base + XREG_PSU_ENABLE);
++
++	/* Exit S5 power state */
++	writeb(0x08, pctrl->xreg_base + XREG_POWER_STATE);
++
++	/* Release host boot gate */
++	writeb(XREG_BOOT_CONTROL_RELEASE,
++	       pctrl->xreg_base + XREG_BOOT_CONTROL);
++
++	/* Clear shutdown reason so fresh boot starts clean */
++	if (pctrl->shutdown_reason_reg)
++		writeb(0x00, pctrl->shutdown_reason_reg);
++}
++
++static int gxp_power_ctrl_get(struct gpio_chip *gc, unsigned int offset)
++{
++	struct gxp_power_ctrl *pctrl = gpiochip_get_data(gc);
++
++	switch (offset) {
++	case POWER_CTRL_POWER_BUTTON:
++	case POWER_CTRL_RESET_OUT:
++		return 0; /* write-only */
++	case POWER_CTRL_POWER_GOOD:
++		return gpiod_get_value(pctrl->pgood_gpio);
++	default:
++		return 0;
++	}
++}
++
++static int gxp_power_ctrl_set(struct gpio_chip *gc, unsigned int offset,
++			      int value)
++{
++	struct gxp_power_ctrl *pctrl = gpiochip_get_data(gc);
++
++	switch (offset) {
++	case POWER_CTRL_POWER_BUTTON:
++		if (value) {
++			/*
++			 * Power button pressed. Check PGOOD to determine
++			 * if this is a power-on (PGOOD low) or shutdown
++			 * request (PGOOD high).
++			 */
++			int pgood = gpiod_get_value(pctrl->pgood_gpio);
++
++			if (pgood <= 0)
++				gxp_power_ctrl_prepare_boot(pctrl);
++
++			/* Forward button press to FN2 */
++			gpiod_set_value(pctrl->vpbtn_gpio, 1);
++		} else {
++			/* Forward button release to FN2 */
++			gpiod_set_value(pctrl->vpbtn_gpio, 0);
++		}
++		break;
++	case POWER_CTRL_RESET_OUT:
++		if (value) {
++			/* Assert: hold host in reset */
++			gxp_power_ctrl_shutdown_ack(pctrl);
++		} else {
++			/* Deassert: release host to boot */
++			gxp_power_ctrl_prepare_boot(pctrl);
++		}
++		break;
++	default:
++		break;
++	}
++
++	return 0;
++}
++
++static int gxp_power_ctrl_get_direction(struct gpio_chip *gc,
++					unsigned int offset)
++{
++	switch (offset) {
++	case POWER_CTRL_POWER_BUTTON:
++	case POWER_CTRL_RESET_OUT:
++		return GPIO_LINE_DIRECTION_OUT;
++	case POWER_CTRL_POWER_GOOD:
++		return GPIO_LINE_DIRECTION_IN;
++	default:
++		return GPIO_LINE_DIRECTION_IN;
++	}
++}
++
++static int gxp_power_ctrl_direction_input(struct gpio_chip *gc,
++					  unsigned int offset)
++{
++	if (offset == POWER_CTRL_POWER_GOOD)
++		return 0;
++	return -EOPNOTSUPP;
++}
++
++static int gxp_power_ctrl_direction_output(struct gpio_chip *gc,
++					   unsigned int offset, int value)
++{
++	if (offset == POWER_CTRL_POWER_BUTTON ||
++	    offset == POWER_CTRL_RESET_OUT) {
++		gxp_power_ctrl_set(gc, offset, value);
++		return 0;
++	}
++	return -EOPNOTSUPP;
++}
++
++/*
++ * Virtual IRQ chip for the power-ctrl GPIO controller.
++ *
++ * This allows consumers (e.g. x86-power-control) to request edge
++ * events on the power-ctrl-good virtual GPIO line. Events are
++ * forwarded from the underlying FN2 PGOOD interrupt.
++ */
++static void gxp_power_ctrl_irq_mask(struct irq_data *d)
++{
++	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
++	struct gxp_power_ctrl *pctrl = gpiochip_get_data(gc);
++
++	pctrl->irq_mask &= ~BIT(irqd_to_hwirq(d));
++	gpiochip_disable_irq(gc, irqd_to_hwirq(d));
++}
++
++static void gxp_power_ctrl_irq_unmask(struct irq_data *d)
++{
++	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
++	struct gxp_power_ctrl *pctrl = gpiochip_get_data(gc);
++
++	gpiochip_enable_irq(gc, irqd_to_hwirq(d));
++	pctrl->irq_mask |= BIT(irqd_to_hwirq(d));
++}
++
++static int gxp_power_ctrl_irq_set_type(struct irq_data *d, unsigned int type)
++{
++	return 0;
++}
++
++static const struct irq_chip gxp_power_ctrl_irqchip = {
++	.name = "gxp-power-ctrl",
++	.irq_mask = gxp_power_ctrl_irq_mask,
++	.irq_unmask = gxp_power_ctrl_irq_unmask,
++	.irq_set_type = gxp_power_ctrl_irq_set_type,
++	.flags = IRQCHIP_IMMUTABLE,
++	GPIOCHIP_IRQ_RESOURCE_HELPERS,
++};
++
++static irqreturn_t gxp_power_ctrl_pgood_irq(int irq, void *data)
++{
++	struct gxp_power_ctrl *pctrl = data;
++	int pgood;
++
++	pgood = gpiod_get_value(pctrl->pgood_gpio);
++	if (pgood <= 0) {
++		/* PGOOD fell: host powered off */
++		gxp_power_ctrl_shutdown_ack(pctrl);
++		dev_info(pctrl->gc.parent,
++			 "PGOOD deasserted, boot gate held\n");
++	}
++
++	/* Forward event to power-ctrl-good virtual GPIO consumers */
++	if (pctrl->irq_mask & BIT(POWER_CTRL_POWER_GOOD)) {
++		unsigned int child_irq;
++
++		child_irq = irq_find_mapping(pctrl->gc.irq.domain,
++					     POWER_CTRL_POWER_GOOD);
++		if (child_irq)
++			handle_nested_irq(child_irq);
++	}
++
++	return IRQ_HANDLED;
++}
++
++static void gxp_power_ctrl_iounmap(void *base)
++{
++	iounmap(base);
++}
++
++static int gxp_power_ctrl_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct gxp_power_ctrl *pctrl;
++	struct device_node *np;
++	void __iomem *base;
++	unsigned int val;
++	int ret;
++
++	pctrl = devm_kzalloc(dev, sizeof(*pctrl), GFP_KERNEL);
++	if (!pctrl)
++		return -ENOMEM;
++
++	platform_set_drvdata(pdev, pctrl);
++
++	/*
++	 * Map the XREG register region for direct byte/word access.
++	 * Several XREG registers (boot_control at 0x09, psu_enable at
++	 * 0x41, power_state at 0x4B) are at offsets not aligned to 4
++	 * bytes. The syscon regmap (reg_stride=4) silently rejects
++	 * access to unaligned offsets, so direct MMIO is required.
++	 */
++	np = of_parse_phandle(dev->of_node, "hpe,xreg", 0);
++	if (!np)
++		return -ENODEV;
++	base = of_iomap(np, 0);
++	of_node_put(np);
++	if (!base)
++		return dev_err_probe(dev, -ENOMEM,
++				     "failed to map xreg region\n");
++	pctrl->xreg_base = base;
++
++	ret = devm_add_action_or_reset(dev, gxp_power_ctrl_iounmap, base);
++	if (ret)
++		return ret;
++
++	/* Read server ID to determine platform type */
++	val = readl(pctrl->xreg_base + XREG_SERVER_ID);
++	pctrl->server_id = (val & XREG_SERVER_ID_MASK) >> XREG_SERVER_ID_SHIFT;
++
++	/*
++	 * Get eSPI syscon for OOB controller reset (optional).
++	 * Only needed on Intel/AMD platforms; Ampere servers do not
++	 * use eSPI. If the phandle is absent, the reset is skipped.
++	 */
++	if (pctrl->server_id != GXP_SERVER_ID_AMPERE) {
++		struct regmap *espi;
++
++		espi = syscon_regmap_lookup_by_phandle(dev->of_node,
++						       "hpe,espi");
++		if (!IS_ERR(espi))
++			pctrl->espi_map = espi;
++	}
++
++	/*
++	 * Map shutdown_reason register from the CSM node.
++	 * The shutdown reason is at offset 0x74 within the single CSM
++	 * register region.
++	 */
++	np = of_parse_phandle(dev->of_node, "hpe,csm", 0);
++	if (np) {
++		base = of_iomap(np, 0);
++		of_node_put(np);
++		if (base) {
++			pctrl->shutdown_reason_reg =
++				base + CSM_SHUTDOWN_REASON;
++			ret = devm_add_action_or_reset(dev,
++						       gxp_power_ctrl_iounmap,
++						       base);
++			if (ret)
++				return ret;
++		}
++	}
++
++	/* Get VPBTN GPIO (output to FN2) */
++	pctrl->vpbtn_gpio = devm_gpiod_get(dev, "vpbtn", GPIOD_OUT_LOW);
++	if (IS_ERR(pctrl->vpbtn_gpio))
++		return dev_err_probe(dev, PTR_ERR(pctrl->vpbtn_gpio),
++				     "failed to get vpbtn gpio\n");
++
++	/* Get PGOOD GPIO (input from FN2) */
++	pctrl->pgood_gpio = devm_gpiod_get(dev, "pgood", GPIOD_IN);
++	if (IS_ERR(pctrl->pgood_gpio))
++		return dev_err_probe(dev, PTR_ERR(pctrl->pgood_gpio),
++				     "failed to get pgood gpio\n");
++
++	/* Setup GPIO controller with IRQ chip for event forwarding */
++	pctrl->gc.label = "gxp-power-ctrl";
++	pctrl->gc.parent = dev;
++	pctrl->gc.owner = THIS_MODULE;
++	pctrl->gc.get = gxp_power_ctrl_get;
++	pctrl->gc.set = gxp_power_ctrl_set;
++	pctrl->gc.get_direction = gxp_power_ctrl_get_direction;
++	pctrl->gc.direction_input = gxp_power_ctrl_direction_input;
++	pctrl->gc.direction_output = gxp_power_ctrl_direction_output;
++	pctrl->gc.base = -1;
++	pctrl->gc.ngpio = POWER_CTRL_NUM_GPIOS;
++
++	{
++		struct gpio_irq_chip *girq = &pctrl->gc.irq;
++
++		gpio_irq_chip_set_chip(girq, &gxp_power_ctrl_irqchip);
++		girq->default_type = IRQ_TYPE_NONE;
++		girq->handler = handle_simple_irq;
++		girq->threaded = true;
++	}
++
++	ret = devm_gpiochip_add_data(dev, &pctrl->gc, pctrl);
++	if (ret < 0)
++		return dev_err_probe(dev, ret,
++				     "could not register gpiochip\n");
++
++	/*
++	 * Request IRQ for PGOOD changes (both edges). On falling edge,
++	 * the driver performs shutdown acknowledgment. All events are
++	 * forwarded to the power-ctrl-good virtual GPIO line so that
++	 * userspace consumers can monitor host power state.
++	 */
++	pctrl->pgood_irq = gpiod_to_irq(pctrl->pgood_gpio);
++	if (pctrl->pgood_irq > 0) {
++		ret = devm_request_threaded_irq(dev, pctrl->pgood_irq, NULL,
++						gxp_power_ctrl_pgood_irq,
++						IRQF_TRIGGER_RISING |
++						IRQF_TRIGGER_FALLING |
++						IRQF_ONESHOT,
++						"gxp-power-ctrl-pgood", pctrl);
++		if (ret < 0)
++			dev_warn(dev, "failed to request pgood irq: %d\n", ret);
++	}
++
++	/* Initial platform configuration */
++	gxp_power_ctrl_init_platform(pctrl);
++
++	dev_info(dev, "ready, server_id=0x%03x pgood=%d espi=%s\n",
++		 pctrl->server_id, gpiod_get_value(pctrl->pgood_gpio),
++		 pctrl->espi_map ? "yes" : "no");
++
++	return 0;
++}
++
++static const struct of_device_id gxp_power_ctrl_of_match[] = {
++	{ .compatible = "hpe,gxp-power-ctrl" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, gxp_power_ctrl_of_match);
++
++static struct platform_driver gxp_power_ctrl_driver = {
++	.probe = gxp_power_ctrl_probe,
++	.driver = {
++		.name = "gxp-power-ctrl",
++		.of_match_table = gxp_power_ctrl_of_match,
++	},
++};
++module_platform_driver(gxp_power_ctrl_driver);
++
++MODULE_AUTHOR("Marcello Sylvester Bauer <marcello.bauer@9elements.com>");
++MODULE_DESCRIPTION("HPE GXP host power controller driver");
++MODULE_LICENSE("GPL");
+-- 
+2.52.0
+

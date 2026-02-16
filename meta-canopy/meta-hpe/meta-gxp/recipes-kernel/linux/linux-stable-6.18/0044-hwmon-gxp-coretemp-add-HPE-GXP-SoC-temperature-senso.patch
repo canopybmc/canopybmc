@@ -1,0 +1,195 @@
+From 05e9d2b392e17659cce9f7b7d510c27ec50b808c Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 12 Feb 2026 21:53:52 +0100
+Subject: [PATCH] hwmon: gxp-coretemp: add HPE GXP SoC temperature sensor
+ driver
+
+Add driver for the internal temperature sensor in HPE GXP BMC SoCs.
+The sensor provides die temperature readings from an on-chip ADC with
+a linear conversion formula.
+
+The driver uses the devm_hwmon_device_register_with_info API to expose
+a single temp1_input attribute.
+
+Co-developed-by: Gilbert Chen <gilbert.chen@hpe.com>
+Signed-off-by: Gilbert Chen <gilbert.chen@hpe.com>
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/hwmon/Kconfig        |   9 +++
+ drivers/hwmon/Makefile       |   1 +
+ drivers/hwmon/gxp-coretemp.c | 131 +++++++++++++++++++++++++++++++++++
+ 3 files changed, 141 insertions(+)
+ create mode 100644 drivers/hwmon/gxp-coretemp.c
+
+diff --git a/drivers/hwmon/Kconfig b/drivers/hwmon/Kconfig
+index 18d5d4d9589c..bda5b5e87084 100644
+--- a/drivers/hwmon/Kconfig
++++ b/drivers/hwmon/Kconfig
+@@ -821,6 +821,15 @@ config SENSORS_GXP_FAN_CTRL
+ 	  The GXP controls fan function via the CPLD through the use of PWM
+ 	  registers. This driver reports status and pwm setting of the fans.
+ 
++config SENSORS_GXP_CORETEMP
++	tristate "HPE GXP core temperature sensor"
++	depends on ARCH_HPE_GXP || COMPILE_TEST
++	help
++	  If you say yes here you get support for the HPE GXP SoC internal
++	  temperature sensor.
++
++	  This driver provides the die temperature of the GXP BMC processor.
++
+ config SENSORS_HIH6130
+ 	tristate "Honeywell Humidicon HIH-6130 humidity/temperature sensor"
+ 	depends on I2C
+diff --git a/drivers/hwmon/Makefile b/drivers/hwmon/Makefile
+index 73b2abdcc6dd..35ffb0681cb1 100644
+--- a/drivers/hwmon/Makefile
++++ b/drivers/hwmon/Makefile
+@@ -91,6 +91,7 @@ obj-$(CONFIG_SENSORS_GSC)	+= gsc-hwmon.o
+ obj-$(CONFIG_SENSORS_GPD)	+= gpd-fan.o
+ obj-$(CONFIG_SENSORS_GPIO_FAN)	+= gpio-fan.o
+ obj-$(CONFIG_SENSORS_GXP_FAN_CTRL) += gxp-fan-ctrl.o
++obj-$(CONFIG_SENSORS_GXP_CORETEMP) += gxp-coretemp.o
+ obj-$(CONFIG_SENSORS_HIH6130)	+= hih6130.o
+ obj-$(CONFIG_SENSORS_HS3001)	+= hs3001.o
+ obj-$(CONFIG_SENSORS_HTU31)	+= htu31.o
+diff --git a/drivers/hwmon/gxp-coretemp.c b/drivers/hwmon/gxp-coretemp.c
+new file mode 100644
+index 000000000000..6c62cf5369a9
+--- /dev/null
++++ b/drivers/hwmon/gxp-coretemp.c
+@@ -0,0 +1,131 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * HPE GXP SoC core temperature sensor driver
++ *
++ * Copyright (C) 2019 Hewlett Packard Enterprise Development LP.
++ * Copyright (C) 2026 9elements GmbH
++ */
++
++#include <linux/delay.h>
++#include <linux/err.h>
++#include <linux/hwmon.h>
++#include <linux/io.h>
++#include <linux/mod_devicetable.h>
++#include <linux/module.h>
++#include <linux/platform_device.h>
++
++#define OFS_TSENCMD	0x00
++#define OFS_TSENDAT	0x04
++#define OFS_TSENSTAT	0x06
++
++struct gxp_coretemp_drvdata {
++	void __iomem *base;
++};
++
++static int gxp_coretemp_read(struct device *dev, enum hwmon_sensor_types type,
++			     u32 attr, int channel, long *val)
++{
++	struct gxp_coretemp_drvdata *drvdata = dev_get_drvdata(dev);
++	u16 raw;
++
++	if (type != hwmon_temp || attr != hwmon_temp_input)
++		return -EOPNOTSUPP;
++
++	/* Check if sensor data is valid */
++	if (!(readw(drvdata->base + OFS_TSENSTAT) & 0x0001)) {
++		*val = 0;
++		return 0;
++	}
++
++	/* Read raw ADC value and convert to millidegrees Celsius */
++	raw = readw(drvdata->base + OFS_TSENDAT);
++	*val = ((raw * 3874) / 1000 - 2821) * 100;
++
++	return 0;
++}
++
++static umode_t gxp_coretemp_is_visible(const void *data,
++				       enum hwmon_sensor_types type,
++				       u32 attr, int channel)
++{
++	if (type == hwmon_temp && attr == hwmon_temp_input)
++		return 0444;
++
++	return 0;
++}
++
++static const struct hwmon_ops gxp_coretemp_ops = {
++	.is_visible = gxp_coretemp_is_visible,
++	.read = gxp_coretemp_read,
++};
++
++static const struct hwmon_channel_info * const gxp_coretemp_info[] = {
++	HWMON_CHANNEL_INFO(temp, HWMON_T_INPUT),
++	NULL
++};
++
++static const struct hwmon_chip_info gxp_coretemp_chip_info = {
++	.ops = &gxp_coretemp_ops,
++	.info = gxp_coretemp_info,
++};
++
++static int gxp_coretemp_init_hw(struct gxp_coretemp_drvdata *drvdata)
++{
++	/* Initialize temperature sensor hardware */
++	writew(0xc0a0, drvdata->base + OFS_TSENCMD);
++	writew(0xc080, drvdata->base + OFS_TSENCMD);
++	writew(0xc081, drvdata->base + OFS_TSENCMD);
++
++	usleep_range(64, 128);
++
++	writew(0xc083, drvdata->base + OFS_TSENCMD);
++
++	return 0;
++}
++
++static int gxp_coretemp_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct gxp_coretemp_drvdata *drvdata;
++	struct device *hwmon_dev;
++	int ret;
++
++	drvdata = devm_kzalloc(dev, sizeof(*drvdata), GFP_KERNEL);
++	if (!drvdata)
++		return -ENOMEM;
++
++	drvdata->base = devm_platform_get_and_ioremap_resource(pdev, 0, NULL);
++	if (IS_ERR(drvdata->base))
++		return dev_err_probe(dev, PTR_ERR(drvdata->base),
++				     "failed to map registers\n");
++
++	ret = gxp_coretemp_init_hw(drvdata);
++	if (ret)
++		return ret;
++
++	hwmon_dev = devm_hwmon_device_register_with_info(dev, "gxp_coretemp",
++							 drvdata,
++							 &gxp_coretemp_chip_info,
++							 NULL);
++
++	return PTR_ERR_OR_ZERO(hwmon_dev);
++}
++
++static const struct of_device_id gxp_coretemp_of_match[] = {
++	{ .compatible = "hpe,gxp-coretemp" },
++	{}
++};
++MODULE_DEVICE_TABLE(of, gxp_coretemp_of_match);
++
++static struct platform_driver gxp_coretemp_driver = {
++	.probe = gxp_coretemp_probe,
++	.driver = {
++		.name = "gxp-coretemp",
++		.of_match_table = gxp_coretemp_of_match,
++	},
++};
++module_platform_driver(gxp_coretemp_driver);
++
++MODULE_AUTHOR("Gilbert Chen <gilbert.chen@hpe.com>");
++MODULE_DESCRIPTION("HPE GXP SoC core temperature sensor");
++MODULE_LICENSE("GPL");
+-- 
+2.52.0
+

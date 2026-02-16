@@ -1,0 +1,43 @@
+From 2efbab8621c71a919bbdcfefc80eca9e3d6538a5 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Wed, 28 Jan 2026 13:42:36 +0100
+Subject: [PATCH] i2c: gxp: fix use of error pointer on syscon lookup failure
+
+When syscon_regmap_lookup_by_phandle() fails, the static i2cg_map
+variable retains the error pointer. On subsequent probe calls for other
+I2C engines, the check '!i2cg_map' evaluates to false, causing the code
+to skip the lookup and use the error pointer directly in
+regmap_update_bits().
+
+This results in a kernel panic:
+  Unable to handle kernel paging request at virtual address fffffffd
+  PC is at regmap_update_bits_base+0xc/0x70
+  LR is at gxp_i2c_probe+0x228/0x2b4
+
+Fix by resetting i2cg_map to NULL when the syscon lookup fails,
+allowing the lookup to be retried on subsequent probe calls.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/i2c/busses/i2c-gxp.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/i2c/busses/i2c-gxp.c b/drivers/i2c/busses/i2c-gxp.c
+index 2d117e7e3cb6..bbb16459c74b 100644
+--- a/drivers/i2c/busses/i2c-gxp.c
++++ b/drivers/i2c/busses/i2c-gxp.c
+@@ -515,7 +515,10 @@ static int gxp_i2c_probe(struct platform_device *pdev)
+ 		i2cg_map = syscon_regmap_lookup_by_phandle(pdev->dev.of_node,
+ 							   "hpe,sysreg");
+ 		if (IS_ERR(i2cg_map)) {
+-			return dev_err_probe(&pdev->dev, PTR_ERR(i2cg_map),
++			int err = PTR_ERR(i2cg_map);
++
++			i2cg_map = NULL;
++			return dev_err_probe(&pdev->dev, err,
+ 					     "failed to map i2cg_handle\n");
+ 		}
+ 
+-- 
+2.52.0
+

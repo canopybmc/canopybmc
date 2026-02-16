@@ -1,0 +1,784 @@
+From 6bbb2b5d279eba1bd80edfa3d347fbe6db847eda Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Tue, 3 Feb 2026 00:46:54 +0100
+Subject: [PATCH] soc: hpe: add GXP CHIF driver
+
+Add support for the HPE GXP Channel Interface (CHIF) which provides
+bidirectional communication between the BMC and host CPU. The driver
+exposes a character device (/dev/chif24) for userspace applications
+to exchange packets with the host via DMA-coherent shared memory.
+
+Features:
+- 1MB DMA-coherent shared memory with 32-channel CCB table
+- Doorbell interrupt handling for packet notifications
+- Read/write interface for packet exchange
+- Sysfs interface for protocol header inspection
+
+Co-developed-by: Gilbert Chen <gilbert.chen@hpe.com>
+Signed-off-by: Gilbert Chen <gilbert.chen@hpe.com>
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/soc/hpe/Kconfig    |  12 +
+ drivers/soc/hpe/Makefile   |   1 +
+ drivers/soc/hpe/gxp-chif.c | 719 +++++++++++++++++++++++++++++++++++++
+ 3 files changed, 732 insertions(+)
+ create mode 100644 drivers/soc/hpe/gxp-chif.c
+
+diff --git a/drivers/soc/hpe/Kconfig b/drivers/soc/hpe/Kconfig
+index b3094d2460bd..6ebcc9678b09 100644
+--- a/drivers/soc/hpe/Kconfig
++++ b/drivers/soc/hpe/Kconfig
+@@ -74,4 +74,16 @@ config SOC_HPE_GXP_POWER_CTRL
+ 	  It exposes two GPIO lines (power-button and power-good)
+ 	  for integration with x86-power-control.
+ 
++config SOC_HPE_GXP_CHIF
++	tristate "HPE GXP CHIF support"
++	depends on ARCH_HPE_GXP || COMPILE_TEST
++	select SOC_HPE_GXP
++	select MFD_SYSCON
++	select REGMAP_MMIO
++	help
++	  Say Y here to add support for the HPE GXP CHIF (Channel
++	  Interface) block. This provides character device access
++	  (/dev/chif24) for bidirectional host-BMC communication
++	  via 1MB DMA-coherent shared memory.
++
+ endif # SOC_HPE
+diff --git a/drivers/soc/hpe/Makefile b/drivers/soc/hpe/Makefile
+index 62994d7b35ee..5fefa0ddee15 100644
+--- a/drivers/soc/hpe/Makefile
++++ b/drivers/soc/hpe/Makefile
+@@ -8,3 +8,4 @@ obj-$(CONFIG_SOC_HPE_GXP_CSM)		+= gxp-csm.o
+ obj-$(CONFIG_SOC_HPE_GXP_XREG)		+= gxp-xreg.o
+ obj-$(CONFIG_SOC_HPE_GXP_FN2)		+= gxp-fn2.o
+ obj-$(CONFIG_SOC_HPE_GXP_POWER_CTRL)	+= gxp-power-ctrl.o
++obj-$(CONFIG_SOC_HPE_GXP_CHIF)		+= gxp-chif.o
+diff --git a/drivers/soc/hpe/gxp-chif.c b/drivers/soc/hpe/gxp-chif.c
+new file mode 100644
+index 000000000000..8cc303256639
+--- /dev/null
++++ b/drivers/soc/hpe/gxp-chif.c
+@@ -0,0 +1,719 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * HPE GXP Channel Interface (CHIF) driver
++ *
++ * Provides bidirectional host-BMC communication via /dev/chif24 character
++ * device with 1MB DMA-coherent shared memory.
++ *
++ * Copyright (C) 2020 Hewlett Packard Enterprise Development LP.
++ */
++
++#include <linux/cdev.h>
++#include <linux/delay.h>
++#include <linux/dma-mapping.h>
++#include <linux/fs.h>
++#include <linux/interrupt.h>
++#include <linux/io.h>
++#include <linux/mfd/syscon.h>
++#include <linux/mod_devicetable.h>
++#include <linux/module.h>
++#include <linux/platform_device.h>
++#include <linux/regmap.h>
++#include <linux/sched/signal.h>
++#include <linux/uaccess.h>
++#include <linux/wait.h>
++
++#include "gxp-soclib.h"
++
++#define MAX_CHANNELS 32
++#define CHANNEL_SHAREMEM 24
++
++#define DEVICE_NAME "chif"
++#define DEVICE_COUNT MAX_CHANNELS
++
++#define SHARED_MEM_CHIF_DESCRIPTOR_NUM 2
++#define SHARED_MEM_CHIF_DESCRIPTOR_SIZE 4096
++#define SHARED_MEM_CHIF_QUEUE_SIZE 16
++
++#define SHARED_MEM_SIZE 0x100000 /* 1MB */
++
++#define REG_SMEMCFG 0x50
++#define REG_INDOOR 0xd0
++#define REG_OUTDOOR 0xd4
++#define REG_FN2ISTAT 0xb0
++#define FN2IMASK_DBELL 0x01
++
++#define CCB_CTRL_GO_MASK 0x0000000080000000ULL
++#define CCB_CTRL_ACTIVE_MASK 0x0000000040000000ULL
++
++struct chif_pkthdr {
++	__le16 pkt_size;
++	__le16 sequence;
++	__le16 command;
++	u8 service_id;
++	u8 version;
++} __packed;
++
++struct ccb {
++	u64 sq_fifo;
++	u64 sq_desc;
++	u64 sq_ctrl;
++
++	u64 rq_fifo;
++	u64 rq_desc;
++	u64 rq_ctrl;
++
++	u64 doorbell_base;
++	u64 channel_number;
++
++	u8 context[128 - (sizeof(u64) * 8)];
++} __packed;
++
++struct chif_queue {
++	int hw_index;
++	int head;
++	int tail;
++	int size;
++	int max_size;
++	u8 pkt[SHARED_MEM_CHIF_QUEUE_SIZE][SHARED_MEM_CHIF_DESCRIPTOR_SIZE];
++	u32 pkt_len[SHARED_MEM_CHIF_QUEUE_SIZE];
++	u32 max_pkt_len;
++};
++
++struct shmem_chif_header {
++	__le32 signature;
++	__le32 major_version;
++	__le32 minor_version;
++	u8 reserved[48];
++	__le32 checksum;
++} __packed;
++
++struct chif_ccb_ctrl {
++	u64 l2sz : 4;
++	u64 fifo_index_mask : 14;
++	u64 desc_limit : 12;
++	u64 active : 1;
++	u64 go : 1;
++	u64 doorbell : 1;
++	u64 reserved : 31;
++} __packed;
++
++struct chif_fifo_entry {
++	u32 qwords : 10;
++	u32 descriptor_num : 12;
++	u32 consumed : 1;
++	u32 occupied : 1;
++	u32 sequence_num : 8;
++	u32 sequence_num2;
++} __packed;
++
++struct chif_desc_entry {
++	u8 data[SHARED_MEM_CHIF_DESCRIPTOR_SIZE];
++} __packed;
++
++struct chif_drvdata {
++	struct device *dev;
++	struct cdev chif_cdev;
++	struct regmap *fn2_map;
++	dev_t devid;
++	int irq;
++	dma_addr_t alloc_buf_dma_addr;
++	void *alloc_buf;
++	void *shmem;
++	dma_addr_t shmem_phys;
++
++	struct ccb *ccb_table;
++	struct shmem_chif_header *shmem_chif_header;
++	wait_queue_head_t wait[MAX_CHANNELS];
++	bool waiting[MAX_CHANNELS];
++
++	/* Per-instance packet queue for channel 24 */
++	struct chif_queue chif24_queue;
++};
++
++#define QUEUE_RC_FULL 1
++#define QUEUE_RC_PKT_OVER_SIZE 2
++#define QUEUE_RC_EMPTY 3
++#define QUEUE_RC_BUF_TOO_SMALL 4
++
++static int chif_queue_push(struct chif_drvdata *drvdata, struct chif_queue *q,
++			   u8 *pkt, u32 len)
++{
++	if (q->size == q->max_size)
++		return -QUEUE_RC_FULL;
++
++	if (len > q->max_pkt_len)
++		return -QUEUE_RC_PKT_OVER_SIZE;
++
++	memcpy(q->pkt[q->tail], pkt, len);
++	q->pkt_len[q->tail] = len;
++	q->size++;
++
++	q->tail++;
++	if (q->tail >= q->max_size)
++		q->tail = 0;
++
++	return 0;
++}
++
++static int chif_queue_pop(struct chif_queue *q, u8 **p_pkt_buf, u32 len)
++{
++	int pkt_len;
++
++	if (q->size == 0)
++		return -QUEUE_RC_EMPTY;
++
++	if (len < q->pkt_len[q->head])
++		return -QUEUE_RC_BUF_TOO_SMALL;
++
++	*p_pkt_buf = q->pkt[q->head];
++	pkt_len = q->pkt_len[q->head];
++	q->size--;
++
++	q->head++;
++	if (q->head >= q->max_size)
++		q->head = 0;
++
++	return pkt_len;
++}
++
++static void chif_doorbell26(struct chif_drvdata *drvdata)
++{
++	unsigned int reg;
++
++	regmap_write(drvdata->fn2_map, REG_OUTDOOR, 0x04000000);
++
++	regmap_read(drvdata->fn2_map, REG_FN2ISTAT, &reg);
++	reg = (reg >> 16) & 0xffff;
++	if (reg & FN2IMASK_DBELL)
++		regmap_write(drvdata->fn2_map, REG_OUTDOOR, 0x01);
++}
++
++static struct chif_fifo_entry *get_sq_fifo(struct chif_drvdata *drvdata,
++					   int channel)
++{
++	return drvdata->shmem + drvdata->ccb_table[channel].sq_fifo;
++}
++
++static struct chif_fifo_entry *get_rq_fifo(struct chif_drvdata *drvdata,
++					   int channel)
++{
++	return drvdata->shmem + drvdata->ccb_table[channel].rq_fifo;
++}
++
++static struct chif_desc_entry *get_sq_desc(struct chif_drvdata *drvdata,
++					   int channel)
++{
++	return drvdata->shmem + drvdata->ccb_table[channel].sq_desc;
++}
++
++static struct chif_desc_entry *get_rq_desc(struct chif_drvdata *drvdata,
++					   int channel)
++{
++	return drvdata->shmem + drvdata->ccb_table[channel].rq_desc;
++}
++
++static int chif_open(struct inode *inode, struct file *file)
++{
++	int channel = iminor(inode);
++	struct chif_drvdata *drvdata;
++	struct ccb *p_ccb;
++
++	drvdata = container_of(inode->i_cdev, struct chif_drvdata, chif_cdev);
++
++	if (channel >= DEVICE_COUNT)
++		return -EINVAL;
++
++	file->private_data = drvdata;
++	p_ccb = &drvdata->ccb_table[channel];
++
++	if (!(p_ccb->sq_ctrl & CCB_CTRL_GO_MASK)) {
++		if (channel == CHANNEL_SHAREMEM) {
++			memset(&drvdata->chif24_queue, 0,
++			       sizeof(struct chif_queue));
++			drvdata->chif24_queue.max_size =
++				SHARED_MEM_CHIF_QUEUE_SIZE;
++			drvdata->chif24_queue.max_pkt_len =
++				SHARED_MEM_CHIF_DESCRIPTOR_SIZE;
++		}
++	}
++
++	return 0;
++}
++
++static ssize_t chif_read(struct file *file, char __user *buf, size_t count,
++			 loff_t *f_pos)
++{
++	struct chif_drvdata *drvdata = file->private_data;
++	unsigned int channel = iminor(file_inode(file));
++	u8 *pkt_buf;
++	int pkt_len;
++	DECLARE_WAITQUEUE(wait, current);
++
++	if (channel != CHANNEL_SHAREMEM) {
++		dev_err(drvdata->dev, "channel %d not supported\n", channel);
++		return -EIO;
++	}
++
++	if (count < SHARED_MEM_CHIF_DESCRIPTOR_SIZE) {
++		dev_err(drvdata->dev, "read length too small (%zu < %d)\n",
++			count, SHARED_MEM_CHIF_DESCRIPTOR_SIZE);
++		return -EINVAL;
++	}
++
++	pkt_len = chif_queue_pop(&drvdata->chif24_queue, &pkt_buf, count);
++	if (pkt_len < 0) {
++		if (file->f_flags & O_NONBLOCK) {
++			dev_dbg(drvdata->dev, "%s: nonblock\n", __func__);
++			return -EAGAIN;
++		}
++
++		add_wait_queue(&drvdata->wait[channel], &wait);
++		drvdata->waiting[channel] = true;
++		while (pkt_len < 0) {
++			set_current_state(TASK_INTERRUPTIBLE);
++			schedule();
++
++			if (signal_pending(current)) {
++				set_current_state(TASK_RUNNING);
++				remove_wait_queue(&drvdata->wait[channel],
++						  &wait);
++				drvdata->waiting[channel] = false;
++				return -ERESTARTSYS;
++			}
++			pkt_len = chif_queue_pop(&drvdata->chif24_queue,
++						 &pkt_buf, count);
++		}
++		set_current_state(TASK_RUNNING);
++		remove_wait_queue(&drvdata->wait[channel], &wait);
++		drvdata->waiting[channel] = false;
++	}
++
++	if (pkt_len > 0) {
++		if (copy_to_user(buf, pkt_buf, pkt_len)) {
++			dev_err(drvdata->dev,
++				"copy_to_user failed (length=%d)\n", pkt_len);
++			return -EFAULT;
++		}
++	}
++
++	return pkt_len;
++}
++
++static ssize_t chif_write(struct file *file, const char __user *buf,
++			  size_t count, loff_t *f_pos)
++{
++	struct chif_drvdata *drvdata = file->private_data;
++	struct chif_fifo_entry *recv_fifo;
++	struct chif_desc_entry *recv_desc;
++	struct ccb *p_ccb;
++	unsigned int channel = iminor(file_inode(file));
++	int round_len;
++	int fifo_idx;
++	u32 desc_idx;
++	int timeout;
++	u8 dummy[4096];
++
++	if (channel != CHANNEL_SHAREMEM) {
++		dev_err(drvdata->dev, "channel %d not supported\n", channel);
++		return -EIO;
++	}
++
++	p_ccb = &drvdata->ccb_table[channel];
++	recv_fifo = get_rq_fifo(drvdata, channel);
++	recv_desc = get_rq_desc(drvdata, channel);
++
++	if (!(p_ccb->rq_ctrl & CCB_CTRL_GO_MASK)) {
++		dev_err(drvdata->dev,
++			"go bit of rq_ctrl not set, dropping response\n");
++		p_ccb->rq_ctrl &= ~CCB_CTRL_ACTIVE_MASK;
++		return -EIO;
++	}
++
++	if (!(p_ccb->rq_ctrl & CCB_CTRL_ACTIVE_MASK))
++		p_ccb->rq_ctrl |= CCB_CTRL_ACTIVE_MASK;
++
++	fifo_idx = 0;
++	desc_idx = recv_fifo[fifo_idx].descriptor_num;
++
++	if (count % 8)
++		round_len = count + 8 - (count % 8);
++	else
++		round_len = count;
++
++	recv_fifo[fifo_idx].qwords = round_len >> 3;
++
++	if (!recv_fifo[fifo_idx].occupied) {
++		dev_err(drvdata->dev, "recv fifo is empty\n");
++
++		timeout = 100;
++		while (timeout) {
++			timeout--;
++			msleep(100);
++			if (recv_fifo[fifo_idx].occupied)
++				break;
++		}
++
++		if (timeout == 0) {
++			dev_err(drvdata->dev,
++				"wait for recv fifo timed out\n");
++			return -EIO;
++		}
++	}
++
++	if (count > SHARED_MEM_CHIF_DESCRIPTOR_SIZE) {
++		dev_err(drvdata->dev, "write len (%zu) exceeds max (%d)\n",
++			count, SHARED_MEM_CHIF_DESCRIPTOR_SIZE);
++		return -EIO;
++	}
++
++	if (recv_fifo[fifo_idx].consumed) {
++		dev_err(drvdata->dev, "fifo not free, host hasn't dequeued\n");
++		return -EIO;
++	}
++
++	memset(&recv_desc[desc_idx], 0, round_len);
++
++	if (copy_from_user(&recv_desc[desc_idx], buf, count)) {
++		dev_err(drvdata->dev, "copy_from_user failed\n");
++		return -EIO;
++	}
++	recv_fifo[fifo_idx].consumed = 1;
++
++	/* Dummy read to ensure write to shared memory completes */
++	memcpy(dummy, &recv_fifo[fifo_idx], sizeof(struct chif_fifo_entry));
++	memcpy(dummy, &recv_desc[desc_idx], round_len);
++
++	if (p_ccb->doorbell_base)
++		regmap_write(drvdata->fn2_map, REG_OUTDOOR, 1 << channel);
++
++	return count;
++}
++
++static int chif_release(struct inode *inode, struct file *file)
++{
++	return 0;
++}
++
++static const struct file_operations chif_fops = {
++	.owner = THIS_MODULE,
++	.open = chif_open,
++	.read = chif_read,
++	.write = chif_write,
++	.release = chif_release,
++};
++
++static int compare_seq(u32 a, u32 b)
++{
++	if (a > b)
++		return 1;
++	else if (a < b)
++		return -1;
++	return 0;
++}
++
++static int active_ccb(struct chif_drvdata *drvdata, int channel)
++{
++	struct ccb *p_ccb = &drvdata->ccb_table[channel];
++
++	if (!(p_ccb->sq_ctrl & CCB_CTRL_GO_MASK)) {
++		dev_dbg(drvdata->dev,
++			"go bit of sq_ctrl not set for channel %d\n", channel);
++		p_ccb->sq_ctrl &= ~CCB_CTRL_ACTIVE_MASK;
++		return -1;
++	}
++
++	if (!(p_ccb->sq_ctrl & CCB_CTRL_ACTIVE_MASK))
++		p_ccb->sq_ctrl |= CCB_CTRL_ACTIVE_MASK;
++
++	return 1;
++}
++
++static int get_occupied_entry(struct chif_fifo_entry *fifo)
++{
++	int i;
++	int fifo_idx = -1;
++	u32 fifo_seq = 0;
++
++	for (i = 0; i < SHARED_MEM_CHIF_DESCRIPTOR_NUM; i++) {
++		if (fifo[i].occupied == 1 && fifo[i].consumed == 0) {
++			if (compare_seq(fifo[i].sequence_num, fifo_seq) <= 0) {
++				fifo_seq = fifo[i].sequence_num;
++				fifo_idx = i;
++			}
++		}
++	}
++	return fifo_idx;
++}
++
++static int consume_packet(struct chif_drvdata *drvdata, int channel)
++{
++	int i;
++	int ret;
++	int non_empty_packets = 0;
++	int desc_idx;
++	int desc_len;
++	struct chif_fifo_entry *send_fifo;
++	struct chif_desc_entry *send_desc;
++
++	send_fifo = get_sq_fifo(drvdata, channel);
++	send_desc = get_sq_desc(drvdata, channel);
++
++	/* Consume empty packets first */
++	for (i = 0; i < SHARED_MEM_CHIF_DESCRIPTOR_NUM; i++) {
++		if (send_fifo[i].occupied == 1 &&
++		    send_fifo[i].consumed == 0) {
++			if (send_fifo[i].qwords == 0)
++				send_fifo[i].consumed = 1;
++			else
++				non_empty_packets++;
++		}
++	}
++
++	if (non_empty_packets > 0) {
++		i = get_occupied_entry(send_fifo);
++		while (i >= 0) {
++			desc_idx = send_fifo[i].descriptor_num;
++			desc_len = send_fifo[i].qwords << 3;
++			ret = chif_queue_push(drvdata, &drvdata->chif24_queue,
++					      send_desc[desc_idx].data,
++					      desc_len);
++			switch (ret) {
++			case -QUEUE_RC_FULL:
++				dev_err(drvdata->dev, "push: queue is full\n");
++				break;
++			case -QUEUE_RC_PKT_OVER_SIZE:
++				dev_err(drvdata->dev,
++					"push: len %d > max_pkt_len %d\n",
++					desc_len,
++					drvdata->chif24_queue.max_pkt_len);
++				break;
++			}
++
++			send_fifo[i].consumed = 1;
++			i = get_occupied_entry(send_fifo);
++		}
++	}
++
++	return non_empty_packets;
++}
++
++static irqreturn_t chif_irq_handle(int irq, void *_drvdata)
++{
++	struct chif_drvdata *drvdata = _drvdata;
++	unsigned int doorbell;
++	int i;
++
++	regmap_read(drvdata->fn2_map, REG_INDOOR, &doorbell);
++	regmap_write(drvdata->fn2_map, REG_INDOOR, doorbell);
++
++	for (i = (MAX_CHANNELS - 1); i >= 0; i--) {
++		if ((1 << i) & doorbell) {
++			if (active_ccb(drvdata, i) < 0)
++				continue;
++
++			if (consume_packet(drvdata, i) > 0 &&
++			    drvdata->waiting[i])
++				wake_up_interruptible(&drvdata->wait[i]);
++		}
++	}
++
++	return IRQ_HANDLED;
++}
++
++static ssize_t header_show(struct device *dev, struct device_attribute *attr,
++			   char *buf)
++{
++	struct chif_drvdata *drvdata = dev_get_drvdata(dev);
++	struct ccb *p_ccb;
++	int len = 0;
++
++	len += sysfs_emit_at(buf, len, "Signature:0x%08x\n",
++			     le32_to_cpu(drvdata->shmem_chif_header->signature));
++	len += sysfs_emit_at(buf, len, "MajorVersion:0x%08x\n",
++			     le32_to_cpu(drvdata->shmem_chif_header->major_version));
++	len += sysfs_emit_at(buf, len, "MinorVersion:0x%08x\n",
++			     le32_to_cpu(drvdata->shmem_chif_header->minor_version));
++	len += sysfs_emit_at(buf, len, "Checksum:0x%08x\n",
++			     le32_to_cpu(drvdata->shmem_chif_header->checksum));
++
++	/* Dump CCB of chif24 */
++	p_ccb = &drvdata->ccb_table[CHANNEL_SHAREMEM];
++	len += sysfs_emit_at(buf, len, "ccb[24] at %p sizeof(ccb)=%zu\n",
++			     p_ccb, sizeof(struct ccb));
++	len += sysfs_emit_at(buf, len, "sqfifo:0x%016llx\n", p_ccb->sq_fifo);
++	len += sysfs_emit_at(buf, len, "sqdesc:0x%016llx\n", p_ccb->sq_desc);
++	len += sysfs_emit_at(buf, len, "sqCtrl:0x%016llx\n", p_ccb->sq_ctrl);
++	len += sysfs_emit_at(buf, len, "rqfifo:0x%016llx\n", p_ccb->rq_fifo);
++	len += sysfs_emit_at(buf, len, "rqdesc:0x%016llx\n", p_ccb->rq_desc);
++	len += sysfs_emit_at(buf, len, "rqCtrl:0x%016llx\n", p_ccb->rq_ctrl);
++	len += sysfs_emit_at(buf, len, "doorbellbase:0x%16llx\n",
++			     p_ccb->doorbell_base);
++	len += sysfs_emit_at(buf, len, "channelNumber:%lld\n",
++			     p_ccb->channel_number);
++
++	return len;
++}
++static DEVICE_ATTR_RO(header);
++
++static struct attribute *chif_attrs[] = {
++	&dev_attr_header.attr,
++	NULL,
++};
++ATTRIBUTE_GROUPS(chif);
++
++static int chif_probe(struct platform_device *pdev)
++{
++	int rc;
++	int major, minor;
++	int i;
++	struct chif_drvdata *drvdata;
++	struct device *dev;
++	u32 reg;
++
++	drvdata = devm_kzalloc(&pdev->dev, sizeof(*drvdata), GFP_KERNEL);
++	if (!drvdata)
++		return -ENOMEM;
++
++	platform_set_drvdata(pdev, drvdata);
++	drvdata->dev = &pdev->dev;
++
++	drvdata->fn2_map = syscon_node_to_regmap(pdev->dev.parent->of_node);
++	if (IS_ERR(drvdata->fn2_map))
++		return dev_err_probe(&pdev->dev, PTR_ERR(drvdata->fn2_map),
++				     "Unable to find fn2 regmap\n");
++
++	if (dma_set_mask_and_coherent(drvdata->dev, DMA_BIT_MASK(32)))
++		return dev_err_probe(&pdev->dev, -ENOMEM,
++				     "No suitable DMA available\n");
++
++	drvdata->alloc_buf = dma_alloc_coherent(drvdata->dev,
++						SHARED_MEM_SIZE * 2,
++						&drvdata->alloc_buf_dma_addr,
++						GFP_KERNEL | GFP_DMA);
++	if (!drvdata->alloc_buf)
++		return dev_err_probe(&pdev->dev, -ENOMEM,
++				     "Failed to alloc shared memory\n");
++
++	drvdata->shmem_phys = drvdata->alloc_buf_dma_addr;
++	drvdata->shmem = drvdata->alloc_buf;
++	if (drvdata->alloc_buf_dma_addr & 0xFFFFF) {
++		drvdata->shmem_phys = drvdata->alloc_buf_dma_addr + 0x100000;
++		drvdata->shmem = drvdata->alloc_buf + 0x100000;
++		drvdata->shmem_phys = (drvdata->shmem_phys & ~0xFFFFF);
++		drvdata->shmem = (void *)((unsigned long)drvdata->shmem &
++					  ~0xFFFFF);
++	}
++
++	dev_info(drvdata->dev, "alloc_buf_dma_addr=0x%08x\n",
++		 (u32)drvdata->alloc_buf_dma_addr);
++	dev_info(drvdata->dev, "alloc_buf=%p\n", drvdata->alloc_buf);
++	dev_info(drvdata->dev, "shmem virt=%p phys=0x%08x\n",
++		 drvdata->shmem, (u32)drvdata->shmem_phys);
++
++	drvdata->ccb_table = (struct ccb *)drvdata->shmem;
++	drvdata->shmem_chif_header = drvdata->shmem + 0x4000;
++
++	/* Initialize shared memory configuration */
++	reg = drvdata->shmem_phys;
++	reg |= 0x09; /* size code for 1MB */
++	reg &= 0x3fffffff; /* bit31:30 are reserved */
++	regmap_write(drvdata->fn2_map, REG_SMEMCFG, reg);
++
++	rc = platform_get_irq(pdev, 0);
++	if (rc < 0)
++		goto dma_free;
++	drvdata->irq = rc;
++
++	rc = devm_request_irq(drvdata->dev, drvdata->irq, chif_irq_handle,
++			      IRQF_SHARED, DEVICE_NAME, drvdata);
++	if (rc < 0) {
++		dev_err(drvdata->dev, "IRQ request failed\n");
++		goto dma_free;
++	}
++
++	rc = alloc_chrdev_region(&drvdata->devid, 0, DEVICE_COUNT, DEVICE_NAME);
++	if (rc < 0) {
++		dev_err(drvdata->dev, "Unable to alloc char device\n");
++		rc = -ENODEV;
++		goto dma_free;
++	}
++
++	/* Create device node for chif24 */
++	major = MAJOR(drvdata->devid);
++	minor = CHANNEL_SHAREMEM;
++	dev_info(drvdata->dev, "major=%d minor=%d\n", major, minor);
++
++	cdev_init(&drvdata->chif_cdev, &chif_fops);
++	drvdata->chif_cdev.owner = THIS_MODULE;
++
++	rc = cdev_add(&drvdata->chif_cdev, MKDEV(major, minor), 1);
++	if (rc < 0) {
++		dev_err(drvdata->dev, "Unable to add char device\n");
++		goto unregister_chrdev;
++	}
++
++	dev = device_create_with_groups(gxp_soc_class, drvdata->dev,
++					MKDEV(major, minor), drvdata,
++					chif_groups, DEVICE_NAME "%d",
++					CHANNEL_SHAREMEM);
++	if (IS_ERR(dev)) {
++		dev_err(drvdata->dev, "Unable to create sysfs\n");
++		rc = PTR_ERR(dev);
++		goto del_cdev;
++	}
++
++	for (i = 0; i < MAX_CHANNELS; i++) {
++		init_waitqueue_head(&drvdata->wait[i]);
++		drvdata->waiting[i] = false;
++	}
++
++	/* Initialize packet queue for channel 24 */
++	memset(&drvdata->chif24_queue, 0, sizeof(struct chif_queue));
++	drvdata->chif24_queue.max_size = SHARED_MEM_CHIF_QUEUE_SIZE;
++	drvdata->chif24_queue.max_pkt_len = SHARED_MEM_CHIF_DESCRIPTOR_SIZE;
++
++	chif_doorbell26(drvdata);
++	return 0;
++
++del_cdev:
++	cdev_del(&drvdata->chif_cdev);
++unregister_chrdev:
++	unregister_chrdev_region(drvdata->devid, DEVICE_COUNT);
++dma_free:
++	dma_free_coherent(drvdata->dev, SHARED_MEM_SIZE * 2, drvdata->alloc_buf,
++			  drvdata->alloc_buf_dma_addr);
++	return rc;
++}
++
++static void chif_remove(struct platform_device *pdev)
++{
++	struct chif_drvdata *drvdata = platform_get_drvdata(pdev);
++
++	device_destroy(gxp_soc_class,
++		       MKDEV(MAJOR(drvdata->devid), CHANNEL_SHAREMEM));
++	cdev_del(&drvdata->chif_cdev);
++	unregister_chrdev_region(drvdata->devid, DEVICE_COUNT);
++	dma_free_coherent(drvdata->dev, SHARED_MEM_SIZE * 2, drvdata->alloc_buf,
++			  drvdata->alloc_buf_dma_addr);
++}
++
++static const struct of_device_id chif_of_match[] = {
++	{ .compatible = "hpe,gxp-chif" },
++	{},
++};
++MODULE_DEVICE_TABLE(of, chif_of_match);
++
++static struct platform_driver chif_driver = {
++	.probe = chif_probe,
++	.remove = chif_remove,
++	.driver = {
++		.name = "gxp-chif",
++		.of_match_table = chif_of_match,
++	},
++};
++module_platform_driver(chif_driver);
++
++MODULE_AUTHOR("Gilbert Chen <gilbert.chen@hpe.com>");
++MODULE_DESCRIPTION("HPE GXP Channel Interface (CHIF) driver");
++MODULE_LICENSE("GPL");
+-- 
+2.52.0
+

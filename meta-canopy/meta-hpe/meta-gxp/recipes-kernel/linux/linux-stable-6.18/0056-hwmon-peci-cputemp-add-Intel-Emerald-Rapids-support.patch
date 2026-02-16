@@ -1,0 +1,68 @@
+From 12b3c6a9cb90af2ad8606a54207463a1050b1b04 Mon Sep 17 00:00:00 2001
+From: Ivan Mikhaylov <fr0st61te@gmail.com>
+Date: Tue, 7 Oct 2025 00:53:21 +0300
+Subject: [PATCH] hwmon: (peci/cputemp) add Intel Emerald Rapids support
+
+Add support to read DTS for reading Intel Emerald Rapids platform.
+
+Signed-off-by: Ivan Mikhaylov <fr0st61te@gmail.com>
+Reviewed-by: Paul Menzel <pmenzel@molgen.mpg.de>
+Link: https://lore.kernel.org/r/20251006215321.5036-4-fr0st61te@gmail.com
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/hwmon/peci/cputemp.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/drivers/hwmon/peci/cputemp.c b/drivers/hwmon/peci/cputemp.c
+index c7112dbf008b..b350c9a76894 100644
+--- a/drivers/hwmon/peci/cputemp.c
++++ b/drivers/hwmon/peci/cputemp.c
+@@ -364,6 +364,7 @@ static int init_core_mask(struct peci_cputemp *priv)
+ 	case INTEL_ICELAKE_X:
+ 	case INTEL_ICELAKE_D:
+ 	case INTEL_SAPPHIRERAPIDS_X:
++	case INTEL_EMERALDRAPIDS_X:
+ 		ret = peci_ep_pci_local_read(peci_dev, 0, reg->bus, reg->dev,
+ 					     reg->func, reg->offset + 4, &data);
+ 		if (ret)
+@@ -539,6 +540,13 @@ static struct resolved_cores_reg resolved_cores_reg_spr = {
+ 	.offset = 0x80,
+ };
+ 
++static struct resolved_cores_reg resolved_cores_reg_emr = {
++	.bus = 31,
++	.dev = 30,
++	.func = 6,
++	.offset = 0x80,
++};
++
+ static const struct cpu_info cpu_hsx = {
+ 	.reg		= &resolved_cores_reg_hsx,
+ 	.min_peci_revision = 0x33,
+@@ -563,6 +571,12 @@ static const struct cpu_info cpu_spr = {
+ 	.thermal_margin_to_millidegree = &dts_ten_dot_six_to_millidegree,
+ };
+ 
++static const struct cpu_info cpu_emr = {
++	.reg    = &resolved_cores_reg_emr,
++	.min_peci_revision = 0x40,
++	.thermal_margin_to_millidegree = &dts_ten_dot_six_to_millidegree,
++};
++
+ static const struct auxiliary_device_id peci_cputemp_ids[] = {
+ 	{
+ 		.name = "peci_cpu.cputemp.hsx",
+@@ -592,6 +606,10 @@ static const struct auxiliary_device_id peci_cputemp_ids[] = {
+ 		.name = "peci_cpu.cputemp.spr",
+ 		.driver_data = (kernel_ulong_t)&cpu_spr,
+ 	},
++	{
++		.name = "peci_cpu.cputemp.emr",
++		.driver_data = (kernel_ulong_t)&cpu_emr,
++	},
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(auxiliary, peci_cputemp_ids);
+-- 
+2.52.0
+

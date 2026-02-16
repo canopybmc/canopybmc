@@ -1,0 +1,71 @@
+From 398d69770e8f2e6707b1b753f541dff5d3bda7c6 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 12 Feb 2026 09:18:10 +0100
+Subject: [PATCH] dt-bindings: hwmon: gxp-fan-ctrl: replace fn2 syscon with
+ fan-supply
+
+Replace the hpe,fn2 syscon phandle with a standard fan-supply
+regulator reference. Power gating state is now provided through the
+regulator framework instead of a direct FN2 regmap dependency. Add
+fan-common.yaml reference for standard fan properties.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ .../bindings/hwmon/hpe,gxp-fan-ctrl.yaml      | 21 +++++++++++--------
+ 1 file changed, 12 insertions(+), 9 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml b/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml
+index bc29a684a8f4..3c3897639e29 100644
+--- a/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml
++++ b/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml
+@@ -7,11 +7,16 @@ $schema: http://devicetree.org/meta-schemas/core.yaml#
+ title: HPE GXP Fan Controller
+ 
+ maintainers:
+-  - Nick Hawkins <nick.hawkins@hpe.com>
++  - Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+ 
+ description: |
+-  The HPE GXP fan controller controls the fans through an external CPLD
+-  device that connects to the fans.
++  The HPE GXP fan controller controls fans through an external CPLD.
++  Fan presence and fault status are read from the XREG syscon. When
++  a fan-supply regulator is provided, PWM reads return zero and writes
++  are rejected while the supply is off (host powered down).
++
++allOf:
++  - $ref: fan-common.yaml#
+ 
+ properties:
+   compatible:
+@@ -25,17 +30,15 @@ properties:
+     $ref: /schemas/types.yaml#/definitions/phandle
+     description: Phandle to the XREG syscon for fan install/fail status
+ 
+-  hpe,fn2:
+-    $ref: /schemas/types.yaml#/definitions/phandle
+-    description: Phandle to the FN2 syscon for power status
++  fan-supply:
++    description: Phandle to host power supply regulator for power gating
+ 
+ required:
+   - compatible
+   - reg
+   - hpe,xreg
+-  - hpe,fn2
+ 
+-additionalProperties: false
++unevaluatedProperties: false
+ 
+ examples:
+   - |
+@@ -43,5 +46,5 @@ examples:
+       compatible = "hpe,gxp-fan-ctrl";
+       reg = <0xc1000c00 0x200>;
+       hpe,xreg = <&xreg>;
+-      hpe,fn2 = <&fn2>;
++      fan-supply = <&host_power>;
+     };
+-- 
+2.52.0
+

@@ -1,0 +1,69 @@
+From c166294c2ad32291daf2ff5a1ea0c73be65a7c39 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Tue, 10 Feb 2026 16:25:34 +0100
+Subject: [PATCH] soc: hpe: gxp-power-ctrl: run full prepare-boot sequence on
+ probe
+
+The init_platform() function only sets boot_control and clears the
+shutdown reason on initial BMC boot. It misses flash_select, SoC
+release, and eSPI OOB reset that prepare_boot() performs before every
+power-on. Without these three steps the host crashes early in POST on
+the first boot after AC power connect.
+
+Replace the duplicated subset with a call to prepare_boot() which
+handles the complete CPLD initialization sequence.
+
+Fixes: 2e2265c94120 ("soc: hpe: add GXP host power controller driver")
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/soc/hpe/gxp-power-ctrl.c | 20 ++++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/soc/hpe/gxp-power-ctrl.c b/drivers/soc/hpe/gxp-power-ctrl.c
+index 9c490e9daaab..08d3fa6f7a1b 100644
+--- a/drivers/soc/hpe/gxp-power-ctrl.c
++++ b/drivers/soc/hpe/gxp-power-ctrl.c
+@@ -29,7 +29,12 @@
+  * On probe (BMC boot):
+  *   1. Set PSU enable to 0xFF
+  *   2. Set power state to 0x08 (exit S5)
+- *   3. Set boot_control to 0x24 (release)
++ *   3. Run prepare-boot sequence
++ *     - flash select
++ *     - SoC release
++ *     - eSPI reset
++ *     - boot control release
++ *     - shutdown reason clear
+  *
+  * Register sources:
+  *   flash_select:    XREG offset 0x119 (direct readb/writeb)
+@@ -149,8 +154,8 @@ static void gxp_power_ctrl_shutdown_ack(struct gxp_power_ctrl *pctrl)
+  * Initial platform configuration on BMC boot.
+  * Only runs if the host is not already powered on.
+  *
+- * This replicates HPE's host-boot-enable script:
+- *   PSU enable = 0xFF, exit S5 = 0x08, boot_control = 0x24
++ * Enables PSUs and exits S5 power state, then runs the full
++ * prepare-boot sequence.
+  */
+ static void gxp_power_ctrl_init_platform(struct gxp_power_ctrl *pctrl)
+ {
+@@ -169,13 +174,8 @@ static void gxp_power_ctrl_init_platform(struct gxp_power_ctrl *pctrl)
+ 	/* Exit S5 power state */
+ 	writeb(0x08, pctrl->xreg_base + XREG_POWER_STATE);
+ 
+-	/* Release host boot gate */
+-	writeb(XREG_BOOT_CONTROL_RELEASE,
+-	       pctrl->xreg_base + XREG_BOOT_CONTROL);
+-
+-	/* Clear shutdown reason so fresh boot starts clean */
+-	if (pctrl->shutdown_reason_reg)
+-		writeb(0x00, pctrl->shutdown_reason_reg);
++	/* Prepare CPLD for host boot */
++	gxp_power_ctrl_prepare_boot(pctrl);
+ }
+ 
+ /*
+-- 
+2.52.0
+

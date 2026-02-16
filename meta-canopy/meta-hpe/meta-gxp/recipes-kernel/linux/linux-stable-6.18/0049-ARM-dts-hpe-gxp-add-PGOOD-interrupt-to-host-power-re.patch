@@ -1,0 +1,41 @@
+From f2d91b946f1b2794ea80b21ecf2c341a1c7280df Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 13 Feb 2026 11:25:46 +0100
+Subject: [PATCH] ARM: dts: hpe-gxp: add PGOOD interrupt to host power
+ regulator
+
+Connect the CPLD host power supply regulator to FN2 IRQ domain
+line 1 (PGOOD) so the regulator driver can fire notifier events
+on host power transitions. This enables event-based PECI device
+lifecycle management.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index 236d691d8109..ed9858b462dc 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -4,6 +4,9 @@
+  */
+ 
+ /dts-v1/;
++
++#include <dt-bindings/interrupt-controller/irq.h>
++
+ / {
+ 	model = "Hewlett Packard Enterprise GXP BMC";
+ 	compatible = "hpe,gxp";
+@@ -207,6 +210,7 @@ chif: chif {
+ 			host_power: regulator-host-power {
+ 				compatible = "hpe,gxp-host-power-supply";
+ 				regulator-name = "host-power";
++				interrupts = <1 IRQ_TYPE_EDGE_BOTH>;
+ 			};
+ 		};
+ 
+-- 
+2.52.0
+

@@ -1,0 +1,41 @@
+From 979c1f71ba2614ab37f2cdd75352346e4adfa61d Mon Sep 17 00:00:00 2001
+From: Ivan Mikhaylov <fr0st61te@gmail.com>
+Date: Tue, 7 Oct 2025 00:53:19 +0300
+Subject: [PATCH] peci: cpu: add Intel Emerald Rapids support
+
+Add support for detection of Intel Emerald Rapids processor based on
+CPU model.
+
+Emerald Rapids Xeon processors with the model set to
+INTEL_EMERALDRAPIDS_X. The data field for this entry is "emr".
+
+Tested the patch series with AST2600 BMC with 5S Intel Emerald Rapids
+processors & verified by reading cpu & dimm temperature which matches
+host sensor values from lmsensors.
+
+Signed-off-by: Ivan Mikhaylov <fr0st61te@gmail.com>
+Reviewed-by: Paul Menzel <pmenzel@molgen.mpg.de>
+Link: https://lore.kernel.org/r/20251006215321.5036-2-fr0st61te@gmail.com
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+---
+ drivers/peci/cpu.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/peci/cpu.c b/drivers/peci/cpu.c
+index 2dac8ba82787..fbccc1d1b637 100644
+--- a/drivers/peci/cpu.c
++++ b/drivers/peci/cpu.c
+@@ -321,6 +321,10 @@ static const struct peci_device_id peci_cpu_device_ids[] = {
+ 		.x86_vfm = INTEL_SAPPHIRERAPIDS_X,
+ 		.data	= "spr",
+ 	},
++	{ /* Emerald Rapids Xeon */
++		.x86_vfm  = INTEL_EMERALDRAPIDS_X,
++		.data  = "emr",
++	},
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(peci, peci_cpu_device_ids);
+-- 
+2.52.0
+

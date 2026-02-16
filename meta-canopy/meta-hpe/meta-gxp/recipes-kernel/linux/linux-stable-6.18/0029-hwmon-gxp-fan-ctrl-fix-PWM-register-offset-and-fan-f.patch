@@ -1,0 +1,71 @@
+From c8bcf57d9df188c1f84433a87be2565631eacafd Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Wed, 11 Feb 2026 17:41:34 +0100
+Subject: [PATCH] hwmon: gxp-fan-ctrl: fix PWM register offset and fan fault
+ bit mapping
+
+The PWM duty cycle registers are at offset 0x10 from the fan controller
+base, not offset 0x00. All PWM reads and writes access the wrong
+registers.
+
+The fan fault status register uses 2 bits per fan one per motor in dual-motor fans.
+Use GENMASK to check both motor bits so that a fault on either motor
+is reported.
+
+The fans are dual-motor, and the fault status register uses two bits
+per fan, with one bit designated for each motor. Use GENMASK to check
+both motor bits so that a fault on either motor is reported.
+
+Tested-on: HPE ProLiant DL320 Gen11
+
+Fixes: 90905f7c4091 ("hwmon: (gxp-fan-ctrl) Add GXP fan controller")
+Fixes: a9920891190c ("hwmon: gxp-fan-ctrl: use syscon phandles for XREG and FN2")
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/hwmon/gxp-fan-ctrl.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/hwmon/gxp-fan-ctrl.c b/drivers/hwmon/gxp-fan-ctrl.c
+index 0ec8818784d2..33decc881b92 100644
+--- a/drivers/hwmon/gxp-fan-ctrl.c
++++ b/drivers/hwmon/gxp-fan-ctrl.c
+@@ -12,6 +12,8 @@
+ #include <linux/regmap.h>
+ #include <linux/soc/hpe/gxp-regs.h>
+ 
++#define GXP_FAN_PWM_BASE	0x10
++
+ struct gxp_fan_ctrl_drvdata {
+ 	void __iomem	*base;
+ 	struct regmap	*xreg_map;
+@@ -35,7 +37,7 @@ static long fan_failed(struct device *dev, int fan)
+ 
+ 	regmap_read(drvdata->xreg_map, XREG_FAN_FAIL_ID, &val);
+ 
+-	return !!(val & BIT(fan));
++	return !!(val & GENMASK(fan * 2 + 1, fan * 2));
+ }
+ 
+ static long fan_enabled(struct device *dev, int fan)
+@@ -61,7 +63,7 @@ static int gxp_pwm_write(struct device *dev, u32 attr, int channel, long val)
+ 	case hwmon_pwm_input:
+ 		if (val > 255 || val < 0)
+ 			return -EINVAL;
+-		writeb(val, drvdata->base + channel);
++		writeb(val, drvdata->base + GXP_FAN_PWM_BASE + channel);
+ 		return 0;
+ 	default:
+ 		return -EOPNOTSUPP;
+@@ -107,7 +109,8 @@ static int gxp_pwm_read(struct device *dev, u32 attr, int channel, long *val)
+ 	regmap_read(drvdata->fn2_map, FN2_SEVSTAT, &reg);
+ 
+ 	if (reg & FN2_SEVSTAT_PGOOD_STATE)
+-		*val = fan_installed(dev, channel) ? readb(drvdata->base + channel) : 0;
++		*val = fan_installed(dev, channel) ?
++			readb(drvdata->base + GXP_FAN_PWM_BASE + channel) : 0;
+ 	else
+ 		*val = 0;
+ 
+-- 
+2.52.0
+

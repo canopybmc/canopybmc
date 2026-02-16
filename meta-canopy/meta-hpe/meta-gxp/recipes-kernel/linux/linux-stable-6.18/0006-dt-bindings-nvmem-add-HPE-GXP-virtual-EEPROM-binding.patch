@@ -1,0 +1,92 @@
+From 02b0f5c642b13674d8d33b208c2e84fc67c5e04d Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Mon, 2 Feb 2026 11:12:26 +0100
+Subject: [PATCH] dt-bindings: nvmem: add HPE GXP virtual EEPROM binding
+
+Add devicetree binding documentation for the HPE GXP SoC virtual
+EEPROM. This 256-byte memory-mapped region at 0xa0017f00 contains
+factory-programmed board identification data including serial number,
+part number, and MAC addresses.
+
+The binding uses the standard NVMEM framework with fixed cell
+definitions as child nodes.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ .../bindings/nvmem/hpe,gxp-nvmem.yaml         | 64 +++++++++++++++++++
+ 1 file changed, 64 insertions(+)
+ create mode 100644 Documentation/devicetree/bindings/nvmem/hpe,gxp-nvmem.yaml
+
+diff --git a/Documentation/devicetree/bindings/nvmem/hpe,gxp-nvmem.yaml b/Documentation/devicetree/bindings/nvmem/hpe,gxp-nvmem.yaml
+new file mode 100644
+index 000000000000..d0c772d6dd81
+--- /dev/null
++++ b/Documentation/devicetree/bindings/nvmem/hpe,gxp-nvmem.yaml
+@@ -0,0 +1,64 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/nvmem/hpe,gxp-nvmem.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: HPE GXP Virtual EEPROM
++
++maintainers:
++  - Marcello Sylvester Bauer <marcello.bauer@9elements.com>
++
++description: |
++  Memory-mapped virtual EEPROM on HPE GXP BMC SoC containing board
++  identification data including serial number, part number, and MAC addresses.
++
++  The virtual EEPROM is located at physical address 0xa0017f00 and provides
++  256 bytes of read-only board identification data programmed at manufacturing.
++
++allOf:
++  - $ref: nvmem.yaml#
++
++properties:
++  compatible:
++    const: hpe,gxp-nvmem
++
++  reg:
++    maxItems: 1
++    description: Physical address and size of the virtual EEPROM region
++
++required:
++  - compatible
++  - reg
++
++unevaluatedProperties: false
++
++examples:
++  - |
++    veeprom: nvmem@a0017f00 {
++        compatible = "hpe,gxp-nvmem";
++        reg = <0xa0017f00 0x100>;
++        read-only;
++
++        nvmem-layout {
++            compatible = "fixed-layout";
++            #address-cells = <1>;
++            #size-cells = <1>;
++
++            serial-number@1 {
++                reg = <0x01 0x10>;
++            };
++
++            part-number@6d {
++                reg = <0x6d 0x10>;
++            };
++
++            mac-address-0@84 {
++                reg = <0x84 0x06>;
++            };
++
++            mac-address-1@8a {
++                reg = <0x8a 0x06>;
++            };
++        };
++    };
+-- 
+2.52.0
+

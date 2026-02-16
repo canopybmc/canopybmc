@@ -1,0 +1,210 @@
+From f054e12f4f8e4ba2998b0577606d62f60f4b9af8 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Mon, 9 Feb 2026 01:07:46 +0100
+Subject: [PATCH] soc: hpe: gxp-power-ctrl: implement ForceRestart as VPBTN
+ power cycle
+
+GXP has no hardware warm-reset pin. The previous reset-out handler
+only toggled boot gates, which has no effect on a running host.
+
+Implement ForceRestart as an autonomous VPBTN power cycle driven by
+a workqueue: shutdown_ack, VPBTN pulse to power off, wait for the
+PGOOD IRQ to confirm power-off via a completion, then prepare_boot
+and a second VPBTN pulse to power on. The resetting flag blocks
+concurrent power button operations and prevents double-scheduling.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/soc/hpe/gxp-power-ctrl.c | 120 ++++++++++++++++++++++++++++---
+ 1 file changed, 109 insertions(+), 11 deletions(-)
+
+diff --git a/drivers/soc/hpe/gxp-power-ctrl.c b/drivers/soc/hpe/gxp-power-ctrl.c
+index 9a8c0cbc50f5..9c490e9daaab 100644
+--- a/drivers/soc/hpe/gxp-power-ctrl.c
++++ b/drivers/soc/hpe/gxp-power-ctrl.c
+@@ -41,6 +41,8 @@
+  *   espi_oob_ctrl:   eSPI offset 0x1040 (Intel/AMD only, via regmap)
+  */
+ 
++#include <linux/completion.h>
++#include <linux/delay.h>
+ #include <linux/device.h>
+ #include <linux/gpio/consumer.h>
+ #include <linux/gpio/driver.h>
+@@ -52,6 +54,7 @@
+ #include <linux/of_address.h>
+ #include <linux/platform_device.h>
+ #include <linux/regmap.h>
++#include <linux/workqueue.h>
+ #include <linux/soc/hpe/gxp-regs.h>
+ 
+ /* GPIO line indices */
+@@ -70,6 +73,9 @@ struct gxp_power_ctrl {
+ 	u16 server_id;
+ 	int pgood_irq;
+ 	u32 irq_mask;		/* bitmask of enabled virtual IRQs */
++	struct work_struct reset_work;
++	struct completion pgood_fell;
++	unsigned long resetting;	/* bit 0 = reset in progress */
+ };
+ 
+ /*
+@@ -172,6 +178,69 @@ static void gxp_power_ctrl_init_platform(struct gxp_power_ctrl *pctrl)
+ 		writeb(0x00, pctrl->shutdown_reason_reg);
+ }
+ 
++/*
++ * Autonomous reset sequence: power-cycle the host via VPBTN.
++ *
++ * GXP has no hardware warm-reset pin. ForceRestart is implemented as
++ * a full VPBTN power cycle: power off, wait for PGOOD to fall, then
++ * power back on. The PGOOD falling edge is signaled by the IRQ handler
++ * via pgood_fell completion — no arbitrary delays.
++ */
++static void gxp_power_ctrl_reset_work(struct work_struct *work)
++{
++	struct gxp_power_ctrl *pctrl =
++		container_of(work, struct gxp_power_ctrl, reset_work);
++	int pgood;
++
++	pgood = gpiod_get_value(pctrl->pgood_gpio);
++	if (pgood <= 0) {
++		dev_info(pctrl->gc.parent,
++			 "reset: host already off, powering on\n");
++		goto power_on;
++	}
++
++	/*
++	 * Power off: assert VPBTN and hold until PGOOD falls. The CPLD
++	 * requires a sustained VPBTN assertion (~5s) to force power off,
++	 * similar to an ATX long-press. A short 200ms pulse is only a
++	 * graceful ACPI power button event and won't cut power.
++	 */
++	reinit_completion(&pctrl->pgood_fell);
++	gpiod_set_value(pctrl->vpbtn_gpio, 1);
++
++	if (!wait_for_completion_timeout(&pctrl->pgood_fell,
++					 msecs_to_jiffies(15000))) {
++		gpiod_set_value(pctrl->vpbtn_gpio, 0);
++		dev_err(pctrl->gc.parent,
++			"reset: timeout waiting for host power off\n");
++		clear_bit(0, &pctrl->resetting);
++		return;
++	}
++
++	gpiod_set_value(pctrl->vpbtn_gpio, 0);
++
++	/* PGOOD fell: acknowledge shutdown (hold boot gate, cycle soc_release) */
++	gxp_power_ctrl_shutdown_ack(pctrl);
++
++	/*
++	 * Wait for the CPLD power sequencer to fully settle after
++	 * power-off before attempting power-on. Without this delay
++	 * the CPLD rejects the power-on and clears soc_release and
++	 * flash_select.
++	 */
++	msleep(5000);
++
++power_on:
++	/* Power on: prepare boot, then pulse VPBTN */
++	gxp_power_ctrl_prepare_boot(pctrl);
++	gpiod_set_value(pctrl->vpbtn_gpio, 1);
++	msleep(200);
++	gpiod_set_value(pctrl->vpbtn_gpio, 0);
++
++	clear_bit(0, &pctrl->resetting);
++	dev_info(pctrl->gc.parent, "reset: sequence complete\n");
++}
++
+ static int gxp_power_ctrl_get(struct gpio_chip *gc, unsigned int offset)
+ {
+ 	struct gxp_power_ctrl *pctrl = gpiochip_get_data(gc);
+@@ -194,6 +263,10 @@ static int gxp_power_ctrl_set(struct gpio_chip *gc, unsigned int offset,
+ 
+ 	switch (offset) {
+ 	case POWER_CTRL_POWER_BUTTON:
++		/* Block power button during autonomous reset sequence */
++		if (test_bit(0, &pctrl->resetting))
++			break;
++
+ 		if (value) {
+ 			/*
+ 			 * Power button pressed. Check PGOOD to determine
+@@ -213,13 +286,14 @@ static int gxp_power_ctrl_set(struct gpio_chip *gc, unsigned int offset,
+ 		}
+ 		break;
+ 	case POWER_CTRL_RESET_OUT:
+-		if (value) {
+-			/* Assert: hold host in reset */
+-			gxp_power_ctrl_shutdown_ack(pctrl);
+-		} else {
+-			/* Deassert: release host to boot */
+-			gxp_power_ctrl_prepare_boot(pctrl);
+-		}
++		/*
++		 * GXP has no hardware warm-reset pin. On assert,
++		 * schedule an autonomous power cycle via workqueue.
++		 * Deassert is a no-op — the work handles the full
++		 * sequence including power-on.
++		 */
++		if (value && !test_and_set_bit(0, &pctrl->resetting))
++			schedule_work(&pctrl->reset_work);
+ 		break;
+ 	default:
+ 		break;
+@@ -307,10 +381,19 @@ static irqreturn_t gxp_power_ctrl_pgood_irq(int irq, void *data)
+ 
+ 	pgood = gpiod_get_value(pctrl->pgood_gpio);
+ 	if (pgood <= 0) {
+-		/* PGOOD fell: host powered off */
+-		gxp_power_ctrl_shutdown_ack(pctrl);
+-		dev_info(pctrl->gc.parent,
+-			 "PGOOD deasserted, boot gate held\n");
++		/*
++		 * PGOOD fell: host powered off. During a reset sequence
++		 * the work function already called shutdown_ack() before
++		 * pulsing VPBTN, so skip it here and just signal the
++		 * completion. For normal power-off, do the full ack.
++		 */
++		if (test_bit(0, &pctrl->resetting)) {
++			complete(&pctrl->pgood_fell);
++		} else {
++			gxp_power_ctrl_shutdown_ack(pctrl);
++			dev_info(pctrl->gc.parent,
++				 "PGOOD deasserted, boot gate held\n");
++		}
+ 	}
+ 
+ 	/* Forward event to power-ctrl-good virtual GPIO consumers */
+@@ -331,6 +414,13 @@ static void gxp_power_ctrl_iounmap(void *base)
+ 	iounmap(base);
+ }
+ 
++static void gxp_power_ctrl_cancel_reset(void *data)
++{
++	struct gxp_power_ctrl *pctrl = data;
++
++	cancel_work_sync(&pctrl->reset_work);
++}
++
+ static int gxp_power_ctrl_probe(struct platform_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+@@ -417,6 +507,14 @@ static int gxp_power_ctrl_probe(struct platform_device *pdev)
+ 		return dev_err_probe(dev, PTR_ERR(pctrl->pgood_gpio),
+ 				     "failed to get pgood gpio\n");
+ 
++	/* Initialize reset work and completion for ForceRestart */
++	INIT_WORK(&pctrl->reset_work, gxp_power_ctrl_reset_work);
++	init_completion(&pctrl->pgood_fell);
++
++	ret = devm_add_action_or_reset(dev, gxp_power_ctrl_cancel_reset, pctrl);
++	if (ret)
++		return ret;
++
+ 	/* Setup GPIO controller with IRQ chip for event forwarding */
+ 	pctrl->gc.label = "gxp-power-ctrl";
+ 	pctrl->gc.parent = dev;
+-- 
+2.52.0
+

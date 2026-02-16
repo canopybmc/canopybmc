@@ -1,0 +1,82 @@
+From 5a57ab909475106f08d76de261e448e4d6e39efc Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 12 Feb 2026 17:42:45 +0100
+Subject: [PATCH] ARM: dts: hpe-gxp: add gpio-keys-polled node for fan presence
+
+Add a gpio-keys-polled node exposing the eight XREG fan-installed
+status GPIOs as input events for userspace fan presence detection.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 55 ++++++++++++++++++++++++++++++-
+ 1 file changed, 54 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index 85f192f93b83..c8794c02ba69 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -525,7 +525,60 @@ umac1: ethernet@c0005000 {
+ 			nvmem-cell-names = "mac-address";
+ 		};
+ 
+-		fanctrl: fan-controller@c1000c00 {
++		fan-keys {
++		compatible = "gpio-keys-polled";
++		poll-interval = <1000>;
++
++		event-fan0-presence {
++			label = "fan0-presence";
++			gpios = <&xreg 8 0>;
++			linux,code = <1>;
++		};
++
++		event-fan1-presence {
++			label = "fan1-presence";
++			gpios = <&xreg 9 0>;
++			linux,code = <2>;
++		};
++
++		event-fan2-presence {
++			label = "fan2-presence";
++			gpios = <&xreg 10 0>;
++			linux,code = <3>;
++		};
++
++		event-fan3-presence {
++			label = "fan3-presence";
++			gpios = <&xreg 11 0>;
++			linux,code = <4>;
++		};
++
++		event-fan4-presence {
++			label = "fan4-presence";
++			gpios = <&xreg 12 0>;
++			linux,code = <5>;
++		};
++
++		event-fan5-presence {
++			label = "fan5-presence";
++			gpios = <&xreg 13 0>;
++			linux,code = <6>;
++		};
++
++		event-fan6-presence {
++			label = "fan6-presence";
++			gpios = <&xreg 14 0>;
++			linux,code = <7>;
++		};
++
++		event-fan7-presence {
++			label = "fan7-presence";
++			gpios = <&xreg 15 0>;
++			linux,code = <8>;
++		};
++	};
++
++	fanctrl: fan-controller@c1000c00 {
+ 			compatible = "hpe,gxp-fan-ctrl";
+ 			reg = <0xc1000c00 0x200>;
+ 			hpe,xreg = <&xreg>;
+-- 
+2.52.0
+

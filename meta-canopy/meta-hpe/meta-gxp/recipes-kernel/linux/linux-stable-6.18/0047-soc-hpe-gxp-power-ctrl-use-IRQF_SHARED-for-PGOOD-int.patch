@@ -1,0 +1,30 @@
+From c555473f944ba1dc020075d9f6fdd4aa0ba07f25 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 13 Feb 2026 11:18:26 +0100
+Subject: [PATCH] soc: hpe: gxp-power-ctrl: use IRQF_SHARED for PGOOD interrupt
+
+Add IRQF_SHARED to the PGOOD interrupt request flags so the CPLD
+regulator driver can share the same FN2 virtual IRQ for firing
+regulator notifier events on power state transitions.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/soc/hpe/gxp-power-ctrl.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/soc/hpe/gxp-power-ctrl.c b/drivers/soc/hpe/gxp-power-ctrl.c
+index 4687c5cd47c2..91e07803f8d4 100644
+--- a/drivers/soc/hpe/gxp-power-ctrl.c
++++ b/drivers/soc/hpe/gxp-power-ctrl.c
+@@ -460,7 +460,7 @@ static int gxp_power_ctrl_probe(struct platform_device *pdev)
+ 						gxp_power_ctrl_pgood_irq,
+ 						IRQF_TRIGGER_RISING |
+ 						IRQF_TRIGGER_FALLING |
+-						IRQF_ONESHOT,
++						IRQF_ONESHOT | IRQF_SHARED,
+ 						"gxp-power-ctrl-pgood", pctrl);
+ 		if (ret < 0)
+ 			dev_warn(dev, "failed to request pgood irq: %d\n", ret);
+-- 
+2.52.0
+

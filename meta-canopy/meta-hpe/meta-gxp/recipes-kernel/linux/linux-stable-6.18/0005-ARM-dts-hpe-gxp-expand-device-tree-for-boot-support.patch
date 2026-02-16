@@ -1,0 +1,421 @@
+From e98c3cbbdbdd3446c45da5537cb547253b19db4f Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 5 Feb 2026 10:06:30 +0100
+Subject: [PATCH] ARM: dts: hpe-gxp: expand device tree for boot support
+
+Add device tree nodes required for basic GXP BMC boot: watchdog, I2C
+syscon and controllers, SPI flash controllers with partition maps,
+and fan controller.
+
+Restructure the bus hierarchy to use identity mapping. The previous
+nested axi/ahb structure used offset-based address translation that
+could not reach vic1 at 0x80f00000 from inside the 0xc0000000 bus
+window. Identity mapping also allows device tree overlays to use
+absolute physical addresses directly.
+
+Extract the BMC flash partition definitions from hpe-gxp.dts into a
+separate gxp-bmc-flash-layout.dtsi file, following the pattern used by
+Aspeed. This allows OpenBMC/Yocto recipes to override the flash layout
+without modifying the kernel base DTS.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ .../boot/dts/hpe/gxp-bmc-flash-layout.dtsi    |  58 ++++
+ arch/arm/boot/dts/hpe/hpe-gxp.dts             | 299 ++++++++++++++----
+ 2 files changed, 291 insertions(+), 66 deletions(-)
+ create mode 100644 arch/arm/boot/dts/hpe/gxp-bmc-flash-layout.dtsi
+
+diff --git a/arch/arm/boot/dts/hpe/gxp-bmc-flash-layout.dtsi b/arch/arm/boot/dts/hpe/gxp-bmc-flash-layout.dtsi
+new file mode 100644
+index 000000000000..c8a4fe40a24a
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/gxp-bmc-flash-layout.dtsi
+@@ -0,0 +1,58 @@
++// SPDX-License-Identifier: GPL-2.0
++
++partitions {
++	compatible = "fixed-partitions";
++	#address-cells = <1>;
++	#size-cells = <1>;
++
++	bmc@0 {
++		reg = <0x0 0x1fc0000>;
++		label = "bmc";
++	};
++
++	u-boot@0 {
++		reg = <0x0 0x60000>;
++		label = "u-boot";
++	};
++
++	u-boot-env@70000 {
++		reg = <0x70000 0x20000>;
++		label = "u-boot-env";
++	};
++
++	kernel@80000 {
++		reg = <0x80000 0x4c0000>;
++		label = "kernel";
++	};
++
++	rofs@540000 {
++		reg = <0x540000 0x1a00000>;
++		label = "rofs";
++	};
++
++	rwfs@1f40000 {
++		reg = <0x1f40000 0x30000>;
++		label = "rwfs";
++	};
++
++	uboot-sig@1f70000 {
++		reg = <0x1f70000 0x10000>;
++		label = "uboot-sig";
++	};
++
++	gxp@1f80000 {
++		reg = <0x1f80000 0x80000>;
++		label = "gxp";
++	};
++
++	gxp-bootblock@1f80000 {
++		reg = <0x1f80000 0x40000>;
++		label = "gxp-bootblock";
++	};
++
++	gxp-ckb@1fc0000 {
++		reg = <0x1fc0000 0x40000>;
++		label = "gxp-ckb";
++		read-only;
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index 6bea75085cd0..eda3e01cfea2 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -54,89 +54,256 @@ iopclk: clock-1 {
+ 		};
+ 	};
+ 
+-	axi {
++	L2: cache-controller@b0040000 {
++		compatible = "arm,pl310-cache";
++		reg = <0xb0040000 0x1000>;
++		cache-unified;
++		cache-level = <2>;
++	};
++
++	ahb@80000000 {
+ 		compatible = "simple-bus";
+ 		#address-cells = <1>;
+ 		#size-cells = <1>;
+ 		ranges;
+-		dma-ranges;
+ 
+-		L2: cache-controller@b0040000 {
+-			compatible = "arm,pl310-cache";
+-			reg = <0xb0040000 0x1000>;
+-			cache-unified;
+-			cache-level = <2>;
++		vic0: interrupt-controller@ceff0000 {
++			compatible = "arm,pl192-vic";
++			reg = <0xceff0000 0x1000>;
++			interrupt-controller;
++			#interrupt-cells = <1>;
++		};
++
++		vic1: interrupt-controller@80f00000 {
++			compatible = "arm,pl192-vic";
++			reg = <0x80f00000 0x1000>;
++			interrupt-controller;
++			#interrupt-cells = <1>;
++		};
++
++		uarta: serial@c00000e0 {
++			compatible = "ns16550a";
++			reg = <0xc00000e0 0x8>;
++			interrupts = <17>;
++			interrupt-parent = <&vic0>;
++			clock-frequency = <1846153>;
++			reg-shift = <0>;
++		};
++
++		uartb: serial@c00000e8 {
++			compatible = "ns16550a";
++			reg = <0xc00000e8 0x8>;
++			interrupts = <18>;
++			interrupt-parent = <&vic0>;
++			clock-frequency = <1846153>;
++			reg-shift = <0>;
+ 		};
+ 
+-		ahb@c0000000 {
+-			compatible = "simple-bus";
++		uartc: serial@c00000f0 {
++			compatible = "ns16550a";
++			reg = <0xc00000f0 0x8>;
++			interrupts = <19>;
++			interrupt-parent = <&vic0>;
++			clock-frequency = <1846153>;
++			reg-shift = <0>;
++		};
++
++		st: timer@c0000080 {
++			compatible = "hpe,gxp-timer";
++			reg = <0xc0000080 0x16>;
++			interrupts = <0>;
++			interrupt-parent = <&vic0>;
++			clocks = <&iopclk>;
++			clock-names = "iop";
++		};
++
++		watchdog: watchdog@c0000090 {
++			compatible = "hpe,gxp-wdt";
++			reg = <0xc0000090 0x2>, <0xc0000096 0x1>;
++		};
++
++		usb0: usb@cefe0000 {
++			compatible = "hpe,gxp-ehci", "generic-ehci";
++			reg = <0xcefe0000 0x100>;
++			interrupts = <7>;
++			interrupt-parent = <&vic0>;
++		};
++
++		usb1: usb@cefe0100 {
++			compatible = "hpe,gxp-ohci", "generic-ohci";
++			reg = <0xcefe0100 0x110>;
++			interrupts = <6>;
++			interrupt-parent = <&vic0>;
++		};
++
++		i2cg: i2cg@c00000f8 {
++			compatible = "syscon";
++			reg = <0xc00000f8 0x08>;
++		};
++
++		i2c0: i2c@c0002000 {
++			compatible = "hpe,gxp-i2c";
++			reg = <0xc0002000 0x70>;
++			interrupts = <9>;
++			interrupt-parent = <&vic0>;
++			hpe,sysreg = <&i2cg>;
+ 			#address-cells = <1>;
+-			#size-cells = <1>;
+-			ranges = <0x0 0xc0000000 0x30000000>;
+-			dma-ranges;
+-
+-			vic0: interrupt-controller@eff0000 {
+-				compatible = "arm,pl192-vic";
+-				reg = <0xeff0000 0x1000>;
+-				interrupt-controller;
+-				#interrupt-cells = <1>;
+-			};
++			#size-cells = <0>;
++		};
+ 
+-			vic1: interrupt-controller@80f00000 {
+-				compatible = "arm,pl192-vic";
+-				reg = <0x80f00000 0x1000>;
+-				interrupt-controller;
+-				#interrupt-cells = <1>;
+-			};
++		i2c1: i2c@c0002100 {
++			compatible = "hpe,gxp-i2c";
++			reg = <0xc0002100 0x70>;
++			interrupts = <9>;
++			interrupt-parent = <&vic0>;
++			hpe,sysreg = <&i2cg>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
+ 
+-			uarta: serial@e0 {
+-				compatible = "ns16550a";
+-				reg = <0xe0 0x8>;
+-				interrupts = <17>;
+-				interrupt-parent = <&vic0>;
+-				clock-frequency = <1846153>;
+-				reg-shift = <0>;
+-			};
++		i2c2: i2c@c0002200 {
++			compatible = "hpe,gxp-i2c";
++			reg = <0xc0002200 0x70>;
++			interrupts = <9>;
++			interrupt-parent = <&vic0>;
++			hpe,sysreg = <&i2cg>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
+ 
+-			uartb: serial@e8 {
+-				compatible = "ns16550a";
+-				reg = <0xe8 0x8>;
+-				interrupts = <18>;
+-				interrupt-parent = <&vic0>;
+-				clock-frequency = <1846153>;
+-				reg-shift = <0>;
+-			};
++		i2c3: i2c@c0002300 {
++			compatible = "hpe,gxp-i2c";
++			reg = <0xc0002300 0x70>;
++			interrupts = <9>;
++			interrupt-parent = <&vic0>;
++			hpe,sysreg = <&i2cg>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
+ 
+-			uartc: serial@f0 {
+-				compatible = "ns16550a";
+-				reg = <0xf0 0x8>;
+-				interrupts = <19>;
+-				interrupt-parent = <&vic0>;
+-				clock-frequency = <1846153>;
+-				reg-shift = <0>;
+-			};
++		i2c4: i2c@c0002400 {
++			compatible = "hpe,gxp-i2c";
++			reg = <0xc0002400 0x70>;
++			interrupts = <9>;
++			interrupt-parent = <&vic0>;
++			hpe,sysreg = <&i2cg>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++
++		i2c5: i2c@c0002500 {
++			compatible = "hpe,gxp-i2c";
++			reg = <0xc0002500 0x70>;
++			interrupts = <9>;
++			interrupt-parent = <&vic0>;
++			hpe,sysreg = <&i2cg>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
+ 
+-			usb0: usb@efe0000 {
+-				compatible = "hpe,gxp-ehci", "generic-ehci";
+-				reg = <0xefe0000 0x100>;
+-				interrupts = <7>;
+-				interrupt-parent = <&vic0>;
++		i2c6: i2c@c0002600 {
++			compatible = "hpe,gxp-i2c";
++			reg = <0xc0002600 0x70>;
++			interrupts = <9>;
++			interrupt-parent = <&vic0>;
++			hpe,sysreg = <&i2cg>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++
++		i2c7: i2c@c0002700 {
++			compatible = "hpe,gxp-i2c";
++			reg = <0xc0002700 0x70>;
++			interrupts = <9>;
++			interrupt-parent = <&vic0>;
++			hpe,sysreg = <&i2cg>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++
++		i2c8: i2c@c0002800 {
++			compatible = "hpe,gxp-i2c";
++			reg = <0xc0002800 0x70>;
++			interrupts = <9>;
++			interrupt-parent = <&vic0>;
++			hpe,sysreg = <&i2cg>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++
++		i2c9: i2c@c0002900 {
++			compatible = "hpe,gxp-i2c";
++			reg = <0xc0002900 0x70>;
++			interrupts = <9>;
++			interrupt-parent = <&vic0>;
++			hpe,sysreg = <&i2cg>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++
++		fanctrl: fan-controller@c1000c00 {
++			compatible = "hpe,gxp-fan-ctrl";
++			reg = <0xc1000c00 0x200>,
++			      <0xd1000000 0x4>,
++			      <0x80200000 0x4>;
++			reg-names = "base", "pl", "fn2";
++		};
++
++		spifi1: spi@c0000280 {
++			compatible = "hpe,gxp-spifi";
++			reg = <0xc0000280 0x80>, <0xc000e000 0x100>, <0xf0000000 0x4000000>;
++			interrupts = <20>;
++			interrupt-parent = <&vic0>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			flash@0 {
++				compatible = "jedec,spi-nor";
++				reg = <0>;
++				partitions {
++					compatible = "fixed-partitions";
++					#address-cells = <1>;
++					#size-cells = <1>;
++
++					host-master@0 {
++						label = "uefi-master";
++						reg = <0x0 0x2000000>;
++					};
++				};
+ 			};
++		};
+ 
+-			st: timer@80 {
+-				compatible = "hpe,gxp-timer";
+-				reg = <0x80 0x16>;
+-				interrupts = <0>;
+-				interrupt-parent = <&vic0>;
+-				clocks = <&iopclk>;
+-				clock-names = "iop";
++		spifi0: spi@c0000200 {
++			compatible = "hpe,gxp-spifi";
++			reg = <0xc0000200 0x80>, <0xc000c000 0x100>, <0xf8000000 0x8000000>;
++			interrupts = <20>;
++			interrupt-parent = <&vic0>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			flash@0 {
++				compatible = "jedec,spi-nor";
++				reg = <0>;
++				#include "gxp-bmc-flash-layout.dtsi"
+ 			};
+ 
+-			usb1: usb@efe0100 {
+-				compatible = "hpe,gxp-ohci", "generic-ohci";
+-				reg = <0xefe0100 0x110>;
+-				interrupts = <6>;
+-				interrupt-parent = <&vic0>;
++			flash@1 {
++				compatible = "jedec,spi-nor";
++				reg = <1>;
++				partitions {
++					compatible = "fixed-partitions";
++					#address-cells = <1>;
++					#size-cells = <1>;
++
++					host-prime@0 {
++						label = "host-prime";
++						reg = <0x0 0x2000000>;
++					};
++					host-second@2000000 {
++						label = "host-second";
++						reg = <0x2000000 0x2000000>;
++					};
++				};
+ 			};
+ 		};
+ 	};
+-- 
+2.52.0
+

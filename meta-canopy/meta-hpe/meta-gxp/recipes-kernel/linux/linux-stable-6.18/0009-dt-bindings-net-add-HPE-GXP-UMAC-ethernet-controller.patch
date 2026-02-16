@@ -1,0 +1,144 @@
+From fea96c1456a537cee718dda09d507485058b4561 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Tue, 27 Jan 2026 23:48:19 +0100
+Subject: [PATCH] dt-bindings: net: add HPE GXP UMAC ethernet controller
+ bindings
+
+Add device tree bindings for the HPE GXP UMAC ethernet controller and
+its associated MDIO bus. The GXP SoC is used as the BMC in HPE ProLiant
+Gen10 and Gen11 servers.
+
+The GXP includes two UMAC ethernet controllers:
+- One connected to an external Marvell PHY for dedicated BMC management
+- One using NCSI for sideband communication with the host NIC
+
+Co-developed-by: Michal Gorlas <michal.gorlas@9elements.com>
+Signed-off-by: Michal Gorlas <michal.gorlas@9elements.com>
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ .../bindings/net/hpe,gxp-umac-mdio.yaml       | 45 ++++++++++++++
+ .../devicetree/bindings/net/hpe,gxp-umac.yaml | 60 +++++++++++++++++++
+ 2 files changed, 105 insertions(+)
+ create mode 100644 Documentation/devicetree/bindings/net/hpe,gxp-umac-mdio.yaml
+ create mode 100644 Documentation/devicetree/bindings/net/hpe,gxp-umac.yaml
+
+diff --git a/Documentation/devicetree/bindings/net/hpe,gxp-umac-mdio.yaml b/Documentation/devicetree/bindings/net/hpe,gxp-umac-mdio.yaml
+new file mode 100644
+index 000000000000..040c966a7506
+--- /dev/null
++++ b/Documentation/devicetree/bindings/net/hpe,gxp-umac-mdio.yaml
+@@ -0,0 +1,45 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/net/hpe,gxp-umac-mdio.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: HPE GXP UMAC MDIO Bus
++
++maintainers:
++  - Marcello Sylvester Bauer <marcello.bauer@9elements.com>
++
++description:
++  MDIO bus controller for the HPE GXP UMAC ethernet MAC. Each UMAC
++  has an associated MDIO bus for PHY management.
++
++allOf:
++  - $ref: mdio.yaml#
++
++properties:
++  compatible:
++    const: hpe,gxp-umac-mdio
++
++  reg:
++    maxItems: 1
++
++required:
++  - compatible
++  - reg
++
++unevaluatedProperties: false
++
++examples:
++  - |
++    mdio@c0004080 {
++        compatible = "hpe,gxp-umac-mdio";
++        reg = <0xc0004080 0x10>;
++        #address-cells = <1>;
++        #size-cells = <0>;
++
++        ethernet-phy@0 {
++            compatible = "ethernet-phy-ieee802.3-c22";
++            phy-mode = "sgmii";
++            reg = <0>;
++        };
++    };
+diff --git a/Documentation/devicetree/bindings/net/hpe,gxp-umac.yaml b/Documentation/devicetree/bindings/net/hpe,gxp-umac.yaml
+new file mode 100644
+index 000000000000..0ad0ee8afbb7
+--- /dev/null
++++ b/Documentation/devicetree/bindings/net/hpe,gxp-umac.yaml
+@@ -0,0 +1,60 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/net/hpe,gxp-umac.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: HPE GXP UMAC Ethernet Controller
++
++maintainers:
++  - Marcello Sylvester Bauer <marcello.bauer@9elements.com>
++
++description:
++  The HPE GXP SoC includes two UMAC ethernet controllers for BMC
++  network connectivity. One is typically connected to an external
++  Marvell PHY for dedicated management and the other uses NCSI
++  for sideband communication with the host NIC.
++
++allOf:
++  - $ref: ethernet-controller.yaml#
++
++properties:
++  compatible:
++    const: hpe,gxp-umac
++
++  reg:
++    maxItems: 1
++
++  interrupts:
++    maxItems: 1
++
++  phy-handle:
++    description: Reference to the external PHY
++
++  int-phy-handle:
++    $ref: /schemas/types.yaml#/definitions/phandle
++    description: Reference to the internal PHY for SGMII/GMII bridging
++
++  mac-address: true
++
++  use-ncsi:
++    type: boolean
++    description: Use NCSI instead of standard PHY
++
++required:
++  - compatible
++  - reg
++  - interrupts
++
++unevaluatedProperties: false
++
++examples:
++  - |
++    ethernet@c0004000 {
++        compatible = "hpe,gxp-umac";
++        reg = <0xc0004000 0x80>;
++        interrupts = <10>;
++        phy-handle = <&ext_phy0>;
++        int-phy-handle = <&int_phy0>;
++        mac-address = [00 11 22 33 44 55];
++    };
+-- 
+2.52.0
+

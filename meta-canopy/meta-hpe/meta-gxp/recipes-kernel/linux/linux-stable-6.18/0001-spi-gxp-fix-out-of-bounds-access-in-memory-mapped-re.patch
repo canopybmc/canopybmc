@@ -1,0 +1,71 @@
+From fd7fdc1dd6785ed4c40da9c6a1db19a925def5ed Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Tue, 3 Feb 2026 01:52:15 +0100
+Subject: [PATCH] spi: gxp: fix out-of-bounds access in memory-mapped read
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+gxp_spi_read() adds a hardcoded 0x4000000 (64MB) chip-select offset
+when reading from CS0 via the memory-mapped flash window. This works
+for spifi0 which has a 128MB window, but causes a kernel panic on
+spifi1 whose window is only 64MB — the offset exceeds the ioremap
+region, triggering an unhandled page fault in memcpy_fromio().
+
+Track the memory-mapped window size from the platform resource and
+fall back to register-based SPI reads when the computed offset would
+exceed the window boundary. This preserves the fast memory-mapped
+path where it fits and gracefully degrades to register-based access
+otherwise.
+
+Fixes: d1fe233a1e8d ("spi: spi-gxp: Add support for HPE GXP SoCs")
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/spi/spi-gxp.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/spi/spi-gxp.c b/drivers/spi/spi-gxp.c
+index 3aff5a166c94..5e3fbf91ca0c 100644
+--- a/drivers/spi/spi-gxp.c
++++ b/drivers/spi/spi-gxp.c
+@@ -43,6 +43,7 @@ struct gxp_spi {
+ 	void __iomem *reg_base;
+ 	void __iomem *dat_base;
+ 	void __iomem *dir_base;
++	resource_size_t dir_size;
+ 	struct device *dev;
+ 	struct gxp_spi_chip chips[GXP_SPI0_MAX_CHIPSELECT];
+ };
+@@ -147,6 +148,9 @@ static ssize_t gxp_spi_read(struct gxp_spi_chip *chip, const struct spi_mem_op *
+ 	if (chip->cs == 0)
+ 		offset += 0x4000000;
+ 
++	if (offset + op->data.nbytes > spifi->dir_size)
++		return gxp_spi_read_reg(chip, op);
++
+ 	memcpy_fromio(op->data.buf.in, spifi->dir_base + offset, op->data.nbytes);
+ 
+ 	return 0;
+@@ -252,6 +256,7 @@ static int gxp_spifi_probe(struct platform_device *pdev)
+ 	struct device *dev = &pdev->dev;
+ 	const struct gxp_spi_data *data;
+ 	struct spi_controller *ctlr;
++	struct resource *res;
+ 	struct gxp_spi *spifi;
+ 	int ret;
+ 
+@@ -275,9 +280,10 @@ static int gxp_spifi_probe(struct platform_device *pdev)
+ 	if (IS_ERR(spifi->dat_base))
+ 		return PTR_ERR(spifi->dat_base);
+ 
+-	spifi->dir_base = devm_platform_ioremap_resource(pdev, 2);
++	spifi->dir_base = devm_platform_get_and_ioremap_resource(pdev, 2, &res);
+ 	if (IS_ERR(spifi->dir_base))
+ 		return PTR_ERR(spifi->dir_base);
++	spifi->dir_size = resource_size(res);
+ 
+ 	ctlr->mode_bits = data->mode_bits;
+ 	ctlr->bus_num = pdev->id;
+-- 
+2.52.0
+

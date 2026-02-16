@@ -1,0 +1,56 @@
+From 556d968b086ad0b236438fda5a843a81b2907457 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 13 Feb 2026 08:37:32 +0100
+Subject: [PATCH] net: ethernet: gxp: fix DMA use-after-free in umac_stop
+
+The umac_stop function freed DMA ring buffer memory before disabling
+the UMAC hardware channels. The DMA engine could still be writing
+received packets into the freed pages, corrupting whatever the page
+allocator assigned to those physical addresses afterward.
+
+Reorder teardown so the hardware is fully quiesced before releasing
+DMA buffers: stop the TX queue, disable channels and interrupts,
+drain NAPI, free the IRQ, then free DMA memory.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/net/ethernet/hpe/gxp-umac.c | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/net/ethernet/hpe/gxp-umac.c b/drivers/net/ethernet/hpe/gxp-umac.c
+index 8af492ef0d5b..20552334065c 100644
+--- a/drivers/net/ethernet/hpe/gxp-umac.c
++++ b/drivers/net/ethernet/hpe/gxp-umac.c
+@@ -543,21 +543,21 @@ static int umac_stop(struct net_device *ndev)
+ 	struct umac_priv *umac = netdev_priv(ndev);
+ 	struct platform_device *pdev = umac->pdev;
+ 
+-	dma_free_coherent(&pdev->dev, sizeof(struct umac_tx_descs),
+-			  umac->tx_descs, umac->tx_descs_dma_addr);
+-	dma_free_coherent(&pdev->dev, sizeof(struct umac_rx_descs),
+-			  umac->rx_descs, umac->rx_descs_dma_addr);
+ 	netif_stop_queue(ndev);
++	umac_channel_disable(umac);
++	umac_irq_disable(umac);
++	napi_disable(&umac->napi);
++	free_irq(ndev->irq, ndev);
+ 
+ 	if (umac->use_ncsi)
+ 		ncsi_stop_dev(umac->ncsidev);
+ 	else
+ 		phy_stop(ndev->phydev);
+-	umac_irq_disable(umac);
+-	umac_channel_disable(umac);
+-	napi_disable(&umac->napi);
+ 
+-	free_irq(ndev->irq, ndev);
++	dma_free_coherent(&pdev->dev, sizeof(struct umac_tx_descs),
++			  umac->tx_descs, umac->tx_descs_dma_addr);
++	dma_free_coherent(&pdev->dev, sizeof(struct umac_rx_descs),
++			  umac->rx_descs, umac->rx_descs_dma_addr);
+ 
+ 	return 0;
+ }
+-- 
+2.52.0
+

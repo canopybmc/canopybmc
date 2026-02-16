@@ -1,0 +1,55 @@
+From 9e6eda9506e05ad66ee17702fbe12e79effa416e Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 5 Feb 2026 10:04:46 +0100
+Subject: [PATCH] dt-bindings: arm: hpe: simplify to generic GXP compatible
+
+The HPE GXP BMC is a single-SoC design where all ProLiant platforms
+share the same peripherals, memory map, and boot configuration. There
+are no board-level differences that require distinct compatible strings
+in the device tree.
+
+Simplify the binding to accept a single "hpe,gxp" compatible value,
+removing the board-specific "hpe,gxp-dl360gen10" string that was added
+without corresponding device tree differences to justify it. Update
+the DL360 Gen10 board device tree accordingly.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ Documentation/devicetree/bindings/arm/hpe,gxp.yaml | 7 +------
+ arch/arm/boot/dts/hpe/hpe-bmc-dl360gen10.dts       | 2 +-
+ 2 files changed, 2 insertions(+), 7 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/arm/hpe,gxp.yaml b/Documentation/devicetree/bindings/arm/hpe,gxp.yaml
+index 224bbcb93f95..01b380031089 100644
+--- a/Documentation/devicetree/bindings/arm/hpe,gxp.yaml
++++ b/Documentation/devicetree/bindings/arm/hpe,gxp.yaml
+@@ -12,12 +12,7 @@ maintainers:
+ 
+ properties:
+   compatible:
+-    oneOf:
+-      - description: GXP Based Boards
+-        items:
+-          - enum:
+-              - hpe,gxp-dl360gen10
+-          - const: hpe,gxp
++    const: hpe,gxp
+ 
+ required:
+   - compatible
+diff --git a/arch/arm/boot/dts/hpe/hpe-bmc-dl360gen10.dts b/arch/arm/boot/dts/hpe/hpe-bmc-dl360gen10.dts
+index 3a7382ce40ef..794e5bd11214 100644
+--- a/arch/arm/boot/dts/hpe/hpe-bmc-dl360gen10.dts
++++ b/arch/arm/boot/dts/hpe/hpe-bmc-dl360gen10.dts
+@@ -8,7 +8,7 @@
+ / {
+ 	#address-cells = <1>;
+ 	#size-cells = <1>;
+-	compatible = "hpe,gxp-dl360gen10", "hpe,gxp";
++	compatible = "hpe,gxp";
+ 	model = "Hewlett Packard Enterprise ProLiant dl360 Gen10";
+ 
+ 	aliases {
+-- 
+2.52.0
+

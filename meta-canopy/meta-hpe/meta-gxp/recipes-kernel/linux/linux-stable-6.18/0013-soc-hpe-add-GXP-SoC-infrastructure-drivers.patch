@@ -1,0 +1,1728 @@
+From 37deb2aeca2288b4868529523f3d9ac45659f412 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Sun, 8 Feb 2026 22:19:53 +0100
+Subject: [PATCH] soc: hpe: add GXP SoC infrastructure drivers
+
+Add the core HPE GXP BMC SoC drivers: gxp-soclib shared library,
+gxp-csm, gxp-xreg (150 GPIO lines), gxp-fn2 (power state GPIOs).
+Include gxp-regs.h with named register constants.
+
+Co-developed-by: Gilbert Chen <gilbert.chen@hpe.com>
+Signed-off-by: Gilbert Chen <gilbert.chen@hpe.com>
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/soc/Kconfig              |   1 +
+ drivers/soc/Makefile             |   1 +
+ drivers/soc/hpe/Kconfig          |  61 +++
+ drivers/soc/hpe/Makefile         |   9 +
+ drivers/soc/hpe/gxp-csm.c        | 266 +++++++++++
+ drivers/soc/hpe/gxp-fn2.c        | 279 ++++++++++++
+ drivers/soc/hpe/gxp-soclib.c     |  37 ++
+ drivers/soc/hpe/gxp-soclib.h     |  14 +
+ drivers/soc/hpe/gxp-xreg.c       | 746 +++++++++++++++++++++++++++++++
+ include/linux/soc/hpe/gxp-regs.h | 208 +++++++++
+ 10 files changed, 1622 insertions(+)
+ create mode 100644 drivers/soc/hpe/Kconfig
+ create mode 100644 drivers/soc/hpe/Makefile
+ create mode 100644 drivers/soc/hpe/gxp-csm.c
+ create mode 100644 drivers/soc/hpe/gxp-fn2.c
+ create mode 100644 drivers/soc/hpe/gxp-soclib.c
+ create mode 100644 drivers/soc/hpe/gxp-soclib.h
+ create mode 100644 drivers/soc/hpe/gxp-xreg.c
+ create mode 100644 include/linux/soc/hpe/gxp-regs.h
+
+diff --git a/drivers/soc/Kconfig b/drivers/soc/Kconfig
+index a2d65adffb80..244822c4f7ed 100644
+--- a/drivers/soc/Kconfig
++++ b/drivers/soc/Kconfig
+@@ -11,6 +11,7 @@ source "drivers/soc/cirrus/Kconfig"
+ source "drivers/soc/fsl/Kconfig"
+ source "drivers/soc/fujitsu/Kconfig"
+ source "drivers/soc/hisilicon/Kconfig"
++source "drivers/soc/hpe/Kconfig"
+ source "drivers/soc/imx/Kconfig"
+ source "drivers/soc/ixp4xx/Kconfig"
+ source "drivers/soc/litex/Kconfig"
+diff --git a/drivers/soc/Makefile b/drivers/soc/Makefile
+index c9e689080ceb..4dfedaf93b6f 100644
+--- a/drivers/soc/Makefile
++++ b/drivers/soc/Makefile
+@@ -15,6 +15,7 @@ obj-y				+= fsl/
+ obj-y				+= fujitsu/
+ obj-$(CONFIG_ARCH_GEMINI)	+= gemini/
+ obj-y				+= hisilicon/
++obj-$(CONFIG_SOC_HPE)		+= hpe/
+ obj-y				+= imx/
+ obj-y				+= ixp4xx/
+ obj-$(CONFIG_SOC_XWAY)		+= lantiq/
+diff --git a/drivers/soc/hpe/Kconfig b/drivers/soc/hpe/Kconfig
+new file mode 100644
+index 000000000000..cada2f39340c
+--- /dev/null
++++ b/drivers/soc/hpe/Kconfig
+@@ -0,0 +1,61 @@
++# SPDX-License-Identifier: GPL-2.0-only
++#
++# HPE SoC drivers
++#
++
++config SOC_HPE
++	bool "HPE SoC drivers"
++	depends on ARCH_HPE || COMPILE_TEST
++	help
++	  Say Y here to enable support for HPE GXP SoC drivers.
++	  The GXP is a BMC SoC used in HPE ProLiant servers. This
++	  option enables the SoC infrastructure drivers for CSM,
++	  XREG, and FN2 register blocks.
++
++if SOC_HPE
++
++config SOC_HPE_GXP
++	bool
++	default n
++
++config SOC_HPE_GXP_CSM
++	tristate "HPE GXP CSM support"
++	depends on ARCH_HPE_GXP || COMPILE_TEST
++	select SOC_HPE_GXP
++	select MFD_SYSCON
++	select REGMAP_MMIO
++	help
++	  Say Y here to add support for the HPE GXP CSM (Slave
++	  Instrumentation and System Support) block. This provides
++	  sysfs interfaces for controlling virtual EHCI enable and
++	  software shutdown.
++
++config SOC_HPE_GXP_XREG
++	tristate "HPE GXP XREG support"
++	depends on ARCH_HPE_GXP || COMPILE_TEST
++	depends on GPIOLIB
++	select SOC_HPE_GXP
++	select MFD_SYSCON
++	select REGMAP_MMIO
++	select GPIOLIB_IRQCHIP
++	help
++	  Say Y here to add support for the HPE GXP XREG (Extended
++	  Register Block). This provides 150 GPIO lines for LEDs,
++	  fan status, PSU presence, and buttons with interrupt
++	  support for power button and PSU events.
++
++config SOC_HPE_GXP_FN2
++	tristate "HPE GXP FN2 support"
++	depends on ARCH_HPE_GXP || COMPILE_TEST
++	depends on GPIOLIB
++	select SOC_HPE_GXP
++	select MFD_SYSCON
++	select REGMAP_MMIO
++	select GPIOLIB_IRQCHIP
++	help
++	  Say Y here to add support for the HPE GXP FN2 (Embedded
++	  Management Processor Support and Configuration). This
++	  provides GPIO lines for power state control (VPBTN,
++	  PGOOD, PERST) and interrupt handling.
++
++endif # SOC_HPE
+diff --git a/drivers/soc/hpe/Makefile b/drivers/soc/hpe/Makefile
+new file mode 100644
+index 000000000000..a7e25539f99d
+--- /dev/null
++++ b/drivers/soc/hpe/Makefile
+@@ -0,0 +1,9 @@
++# SPDX-License-Identifier: GPL-2.0
++#
++# Makefile for HPE SoC drivers
++#
++
++obj-$(CONFIG_SOC_HPE_GXP)		+= gxp-soclib.o
++obj-$(CONFIG_SOC_HPE_GXP_CSM)		+= gxp-csm.o
++obj-$(CONFIG_SOC_HPE_GXP_XREG)		+= gxp-xreg.o
++obj-$(CONFIG_SOC_HPE_GXP_FN2)		+= gxp-fn2.o
+diff --git a/drivers/soc/hpe/gxp-csm.c b/drivers/soc/hpe/gxp-csm.c
+new file mode 100644
+index 000000000000..c649ab42f36a
+--- /dev/null
++++ b/drivers/soc/hpe/gxp-csm.c
+@@ -0,0 +1,266 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * HPE GXP CSM (Slave Instrumentation and System Support) driver
++ *
++ * Copyright (C) 2019 Hewlett Packard Enterprise Development LP.
++ * Copyright (C) 2026 9elements GmbH
++ *
++ * This driver provides sysfs interfaces for controlling the virtual EHCI
++ * enable and software shutdown functions of the HPE GXP BMC.
++ */
++
++#include <linux/device.h>
++#include <linux/io.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++#include <linux/soc/hpe/gxp-regs.h>
++
++#include "gxp-soclib.h"
++
++struct gxp_csm_drvdata {
++	void __iomem *base;
++	void __iomem *shutdown_reg;
++	void __iomem *shutdown_reason_reg;
++	void __iomem *rom_state_reg;
++	void __iomem *spd_config_reg;
++	/* protects access to all registers */
++	struct mutex mutex;
++	struct device *sysfs_dev;
++};
++
++static ssize_t vehci_enable_show(struct device *dev,
++				 struct device_attribute *attr, char *buf)
++{
++	struct gxp_csm_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned char value;
++
++	mutex_lock(&drvdata->mutex);
++	value = readb(drvdata->base + CSM_AFUNEN2);
++	mutex_unlock(&drvdata->mutex);
++
++	return sysfs_emit(buf, "%d\n", (value & CSM_AFUNEN2_VEHCI_EN) ? 1 : 0);
++}
++
++static ssize_t vehci_enable_store(struct device *dev,
++				  struct device_attribute *attr,
++				  const char *buf, size_t count)
++{
++	struct gxp_csm_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned int input;
++	unsigned char value;
++	int rc;
++
++	rc = kstrtouint(buf, 0, &input);
++	if (rc < 0)
++		return -EINVAL;
++
++	mutex_lock(&drvdata->mutex);
++
++	value = readb(drvdata->base + CSM_AFUNEN2);
++	if (input)
++		value |= CSM_AFUNEN2_VEHCI_EN;
++	else
++		value &= ~CSM_AFUNEN2_VEHCI_EN;
++	writeb(value, drvdata->base + CSM_AFUNEN2);
++
++	mutex_unlock(&drvdata->mutex);
++
++	return count;
++}
++static DEVICE_ATTR_RW(vehci_enable);
++
++static ssize_t sw_shutdown_store(struct device *dev,
++				 struct device_attribute *attr,
++				 const char *buf, size_t count)
++{
++	struct gxp_csm_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned int value;
++	int rc;
++
++	rc = kstrtouint(buf, 0, &value);
++	if (rc < 0)
++		return -EINVAL;
++
++	mutex_lock(&drvdata->mutex);
++
++	if (value)
++		writeb(CSM_SHUTDOWN_MAGIC, drvdata->shutdown_reg);
++
++	mutex_unlock(&drvdata->mutex);
++
++	return count;
++}
++static DEVICE_ATTR_WO(sw_shutdown);
++
++static ssize_t shutdown_reason_show(struct device *dev,
++				    struct device_attribute *attr, char *buf)
++{
++	struct gxp_csm_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned char value;
++
++	mutex_lock(&drvdata->mutex);
++	value = readb(drvdata->shutdown_reason_reg);
++	mutex_unlock(&drvdata->mutex);
++
++	return sysfs_emit(buf, "0x%02x\n", value);
++}
++
++static ssize_t shutdown_reason_store(struct device *dev,
++				     struct device_attribute *attr,
++				     const char *buf, size_t count)
++{
++	struct gxp_csm_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned int value;
++	int rc;
++
++	rc = kstrtouint(buf, 0, &value);
++	if (rc < 0)
++		return -EINVAL;
++
++	mutex_lock(&drvdata->mutex);
++	writeb(value & 0xff, drvdata->shutdown_reason_reg);
++	mutex_unlock(&drvdata->mutex);
++
++	return count;
++}
++static DEVICE_ATTR_RW(shutdown_reason);
++
++static ssize_t rom_state_show(struct device *dev,
++			      struct device_attribute *attr, char *buf)
++{
++	struct gxp_csm_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned char value;
++
++	mutex_lock(&drvdata->mutex);
++	value = readb(drvdata->rom_state_reg);
++	mutex_unlock(&drvdata->mutex);
++
++	return sysfs_emit(buf, "0x%02x\n", value);
++}
++
++static ssize_t rom_state_store(struct device *dev,
++			       struct device_attribute *attr,
++			       const char *buf, size_t count)
++{
++	struct gxp_csm_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned int value;
++	int rc;
++
++	rc = kstrtouint(buf, 0, &value);
++	if (rc < 0)
++		return -EINVAL;
++
++	mutex_lock(&drvdata->mutex);
++	writeb(value & 0xff, drvdata->rom_state_reg);
++	mutex_unlock(&drvdata->mutex);
++
++	return count;
++}
++static DEVICE_ATTR_RW(rom_state);
++
++static ssize_t spd_config_show(struct device *dev,
++			       struct device_attribute *attr, char *buf)
++{
++	struct gxp_csm_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned char value;
++
++	mutex_lock(&drvdata->mutex);
++	value = readb(drvdata->spd_config_reg);
++	mutex_unlock(&drvdata->mutex);
++
++	return sysfs_emit(buf, "0x%02x\n", value);
++}
++
++static ssize_t spd_config_store(struct device *dev,
++				struct device_attribute *attr,
++				const char *buf, size_t count)
++{
++	struct gxp_csm_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned int value;
++	int rc;
++
++	rc = kstrtouint(buf, 0, &value);
++	if (rc < 0)
++		return -EINVAL;
++
++	mutex_lock(&drvdata->mutex);
++	writeb(value & 0xff, drvdata->spd_config_reg);
++	mutex_unlock(&drvdata->mutex);
++
++	return count;
++}
++static DEVICE_ATTR_RW(spd_config);
++
++static struct attribute *csm_attrs[] = {
++	&dev_attr_sw_shutdown.attr,
++	&dev_attr_vehci_enable.attr,
++	&dev_attr_shutdown_reason.attr,
++	&dev_attr_rom_state.attr,
++	&dev_attr_spd_config.attr,
++	NULL,
++};
++ATTRIBUTE_GROUPS(csm);
++
++static int gxp_csm_probe(struct platform_device *pdev)
++{
++	struct gxp_csm_drvdata *drvdata;
++	void __iomem *base;
++
++	drvdata = devm_kzalloc(&pdev->dev, sizeof(*drvdata), GFP_KERNEL);
++	if (!drvdata)
++		return -ENOMEM;
++
++	platform_set_drvdata(pdev, drvdata);
++
++	/* Map CSM register block */
++	base = devm_platform_ioremap_resource(pdev, 0);
++	if (IS_ERR(base))
++		return PTR_ERR(base);
++	drvdata->base = base;
++	drvdata->shutdown_reg = base + CSM_SHUTDOWN;
++	drvdata->shutdown_reason_reg = base + CSM_SHUTDOWN_REASON;
++	drvdata->rom_state_reg = base + CSM_ROM_STATE;
++	drvdata->spd_config_reg = base + CSM_SPD_CONFIG;
++
++	mutex_init(&drvdata->mutex);
++
++	/* Create sysfs node under /sys/class/gxp-soc/csm */
++	drvdata->sysfs_dev = device_create_with_groups(gxp_soc_class, &pdev->dev,
++						       0, drvdata, csm_groups,
++						       "csm");
++	if (IS_ERR(drvdata->sysfs_dev))
++		return dev_err_probe(&pdev->dev, PTR_ERR(drvdata->sysfs_dev),
++				     "failed to create sysfs device\n");
++
++	return 0;
++}
++
++static void gxp_csm_remove(struct platform_device *pdev)
++{
++	struct gxp_csm_drvdata *drvdata = platform_get_drvdata(pdev);
++
++	device_unregister(drvdata->sysfs_dev);
++}
++
++static const struct of_device_id gxp_csm_of_match[] = {
++	{ .compatible = "hpe,gxp-csm" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, gxp_csm_of_match);
++
++static struct platform_driver gxp_csm_driver = {
++	.probe = gxp_csm_probe,
++	.remove = gxp_csm_remove,
++	.driver = {
++		.name = "gxp-csm",
++		.of_match_table = gxp_csm_of_match,
++	},
++};
++module_platform_driver(gxp_csm_driver);
++
++MODULE_AUTHOR("Gilbert Chen <gilbert.chen@hpe.com>");
++MODULE_AUTHOR("Marcello Sylvester Bauer <marcello.bauer@9elements.com>");
++MODULE_DESCRIPTION("HPE GXP CSM Driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/soc/hpe/gxp-fn2.c b/drivers/soc/hpe/gxp-fn2.c
+new file mode 100644
+index 000000000000..306c5e66dde8
+--- /dev/null
++++ b/drivers/soc/hpe/gxp-fn2.c
+@@ -0,0 +1,279 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * HPE GXP FN2 (Embedded Management Processor Support and Configuration) driver
++ *
++ * Copyright (C) 2019 Hewlett Packard Enterprise Development LP.
++ * Copyright (C) 2026 9elements GmbH
++ *
++ * This driver provides GPIO functionality for power state control on the
++ * HPE GXP BMC SoC. It exposes GPIO lines for VPBTN (virtual power button),
++ * PGOOD, PERST, and POST_COMPLETE with interrupt support.
++ */
++
++#include <linux/device.h>
++#include <linux/gpio/driver.h>
++#include <linux/interrupt.h>
++#include <linux/io.h>
++#include <linux/mfd/syscon.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++#include <linux/regmap.h>
++#include <linux/soc/hpe/gxp-regs.h>
++
++/* GPIO pin definitions */
++enum fn2_gpio_pin {
++	VPBTN = 0,		/* Output: virtual power button */
++	PGOOD,			/* Input: power good */
++	PERST,			/* Input: PCIe reset */
++	POST_COMPLETE,		/* Input: POST complete */
++	BTN_STATE,		/* Input: button state */
++};
++
++struct gxp_fn2_drvdata {
++	void __iomem *base;
++	struct regmap *fn2_map;
++	struct gpio_chip gpio_chip;
++	int irq;
++	int btn_state;
++};
++
++static int gxp_fn2_gpio_get(struct gpio_chip *chip, unsigned int offset)
++{
++	struct gxp_fn2_drvdata *drvdata = gpiochip_get_data(chip);
++	unsigned int val;
++
++	switch (offset) {
++	case VPBTN:
++		return 0; /* Write-only */
++	case BTN_STATE:
++		return drvdata->btn_state;
++	case PGOOD:
++		regmap_read(drvdata->fn2_map, FN2_SEVSTAT, &val);
++		return !!(val & FN2_SEVSTAT_PGOOD_STATE);
++	case PERST:
++		regmap_read(drvdata->fn2_map, FN2_SEVSTAT, &val);
++		return !!(val & FN2_SEVSTAT_PERST_STATE);
++	case POST_COMPLETE:
++		/* TODO: read from SRAM */
++		return 0;
++	default:
++		return 0;
++	}
++}
++
++static int gxp_fn2_gpio_set(struct gpio_chip *chip, unsigned int offset,
++			     int value)
++{
++	struct gxp_fn2_drvdata *drvdata = gpiochip_get_data(chip);
++	unsigned int val;
++
++	switch (offset) {
++	case VPBTN:
++		/* Set virtual power button */
++		regmap_update_bits(drvdata->fn2_map, FN2_VPBTN_CTRL,
++				   FN2_VPBTN_PRESSED,
++				   value ? FN2_VPBTN_PRESSED : 0);
++		regmap_read(drvdata->fn2_map, FN2_VPBTN_CTRL, &val);
++		drvdata->btn_state = !!(val & FN2_VPBTN_PRESSED);
++		break;
++	default:
++		break;
++	}
++
++	return 0;
++}
++
++static int gxp_fn2_gpio_get_direction(struct gpio_chip *chip,
++				      unsigned int offset)
++{
++	switch (offset) {
++	case VPBTN:
++		return GPIO_LINE_DIRECTION_OUT;
++	default:
++		return GPIO_LINE_DIRECTION_IN;
++	}
++}
++
++static int gxp_fn2_gpio_direction_input(struct gpio_chip *chip,
++					 unsigned int offset)
++{
++	switch (offset) {
++	case PGOOD:
++	case PERST:
++	case BTN_STATE:
++	case POST_COMPLETE:
++		return 0;
++	default:
++		return -EOPNOTSUPP;
++	}
++}
++
++static int gxp_fn2_gpio_direction_output(struct gpio_chip *chip,
++					  unsigned int offset, int value)
++{
++	switch (offset) {
++	case VPBTN:
++		gxp_fn2_gpio_set(chip, offset, value);
++		return 0;
++	default:
++		return -EOPNOTSUPP;
++	}
++}
++
++static void gxp_fn2_gpio_irq_ack(struct irq_data *d)
++{
++	struct gpio_chip *chip = irq_data_get_irq_chip_data(d);
++	struct gxp_fn2_drvdata *drvdata = gpiochip_get_data(chip);
++
++	/* Clear latched interrupt */
++	regmap_update_bits(drvdata->fn2_map, FN2_SEVSTAT, 0xFFFF, 0xFFFF);
++}
++
++static void gxp_fn2_gpio_irq_set_mask(struct irq_data *d, bool set)
++{
++	struct gpio_chip *chip = irq_data_get_irq_chip_data(d);
++	struct gxp_fn2_drvdata *drvdata = gpiochip_get_data(chip);
++
++	regmap_update_bits(drvdata->fn2_map, FN2_SEVMASK, FN2_SEVMASK_EN,
++			   set ? FN2_SEVMASK_EN : 0);
++}
++
++static void gxp_fn2_gpio_irq_mask(struct irq_data *d)
++{
++	gxp_fn2_gpio_irq_set_mask(d, false);
++}
++
++static void gxp_fn2_gpio_irq_unmask(struct irq_data *d)
++{
++	gxp_fn2_gpio_irq_set_mask(d, true);
++}
++
++static int gxp_fn2_gpio_set_type(struct irq_data *d, unsigned int type)
++{
++	if (type & IRQ_TYPE_LEVEL_MASK)
++		irq_set_handler_locked(d, handle_level_irq);
++	else
++		irq_set_handler_locked(d, handle_edge_irq);
++
++	return 0;
++}
++
++static irqreturn_t gxp_fn2_irq_handle(int irq, void *_drvdata)
++{
++	struct gxp_fn2_drvdata *drvdata = _drvdata;
++	unsigned int val;
++	int girq;
++
++	/* Handle system event */
++	val = readb(drvdata->base + FN2_SEVSTAT);
++
++	if (val & FN2_SEVSTAT_PGOOD) {
++		girq = irq_find_mapping(drvdata->gpio_chip.irq.domain, PGOOD);
++		if (girq)
++			generic_handle_irq(girq);
++		else
++			regmap_update_bits(drvdata->fn2_map, FN2_SEVSTAT,
++					   0xFFFF, 0xFFFF);
++	}
++
++	if (val & FN2_SEVSTAT_PERST) {
++		girq = irq_find_mapping(drvdata->gpio_chip.irq.domain, PERST);
++		if (girq)
++			generic_handle_irq(girq);
++		else
++			regmap_update_bits(drvdata->fn2_map, FN2_SEVSTAT,
++					   0xFFFF, 0xFFFF);
++	}
++
++	return IRQ_HANDLED;
++}
++
++static const struct irq_chip gxp_fn2_irqchip = {
++	.name		= "gxp-fn2",
++	.irq_ack	= gxp_fn2_gpio_irq_ack,
++	.irq_mask	= gxp_fn2_gpio_irq_mask,
++	.irq_unmask	= gxp_fn2_gpio_irq_unmask,
++	.irq_set_type	= gxp_fn2_gpio_set_type,
++	.flags		= IRQCHIP_IMMUTABLE,
++	GPIOCHIP_IRQ_RESOURCE_HELPERS,
++};
++
++static const struct of_device_id gxp_fn2_of_match[] = {
++	{ .compatible = "hpe,gxp-fn2" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, gxp_fn2_of_match);
++
++static int gxp_fn2_probe(struct platform_device *pdev)
++{
++	struct gxp_fn2_drvdata *drvdata;
++	struct gpio_irq_chip *girq;
++	int ret;
++
++	drvdata = devm_kzalloc(&pdev->dev, sizeof(*drvdata), GFP_KERNEL);
++	if (!drvdata)
++		return -ENOMEM;
++
++	platform_set_drvdata(pdev, drvdata);
++
++	/* Map FN2 registers */
++	drvdata->base = devm_platform_ioremap_resource(pdev, 0);
++	if (IS_ERR(drvdata->base))
++		return PTR_ERR(drvdata->base);
++
++	drvdata->fn2_map = syscon_regmap_lookup_by_compatible("hpe,gxp-fn2");
++	if (IS_ERR(drvdata->fn2_map))
++		return dev_err_probe(&pdev->dev, PTR_ERR(drvdata->fn2_map),
++				     "failed to find fn2 regmap\n");
++
++	/* Setup GPIO chip */
++	drvdata->gpio_chip.label = "gxp-fn2";
++	drvdata->gpio_chip.parent = &pdev->dev;
++	drvdata->gpio_chip.owner = THIS_MODULE;
++	drvdata->gpio_chip.get = gxp_fn2_gpio_get;
++	drvdata->gpio_chip.set = gxp_fn2_gpio_set;
++	drvdata->gpio_chip.get_direction = gxp_fn2_gpio_get_direction;
++	drvdata->gpio_chip.direction_input = gxp_fn2_gpio_direction_input;
++	drvdata->gpio_chip.direction_output = gxp_fn2_gpio_direction_output;
++	drvdata->gpio_chip.base = -1;
++	drvdata->gpio_chip.ngpio = 50;
++
++	/* Setup IRQ chip */
++	girq = &drvdata->gpio_chip.irq;
++	gpio_irq_chip_set_chip(girq, &gxp_fn2_irqchip);
++	girq->handler = handle_edge_irq;
++	girq->default_type = IRQ_TYPE_NONE;
++
++	ret = devm_gpiochip_add_data(&pdev->dev, &drvdata->gpio_chip, drvdata);
++	if (ret < 0)
++		return dev_err_probe(&pdev->dev, ret,
++				     "could not register gpiochip\n");
++
++	/* Setup interrupt from FN2 system event register */
++	ret = platform_get_irq(pdev, 0);
++	if (ret < 0)
++		return dev_err_probe(&pdev->dev, ret, "failed to get irq\n");
++	drvdata->irq = ret;
++
++	ret = devm_request_irq(&pdev->dev, drvdata->irq, gxp_fn2_irq_handle,
++			       IRQF_SHARED, "gxp-fn2", drvdata);
++	if (ret < 0)
++		return dev_err_probe(&pdev->dev, ret, "failed to request irq\n");
++
++	return 0;
++}
++
++static struct platform_driver gxp_fn2_driver = {
++	.probe = gxp_fn2_probe,
++	.driver = {
++		.name = "gxp-fn2",
++		.of_match_table = gxp_fn2_of_match,
++	},
++};
++module_platform_driver(gxp_fn2_driver);
++
++MODULE_AUTHOR("Gilbert Chen <gilbert.chen@hpe.com>");
++MODULE_AUTHOR("Marcello Sylvester Bauer <marcello.bauer@9elements.com>");
++MODULE_DESCRIPTION("HPE GXP FN2 Driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/soc/hpe/gxp-soclib.c b/drivers/soc/hpe/gxp-soclib.c
+new file mode 100644
+index 000000000000..a1ef2b62436b
+--- /dev/null
++++ b/drivers/soc/hpe/gxp-soclib.c
+@@ -0,0 +1,37 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * HPE GXP SoC class library
++ *
++ * Copyright (C) 2019 Hewlett Packard Enterprise Development LP.
++ * Copyright (C) 2026 9elements GmbH
++ *
++ * This provides a common soc_class for GXP SoC drivers to create sysfs
++ * device nodes under /sys/class/soc/.
++ */
++
++#include <linux/device.h>
++#include <linux/module.h>
++
++const struct class *gxp_soc_class;
++EXPORT_SYMBOL_GPL(gxp_soc_class);
++
++static int __init gxp_soclib_init(void)
++{
++	gxp_soc_class = class_create("gxp-soc");
++	if (IS_ERR(gxp_soc_class))
++		return PTR_ERR(gxp_soc_class);
++	return 0;
++}
++
++static void __exit gxp_soclib_exit(void)
++{
++	class_destroy((struct class *)gxp_soc_class);
++}
++
++subsys_initcall(gxp_soclib_init);
++module_exit(gxp_soclib_exit);
++
++MODULE_AUTHOR("Gilbert Chen <gilbert.chen@hpe.com>");
++MODULE_AUTHOR("Marcello Sylvester Bauer <marcello.bauer@9elements.com>");
++MODULE_DESCRIPTION("HPE GXP SoC class library");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/soc/hpe/gxp-soclib.h b/drivers/soc/hpe/gxp-soclib.h
+new file mode 100644
+index 000000000000..1d30d05f0df8
+--- /dev/null
++++ b/drivers/soc/hpe/gxp-soclib.h
+@@ -0,0 +1,14 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * HPE GXP SoC class library header
++ *
++ * Copyright (C) 2019 Hewlett Packard Enterprise Development LP.
++ * Copyright (C) 2026 9elements GmbH
++ */
++
++#ifndef __GXP_SOCLIB_H__
++#define __GXP_SOCLIB_H__
++
++extern const struct class *gxp_soc_class;
++
++#endif /* __GXP_SOCLIB_H__ */
+diff --git a/drivers/soc/hpe/gxp-xreg.c b/drivers/soc/hpe/gxp-xreg.c
+new file mode 100644
+index 000000000000..33656f77db79
+--- /dev/null
++++ b/drivers/soc/hpe/gxp-xreg.c
+@@ -0,0 +1,746 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * HPE GXP XREG (Extended Register Block) driver
++ *
++ * Copyright (C) 2019 Hewlett Packard Enterprise Development LP.
++ * Copyright (C) 2026 9elements GmbH
++ *
++ * This driver provides extended GPIO functionality and interrupt handling
++ * for the HPE GXP BMC SoC. It exposes 150 GPIO lines for LEDs, fan status,
++ * PSU presence, and button handling with interrupt support.
++ */
++
++#include <linux/device.h>
++#include <linux/gpio/driver.h>
++#include <linux/interrupt.h>
++#include <linux/io.h>
++#include <linux/mfd/syscon.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++#include <linux/regmap.h>
++#include <linux/soc/hpe/gxp-regs.h>
++
++#include "gxp-soclib.h"
++
++/* GPIO pin to interrupt group mapping */
++#define XREG_INT_GRP5_PIN_BASE	59
++#define XREG_INT_GRP6_PIN_BASE	90
++
++/* GPIO pin definitions */
++enum xreg_gpio_pin {
++	IOP_LED1 = 0,
++	IOP_LED2,
++	IOP_LED3,
++	IOP_LED4,
++	IOP_LED5,
++	IOP_LED6,
++	IOP_LED7,
++	IOP_LED8,
++	FAN1_INST = 8,
++	FAN2_INST,
++	FAN3_INST,
++	FAN4_INST,
++	FAN5_INST,
++	FAN6_INST,
++	FAN7_INST,
++	FAN8_INST,
++	FAN9_INST,
++	FAN10_INST,
++	FAN11_INST,
++	FAN12_INST,
++	FAN13_INST,
++	FAN14_INST,
++	FAN15_INST,
++	FAN16_INST,
++	FAN1_FAIL = 24,
++	FAN2_FAIL,
++	FAN3_FAIL,
++	FAN4_FAIL,
++	FAN5_FAIL,
++	FAN6_FAIL,
++	FAN7_FAIL,
++	FAN8_FAIL,
++	FAN9_FAIL,
++	FAN10_FAIL,
++	FAN11_FAIL,
++	FAN12_FAIL,
++	FAN13_FAIL,
++	FAN14_FAIL,
++	FAN15_FAIL,
++	FAN16_FAIL,
++	FAN1_ID = 40,
++	FAN2_ID,
++	FAN3_ID,
++	FAN4_ID,
++	FAN5_ID,
++	FAN6_ID,
++	FAN7_ID,
++	FAN8_ID,
++	FAN9_ID,
++	FAN10_ID,
++	FAN11_ID,
++	FAN12_ID,
++	FAN13_ID,
++	FAN14_ID,
++	FAN15_ID,
++	FAN16_ID,
++	LED_IDENTIFY = 56,
++	LED_HEALTH_RED,
++	LED_HEALTH_AMBER,
++	PWR_BTN_INT = 59,
++	UID_PRESS_INT,
++	SLP_INT,
++	ACM_FORCE_OFF = 70,
++	ACM_REMOVED,
++	ACM_REQ_N,
++	PSU1_INST = 90,
++	PSU2_INST,
++	PSU3_INST,
++	PSU4_INST,
++	PSU5_INST,
++	PSU6_INST,
++	PSU7_INST,
++	PSU8_INST,
++	PSU1_AC = 100,
++	PSU2_AC,
++	PSU3_AC,
++	PSU4_AC,
++	PSU5_AC,
++	PSU6_AC,
++	PSU7_AC,
++	PSU8_AC,
++	PSU1_DC = 110,
++	PSU2_DC,
++	PSU3_DC,
++	PSU4_DC,
++	PSU5_DC,
++	PSU6_DC,
++	PSU7_DC,
++	PSU8_DC
++};
++
++struct gxp_xreg_drvdata {
++	void __iomem *base;
++	struct regmap *xreg_map;
++	struct gpio_chip gpio_chip;
++	struct device *sysfs_dev;
++	void __iomem *soc_ready_reg;
++	void __iomem *flash_select_reg;
++	int irq;
++	u8 psu_presence;
++};
++
++static ssize_t server_id_show(struct device *dev,
++			      struct device_attribute *attr, char *buf)
++{
++	struct gxp_xreg_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned int value;
++
++	regmap_read(drvdata->xreg_map, XREG_SERVER_ID, &value);
++
++	return sysfs_emit(buf, "0x%04x\n", (value & 0xffff00) >> 8);
++}
++static DEVICE_ATTR_RO(server_id);
++
++static ssize_t sideband_sel_show(struct device *dev,
++				 struct device_attribute *attr, char *buf)
++{
++	struct gxp_xreg_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned int value;
++
++	regmap_read(drvdata->xreg_map, XREG_PSU_SIDEBAND, &value);
++
++	return sysfs_emit(buf, "0x%02x\n", value & XREG_PSU_SIDEBAND_MASK);
++}
++
++static ssize_t sideband_sel_store(struct device *dev,
++				  struct device_attribute *attr,
++				  const char *buf, size_t count)
++{
++	struct gxp_xreg_drvdata *drvdata = dev_get_drvdata(dev);
++	int input;
++	int rc;
++
++	rc = kstrtoint(buf, 0, &input);
++	if (rc < 0)
++		return -EINVAL;
++
++	if (input & ~XREG_PSU_SIDEBAND_MASK)
++		return -EINVAL;
++
++	regmap_update_bits(drvdata->xreg_map, XREG_PSU_SIDEBAND,
++			   XREG_PSU_SIDEBAND_MASK, input);
++
++	return count;
++}
++static DEVICE_ATTR_RW(sideband_sel);
++
++static ssize_t boot_control_show(struct device *dev,
++				 struct device_attribute *attr, char *buf)
++{
++	struct gxp_xreg_drvdata *drvdata = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "0x%02x\n",
++			  readb(drvdata->base + XREG_BOOT_CONTROL));
++}
++
++static ssize_t boot_control_store(struct device *dev,
++				  struct device_attribute *attr,
++				  const char *buf, size_t count)
++{
++	struct gxp_xreg_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned int value;
++	int rc;
++
++	rc = kstrtouint(buf, 0, &value);
++	if (rc < 0)
++		return -EINVAL;
++
++	if (value != XREG_BOOT_CONTROL_RELEASE &&
++	    value != XREG_BOOT_CONTROL_HOLD)
++		return -EINVAL;
++
++	writeb(value, drvdata->base + XREG_BOOT_CONTROL);
++
++	return count;
++}
++static DEVICE_ATTR_RW(boot_control);
++
++static ssize_t psu_enable_show(struct device *dev,
++			       struct device_attribute *attr, char *buf)
++{
++	struct gxp_xreg_drvdata *drvdata = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "0x%02x\n",
++			  readb(drvdata->base + XREG_PSU_ENABLE));
++}
++
++static ssize_t psu_enable_store(struct device *dev,
++				struct device_attribute *attr,
++				const char *buf, size_t count)
++{
++	struct gxp_xreg_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned int value;
++	int rc;
++
++	rc = kstrtouint(buf, 0, &value);
++	if (rc < 0)
++		return -EINVAL;
++
++	writeb(value & 0xff, drvdata->base + XREG_PSU_ENABLE);
++
++	return count;
++}
++static DEVICE_ATTR_RW(psu_enable);
++
++static ssize_t power_state_show(struct device *dev,
++				struct device_attribute *attr, char *buf)
++{
++	struct gxp_xreg_drvdata *drvdata = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "0x%02x\n",
++			  readb(drvdata->base + XREG_POWER_STATE));
++}
++
++static ssize_t power_state_store(struct device *dev,
++				 struct device_attribute *attr,
++				 const char *buf, size_t count)
++{
++	struct gxp_xreg_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned int value;
++	int rc;
++
++	rc = kstrtouint(buf, 0, &value);
++	if (rc < 0)
++		return -EINVAL;
++
++	writeb(value & 0xff, drvdata->base + XREG_POWER_STATE);
++
++	return count;
++}
++static DEVICE_ATTR_RW(power_state);
++
++static ssize_t spd_mode_show(struct device *dev,
++			     struct device_attribute *attr, char *buf)
++{
++	struct gxp_xreg_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned int value;
++
++	regmap_read(drvdata->xreg_map, XREG_SPD_MODE, &value);
++
++	return sysfs_emit(buf, "0x%02x\n", value & 0xff);
++}
++
++static ssize_t spd_mode_store(struct device *dev,
++			      struct device_attribute *attr,
++			      const char *buf, size_t count)
++{
++	struct gxp_xreg_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned int value;
++	int rc;
++
++	rc = kstrtouint(buf, 0, &value);
++	if (rc < 0)
++		return -EINVAL;
++
++	regmap_write(drvdata->xreg_map, XREG_SPD_MODE, value & 0xff);
++
++	return count;
++}
++static DEVICE_ATTR_RW(spd_mode);
++
++static ssize_t soc_ready_show(struct device *dev,
++			      struct device_attribute *attr, char *buf)
++{
++	struct gxp_xreg_drvdata *drvdata = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "0x%02x\n", readb(drvdata->soc_ready_reg));
++}
++static DEVICE_ATTR_RO(soc_ready);
++
++static ssize_t flash_select_show(struct device *dev,
++				 struct device_attribute *attr, char *buf)
++{
++	struct gxp_xreg_drvdata *drvdata = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "0x%02x\n", readb(drvdata->flash_select_reg));
++}
++
++static ssize_t flash_select_store(struct device *dev,
++				  struct device_attribute *attr,
++				  const char *buf, size_t count)
++{
++	struct gxp_xreg_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned int value;
++	int rc;
++
++	rc = kstrtouint(buf, 0, &value);
++	if (rc < 0)
++		return -EINVAL;
++
++	writeb(value & 0xff, drvdata->flash_select_reg);
++
++	return count;
++}
++static DEVICE_ATTR_RW(flash_select);
++
++static ssize_t soc_release_show(struct device *dev,
++				struct device_attribute *attr, char *buf)
++{
++	struct gxp_xreg_drvdata *drvdata = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "0x%02x\n",
++			  readb(drvdata->flash_select_reg + 1));
++}
++
++static ssize_t soc_release_store(struct device *dev,
++				 struct device_attribute *attr,
++				 const char *buf, size_t count)
++{
++	struct gxp_xreg_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned int value;
++	int rc;
++
++	rc = kstrtouint(buf, 0, &value);
++	if (rc < 0)
++		return -EINVAL;
++
++	writeb(value & 0xff, drvdata->flash_select_reg + 1);
++
++	return count;
++}
++static DEVICE_ATTR_RW(soc_release);
++
++static struct attribute *xreg_attrs[] = {
++	&dev_attr_server_id.attr,
++	&dev_attr_sideband_sel.attr,
++	&dev_attr_boot_control.attr,
++	&dev_attr_psu_enable.attr,
++	&dev_attr_power_state.attr,
++	&dev_attr_spd_mode.attr,
++	&dev_attr_soc_ready.attr,
++	&dev_attr_flash_select.attr,
++	&dev_attr_soc_release.attr,
++	NULL,
++};
++ATTRIBUTE_GROUPS(xreg);
++
++static int gxp_gpio_xreg_get(struct gpio_chip *chip, unsigned int offset)
++{
++	struct gxp_xreg_drvdata *drvdata = gpiochip_get_data(chip);
++	unsigned int val;
++
++	switch (offset) {
++	case IOP_LED1 ... IOP_LED8:
++		regmap_read(drvdata->xreg_map, XREG_IOP_LED, &val);
++		return !!(val & BIT(offset));
++	case FAN1_INST ... FAN8_INST:
++		regmap_read(drvdata->xreg_map, XREG_FAN_INSTALLED, &val);
++		return !!(val & BIT((offset - FAN1_INST) + XREG_FAN1_8_INST_SHIFT));
++	case FAN9_INST ... FAN16_INST:
++		regmap_read(drvdata->xreg_map, XREG_FAN_INSTALLED, &val);
++		return !!(val & BIT((offset - FAN9_INST) + XREG_FAN9_16_INST_SHIFT));
++	case PSU1_INST ... PSU8_INST:
++		regmap_read(drvdata->xreg_map, XREG_PSU_SIDEBAND, &val);
++		return !!(val & BIT((offset - PSU1_INST) + XREG_PSU_PRESENCE_SHIFT));
++	case PSU1_AC ... PSU8_AC:
++		regmap_read(drvdata->xreg_map, XREG_PSU_POWER_STATUS, &val);
++		return !!(val & BIT(offset - PSU1_AC));
++	case PSU1_DC ... PSU8_DC:
++		regmap_read(drvdata->xreg_map, XREG_PSU_POWER_STATUS, &val);
++		return !!(val & BIT((offset - PSU1_DC) + XREG_PSU_DC_OK_SHIFT));
++	case FAN1_FAIL ... FAN16_FAIL:
++		regmap_read(drvdata->xreg_map, XREG_FAN_FAIL_ID, &val);
++		/* Dual motor fans use x2 bits */
++		return !!(val & BIT(2 * (offset - FAN1_FAIL)));
++	case FAN1_ID ... FAN8_ID:
++		regmap_read(drvdata->xreg_map, XREG_FAN_FAIL_ID, &val);
++		return !!(val & BIT((offset - FAN1_ID) + XREG_FAN1_8_ID_SHIFT));
++	case FAN9_ID ... FAN16_ID:
++		regmap_read(drvdata->xreg_map, XREG_FAN_ID_EXT, &val);
++		return !!(val & BIT(offset - FAN9_ID));
++	case PWR_BTN_INT ... SLP_INT:
++		val = readl(drvdata->base + XREG_INT_GRP5_FLAG);
++		/* Active low for default */
++		return !(val & BIT((offset - PWR_BTN_INT) + 16));
++	case ACM_FORCE_OFF ... ACM_REQ_N:
++		regmap_read(drvdata->xreg_map, XREG_LED_CTRL, &val);
++		return !(val & BIT((offset - ACM_FORCE_OFF) + 16));
++	default:
++		return 0;
++	}
++}
++
++static int gxp_gpio_xreg_set(struct gpio_chip *chip, unsigned int offset,
++			      int value)
++{
++	struct gxp_xreg_drvdata *drvdata = gpiochip_get_data(chip);
++
++	switch (offset) {
++	case IOP_LED1 ... IOP_LED8:
++		regmap_update_bits(drvdata->xreg_map, XREG_IOP_LED, BIT(offset),
++				   value ? BIT(offset) : 0);
++		break;
++	case LED_IDENTIFY:
++		regmap_update_bits(drvdata->xreg_map, XREG_IOP_LED,
++				   XREG_LED_CTRL_UID_BLINK | XREG_LED_CTRL_UID_ON,
++				   value ? (XREG_LED_CTRL_UID_BLINK | XREG_LED_CTRL_UID_ON)
++					 : XREG_LED_CTRL_UID_BLINK);
++		break;
++	case LED_HEALTH_RED:
++		regmap_update_bits(drvdata->xreg_map, XREG_HEALTH_LED,
++				   XREG_HEALTH_LED_RED,
++				   value ? XREG_HEALTH_LED_RED : 0);
++		break;
++	case LED_HEALTH_AMBER:
++		regmap_update_bits(drvdata->xreg_map, XREG_HEALTH_LED,
++				   XREG_HEALTH_LED_AMBER,
++				   value ? XREG_HEALTH_LED_AMBER : 0);
++		break;
++	case ACM_FORCE_OFF:
++		regmap_update_bits(drvdata->xreg_map, XREG_LED_CTRL,
++				   XREG_LED_CTRL_ACM_OFF,
++				   value ? XREG_LED_CTRL_ACM_OFF : 0);
++		break;
++	case ACM_REQ_N:
++		regmap_update_bits(drvdata->xreg_map, XREG_LED_CTRL,
++				   XREG_LED_CTRL_ACM_REQ,
++				   value ? XREG_LED_CTRL_ACM_REQ : 0);
++		break;
++	default:
++		break;
++	}
++
++	return 0;
++}
++
++static int gxp_gpio_xreg_get_direction(struct gpio_chip *chip,
++					unsigned int offset)
++{
++	switch (offset) {
++	case IOP_LED1 ... IOP_LED8:
++	case LED_IDENTIFY ... LED_HEALTH_AMBER:
++	case ACM_FORCE_OFF:
++	case ACM_REQ_N:
++		return GPIO_LINE_DIRECTION_OUT;
++	default:
++		return GPIO_LINE_DIRECTION_IN;
++	}
++}
++
++static int gxp_gpio_xreg_direction_input(struct gpio_chip *chip,
++					  unsigned int offset)
++{
++	switch (offset) {
++	case 8 ... 55:
++	case 59 ... 65:
++	case 90 ... 118:
++		return 0;
++	default:
++		return -EOPNOTSUPP;
++	}
++}
++
++static int gxp_gpio_xreg_direction_output(struct gpio_chip *chip,
++					   unsigned int offset, int value)
++{
++	switch (offset) {
++	case IOP_LED1 ... IOP_LED8:
++	case LED_IDENTIFY ... LED_HEALTH_AMBER:
++	case ACM_FORCE_OFF:
++	case ACM_REQ_N:
++		gxp_gpio_xreg_set(chip, offset, value);
++		return 0;
++	default:
++		return -EOPNOTSUPP;
++	}
++}
++
++static void gxp_gpio_irq_ack(struct irq_data *d)
++{
++	struct gpio_chip *chip = irq_data_get_irq_chip_data(d);
++	struct gxp_xreg_drvdata *drvdata = gpiochip_get_data(chip);
++	unsigned int val, tmp;
++
++	/* Clear latched interrupt for GRP5 */
++	val = readl(drvdata->base + XREG_INT_GRP5_BASE);
++	tmp = val & ~0xFF;
++	tmp |= 0xFF;
++	writel(tmp, drvdata->base + XREG_INT_GRP5_BASE);
++
++	/* Clear latched interrupt for GRP6 */
++	val = readl(drvdata->base + XREG_INT_GRP6_BASE);
++	tmp = val & ~0xFF;
++	tmp |= 0xFF;
++	writel(tmp, drvdata->base + XREG_INT_GRP6_BASE);
++}
++
++static void gxp_gpio_irq_set_mask(struct irq_data *d, bool set)
++{
++	struct gpio_chip *chip = irq_data_get_irq_chip_data(d);
++	struct gxp_xreg_drvdata *drvdata = gpiochip_get_data(chip);
++	unsigned int val, tmp;
++
++	/* Update GRP5 mask */
++	val = readl(drvdata->base + XREG_INT_GRP5_BASE);
++	tmp = val & ~(BIT(8) | BIT(10));
++	if (!set)
++		tmp |= BIT(8) | BIT(10);
++	writel(tmp, drvdata->base + XREG_INT_GRP5_BASE);
++
++	/* Clear interrupt flags */
++	val = readl(drvdata->base + XREG_INT_GRP5_BASE);
++	tmp = val & ~0xFF;
++	tmp |= 0xFF;
++	writel(tmp, drvdata->base + XREG_INT_GRP5_BASE);
++
++	/* Update GRP6 mask */
++	val = readl(drvdata->base + XREG_INT_GRP6_BASE);
++	tmp = val & ~BIT(10);
++	if (!set)
++		tmp |= BIT(10);
++	writel(tmp, drvdata->base + XREG_INT_GRP6_BASE);
++
++	/* Clear interrupt flags */
++	val = readl(drvdata->base + XREG_INT_GRP6_BASE);
++	tmp = val & ~0xFF;
++	tmp |= 0xFF;
++	writel(tmp, drvdata->base + XREG_INT_GRP6_BASE);
++}
++
++static void gxp_gpio_irq_mask(struct irq_data *d)
++{
++	gxp_gpio_irq_set_mask(d, false);
++}
++
++static void gxp_gpio_irq_unmask(struct irq_data *d)
++{
++	gxp_gpio_irq_set_mask(d, true);
++}
++
++static int gxp_gpio_set_type(struct irq_data *d, unsigned int type)
++{
++	if (type & IRQ_TYPE_LEVEL_MASK)
++		irq_set_handler_locked(d, handle_level_irq);
++	else
++		irq_set_handler_locked(d, handle_edge_irq);
++
++	return 0;
++}
++
++static irqreturn_t gxp_xreg_irq_handle(int irq, void *_drvdata)
++{
++	struct gxp_xreg_drvdata *drvdata = _drvdata;
++	unsigned int val, tmp;
++	unsigned long flags;
++	int i;
++
++	/* Handle XREG interrupt group 5 (power button, UID, SLP) */
++	val = readb(drvdata->base + XREG_INT_GRP5_FLAG);
++	flags = val;
++	for_each_set_bit(i, &flags, 3) {
++		int hwirq = i + XREG_INT_GRP5_PIN_BASE;
++		int girq = irq_find_mapping(drvdata->gpio_chip.irq.domain, hwirq);
++
++		if (girq)
++			generic_handle_irq(girq);
++	}
++
++	/* Handle XREG interrupt group 6 (PSU events) */
++	val = readb(drvdata->base + XREG_INT_GRP6_FLAG);
++	flags = val;
++	if (flags & BIT(2)) {
++		u8 old_psu = drvdata->psu_presence;
++		u8 new_psu = readb(drvdata->base + XREG_PSU_PRESENCE);
++
++		if (old_psu != new_psu) {
++			for (i = 0; i < 8; i++) {
++				if ((new_psu ^ old_psu) & BIT(i)) {
++					int hwirq = i + XREG_INT_GRP6_PIN_BASE;
++					int girq;
++
++					girq = irq_find_mapping(drvdata->gpio_chip.irq.domain,
++								hwirq);
++					if (girq)
++						generic_handle_irq(girq);
++				}
++			}
++			drvdata->psu_presence = new_psu;
++		}
++	}
++
++	/* Clear interrupt flags for GRP5 */
++	val = readl(drvdata->base + XREG_INT_GRP5_BASE);
++	tmp = val & ~0xFF;
++	tmp |= 0xFF;
++	writel(tmp, drvdata->base + XREG_INT_GRP5_BASE);
++
++	/* Clear interrupt flags for GRP6 */
++	val = readl(drvdata->base + XREG_INT_GRP6_BASE);
++	tmp = val & ~0xFF;
++	tmp |= 0xFF;
++	writel(tmp, drvdata->base + XREG_INT_GRP6_BASE);
++
++	return IRQ_HANDLED;
++}
++
++static const struct irq_chip gxp_gpio_irqchip = {
++	.name		= "gxp-xreg",
++	.irq_ack	= gxp_gpio_irq_ack,
++	.irq_mask	= gxp_gpio_irq_mask,
++	.irq_unmask	= gxp_gpio_irq_unmask,
++	.irq_set_type	= gxp_gpio_set_type,
++	.flags		= IRQCHIP_IMMUTABLE,
++	GPIOCHIP_IRQ_RESOURCE_HELPERS,
++};
++
++static const struct of_device_id gxp_xreg_of_match[] = {
++	{ .compatible = "hpe,gxp-xreg" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, gxp_xreg_of_match);
++
++static int gxp_xreg_probe(struct platform_device *pdev)
++{
++	struct gxp_xreg_drvdata *drvdata;
++	struct gpio_irq_chip *girq;
++	unsigned int val, tmp;
++	int ret;
++
++	drvdata = devm_kzalloc(&pdev->dev, sizeof(*drvdata), GFP_KERNEL);
++	if (!drvdata)
++		return -ENOMEM;
++
++	platform_set_drvdata(pdev, drvdata);
++
++	/* Map XREG register block */
++	drvdata->base = devm_platform_ioremap_resource(pdev, 0);
++	if (IS_ERR(drvdata->base))
++		return PTR_ERR(drvdata->base);
++	drvdata->soc_ready_reg = drvdata->base + XREG_SOC_READY;
++	drvdata->flash_select_reg = drvdata->base + XREG_FLASH_SELECT;
++
++	drvdata->xreg_map = syscon_regmap_lookup_by_compatible("hpe,gxp-xreg");
++	if (IS_ERR(drvdata->xreg_map))
++		return dev_err_probe(&pdev->dev, PTR_ERR(drvdata->xreg_map),
++				     "failed to find xreg regmap\n");
++
++	/* Setup GPIO chip */
++	drvdata->gpio_chip.label = "gxp-xreg";
++	drvdata->gpio_chip.parent = &pdev->dev;
++	drvdata->gpio_chip.owner = THIS_MODULE;
++	drvdata->gpio_chip.get = gxp_gpio_xreg_get;
++	drvdata->gpio_chip.set = gxp_gpio_xreg_set;
++	drvdata->gpio_chip.get_direction = gxp_gpio_xreg_get_direction;
++	drvdata->gpio_chip.direction_input = gxp_gpio_xreg_direction_input;
++	drvdata->gpio_chip.direction_output = gxp_gpio_xreg_direction_output;
++	drvdata->gpio_chip.base = -1;
++	drvdata->gpio_chip.ngpio = 150;
++
++	/* Setup IRQ chip */
++	girq = &drvdata->gpio_chip.irq;
++	gpio_irq_chip_set_chip(girq, &gxp_gpio_irqchip);
++	girq->handler = handle_edge_irq;
++	girq->default_type = IRQ_TYPE_NONE;
++
++	ret = devm_gpiochip_add_data(&pdev->dev, &drvdata->gpio_chip, drvdata);
++	if (ret < 0)
++		return dev_err_probe(&pdev->dev, ret,
++				     "could not register gpiochip\n");
++
++	/* Initialize PSU presence */
++	drvdata->psu_presence = readb(drvdata->base + XREG_PSU_PRESENCE);
++
++	/* Setup interrupt from XREG - enable GRP5 and GRP6 */
++	val = readl(drvdata->base + XREG_INT_HI_PRI_EN);
++	tmp = val & ~(XREG_INT_GRP5_EN | XREG_INT_GRP6_EN);
++	tmp |= XREG_INT_GRP5_EN | XREG_INT_GRP6_EN;
++	writel(tmp, drvdata->base + XREG_INT_HI_PRI_EN);
++
++	val = readl(drvdata->base + XREG_INT_GRP_STAT_MASK);
++	tmp = val & ~(XREG_INT_GRP5_EN | XREG_INT_GRP6_EN);
++	writel(tmp, drvdata->base + XREG_INT_GRP_STAT_MASK);
++
++	ret = platform_get_irq(pdev, 0);
++	if (ret < 0)
++		return dev_err_probe(&pdev->dev, ret, "failed to get irq\n");
++	drvdata->irq = ret;
++
++	ret = devm_request_irq(&pdev->dev, drvdata->irq, gxp_xreg_irq_handle,
++			       IRQF_SHARED, "gxp-xreg", drvdata);
++	if (ret < 0)
++		return dev_err_probe(&pdev->dev, ret, "failed to request irq\n");
++
++	/* Create sysfs node under /sys/class/gxp-soc/xreg */
++	drvdata->sysfs_dev = device_create_with_groups(gxp_soc_class, &pdev->dev,
++						       0, drvdata, xreg_groups,
++						       "xreg");
++	if (IS_ERR(drvdata->sysfs_dev))
++		return dev_err_probe(&pdev->dev, PTR_ERR(drvdata->sysfs_dev),
++				     "failed to create sysfs device\n");
++
++	return 0;
++}
++
++static void gxp_xreg_remove(struct platform_device *pdev)
++{
++	struct gxp_xreg_drvdata *drvdata = platform_get_drvdata(pdev);
++
++	device_unregister(drvdata->sysfs_dev);
++}
++
++static struct platform_driver gxp_xreg_driver = {
++	.probe = gxp_xreg_probe,
++	.remove = gxp_xreg_remove,
++	.driver = {
++		.name = "gxp-xreg",
++		.of_match_table = gxp_xreg_of_match,
++	},
++};
++module_platform_driver(gxp_xreg_driver);
++
++MODULE_AUTHOR("Gilbert Chen <gilbert.chen@hpe.com>");
++MODULE_AUTHOR("Marcello Sylvester Bauer <marcello.bauer@9elements.com>");
++MODULE_DESCRIPTION("HPE GXP XREG Driver");
++MODULE_LICENSE("GPL");
+diff --git a/include/linux/soc/hpe/gxp-regs.h b/include/linux/soc/hpe/gxp-regs.h
+new file mode 100644
+index 000000000000..61ac3adc2605
+--- /dev/null
++++ b/include/linux/soc/hpe/gxp-regs.h
+@@ -0,0 +1,208 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * HPE GXP SoC Register Definitions
++ *
++ * Copyright (C) 2019 Hewlett Packard Enterprise Development LP.
++ * Copyright (C) 2026 9elements GmbH
++ *
++ * This header provides named constants for GXP SoC register offsets,
++ * replacing magic numbers in drivers with self-documenting identifiers.
++ */
++
++#ifndef __LINUX_SOC_HPE_GXP_REGS_H
++#define __LINUX_SOC_HPE_GXP_REGS_H
++
++/*
++ * XREG (Extended Register Block) at 0xD1000000
++ *
++ * The XREG block provides extended GPIO functionality for LEDs, fans,
++ * PSU status, and interrupt handling through two interrupt groups.
++ */
++
++/* Server identification */
++#define XREG_SERVER_ID		0x00	/* Server ID [23:8] */
++#define XREG_SERVER_ID_MASK	GENMASK(23, 8)
++#define XREG_SERVER_ID_SHIFT	8
++#define GXP_SERVER_ID_AMPERE	0x250	/* Ampere-based ProLiant (RL300, RL340) */
++
++/* LED control registers */
++#define XREG_IOP_LED		0x04	/* IOP LED control [7:0] */
++#define XREG_LED_CTRL		0x08	/* LED/ACM control */
++#define XREG_HEALTH_LED		0x0c	/* Health LED control */
++
++/* XREG_IOP_LED bits */
++#define XREG_IOP_LED_MASK	GENMASK(7, 0)
++
++/* XREG_LED_CTRL bits */
++#define XREG_LED_CTRL_UID_ON	BIT(14)	/* UID LED on */
++#define XREG_LED_CTRL_UID_BLINK	BIT(15)	/* UID LED blink enable */
++#define XREG_LED_CTRL_ACM_OFF	BIT(16)	/* ACM force off */
++#define XREG_LED_CTRL_ACM_REM	BIT(17)	/* ACM removed (RO) */
++#define XREG_LED_CTRL_ACM_REQ	BIT(18)	/* ACM request */
++
++/* XREG_HEALTH_LED bits */
++#define XREG_HEALTH_LED_AMBER	BIT(14)	/* Health LED amber */
++#define XREG_HEALTH_LED_RED	BIT(15)	/* Health LED red */
++
++/* PSU control and status */
++#define XREG_PSU_SIDEBAND	0x40	/* PSU sideband selection [1:0] */
++#define XREG_PSU_ENABLE		0x41	/* PSU enable */
++#define XREG_PSU_PRESENCE	0x42	/* PSU presence [7:0] */
++#define XREG_PSU_POWER_STATUS	0x44	/* PSU AC/DC status */
++
++/* XREG_PSU_SIDEBAND bits */
++#define XREG_PSU_SIDEBAND_MASK	GENMASK(1, 0)
++
++/* XREG_PSU_PRESENCE bits */
++#define XREG_PSU_PRESENCE_MASK	GENMASK(23, 16)
++#define XREG_PSU_PRESENCE_SHIFT	16
++
++/* XREG_PSU_POWER_STATUS bits */
++#define XREG_PSU_AC_OK_MASK	GENMASK(7, 0)
++#define XREG_PSU_DC_OK_MASK	GENMASK(15, 8)
++#define XREG_PSU_DC_OK_SHIFT	8
++
++/* Fan status registers */
++#define XREG_FAN_INSTALLED	0x78	/* Fan installed status */
++#define XREG_FAN_FAIL_ID	0x7c	/* Fan fail and ID [23:0] */
++#define XREG_FAN_ID_EXT		0x80	/* Extended fan ID [7:0] */
++
++/* XREG_FAN_INSTALLED bits */
++#define XREG_FAN1_8_INST_MASK	GENMASK(23, 16)
++#define XREG_FAN1_8_INST_SHIFT	16
++#define XREG_FAN9_16_INST_MASK	GENMASK(31, 24)
++#define XREG_FAN9_16_INST_SHIFT	24
++
++/* XREG_FAN_FAIL_ID bits (dual-motor fans use 2 bits each) */
++#define XREG_FAN_FAIL_MASK	GENMASK(15, 0)
++#define XREG_FAN1_8_ID_MASK	GENMASK(31, 24)
++#define XREG_FAN1_8_ID_SHIFT	24
++
++/* XREG_FAN_ID_EXT bits */
++#define XREG_FAN9_16_ID_MASK	GENMASK(7, 0)
++
++/* Boot and power control */
++#define XREG_BOOT_CONTROL	0x09	/* Host boot gate control */
++#define XREG_POWER_STATE	0x4b	/* Exit S5 power state */
++#define XREG_SPD_MODE		0x84	/* I2C SPD mode selection */
++#define XREG_SOC_READY		0xe2	/* Ampere SoC communication ready (RO) */
++#define XREG_FLASH_SELECT	0x119	/* SPI flash allocation */
++#define XREG_SOC_RELEASE	0x11a	/* SoC release (bit 3) */
++
++/*
++ * XREG_BOOT_CONTROL valid values
++ *
++ * 0x24 releases the host boot gate, allowing the host CPU to boot.
++ * 0x00 holds the host boot gate, preventing host CPU boot.
++ *
++ * Verified against HPE OpenBMC:
++ *   host-boot-enable: devmem 0xd1000009 8 36 (0x24 = release)
++ *   down scripts:     devmem 0xd1000009 8 0  (0x00 = hold)
++ */
++#define XREG_BOOT_CONTROL_RELEASE	0x24	/* Allow host boot */
++#define XREG_BOOT_CONTROL_HOLD		0x00	/* Hold host boot */
++
++/* XREG_FLASH_SELECT values */
++#define XREG_FLASH_SELECT_UEFI_EV	0x5d	/* UEFI EV store via SPI ctrl1 */
++
++/* XREG_SOC_RELEASE bits */
++#define XREG_SOC_RELEASE_BIT	BIT(3)	/* SoC release control bit */
++
++/* Interrupt control registers */
++#define XREG_INT_GRP_STAT_MASK	0x94	/* Interrupt group status mask */
++#define XREG_INT_HI_PRI_EN	0xa0	/* High priority interrupt enable */
++#define XREG_INT_GRP5_BASE	0xc0	/* Interrupt group 5 base */
++#define XREG_INT_GRP6_BASE	0xc4	/* Interrupt group 6 base */
++#define XREG_INT_GRP5_FLAG	0xc0	/* Interrupt group 5 flags */
++#define XREG_INT_GRP6_FLAG	0xc4	/* Interrupt group 6 flags */
++#define XREG_INT_GRP5_MASK	0xc1	/* Interrupt group 5 mask */
++#define XREG_INT_GRP6_MASK	0xc5	/* Interrupt group 6 mask */
++
++/* Interrupt group enable bits */
++#define XREG_INT_GRP5_EN	BIT(4)
++#define XREG_INT_GRP6_EN	BIT(5)
++
++/*
++ * CSM (Slave Instrumentation and System Support) at 0x80000000
++ *
++ * The CSM block provides core GPIO functionality through GPI (General
++ * Purpose Input) and GPO (General Purpose Output) chains.
++ */
++
++/* Function enable register */
++#define CSM_AFUNEN2		0xde	/* Function enable register 2 */
++#define CSM_AFUNEN2_VEHCI_EN	BIT(6)	/* Virtual EHCI enable */
++
++/* Software shutdown */
++#define CSM_SHUTDOWN		0xe7	/* Shutdown register */
++#define CSM_SHUTDOWN_MAGIC	0xb2	/* Magic value to trigger shutdown */
++
++/* Shutdown reason */
++#define CSM_SHUTDOWN_REASON	0x74	/* Shutdown cause code (RW) */
++
++/* ROM state */
++#define CSM_ROM_STATE		0xb0	/* ROM ready / DIMM access state (RW) */
++
++/* SPD config */
++#define CSM_SPD_CONFIG		0x110	/* SPD read mode configuration (RW) */
++
++/* GPI (General Purpose Input) data registers */
++#define CSM_GPIDATL		0x40	/* GPI data low [31:0] */
++#define CSM_GPIDATH		0x60	/* GPI data high [63:32] */
++
++/* GPO chain 1 data registers */
++#define CSM_GPODATL		0xb0	/* GPO chain 1 data low [31:0] */
++#define CSM_GPODATH		0xb4	/* GPO chain 1 data high [63:32] */
++
++/* GPO chain 2 data registers */
++#define CSM_GPODAT2L		0xf8	/* GPO chain 2 data low [31:0] */
++#define CSM_GPODAT2H		0xfc	/* GPO chain 2 data high [63:32] */
++
++/* GPO ownership registers (determines which CPU can control each GPIO) */
++#define CSM_GPOOWNL		0x110	/* GPO chain 1 ownership low */
++#define CSM_GPOOWNH		0x114	/* GPO chain 1 ownership high */
++#define CSM_GPOOWN2L		0x118	/* GPO chain 2 ownership low */
++#define CSM_GPOOWN2H		0x11c	/* GPO chain 2 ownership high */
++
++/* Direct access registers (for SW_RESET) */
++#define CSM_ASRSTAT		0x5c	/* Reset status */
++#define CSM_ASRESTAT		0x5d	/* Extended reset status */
++#define CSM_ASRESTAT_SW_RESET	BIT(7)	/* Software reset bit */
++
++/*
++ * FN2 (Function 2 - Embedded Management Processor Support) at 0x80200000
++ *
++ * The FN2 block provides power state control through GPIO lines for
++ * VPBTN (virtual power button), PGOOD, and PERST signals.
++ */
++
++/* Power button control */
++#define FN2_VPBTN_CTRL		0x44	/* Virtual power button control */
++#define FN2_VPBTN		0x46	/* Virtual power button (legacy) */
++#define FN2_VPBTN_PRESSED	BIT(16)	/* Power button pressed */
++
++/* System event registers */
++#define FN2_SEVSTAT		0x70	/* System event status */
++#define FN2_SEVMASK		0x74	/* System event mask */
++
++/* FN2_SEVSTAT bits */
++#define FN2_SEVSTAT_PGOOD	BIT(0)	/* Power good event */
++#define FN2_SEVSTAT_PERST	BIT(1)	/* PCIe reset event */
++#define FN2_SEVSTAT_PGOOD_STATE	BIT(24)	/* Current PGOOD state */
++#define FN2_SEVSTAT_PERST_STATE	BIT(25)	/* Current PERST state */
++
++/* FN2_SEVMASK bits */
++#define FN2_SEVMASK_EN		BIT(0)	/* Event interrupt enable */
++
++/*
++ * eSPI Controller at 0x80FE0000
++ *
++ * The eSPI block provides the Enhanced SPI interface for host-BMC
++ * communication. The OOB (Out-of-Band) controller requires a reset
++ * before host power-on on platforms that use eSPI (Intel, AMD).
++ * Ampere-based servers use SSIF instead and do not need this reset.
++ */
++#define GXP_ESPI_OOB_CTRL	0x1040		/* eSPI OOB control register */
++#define GXP_ESPI_OOB_RESET	0x00060001	/* Reset eSPI OOB controller */
++
++#endif /* __LINUX_SOC_HPE_GXP_REGS_H */
+-- 
+2.52.0
+

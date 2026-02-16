@@ -1,0 +1,29 @@
+From 54c107a97b387e7dda016f6765bbed3be1566b4a Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 13 Feb 2026 13:08:10 +0100
+Subject: [PATCH] ARM: dts: hpe-gxp: set fan shutdown speed to 50 percent
+
+Set fan-shutdown-percent to 50 on the fan controller so that fans
+run at half speed after a BMC reboot rather than staying at whatever
+duty cycle userspace last programmed.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index f8d6df913a50..5cb4d65248d9 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -600,6 +600,7 @@ fanctrl: fan-controller@c1000c00 {
+ 			reg = <0xc1000c00 0x200>;
+ 			hpe,xreg = <&xreg>;
+ 			fan-supply = <&host_power>;
++			fan-shutdown-percent = <50>;
+ 		};
+ 
+ 		spifi1: spi@c0000280 {
+-- 
+2.52.0
+

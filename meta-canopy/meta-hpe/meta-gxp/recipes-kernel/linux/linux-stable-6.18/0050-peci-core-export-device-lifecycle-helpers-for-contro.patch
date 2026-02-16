@@ -1,0 +1,79 @@
+From 1fc25b56467423a0bd5ab7c7511eb4e75d201774 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 13 Feb 2026 11:18:05 +0100
+Subject: [PATCH] peci: core: export device lifecycle helpers for controller
+ drivers
+
+Export peci_controller_scan_devices() and add a new
+peci_controller_remove_devices() helper that tears down all PECI
+devices on a controller. Move declarations to the public peci.h
+header so controller drivers can manage device lifecycle in response
+to host power state changes.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/peci/core.c     | 15 +++++++++++++++
+ drivers/peci/internal.h |  2 --
+ include/linux/peci.h    |  2 ++
+ 3 files changed, 17 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/peci/core.c b/drivers/peci/core.c
+index 936c1fadefe5..fb319c0276ae 100644
+--- a/drivers/peci/core.c
++++ b/drivers/peci/core.c
+@@ -42,6 +42,7 @@ int peci_controller_scan_devices(struct peci_controller *controller)
+ 
+ 	return 0;
+ }
++EXPORT_SYMBOL_NS_GPL(peci_controller_scan_devices, "PECI");
+ 
+ static struct peci_controller *peci_controller_alloc(struct device *dev,
+ 						     const struct peci_controller_ops *ops)
+@@ -85,6 +86,20 @@ static int unregister_child(struct device *dev, void *dummy)
+ 	return 0;
+ }
+ 
++/**
++ * peci_controller_remove_devices() - remove all PECI devices on a controller
++ * @controller: PECI controller to remove devices from
++ *
++ * Remove all PECI devices currently registered on this controller. This is
++ * useful for controller drivers that need to tear down devices when the host
++ * powers off and re-scan when it powers back on.
++ */
++void peci_controller_remove_devices(struct peci_controller *controller)
++{
++	device_for_each_child_reverse(&controller->dev, NULL, unregister_child);
++}
++EXPORT_SYMBOL_NS_GPL(peci_controller_remove_devices, "PECI");
++
+ static void unregister_controller(void *_controller)
+ {
+ 	struct peci_controller *controller = _controller;
+diff --git a/drivers/peci/internal.h b/drivers/peci/internal.h
+index 99924a118c8c..8b1ce0e37609 100644
+--- a/drivers/peci/internal.h
++++ b/drivers/peci/internal.h
+@@ -126,6 +126,4 @@ void peci_driver_unregister(struct peci_driver *driver);
+ 
+ extern const struct device_type peci_controller_type;
+ 
+-int peci_controller_scan_devices(struct peci_controller *controller);
+-
+ #endif /* __PECI_INTERNAL_H */
+diff --git a/include/linux/peci.h b/include/linux/peci.h
+index 3e0bc37591d6..6c872d9458d4 100644
+--- a/include/linux/peci.h
++++ b/include/linux/peci.h
+@@ -49,6 +49,8 @@ struct peci_controller {
+ 
+ struct peci_controller *devm_peci_controller_add(struct device *parent,
+ 						 const struct peci_controller_ops *ops);
++int peci_controller_scan_devices(struct peci_controller *controller);
++void peci_controller_remove_devices(struct peci_controller *controller);
+ 
+ static inline struct peci_controller *to_peci_controller(void *d)
+ {
+-- 
+2.52.0
+

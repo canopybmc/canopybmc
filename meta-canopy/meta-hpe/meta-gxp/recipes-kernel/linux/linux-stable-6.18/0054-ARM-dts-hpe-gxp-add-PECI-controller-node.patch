@@ -1,0 +1,36 @@
+From 9a9e25f1913172be6045c2b088537c5440280df4 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 12 Feb 2026 22:02:16 +0100
+Subject: [PATCH] ARM: dts: hpe-gxp: add PECI controller node
+
+Add device tree node for the GXP PECI controller used for host CPU
+thermal management. A peci-supply reference to the host power
+regulator gates PECI bus access when the host is off.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index ed9858b462dc..f8d6df913a50 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -529,6 +529,14 @@ umac1: ethernet@c0005000 {
+ 			nvmem-cell-names = "mac-address";
+ 		};
+ 
++		peci: peci-controller@80000400 {
++			compatible = "hpe,gxp-peci";
++			reg = <0x80000400 0x200>;
++			interrupts = <22>;
++			interrupt-parent = <&vic1>;
++			peci-supply = <&host_power>;
++		};
++
+ 		coretemp: coretemp@c0000130 {
+ 			compatible = "hpe,gxp-coretemp";
+ 			reg = <0xc0000130 0x8>;
+-- 
+2.52.0
+

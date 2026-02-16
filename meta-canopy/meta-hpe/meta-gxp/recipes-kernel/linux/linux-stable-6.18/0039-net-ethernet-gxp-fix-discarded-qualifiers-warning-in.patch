@@ -1,0 +1,35 @@
+From 4440622316288fc4b2496e09e81b9325d7a9475d Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 13 Feb 2026 11:43:03 +0100
+Subject: [PATCH] net: ethernet: gxp: fix discarded-qualifiers warning in umac
+
+Add const qualifier to umac_set_mac_address() parameter since the
+function only reads from the address buffer. This fixes a
+-Wdiscarded-qualifiers warning when passing ndev->dev_addr (which
+is const unsigned char *).
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/net/ethernet/hpe/gxp-umac.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/ethernet/hpe/gxp-umac.c b/drivers/net/ethernet/hpe/gxp-umac.c
+index 20552334065c..014751e14f00 100644
+--- a/drivers/net/ethernet/hpe/gxp-umac.c
++++ b/drivers/net/ethernet/hpe/gxp-umac.c
+@@ -114,10 +114,10 @@ static int umac_ioctl(struct net_device *ndev, struct ifreq *ifr, int cmd)
+ 	return phy_mii_ioctl(ndev->phydev, ifr, cmd);
+ }
+ 
+-static void umac_set_mac_address(struct net_device *ndev, void *p_addr)
++static void umac_set_mac_address(struct net_device *ndev, const void *p_addr)
+ {
+ 	struct umac_priv *umac = netdev_priv(ndev);
+-	char *addr = (char *)p_addr;
++	const char *addr = p_addr;
+ 	unsigned int value;
+ 
+ 	value = addr[0] << 8 | addr[1];
+-- 
+2.52.0
+

@@ -1,0 +1,206 @@
+From f9645dc306114a7802909bfabd450719b803c389 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Sun, 8 Feb 2026 22:21:32 +0100
+Subject: [PATCH] ARM: dts: hpe-gxp: add SoC infrastructure and power control
+
+Add CSM, XREG (150 GPIO names), FN2 (5 GPIO names), GPIO (300
+lines), eSPI, and power-ctrl (3 GPIO names) nodes. Add five LED
+definitions and update the fan controller node to use syscon
+phandles instead of direct register regions.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 170 +++++++++++++++++++++++++++++-
+ 1 file changed, 166 insertions(+), 4 deletions(-)
+
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index 14b333d8297d..7584b6a58218 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -83,6 +83,169 @@ vic1: interrupt-controller@80f00000 {
+ 			#interrupt-cells = <1>;
+ 		};
+ 
++		csm: csm@80000000 {
++			compatible = "hpe,gxp-csm", "simple-mfd", "syscon";
++			reg = <0x80000000 0x400>;
++		};
++
++		vuhc0: vuhc@80400000 {
++			compatible = "syscon";
++			reg = <0x80400000 0x100>;
++		};
++
++		gpio: gpio@8000005c {
++			compatible = "hpe,gxp-gpio";
++			reg = <0x8000005c 0x2>;
++			gpio-controller;
++			#gpio-cells = <2>;
++			hpe,csm = <&csm>;
++			hpe,vuhc = <&vuhc0>;
++		};
++
++		xreg: xreg@d1000000 {
++			compatible = "hpe,gxp-xreg", "simple-mfd", "syscon";
++			reg = <0xd1000000 0x11c>;
++			interrupts = <26>;
++			interrupt-parent = <&vic0>;
++			interrupt-controller;
++			#interrupt-cells = <2>;
++			gpio-controller;
++			#gpio-cells = <2>;
++
++			gpio-line-names =
++				/* 0-7: IOP LEDs */
++				"iop-led1", "iop-led2", "iop-led3", "iop-led4",
++				"iop-led5", "iop-led6", "iop-led7", "iop-led8",
++				/* 8-23: Fan installed status */
++				"fan1-installed", "fan2-installed",
++				"fan3-installed", "fan4-installed",
++				"fan5-installed", "fan6-installed",
++				"fan7-installed", "fan8-installed",
++				"fan9-installed", "fan10-installed",
++				"fan11-installed", "fan12-installed",
++				"fan13-installed", "fan14-installed",
++				"fan15-installed", "fan16-installed",
++				/* 24-39: Fan fail status (active low) */
++				"fan1-fail", "fan2-fail",
++				"fan3-fail", "fan4-fail",
++				"fan5-fail", "fan6-fail",
++				"fan7-fail", "fan8-fail",
++				"fan9-fail", "fan10-fail",
++				"fan11-fail", "fan12-fail",
++				"fan13-fail", "fan14-fail",
++				"fan15-fail", "fan16-fail",
++				/* 40-55: Fan ID */
++				"fan1-id", "fan2-id",
++				"fan3-id", "fan4-id",
++				"fan5-id", "fan6-id",
++				"fan7-id", "fan8-id",
++				"fan9-id", "fan10-id",
++				"fan11-id", "fan12-id",
++				"fan13-id", "fan14-id",
++				"fan15-id", "fan16-id",
++				/* 56-58: Status LEDs */
++				"led-identify", "led-health-red", "led-health-amber",
++				/* 59-61: Button interrupts */
++				"power-button", "uid-button", "sleep-button",
++				/* 62-69: Reserved */
++				"", "", "", "", "", "", "", "",
++				/* 70-72: ACM control */
++				"acm-force-off", "acm-removed", "acm-req-n",
++				/* 73-89: Reserved */
++				"", "", "", "", "", "", "", "",
++				"", "", "", "", "", "", "", "", "",
++				/* 90-97: PSU installed */
++				"psu1-installed", "psu2-installed",
++				"psu3-installed", "psu4-installed",
++				"psu5-installed", "psu6-installed",
++				"psu7-installed", "psu8-installed",
++				/* 98-99: Reserved */
++				"", "",
++				/* 100-107: PSU AC OK */
++				"psu1-ac-ok", "psu2-ac-ok",
++				"psu3-ac-ok", "psu4-ac-ok",
++				"psu5-ac-ok", "psu6-ac-ok",
++				"psu7-ac-ok", "psu8-ac-ok",
++				/* 108-109: Reserved */
++				"", "",
++				/* 110-117: PSU DC OK */
++				"psu1-dc-ok", "psu2-dc-ok",
++				"psu3-dc-ok", "psu4-dc-ok",
++				"psu5-dc-ok", "psu6-dc-ok",
++				"psu7-dc-ok", "psu8-dc-ok";
++		};
++
++		fn2: fn2@80200000 {
++			compatible = "hpe,gxp-fn2", "simple-mfd", "syscon";
++			reg = <0x80200000 0x100000>;
++			interrupts = <0>;
++			interrupt-parent = <&vic1>;
++			interrupt-controller;
++			#interrupt-cells = <2>;
++			gpio-controller;
++			#gpio-cells = <2>;
++
++			gpio-line-names =
++				/* 0: Virtual power button (output) */
++				"vpbtn",
++				/* 1: Power good (input) */
++				"pgood",
++				/* 2: PCIe reset (input) */
++				"perst",
++				/* 3: POST complete (input) */
++				"post-complete",
++				/* 4: Button state (input) */
++				"btn-state";
++		};
++
++		espi: espi@80fe0000 {
++			compatible = "hpe,gxp-espi", "syscon";
++			reg = <0x80fe0000 0x2000>;
++		};
++
++		power-ctrl {
++			compatible = "hpe,gxp-power-ctrl";
++			hpe,xreg = <&xreg>;
++			hpe,csm = <&csm>;
++			hpe,espi = <&espi>;
++			vpbtn-gpios = <&fn2 0 0>;
++			pgood-gpios = <&fn2 1 0>;
++			gpio-controller;
++			#gpio-cells = <2>;
++			gpio-line-names = "power-ctrl-out", "power-ctrl-good", "reset-out";
++		};
++
++		leds {
++			compatible = "gpio-leds";
++
++			led-power {
++				gpios = <&xreg 6 0>;
++				label = "platform:power";
++				linux,default-trigger = "default-on";
++			};
++
++			led-heartbeat {
++				gpios = <&xreg 7 0>;
++				label = "platform:heartbeat";
++				linux,default-trigger = "heartbeat";
++			};
++
++			led-identify {
++				gpios = <&xreg 56 0>;
++				label = "platform:identify";
++			};
++
++			led-health-red {
++				gpios = <&xreg 57 0>;
++				label = "platform:health-red";
++			};
++
++			led-health-amber {
++				gpios = <&xreg 58 0>;
++				label = "platform:health-amber";
++			};
++		};
++
+ 		uarta: serial@c00000e0 {
+ 			compatible = "ns16550a";
+ 			reg = <0xc00000e0 0x8>;
+@@ -335,10 +498,9 @@ umac1: ethernet@c0005000 {
+ 
+ 		fanctrl: fan-controller@c1000c00 {
+ 			compatible = "hpe,gxp-fan-ctrl";
+-			reg = <0xc1000c00 0x200>,
+-			      <0xd1000000 0x4>,
+-			      <0x80200000 0x4>;
+-			reg-names = "base", "pl", "fn2";
++			reg = <0xc1000c00 0x200>;
++			hpe,xreg = <&xreg>;
++			hpe,fn2 = <&fn2>;
+ 		};
+ 
+ 		spifi1: spi@c0000280 {
+-- 
+2.52.0
+

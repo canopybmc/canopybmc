@@ -1,0 +1,53 @@
+From e55f53179197e948bdaff49d418966d6247f0db8 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Tue, 10 Feb 2026 12:38:40 +0100
+Subject: [PATCH] ARM: dts: hpe-gxp: add Virtual UART node
+
+Add device tree nodes for the GXP Virtual UART: a syscon node for the
+host-side configuration registers and the VUART serial device itself.
+The VUART is assigned to ttyS3 via the serial-line property.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index 7584b6a58218..210b6900512d 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -14,6 +14,7 @@ aliases {
+ 		serial0 = &uarta;
+ 		serial1 = &uartb;
+ 		serial2 = &uartc;
++		serial3 = &vuart;
+ 		ethernet0 = &umac0;
+ 		ethernet1 = &umac1;
+ 	};
+@@ -273,6 +274,23 @@ uartc: serial@c00000f0 {
+ 			reg-shift = <0>;
+ 		};
+ 
++		vuart_cfg: syscon@80fc0230 {
++			compatible = "hpe,gxp-vuart-cfg", "syscon";
++			reg = <0x80fc0230 0x100>;
++			reg-io-width = <1>;
++		};
++
++		vuart: serial@80fd0200 {
++			compatible = "hpe,gxp-vuart";
++			reg = <0x80fd0200 0x100>;
++			interrupts = <2>;
++			interrupt-parent = <&vic1>;
++			clock-frequency = <1846153>;
++			reg-shift = <0>;
++			serial-line = <3>;
++			vuart-cfg = <&vuart_cfg>;
++		};
++
+ 		st: timer@c0000080 {
+ 			compatible = "hpe,gxp-timer";
+ 			reg = <0xc0000080 0x16>;
+-- 
+2.52.0
+

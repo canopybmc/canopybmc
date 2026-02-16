@@ -1,0 +1,84 @@
+From 453aa9958aaf2d24b2205d2c765a0c2ba928b064 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 13 Feb 2026 13:29:20 +0100
+Subject: [PATCH] hwmon: gxp-fan-ctrl: restore fan speed on kernel panic
+
+Register a panic notifier that writes the safe PWM duty cycle to all
+present fans. The GXP fan controller lives in an external CPLD that
+retains PWM values across BMC resets, so a panic would otherwise leave
+fans at whatever duty cycle userspace last programmed.
+
+The notifier only performs writeb() to MMIO registers, which is safe
+in atomic/NMI panic context.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/hwmon/gxp-fan-ctrl.c | 31 +++++++++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+diff --git a/drivers/hwmon/gxp-fan-ctrl.c b/drivers/hwmon/gxp-fan-ctrl.c
+index 545c4fffe904..3c546037f2a0 100644
+--- a/drivers/hwmon/gxp-fan-ctrl.c
++++ b/drivers/hwmon/gxp-fan-ctrl.c
+@@ -12,6 +12,7 @@
+ #include <linux/io.h>
+ #include <linux/mfd/syscon.h>
+ #include <linux/module.h>
++#include <linux/panic_notifier.h>
+ #include <linux/mod_devicetable.h>
+ #include <linux/platform_device.h>
+ #include <linux/property.h>
+@@ -25,6 +26,7 @@ struct gxp_fan_ctrl_drvdata {
+ 	void __iomem		*base;
+ 	struct regmap		*xreg_map;
+ 	struct regulator	*fan_supply;
++	struct notifier_block	panic_nb;
+ 	u8			fan_present;
+ 	u8			pwm_shutdown;
+ };
+@@ -194,6 +196,24 @@ static void gxp_fan_ctrl_restore_pwm(void *data)
+ 	}
+ }
+ 
++static int gxp_fan_ctrl_panic(struct notifier_block *nb,
++			      unsigned long event, void *unused)
++{
++	struct gxp_fan_ctrl_drvdata *drvdata =
++		container_of(nb, struct gxp_fan_ctrl_drvdata, panic_nb);
++
++	gxp_fan_ctrl_restore_pwm(drvdata);
++	return NOTIFY_DONE;
++}
++
++static void gxp_fan_ctrl_unregister_panic(void *data)
++{
++	struct gxp_fan_ctrl_drvdata *drvdata = data;
++
++	atomic_notifier_chain_unregister(&panic_notifier_list,
++					 &drvdata->panic_nb);
++}
++
+ static int gxp_fan_ctrl_probe(struct platform_device *pdev)
+ {
+ 	struct gxp_fan_ctrl_drvdata *drvdata;
+@@ -245,6 +265,17 @@ static int gxp_fan_ctrl_probe(struct platform_device *pdev)
+ 	if (ret)
+ 		return ret;
+ 
++	drvdata->panic_nb.notifier_call = gxp_fan_ctrl_panic;
++	ret = atomic_notifier_chain_register(&panic_notifier_list,
++					     &drvdata->panic_nb);
++	if (ret)
++		return ret;
++
++	ret = devm_add_action_or_reset(dev, gxp_fan_ctrl_unregister_panic,
++				       drvdata);
++	if (ret)
++		return ret;
++
+ 	hwmon_dev = devm_hwmon_device_register_with_info(dev,
+ 							 "hpe_gxp_fan_ctrl",
+ 							 drvdata,
+-- 
+2.52.0
+

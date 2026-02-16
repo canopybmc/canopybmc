@@ -1,0 +1,42 @@
+From a160aa67d30df47d22d2acd8fced6714e304e0ee Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 13 Feb 2026 11:42:40 +0100
+Subject: [PATCH] soc: hpe: gxp-chif: replace stack buffer with dma_wmb barrier
+
+The dummy read-back via a 4096-byte stack buffer was used to ensure
+DMA-coherent write ordering. Replace with a proper dma_wmb() barrier
+which achieves the same ordering guarantee without exceeding the
+1280-byte stack frame limit.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/soc/hpe/gxp-chif.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/soc/hpe/gxp-chif.c b/drivers/soc/hpe/gxp-chif.c
+index 8cc303256639..640eae54142d 100644
+--- a/drivers/soc/hpe/gxp-chif.c
++++ b/drivers/soc/hpe/gxp-chif.c
+@@ -312,7 +312,6 @@ static ssize_t chif_write(struct file *file, const char __user *buf,
+ 	int fifo_idx;
+ 	u32 desc_idx;
+ 	int timeout;
+-	u8 dummy[4096];
+ 
+ 	if (channel != CHANNEL_SHAREMEM) {
+ 		dev_err(drvdata->dev, "channel %d not supported\n", channel);
+@@ -380,9 +379,8 @@ static ssize_t chif_write(struct file *file, const char __user *buf,
+ 	}
+ 	recv_fifo[fifo_idx].consumed = 1;
+ 
+-	/* Dummy read to ensure write to shared memory completes */
+-	memcpy(dummy, &recv_fifo[fifo_idx], sizeof(struct chif_fifo_entry));
+-	memcpy(dummy, &recv_desc[desc_idx], round_len);
++	/* Ensure writes to shared memory are visible before doorbell */
++	dma_wmb();
+ 
+ 	if (p_ccb->doorbell_base)
+ 		regmap_write(drvdata->fn2_map, REG_OUTDOOR, 1 << channel);
+-- 
+2.52.0
+
