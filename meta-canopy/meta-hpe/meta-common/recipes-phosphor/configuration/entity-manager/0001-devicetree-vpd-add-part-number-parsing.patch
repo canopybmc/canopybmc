@@ -1,0 +1,36 @@
+From d03e050a5b529ba9a4aea7be29b22ec3ac0f440b Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 22 Jan 2026 12:43:08 +0100
+Subject: [PATCH] devicetree-vpd: add part-number parsing
+
+Parse the part-number property from the device tree root node and
+expose it via the Asset D-Bus interface. This mirrors the existing
+serial-number parsing and allows platforms to expose inventory
+information through standard device tree properties.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ src/devicetree_vpd_parser/machine_context.cpp | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/src/devicetree_vpd_parser/machine_context.cpp b/src/devicetree_vpd_parser/machine_context.cpp
+index f936ceb..8c9878b 100644
+--- a/src/devicetree_vpd_parser/machine_context.cpp
++++ b/src/devicetree_vpd_parser/machine_context.cpp
+@@ -22,6 +22,13 @@ void MachineContext::populateFromDeviceTree()
+         MachineContext::Asset::serial_number(nodeVal);
+         vpdStream.close();
+     }
++
++    vpdStream.open(nodeBasePath + std::string("part-number"));
++    if (vpdStream && std::getline(vpdStream, nodeVal))
++    {
++        MachineContext::Asset::part_number(nodeVal);
++        vpdStream.close();
++    }
+ };
+ 
+ bool MachineContext::keyNodeExists()
+-- 
+2.52.0
+

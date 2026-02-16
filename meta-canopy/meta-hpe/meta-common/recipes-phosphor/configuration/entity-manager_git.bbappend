@@ -1,8 +1,8 @@
 FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 
-SRC_URI = "git://github.com/canopybmc/entity-manager.git;protocol=https;branch=${UBRANCH}"
-UBRANCH = "hpe-gxp"
-SRCREV = "330c0d82ef0a3122eb1d83f3af7379aeedfb49bb"
+SRC_URI += "file://0001-devicetree-vpd-add-part-number-parsing.patch"
+SRC_URI += "file://0002-devicetree-vpd-add-manufacturer-parsing.patch"
+ERROR_QA:remove = "patch-status"
 
 # Enable devicetree VPD parser for platform identification
 PACKAGECONFIG:append = " dts-vpd"
@@ -10,7 +10,6 @@ PACKAGECONFIG:append = " dts-vpd"
 # HPE ProLiant Gen11 baseboard configurations
 SRC_URI += " \
     file://blocklist.json \
-    file://dl110g11_baseboard.json \
     file://dl110g11_baseboard.json \
     file://dl145g11_baseboard.json \
     file://dl320g11_baseboard.json \
