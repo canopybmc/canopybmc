@@ -1,0 +1,31 @@
+From 050e4d609c269fe45864d2a14f17a3d7fd9da270 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 13 Feb 2026 11:42:14 +0100
+Subject: [PATCH] soc: hpe: gxp-xreg: fix format string type for GENMASK result
+
+Cast the GENMASK(1, 0) result to unsigned int before passing to
+%x format specifier. GENMASK returns unsigned long on ARM, causing
+a -Wformat warning.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/soc/hpe/gxp-xreg.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/soc/hpe/gxp-xreg.c b/drivers/soc/hpe/gxp-xreg.c
+index 33656f77db79..709a56222bff 100644
+--- a/drivers/soc/hpe/gxp-xreg.c
++++ b/drivers/soc/hpe/gxp-xreg.c
+@@ -151,7 +151,8 @@ static ssize_t sideband_sel_show(struct device *dev,
+ 
+ 	regmap_read(drvdata->xreg_map, XREG_PSU_SIDEBAND, &value);
+ 
+-	return sysfs_emit(buf, "0x%02x\n", value & XREG_PSU_SIDEBAND_MASK);
++	return sysfs_emit(buf, "0x%02x\n",
++			  (unsigned int)(value & XREG_PSU_SIDEBAND_MASK));
+ }
+ 
+ static ssize_t sideband_sel_store(struct device *dev,
+-- 
+2.52.0
+

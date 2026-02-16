@@ -1,0 +1,113 @@
+From 28bdea4efc7e3120e714137f73b07cf65aa8cb2b Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 13 Feb 2026 13:07:50 +0100
+Subject: [PATCH] hwmon: gxp-fan-ctrl: restore safe fan speed on shutdown and
+ removal
+
+When the BMC reboots, fan PWM registers retain their last-written
+value. If userspace had set fans to a low duty cycle, the host CPU
+could overheat before the new BMC instance starts fan control.
+
+Add a shutdown callback and devm cleanup action that write a safe
+PWM duty cycle to all present fans on kernel shutdown or driver
+removal. The duty cycle is configurable via the fan-shutdown-percent
+DT property, defaulting to 50% (PWM 128) when unset.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/hwmon/gxp-fan-ctrl.c | 39 +++++++++++++++++++++++++++++++++++-
+ 1 file changed, 38 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/hwmon/gxp-fan-ctrl.c b/drivers/hwmon/gxp-fan-ctrl.c
+index 862216218784..545c4fffe904 100644
+--- a/drivers/hwmon/gxp-fan-ctrl.c
++++ b/drivers/hwmon/gxp-fan-ctrl.c
+@@ -14,6 +14,7 @@
+ #include <linux/module.h>
+ #include <linux/mod_devicetable.h>
+ #include <linux/platform_device.h>
++#include <linux/property.h>
+ #include <linux/regmap.h>
+ #include <linux/regulator/consumer.h>
+ #include <linux/soc/hpe/gxp-regs.h>
+@@ -25,6 +26,7 @@ struct gxp_fan_ctrl_drvdata {
+ 	struct regmap		*xreg_map;
+ 	struct regulator	*fan_supply;
+ 	u8			fan_present;
++	u8			pwm_shutdown;
+ };
+ 
+ static bool fan_powered(struct gxp_fan_ctrl_drvdata *drvdata)
+@@ -180,12 +182,26 @@ static const struct hwmon_chip_info gxp_fan_ctrl_chip_info = {
+ 	.info = gxp_fan_ctrl_info,
+ };
+ 
++static void gxp_fan_ctrl_restore_pwm(void *data)
++{
++	struct gxp_fan_ctrl_drvdata *drvdata = data;
++	int i;
++
++	for (i = 0; i < 8; i++) {
++		if (drvdata->fan_present & BIT(i))
++			writeb(drvdata->pwm_shutdown,
++			       drvdata->base + GXP_FAN_PWM_BASE + i);
++	}
++}
++
+ static int gxp_fan_ctrl_probe(struct platform_device *pdev)
+ {
+ 	struct gxp_fan_ctrl_drvdata *drvdata;
+-	struct device *dev = &pdev->dev;
+ 	struct device *hwmon_dev;
++	struct device *dev = &pdev->dev;
++	u32 shutdown_pct;
+ 	unsigned int val;
++	int ret;
+ 
+ 	drvdata = devm_kzalloc(dev, sizeof(*drvdata), GFP_KERNEL);
+ 	if (!drvdata)
+@@ -214,6 +230,21 @@ static int gxp_fan_ctrl_probe(struct platform_device *pdev)
+ 	drvdata->fan_present = (val & XREG_FAN1_8_INST_MASK) >>
+ 			       XREG_FAN1_8_INST_SHIFT;
+ 
++	ret = device_property_read_u32(dev, "fan-shutdown-percent",
++				       &shutdown_pct);
++	if (!ret)
++		drvdata->pwm_shutdown = clamp(shutdown_pct, 0U, 100U) *
++					255 / 100;
++	else
++		drvdata->pwm_shutdown = 128;
++
++	platform_set_drvdata(pdev, drvdata);
++
++	ret = devm_add_action_or_reset(dev, gxp_fan_ctrl_restore_pwm,
++				       drvdata);
++	if (ret)
++		return ret;
++
+ 	hwmon_dev = devm_hwmon_device_register_with_info(dev,
+ 							 "hpe_gxp_fan_ctrl",
+ 							 drvdata,
+@@ -223,6 +254,11 @@ static int gxp_fan_ctrl_probe(struct platform_device *pdev)
+ 	return PTR_ERR_OR_ZERO(hwmon_dev);
+ }
+ 
++static void gxp_fan_ctrl_shutdown(struct platform_device *pdev)
++{
++	gxp_fan_ctrl_restore_pwm(platform_get_drvdata(pdev));
++}
++
+ static const struct of_device_id gxp_fan_ctrl_of_match[] = {
+ 	{ .compatible = "hpe,gxp-fan-ctrl", },
+ 	{},
+@@ -231,6 +267,7 @@ MODULE_DEVICE_TABLE(of, gxp_fan_ctrl_of_match);
+ 
+ static struct platform_driver gxp_fan_ctrl_driver = {
+ 	.probe		= gxp_fan_ctrl_probe,
++	.shutdown	= gxp_fan_ctrl_shutdown,
+ 	.driver = {
+ 		.name	= "gxp-fan-ctrl",
+ 		.of_match_table = gxp_fan_ctrl_of_match,
+-- 
+2.52.0
+

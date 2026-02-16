@@ -1,0 +1,113 @@
+From bcec0aaad7cabcb75b3223a91dc3166edb77a73a Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 13 Feb 2026 11:19:29 +0100
+Subject: [PATCH] peci: controller: gxp: manage PECI devices via regulator
+ events
+
+Subscribe to host power regulator notifier events to automatically
+remove PECI devices when the host powers off and re-scan for them
+when the host powers back on. This prevents -EIO floods from sensor
+reads against powered-off CPUs and ensures devices are rediscovered
+on subsequent power cycles.
+
+The work is deferred to a workqueue since the notifier callback runs
+in blocking context and device creation/destruction may sleep.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/peci/controller/peci-gxp.c | 58 ++++++++++++++++++++++++++++++
+ 1 file changed, 58 insertions(+)
+
+diff --git a/drivers/peci/controller/peci-gxp.c b/drivers/peci/controller/peci-gxp.c
+index 13a1e87151b0..bbfba8a5bb09 100644
+--- a/drivers/peci/controller/peci-gxp.c
++++ b/drivers/peci/controller/peci-gxp.c
+@@ -15,6 +15,7 @@
+ #include <linux/peci.h>
+ #include <linux/platform_device.h>
+ #include <linux/regulator/consumer.h>
++#include <linux/workqueue.h>
+ 
+ /* PECI registers */
+ #define GXP_PECI_CMD		0x00
+@@ -41,6 +42,9 @@ struct gxp_peci {
+ 	struct device *dev;
+ 	void __iomem *base;
+ 	struct regulator *peci_supply;
++	struct notifier_block reg_nb;
++	struct work_struct rescan_work;
++	struct work_struct remove_work;
+ 	int irq;
+ 	spinlock_t lock; /* protects completion status handling */
+ 	struct completion xfer_complete;
+@@ -120,6 +124,43 @@ static irqreturn_t gxp_peci_irq_handler(int irq, void *arg)
+ 	return IRQ_HANDLED;
+ }
+ 
++static void gxp_peci_rescan_work_fn(struct work_struct *work)
++{
++	struct gxp_peci *priv = container_of(work, struct gxp_peci,
++					     rescan_work);
++
++	peci_controller_scan_devices(priv->controller);
++}
++
++static void gxp_peci_remove_work_fn(struct work_struct *work)
++{
++	struct gxp_peci *priv = container_of(work, struct gxp_peci,
++					     remove_work);
++
++	peci_controller_remove_devices(priv->controller);
++}
++
++static int gxp_peci_reg_event(struct notifier_block *nb,
++			      unsigned long event, void *data)
++{
++	struct gxp_peci *priv = container_of(nb, struct gxp_peci, reg_nb);
++
++	if (event & REGULATOR_EVENT_ENABLE)
++		schedule_work(&priv->rescan_work);
++	else if (event & REGULATOR_EVENT_DISABLE)
++		schedule_work(&priv->remove_work);
++
++	return NOTIFY_OK;
++}
++
++static void gxp_peci_cancel_work(void *data)
++{
++	struct gxp_peci *priv = data;
++
++	cancel_work_sync(&priv->rescan_work);
++	cancel_work_sync(&priv->remove_work);
++}
++
+ static const struct peci_controller_ops gxp_peci_ops = {
+ 	.xfer = gxp_peci_xfer,
+ };
+@@ -169,6 +210,23 @@ static int gxp_peci_probe(struct platform_device *pdev)
+ 
+ 	priv->controller = controller;
+ 
++	if (priv->peci_supply) {
++		INIT_WORK(&priv->rescan_work, gxp_peci_rescan_work_fn);
++		INIT_WORK(&priv->remove_work, gxp_peci_remove_work_fn);
++
++		ret = devm_add_action_or_reset(&pdev->dev,
++					       gxp_peci_cancel_work, priv);
++		if (ret)
++			return ret;
++
++		priv->reg_nb.notifier_call = gxp_peci_reg_event;
++		ret = devm_regulator_register_notifier(priv->peci_supply,
++						       &priv->reg_nb);
++		if (ret)
++			return dev_err_probe(&pdev->dev, ret,
++					     "failed to register regulator notifier\n");
++	}
++
+ 	return 0;
+ }
+ 
+-- 
+2.52.0
+

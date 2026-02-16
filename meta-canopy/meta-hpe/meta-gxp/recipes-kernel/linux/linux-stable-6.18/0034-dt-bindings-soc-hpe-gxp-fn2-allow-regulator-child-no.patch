@@ -1,0 +1,44 @@
+From 10d06b278976ff1bd6c7d0066d4c0985f941184b Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 12 Feb 2026 09:31:17 +0100
+Subject: [PATCH] dt-bindings: soc: hpe: gxp-fn2: allow regulator child nodes
+
+Add a patternProperties entry allowing regulator child nodes
+matching the hpe,gxp-host-power-supply binding. This enables
+the FN2 syscon to host a regulator exposing the CPLD power-good
+state to consumer devices.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ .../devicetree/bindings/soc/hpe/hpe,gxp-fn2.yaml       | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/soc/hpe/hpe,gxp-fn2.yaml b/Documentation/devicetree/bindings/soc/hpe/hpe,gxp-fn2.yaml
+index f7c79fa25681..d4ede3795ede 100644
+--- a/Documentation/devicetree/bindings/soc/hpe/hpe,gxp-fn2.yaml
++++ b/Documentation/devicetree/bindings/soc/hpe/hpe,gxp-fn2.yaml
+@@ -48,6 +48,11 @@ properties:
+     type: object
+     $ref: hpe,gxp-chif.yaml#
+ 
++patternProperties:
++  "^regulator-":
++    type: object
++    $ref: /schemas/regulator/hpe,gxp-host-power-supply.yaml#
++
+ required:
+   - compatible
+   - reg
+@@ -75,4 +80,9 @@ examples:
+             "perst",        /* PCIe reset (input) */
+             "post-complete", /* POST complete (input) */
+             "btn-state";    /* Button state (input) */
++
++        regulator-host-power {
++            compatible = "hpe,gxp-host-power-supply";
++            regulator-name = "host-power";
++        };
+     };
+-- 
+2.52.0
+

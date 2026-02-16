@@ -1,0 +1,65 @@
+From 758b130a0a9d4c3adee61358b9feb1acdb58fc1f Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Sun, 8 Feb 2026 22:20:31 +0100
+Subject: [PATCH] dt-bindings: hwmon: hpe,gxp-fan-ctrl: use syscon phandles
+
+Change the fan controller binding from 3 direct reg regions to
+1 reg + 2 syscon phandles (hpe,xreg and hpe,fn2). This avoids
+MMIO resource conflicts with the XREG and FN2 syscon nodes.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ .../bindings/hwmon/hpe,gxp-fan-ctrl.yaml      | 28 ++++++++++---------
+ 1 file changed, 15 insertions(+), 13 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml b/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml
+index 4a52aac6be72..bc29a684a8f4 100644
+--- a/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml
++++ b/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml
+@@ -18,28 +18,30 @@ properties:
+     const: hpe,gxp-fan-ctrl
+ 
+   reg:
+-    items:
+-      - description: Fan controller PWM
+-      - description: Programmable logic
+-      - description: Function 2
++    maxItems: 1
++    description: Fan controller PWM registers
+ 
+-  reg-names:
+-    items:
+-      - const: base
+-      - const: pl
+-      - const: fn2
++  hpe,xreg:
++    $ref: /schemas/types.yaml#/definitions/phandle
++    description: Phandle to the XREG syscon for fan install/fail status
++
++  hpe,fn2:
++    $ref: /schemas/types.yaml#/definitions/phandle
++    description: Phandle to the FN2 syscon for power status
+ 
+ required:
+   - compatible
+   - reg
+-  - reg-names
++  - hpe,xreg
++  - hpe,fn2
+ 
+ additionalProperties: false
+ 
+ examples:
+   - |
+-    fan-controller@1000c00 {
++    fan-controller@c1000c00 {
+       compatible = "hpe,gxp-fan-ctrl";
+-      reg = <0x1000c00 0x200>, <0xd1000000 0xff>, <0x80200000 0x100000>;
+-      reg-names = "base", "pl", "fn2";
++      reg = <0xc1000c00 0x200>;
++      hpe,xreg = <&xreg>;
++      hpe,fn2 = <&fn2>;
+     };
+-- 
+2.52.0
+

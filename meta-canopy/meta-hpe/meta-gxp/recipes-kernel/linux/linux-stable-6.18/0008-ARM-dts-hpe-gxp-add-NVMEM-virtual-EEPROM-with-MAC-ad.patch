@@ -1,0 +1,66 @@
+From 4f948a17d231fb5297f1c42dfea413927cf54cde Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 5 Feb 2026 11:04:06 +0100
+Subject: [PATCH] ARM: dts: hpe-gxp: add NVMEM virtual EEPROM with MAC address
+ cells
+
+Add a virtual EEPROM node to provide access to the HPE GXP memory
+region, which contains board identification data. This includes the
+serial numbers, part numbers, and MAC addresses used by the UMAC
+Ethernet controllers.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 36 +++++++++++++++++++++++++++++++
+ 1 file changed, 36 insertions(+)
+
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index eda3e01cfea2..ad23b8d08bc3 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -241,6 +241,42 @@ i2c9: i2c@c0002900 {
+ 			#size-cells = <0>;
+ 		};
+ 
++		veeprom: nvmem@a0017f00 {
++			compatible = "hpe,gxp-nvmem";
++			reg = <0xa0017f00 0x100>;
++			read-only;
++
++			nvmem-layout {
++				compatible = "fixed-layout";
++				#address-cells = <1>;
++				#size-cells = <1>;
++
++				board_sn: serial-number@1 {
++					reg = <0x01 0x10>;
++				};
++
++				board_pn: part-number@6d {
++					reg = <0x6d 0x10>;
++				};
++
++				mac0: mac-address-0@84 {
++					reg = <0x84 0x06>;
++				};
++
++				mac1: mac-address-1@8a {
++					reg = <0x8a 0x06>;
++				};
++
++				pca_sn: pca-serial-number@90 {
++					reg = <0x90 0x10>;
++				};
++
++				pca_pn: pca-part-number@a0 {
++					reg = <0xa0 0x10>;
++				};
++			};
++		};
++
+ 		fanctrl: fan-controller@c1000c00 {
+ 			compatible = "hpe,gxp-fan-ctrl";
+ 			reg = <0xc1000c00 0x200>,
+-- 
+2.52.0
+

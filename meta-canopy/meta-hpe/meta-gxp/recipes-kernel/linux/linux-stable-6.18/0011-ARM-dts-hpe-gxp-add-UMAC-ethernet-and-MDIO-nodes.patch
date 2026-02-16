@@ -1,0 +1,97 @@
+From 1766faf4c121ad226f0e2e686fe06bee96488f43 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 5 Feb 2026 11:05:29 +0100
+Subject: [PATCH] ARM: dts: hpe-gxp: add UMAC ethernet and MDIO nodes
+
+Add device tree nodes for the two GXP UMAC ethernet controllers and
+their associated MDIO buses.
+
+umac0 is the primary management port using an external Marvell 88E1514
+PHY on mdio0 in SGMII mode, with MAC address read from the veeprom
+NVMEM provider.
+
+umac1 is the secondary port using NC-SI for sideband network access
+through the host NIC, with an internal PHY on mdio1.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 56 +++++++++++++++++++++++++++++++
+ 1 file changed, 56 insertions(+)
+
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index ad23b8d08bc3..14b333d8297d 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -14,6 +14,8 @@ aliases {
+ 		serial0 = &uarta;
+ 		serial1 = &uartb;
+ 		serial2 = &uartc;
++		ethernet0 = &umac0;
++		ethernet1 = &umac1;
+ 	};
+ 
+ 	chosen {
+@@ -277,6 +279,60 @@ pca_pn: pca-part-number@a0 {
+ 			};
+ 		};
+ 
++		mdio0: mdio@c0004080 {
++			compatible = "hpe,gxp-umac-mdio";
++			reg = <0xc0004080 0x10>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			ext_phy0: ethernet-phy@0 {
++				compatible = "ethernet-phy-ieee802.3-c22";
++				phy-mode = "sgmii";
++				reg = <0>;
++			};
++		};
++
++		mdio1: mdio@c0005080 {
++			compatible = "hpe,gxp-umac-mdio";
++			reg = <0xc0005080 0x10>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			int_phy0: ethernet-phy@0 {
++				compatible = "ethernet-phy-ieee802.3-c22";
++				phy-mode = "gmii";
++				reg = <0>;
++			};
++
++			int_phy1: ethernet-phy@1 {
++				compatible = "ethernet-phy-ieee802.3-c22";
++				phy-mode = "gmii";
++				reg = <1>;
++			};
++		};
++
++		umac0: ethernet@c0004000 {
++			compatible = "hpe,gxp-umac";
++			reg = <0xc0004000 0x80>;
++			interrupts = <10>;
++			interrupt-parent = <&vic0>;
++			phy-handle = <&ext_phy0>;
++			int-phy-handle = <&int_phy0>;
++			nvmem-cells = <&mac0>;
++			nvmem-cell-names = "mac-address";
++		};
++
++		umac1: ethernet@c0005000 {
++			compatible = "hpe,gxp-umac";
++			reg = <0xc0005000 0x80>;
++			interrupts = <11>;
++			interrupt-parent = <&vic0>;
++			phy-handle = <&int_phy1>;
++			use-ncsi;
++			nvmem-cells = <&mac1>;
++			nvmem-cell-names = "mac-address";
++		};
++
+ 		fanctrl: fan-controller@c1000c00 {
+ 			compatible = "hpe,gxp-fan-ctrl";
+ 			reg = <0xc1000c00 0x200>,
+-- 
+2.52.0
+

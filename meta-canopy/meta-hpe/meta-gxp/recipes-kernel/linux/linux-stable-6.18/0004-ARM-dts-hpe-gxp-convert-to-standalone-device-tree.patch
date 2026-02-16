@@ -1,0 +1,98 @@
+From d6fa9d16396a0c84f116fdcde578bd889d3ea6c6 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 5 Feb 2026 10:05:32 +0100
+Subject: [PATCH] ARM: dts: hpe-gxp: convert to standalone device tree
+
+The HPE GXP is a single-SoC platform where all boards share the same
+peripherals, memory map, and boot configuration. The separate dtsi+dts
+split with a board-specific DL360 Gen10 overlay adds no value since
+the overlay only provides aliases, chosen, and memory nodes that are
+common to all GXP boards.
+
+Merge the board-specific nodes into the SoC device tree and rename
+hpe-gxp.dtsi to hpe-gxp.dts, producing a single standalone device tree
+that can be used directly by all GXP platforms.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ arch/arm/boot/dts/hpe/Makefile                |  2 +-
+ arch/arm/boot/dts/hpe/hpe-bmc-dl360gen10.dts  | 26 -------------------
+ .../dts/hpe/{hpe-gxp.dtsi => hpe-gxp.dts}     | 16 ++++++++++++
+ 3 files changed, 17 insertions(+), 27 deletions(-)
+ delete mode 100644 arch/arm/boot/dts/hpe/hpe-bmc-dl360gen10.dts
+ rename arch/arm/boot/dts/hpe/{hpe-gxp.dtsi => hpe-gxp.dts} (90%)
+
+diff --git a/arch/arm/boot/dts/hpe/Makefile b/arch/arm/boot/dts/hpe/Makefile
+index e175b1732cdb..2b5efa6270fb 100644
+--- a/arch/arm/boot/dts/hpe/Makefile
++++ b/arch/arm/boot/dts/hpe/Makefile
+@@ -1,3 +1,3 @@
+ # SPDX-License-Identifier: GPL-2.0
+ dtb-$(CONFIG_ARCH_HPE_GXP) += \
+-	hpe-bmc-dl360gen10.dtb
++	hpe-gxp.dtb
+diff --git a/arch/arm/boot/dts/hpe/hpe-bmc-dl360gen10.dts b/arch/arm/boot/dts/hpe/hpe-bmc-dl360gen10.dts
+deleted file mode 100644
+index 794e5bd11214..000000000000
+--- a/arch/arm/boot/dts/hpe/hpe-bmc-dl360gen10.dts
++++ /dev/null
+@@ -1,26 +0,0 @@
+-// SPDX-License-Identifier: GPL-2.0
+-/*
+- * Device Tree file for HPE DL360Gen10
+- */
+-
+-/include/ "hpe-gxp.dtsi"
+-
+-/ {
+-	#address-cells = <1>;
+-	#size-cells = <1>;
+-	compatible = "hpe,gxp";
+-	model = "Hewlett Packard Enterprise ProLiant dl360 Gen10";
+-
+-	aliases {
+-		serial0 = &uartc;
+-	};
+-
+-	chosen {
+-		stdout-path = "serial0:115200n8";
+-	};
+-
+-	memory@40000000 {
+-		device_type = "memory";
+-		reg = <0x40000000 0x20000000>;
+-	};
+-};
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+similarity index 90%
+rename from arch/arm/boot/dts/hpe/hpe-gxp.dtsi
+rename to arch/arm/boot/dts/hpe/hpe-gxp.dts
+index cf735b3c4f35..6bea75085cd0 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -10,6 +10,22 @@ / {
+ 	#address-cells = <1>;
+ 	#size-cells = <1>;
+ 
++	aliases {
++		serial0 = &uarta;
++		serial1 = &uartb;
++		serial2 = &uartc;
++	};
++
++	chosen {
++		stdout-path = "serial2:115200n8";
++		bootargs = "earlyprintk console=ttyS2,115200";
++	};
++
++	memory@40000000 {
++		device_type = "memory";
++		reg = <0x40000000 0x20000000>;
++	};
++
+ 	cpus {
+ 		#address-cells = <1>;
+ 		#size-cells = <0>;
+-- 
+2.52.0
+

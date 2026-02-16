@@ -1,0 +1,60 @@
+From 3d66f56f438f9e3f30d6c50d8b60f2d503895afe Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 12 Feb 2026 21:53:35 +0100
+Subject: [PATCH] dt-bindings: hwmon: add HPE GXP SoC temperature sensor
+ binding
+
+Add device tree binding for the internal temperature sensor in HPE GXP
+BMC SoCs. The sensor provides die temperature readings through a
+memory-mapped register interface.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ .../bindings/hwmon/hpe,gxp-coretemp.yaml      | 35 +++++++++++++++++++
+ 1 file changed, 35 insertions(+)
+ create mode 100644 Documentation/devicetree/bindings/hwmon/hpe,gxp-coretemp.yaml
+
+diff --git a/Documentation/devicetree/bindings/hwmon/hpe,gxp-coretemp.yaml b/Documentation/devicetree/bindings/hwmon/hpe,gxp-coretemp.yaml
+new file mode 100644
+index 000000000000..2ce7fce9fda7
+--- /dev/null
++++ b/Documentation/devicetree/bindings/hwmon/hpe,gxp-coretemp.yaml
+@@ -0,0 +1,35 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/hwmon/hpe,gxp-coretemp.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: HPE GXP SoC Core Temperature Sensor
++
++maintainers:
++  - Marcello Sylvester Bauer <marcello.bauer@9elements.com>
++
++description: |
++  The HPE GXP SoC includes an internal temperature sensor that measures the
++  die temperature of the BMC processor.
++
++properties:
++  compatible:
++    const: hpe,gxp-coretemp
++
++  reg:
++    maxItems: 1
++    description: Temperature sensor registers
++
++required:
++  - compatible
++  - reg
++
++additionalProperties: false
++
++examples:
++  - |
++    coretemp@c0000130 {
++      compatible = "hpe,gxp-coretemp";
++      reg = <0xc0000130 0x8>;
++    };
+-- 
+2.52.0
+

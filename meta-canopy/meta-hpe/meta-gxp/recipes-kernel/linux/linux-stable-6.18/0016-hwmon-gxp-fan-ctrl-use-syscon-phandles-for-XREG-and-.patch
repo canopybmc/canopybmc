@@ -1,0 +1,160 @@
+From bcad6c98e27aceb1546c8e9ab2f5e640754ae67d Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Sun, 8 Feb 2026 22:20:50 +0100
+Subject: [PATCH] hwmon: gxp-fan-ctrl: use syscon phandles for XREG and FN2
+
+Replace raw register mappings with syscon regmap lookups via
+hpe,xreg and hpe,fn2 phandles, matching the HPE reference driver.
+Read fan install status from XREG offset 0x78 and power state from
+FN2 SEVSTAT at offset 0x70 via regmap.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/hwmon/Kconfig        |  2 ++
+ drivers/hwmon/gxp-fan-ctrl.c | 58 +++++++++++++++++-------------------
+ 2 files changed, 30 insertions(+), 30 deletions(-)
+
+diff --git a/drivers/hwmon/Kconfig b/drivers/hwmon/Kconfig
+index 2760feb9f83b..18d5d4d9589c 100644
+--- a/drivers/hwmon/Kconfig
++++ b/drivers/hwmon/Kconfig
+@@ -813,6 +813,8 @@ config SENSORS_GPIO_FAN
+ config SENSORS_GXP_FAN_CTRL
+ 	tristate "HPE GXP fan controller"
+ 	depends on ARCH_HPE_GXP || COMPILE_TEST
++	select MFD_SYSCON
++	select REGMAP
+ 	help
+ 	  If you say yes here you get support for GXP fan control functionality.
+ 
+diff --git a/drivers/hwmon/gxp-fan-ctrl.c b/drivers/hwmon/gxp-fan-ctrl.c
+index 00e057050437..0ec8818784d2 100644
+--- a/drivers/hwmon/gxp-fan-ctrl.c
++++ b/drivers/hwmon/gxp-fan-ctrl.c
+@@ -5,37 +5,35 @@
+ #include <linux/err.h>
+ #include <linux/hwmon.h>
+ #include <linux/io.h>
++#include <linux/mfd/syscon.h>
+ #include <linux/module.h>
+ #include <linux/mod_devicetable.h>
+ #include <linux/platform_device.h>
+-
+-#define OFS_FAN_INST	0 /* Is 0 because plreg base will be set at INST */
+-#define OFS_FAN_FAIL	2 /* Is 2 bytes after base */
+-#define OFS_SEVSTAT	0 /* Is 0 because fn2 base will be set at SEVSTAT */
+-#define POWER_BIT	24
++#include <linux/regmap.h>
++#include <linux/soc/hpe/gxp-regs.h>
+ 
+ struct gxp_fan_ctrl_drvdata {
+ 	void __iomem	*base;
+-	void __iomem	*plreg;
+-	void __iomem	*fn2;
++	struct regmap	*xreg_map;
++	struct regmap	*fn2_map;
+ };
+ 
+ static bool fan_installed(struct device *dev, int fan)
+ {
+ 	struct gxp_fan_ctrl_drvdata *drvdata = dev_get_drvdata(dev);
+-	u8 val;
++	unsigned int val;
+ 
+-	val = readb(drvdata->plreg + OFS_FAN_INST);
++	regmap_read(drvdata->xreg_map, XREG_FAN_INSTALLED, &val);
+ 
+-	return !!(val & BIT(fan));
++	return !!(val & BIT(fan + XREG_FAN1_8_INST_SHIFT));
+ }
+ 
+ static long fan_failed(struct device *dev, int fan)
+ {
+ 	struct gxp_fan_ctrl_drvdata *drvdata = dev_get_drvdata(dev);
+-	u8 val;
++	unsigned int val;
+ 
+-	val = readb(drvdata->plreg + OFS_FAN_FAIL);
++	regmap_read(drvdata->xreg_map, XREG_FAN_FAIL_ID, &val);
+ 
+ 	return !!(val & BIT(fan));
+ }
+@@ -43,16 +41,16 @@ static long fan_failed(struct device *dev, int fan)
+ static long fan_enabled(struct device *dev, int fan)
+ {
+ 	struct gxp_fan_ctrl_drvdata *drvdata = dev_get_drvdata(dev);
+-	u32 val;
++	unsigned int val;
+ 
+ 	/*
+ 	 * Check the power status as if the platform is off the value
+ 	 * reported for the PWM will be incorrect. Report fan as
+ 	 * disabled.
+ 	 */
+-	val = readl(drvdata->fn2 + OFS_SEVSTAT);
++	regmap_read(drvdata->fn2_map, FN2_SEVSTAT, &val);
+ 
+-	return !!((val & BIT(POWER_BIT)) && fan_installed(dev, fan));
++	return !!((val & FN2_SEVSTAT_PGOOD_STATE) && fan_installed(dev, fan));
+ }
+ 
+ static int gxp_pwm_write(struct device *dev, u32 attr, int channel, long val)
+@@ -98,7 +96,7 @@ static int gxp_fan_read(struct device *dev, u32 attr, int channel, long *val)
+ static int gxp_pwm_read(struct device *dev, u32 attr, int channel, long *val)
+ {
+ 	struct gxp_fan_ctrl_drvdata *drvdata = dev_get_drvdata(dev);
+-	u32 reg;
++	unsigned int reg;
+ 
+ 	/*
+ 	 * Check the power status of the platform. If the platform is off
+@@ -106,9 +104,9 @@ static int gxp_pwm_read(struct device *dev, u32 attr, int channel, long *val)
+ 	 * report a PWM of zero.
+ 	 */
+ 
+-	reg = readl(drvdata->fn2 + OFS_SEVSTAT);
++	regmap_read(drvdata->fn2_map, FN2_SEVSTAT, &reg);
+ 
+-	if (reg & BIT(POWER_BIT))
++	if (reg & FN2_SEVSTAT_PGOOD_STATE)
+ 		*val = fan_installed(dev, channel) ? readb(drvdata->base + channel) : 0;
+ 	else
+ 		*val = 0;
+@@ -207,22 +205,22 @@ static int gxp_fan_ctrl_probe(struct platform_device *pdev)
+ 	if (!drvdata)
+ 		return -ENOMEM;
+ 
+-	drvdata->base = devm_platform_get_and_ioremap_resource(pdev, 0, NULL);
++	drvdata->base = devm_platform_ioremap_resource(pdev, 0);
+ 	if (IS_ERR(drvdata->base))
+ 		return dev_err_probe(dev, PTR_ERR(drvdata->base),
+ 				     "failed to map base\n");
+ 
+-	drvdata->plreg = devm_platform_ioremap_resource_byname(pdev,
+-							       "pl");
+-	if (IS_ERR(drvdata->plreg))
+-		return dev_err_probe(dev, PTR_ERR(drvdata->plreg),
+-				     "failed to map plreg\n");
+-
+-	drvdata->fn2 = devm_platform_ioremap_resource_byname(pdev,
+-							     "fn2");
+-	if (IS_ERR(drvdata->fn2))
+-		return dev_err_probe(dev, PTR_ERR(drvdata->fn2),
+-				     "failed to map fn2\n");
++	drvdata->xreg_map = syscon_regmap_lookup_by_phandle(dev->of_node,
++							    "hpe,xreg");
++	if (IS_ERR(drvdata->xreg_map))
++		return dev_err_probe(dev, PTR_ERR(drvdata->xreg_map),
++				     "failed to find hpe,xreg syscon\n");
++
++	drvdata->fn2_map = syscon_regmap_lookup_by_phandle(dev->of_node,
++							   "hpe,fn2");
++	if (IS_ERR(drvdata->fn2_map))
++		return dev_err_probe(dev, PTR_ERR(drvdata->fn2_map),
++				     "failed to find hpe,fn2 syscon\n");
+ 
+ 	hwmon_dev = devm_hwmon_device_register_with_info(&pdev->dev,
+ 							 "hpe_gxp_fan_ctrl",
+-- 
+2.52.0
+

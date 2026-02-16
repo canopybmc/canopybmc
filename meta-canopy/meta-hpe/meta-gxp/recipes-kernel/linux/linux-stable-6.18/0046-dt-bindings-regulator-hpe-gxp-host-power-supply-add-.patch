@@ -1,0 +1,54 @@
+From 24b28d8a9e17bf54ed38f61b6e2f12689a2ca1af Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 13 Feb 2026 11:17:40 +0100
+Subject: [PATCH] dt-bindings: regulator: hpe,gxp-host-power-supply: add
+ interrupts
+
+Add optional interrupts property to the HPE GXP CPLD host power
+supply binding. When an interrupt is specified, the regulator driver
+fires notifier events on host power transitions, enabling consumer
+drivers to respond to power state changes.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ .../bindings/regulator/hpe,gxp-host-power-supply.yaml | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/regulator/hpe,gxp-host-power-supply.yaml b/Documentation/devicetree/bindings/regulator/hpe,gxp-host-power-supply.yaml
+index 685e54ffb3cc..fe3ab92b6454 100644
+--- a/Documentation/devicetree/bindings/regulator/hpe,gxp-host-power-supply.yaml
++++ b/Documentation/devicetree/bindings/regulator/hpe,gxp-host-power-supply.yaml
+@@ -26,6 +26,13 @@ properties:
+ 
+   regulator-name: true
+ 
++  interrupts:
++    maxItems: 1
++    description:
++      PGOOD state change interrupt from the parent FN2 interrupt controller.
++      When provided, the regulator fires notifier events on host power
++      transitions.
++
+ required:
+   - compatible
+ 
+@@ -33,12 +40,16 @@ unevaluatedProperties: false
+ 
+ examples:
+   - |
++    #include <dt-bindings/interrupt-controller/irq.h>
+     syscon@80200000 {
+       compatible = "hpe,gxp-fn2", "simple-mfd", "syscon";
+       reg = <0x80200000 0x100000>;
++      interrupt-controller;
++      #interrupt-cells = <2>;
+ 
+       regulator-host-power {
+         compatible = "hpe,gxp-host-power-supply";
+         regulator-name = "host-power";
++        interrupts = <1 IRQ_TYPE_EDGE_BOTH>;
+       };
+     };
+-- 
+2.52.0
+

@@ -1,0 +1,150 @@
+From 3ea60c46fa73d56e59f53dc0c17e01f5dc55a74f Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Sat, 14 Feb 2026 05:35:22 +0100
+Subject: [PATCH] peci: core: serialize device creation with per-controller
+ mutex
+
+PECI device creation and removal have no synchronization. Concurrent
+callers such as the bus rescan sysfs attribute and a regulator notifier
+workqueue can race between the dedup check in peci_device_create() and
+device_add(), creating duplicate sysfs entries that cause a kernel
+warning.
+
+Add a per-controller scan_lock mutex, following the SPI subsystem's
+add_lock pattern, to serialize peci_device_create() and
+peci_device_destroy(). This replaces the file-local peci_device_del_lock
+with the per-controller lock, which also covers the creation path.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/peci/core.c   |  2 ++
+ drivers/peci/device.c | 38 ++++++++++++++++++++++++++------------
+ include/linux/peci.h  |  1 +
+ 3 files changed, 29 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/peci/core.c b/drivers/peci/core.c
+index fb319c0276ae..ab68a72e09f6 100644
+--- a/drivers/peci/core.c
++++ b/drivers/peci/core.c
+@@ -20,6 +20,7 @@ static void peci_controller_dev_release(struct device *dev)
+ {
+ 	struct peci_controller *controller = to_peci_controller(dev);
+ 
++	mutex_destroy(&controller->scan_lock);
+ 	mutex_destroy(&controller->bus_lock);
+ 	ida_free(&peci_controller_ida, controller->id);
+ 	kfree(controller);
+@@ -71,6 +72,7 @@ static struct peci_controller *peci_controller_alloc(struct device *dev,
+ 	device_initialize(&controller->dev);
+ 
+ 	mutex_init(&controller->bus_lock);
++	mutex_init(&controller->scan_lock);
+ 
+ 	return controller;
+ 
+diff --git a/drivers/peci/device.c b/drivers/peci/device.c
+index 416635029f55..53f0dc2ffe6a 100644
+--- a/drivers/peci/device.c
++++ b/drivers/peci/device.c
+@@ -9,11 +9,12 @@
+ #include "internal.h"
+ 
+ /*
+- * PECI device can be removed using sysfs, but the removal can also happen as
+- * a result of controller being removed.
+- * Mutex is used to protect PECI device from being double-deleted.
++ * PECI device creation and removal must be serialized per controller.
++ * Without this, concurrent callers (e.g. a regulator notifier workqueue
++ * and a sysfs rescan) can race between the dedup check in
++ * peci_device_create() and device_add(), creating duplicate devices.
++ * The per-controller scan_lock also protects against double-deletion.
+  */
+-static DEFINE_MUTEX(peci_device_del_lock);
+ 
+ #define REVISION_NUM_MASK GENMASK(15, 8)
+ static int peci_get_revision(struct peci_device *device, u8 *revision)
+@@ -153,10 +154,14 @@ int peci_device_create(struct peci_controller *controller, u8 addr)
+ 	if (!peci_addr_valid(addr))
+ 		return -EINVAL;
+ 
++	mutex_lock(&controller->scan_lock);
++
+ 	/* Check if we have already detected this device before. */
+ 	ret = device_for_each_child(&controller->dev, &addr, peci_dev_exists);
+-	if (ret)
+-		return 0;
++	if (ret) {
++		ret = 0;
++		goto out_unlock;
++	}
+ 
+ 	ret = peci_detect(controller, addr);
+ 	if (ret) {
+@@ -165,14 +170,16 @@ int peci_device_create(struct peci_controller *controller, u8 addr)
+ 		 * detection at this time.
+ 		 */
+ 		if (ret == -EIO || ret == -ETIMEDOUT)
+-			return 0;
++			ret = 0;
+ 
+-		return ret;
++		goto out_unlock;
+ 	}
+ 
+ 	device = kzalloc(sizeof(*device), GFP_KERNEL);
+-	if (!device)
+-		return -ENOMEM;
++	if (!device) {
++		ret = -ENOMEM;
++		goto out_unlock;
++	}
+ 
+ 	device_initialize(&device->dev);
+ 
+@@ -193,22 +200,29 @@ int peci_device_create(struct peci_controller *controller, u8 addr)
+ 	if (ret)
+ 		goto err_put;
+ 
++	mutex_unlock(&controller->scan_lock);
++
+ 	return 0;
+ 
+ err_put:
+ 	put_device(&device->dev);
+ 
++out_unlock:
++	mutex_unlock(&controller->scan_lock);
++
+ 	return ret;
+ }
+ 
+ void peci_device_destroy(struct peci_device *device)
+ {
+-	mutex_lock(&peci_device_del_lock);
++	struct peci_controller *controller = to_peci_controller(device->dev.parent);
++
++	mutex_lock(&controller->scan_lock);
+ 	if (!device->deleted) {
+ 		device_unregister(&device->dev);
+ 		device->deleted = true;
+ 	}
+-	mutex_unlock(&peci_device_del_lock);
++	mutex_unlock(&controller->scan_lock);
+ }
+ 
+ int __peci_driver_register(struct peci_driver *driver, struct module *owner,
+diff --git a/include/linux/peci.h b/include/linux/peci.h
+index 6c872d9458d4..e033cf6bddf0 100644
+--- a/include/linux/peci.h
++++ b/include/linux/peci.h
+@@ -44,6 +44,7 @@ struct peci_controller {
+ 	struct device dev;
+ 	const struct peci_controller_ops *ops;
+ 	struct mutex bus_lock; /* held for the duration of xfer */
++	struct mutex scan_lock; /* serializes device creation/removal */
+ 	u8 id;
+ };
+ 
+-- 
+2.52.0
+

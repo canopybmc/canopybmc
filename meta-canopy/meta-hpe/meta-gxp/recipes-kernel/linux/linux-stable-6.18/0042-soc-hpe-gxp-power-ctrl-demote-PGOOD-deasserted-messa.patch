@@ -1,0 +1,33 @@
+From 874308372f4a864d8915f6a7e19d0eb3737062cb Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 13 Feb 2026 12:29:04 +0100
+Subject: [PATCH] soc: hpe: gxp-power-ctrl: demote PGOOD deasserted message to
+ dev_dbg
+
+The "PGOOD deasserted, boot gate held" message fires on every host
+power-off, which is normal operation. Demote from dev_info to dev_dbg
+so it is silent by default but available via dynamic debug.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/soc/hpe/gxp-power-ctrl.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/soc/hpe/gxp-power-ctrl.c b/drivers/soc/hpe/gxp-power-ctrl.c
+index 0b797a72a5f4..4687c5cd47c2 100644
+--- a/drivers/soc/hpe/gxp-power-ctrl.c
++++ b/drivers/soc/hpe/gxp-power-ctrl.c
+@@ -316,8 +316,8 @@ static irqreturn_t gxp_power_ctrl_pgood_irq(int irq, void *data)
+ 	if (pgood <= 0) {
+ 		/* PGOOD fell: host powered off, hold boot gate */
+ 		gxp_power_ctrl_shutdown_ack(pctrl);
+-		dev_info(pctrl->gc.parent,
+-			 "PGOOD deasserted, boot gate held\n");
++		dev_dbg(pctrl->gc.parent,
++			"PGOOD deasserted, boot gate held\n");
+ 	}
+ 
+ 	/* Forward event to power-ctrl-good virtual GPIO consumers */
+-- 
+2.52.0
+

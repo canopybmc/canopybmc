@@ -1,4 +1,4 @@
-PREFERRED_PROVIDER_virtual/kernel ?= "linux-canopy"
+PREFERRED_PROVIDER_virtual/kernel ?= "linux-stable"
 
 # Build a signed FIT image by default.
 KERNEL_IMAGETYPE = "fitImage"

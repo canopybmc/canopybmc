@@ -1,0 +1,50 @@
+From 12c77fc1fe10a252ef8179e99b57cdfe9caed324 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 13 Feb 2026 09:54:22 +0100
+Subject: [PATCH] peci: request: retry on unrecognized completion codes
+
+Unrecognized PECI completion codes trigger WARN_ONCE and return
+-EIO, which prevents the retry loop in peci_request_xfer_retry()
+from recovering. On HPE GXP platforms, codes like 0x0 (timeout)
+and 0xa1 (command byte echo-back) appear transiently during host
+power state transitions.
+
+Replace the WARN_ONCE with dev_dbg and return -EAGAIN for all
+unrecognized codes so the existing exponential backoff retry
+logic can handle these transient conditions.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/peci/request.c | 15 +++++++++++----
+ 1 file changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/peci/request.c b/drivers/peci/request.c
+index e6327af45fc7..12d253f452d9 100644
+--- a/drivers/peci/request.c
++++ b/drivers/peci/request.c
+@@ -122,11 +122,18 @@ int peci_request_status(struct peci_request *req)
+ 	case PECI_CC_PARITY_ERR_GPSB_OR_PMSB_IERR:
+ 	case PECI_CC_PARITY_ERR_GPSB_OR_PMSB_MCA:
+ 		return -EIO;
++	default:
++		/*
++		 * Unrecognized completion codes (e.g. 0x00 timeout or
++		 * command byte echo-back) are transient conditions that
++		 * can occur during host power transitions. Treat them
++		 * as retry-able so the exponential backoff in
++		 * peci_request_xfer_retry() can recover.
++		 */
++		dev_dbg(&req->device->dev,
++			"unknown completion code: %#02x\n", cc);
++		return -EAGAIN;
+ 	}
+-
+-	WARN_ONCE(1, "Unknown PECI completion code: %#02x\n", cc);
+-
+-	return -EIO;
+ }
+ EXPORT_SYMBOL_NS_GPL(peci_request_status, "PECI");
+ 
+-- 
+2.52.0
+

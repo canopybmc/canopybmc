@@ -1,0 +1,107 @@
+From acfad34c2f402c4f31ede08450055dc919bf4451 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Sat, 14 Feb 2026 05:52:22 +0100
+Subject: [PATCH] regulator: gxp-cpld: debounce PGOOD IRQ before notifying
+ consumers
+
+The PGOOD signal from the CPLD can bounce during host power
+transitions, causing multiple rapid regulator events. Consumer
+drivers (e.g. PECI) that scan or remove devices on these events
+can be disrupted by spurious transitions during the settling period.
+
+Replace the immediate regulator_notifier_call_chain() in the IRQ
+handler with a 500ms debounced delayed_work. Each new interrupt
+edge restarts the timer via mod_delayed_work(), so consumers only
+see a single notification after the signal has settled. This moves
+the debounce responsibility from individual consumers to the
+provider where it belongs.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/regulator/gxp-cpld-regulator.c | 35 +++++++++++++++++++++++---
+ 1 file changed, 32 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/regulator/gxp-cpld-regulator.c b/drivers/regulator/gxp-cpld-regulator.c
+index 2bbf9555f871..e557dc36c85f 100644
+--- a/drivers/regulator/gxp-cpld-regulator.c
++++ b/drivers/regulator/gxp-cpld-regulator.c
+@@ -21,10 +21,14 @@
+ #include <linux/regmap.h>
+ #include <linux/regulator/driver.h>
+ #include <linux/soc/hpe/gxp-regs.h>
++#include <linux/workqueue.h>
++
++#define GXP_CPLD_PGOOD_DEBOUNCE_MS	500
+ 
+ struct gxp_cpld_reg_data {
+ 	struct regulator_dev *rdev;
+ 	struct regmap *regmap;
++	struct delayed_work pgood_work;
+ };
+ 
+ /* No-op: CPLD controls the power rail, not software */
+@@ -48,15 +52,17 @@ static const struct regulator_desc gxp_cpld_reg_desc = {
+ 	.enable_mask = FN2_SEVSTAT_PGOOD_STATE,
+ };
+ 
+-static irqreturn_t gxp_cpld_reg_pgood_irq(int irq, void *data)
++static void gxp_cpld_reg_pgood_work_fn(struct work_struct *work)
+ {
+-	struct gxp_cpld_reg_data *priv = data;
++	struct gxp_cpld_reg_data *priv = container_of(work,
++						      struct gxp_cpld_reg_data,
++						      pgood_work.work);
+ 	unsigned int val;
+ 	int ret;
+ 
+ 	ret = regmap_read(priv->regmap, FN2_SEVSTAT, &val);
+ 	if (ret)
+-		return IRQ_NONE;
++		return;
+ 
+ 	if (val & FN2_SEVSTAT_PGOOD_STATE)
+ 		regulator_notifier_call_chain(priv->rdev,
+@@ -64,10 +70,25 @@ static irqreturn_t gxp_cpld_reg_pgood_irq(int irq, void *data)
+ 	else
+ 		regulator_notifier_call_chain(priv->rdev,
+ 					      REGULATOR_EVENT_DISABLE, NULL);
++}
++
++static irqreturn_t gxp_cpld_reg_pgood_irq(int irq, void *data)
++{
++	struct gxp_cpld_reg_data *priv = data;
++
++	mod_delayed_work(system_wq, &priv->pgood_work,
++			 msecs_to_jiffies(GXP_CPLD_PGOOD_DEBOUNCE_MS));
+ 
+ 	return IRQ_HANDLED;
+ }
+ 
++static void gxp_cpld_reg_cancel_work(void *data)
++{
++	struct gxp_cpld_reg_data *priv = data;
++
++	cancel_delayed_work_sync(&priv->pgood_work);
++}
++
+ static int gxp_cpld_reg_probe(struct platform_device *pdev)
+ {
+ 	struct gxp_cpld_reg_data *priv;
+@@ -97,6 +118,14 @@ static int gxp_cpld_reg_probe(struct platform_device *pdev)
+ 
+ 	irq = platform_get_irq_optional(pdev, 0);
+ 	if (irq > 0) {
++		INIT_DELAYED_WORK(&priv->pgood_work,
++				  gxp_cpld_reg_pgood_work_fn);
++
++		ret = devm_add_action_or_reset(&pdev->dev,
++					       gxp_cpld_reg_cancel_work, priv);
++		if (ret)
++			return ret;
++
+ 		ret = devm_request_threaded_irq(&pdev->dev, irq, NULL,
+ 						gxp_cpld_reg_pgood_irq,
+ 						IRQF_ONESHOT | IRQF_SHARED,
+-- 
+2.52.0
+

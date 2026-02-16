@@ -1,0 +1,88 @@
+From b762373b8ff2fbddf0520e895ba3953bc94ff065 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 12 Feb 2026 15:36:17 +0100
+Subject: [PATCH] hwmon: gxp-fan-ctrl: expose fan_input reporting PWM duty
+ cycle
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add fan_input sysfs attributes that report the PWM duty cycle value
+(0-255) for each fan channel. The GXP SoC has no tachometer hardware,
+so fan_input reads the PWM drive register — matching the original
+driver's show_in() behavior.
+
+This enables standard hwmon fan discovery by userspace tools that
+scan for fan*_input files.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ Documentation/hwmon/gxp-fan-ctrl.rst |  6 ++++--
+ drivers/hwmon/gxp-fan-ctrl.c         | 21 ++++++++++++++++-----
+ 2 files changed, 20 insertions(+), 7 deletions(-)
+
+diff --git a/Documentation/hwmon/gxp-fan-ctrl.rst b/Documentation/hwmon/gxp-fan-ctrl.rst
+index ae3397e81c04..24bcb4c543c2 100644
+--- a/Documentation/hwmon/gxp-fan-ctrl.rst
++++ b/Documentation/hwmon/gxp-fan-ctrl.rst
+@@ -22,7 +22,9 @@ Sysfs attributes
+ ----------------
+ 
+ ======================= ===========================================================
++fan[1-8]_input		Fan 1 to 8 respective PWM duty cycle (0-255).
++			The GXP has no tachometer; this reports PWM drive level.
++fan[1-8]_fault		Fan 1 to 8 respective fault status: 1 fail, 0 ok
+ pwm[0-7]		Fan 0 to 7 respective PWM value (0-255)
+-fan[0-7]_fault		Fan 0 to 7 respective fault status: 1 fail, 0 ok
+-fan[0-7]_enable         Fan 0 to 7 respective enabled status: 1 enabled, 0 disabled
++pwm[0-7]_enable         Fan 0 to 7 respective enabled status: 1 enabled, 0 disabled
+ ======================= ===========================================================
+diff --git a/drivers/hwmon/gxp-fan-ctrl.c b/drivers/hwmon/gxp-fan-ctrl.c
+index 328291cacfbd..862216218784 100644
+--- a/drivers/hwmon/gxp-fan-ctrl.c
++++ b/drivers/hwmon/gxp-fan-ctrl.c
+@@ -41,6 +41,13 @@ static int gxp_fan_read(struct device *dev, u32 attr, int channel, long *val)
+ 	unsigned int reg;
+ 
+ 	switch (attr) {
++	case hwmon_fan_input:
++		if (!fan_powered(drvdata)) {
++			*val = 0;
++			return 0;
++		}
++		*val = readb(drvdata->base + GXP_FAN_PWM_BASE + channel);
++		return 0;
+ 	case hwmon_fan_fault:
+ 		regmap_read(drvdata->xreg_map, XREG_FAN_FAIL_ID, &reg);
+ 		*val = !!(reg & GENMASK(channel * 2 + 1, channel * 2));
+@@ -122,7 +129,7 @@ static umode_t gxp_fan_ctrl_is_visible(const void *_data,
+ 
+ 	switch (type) {
+ 	case hwmon_fan:
+-		if (attr == hwmon_fan_fault)
++		if (attr == hwmon_fan_input || attr == hwmon_fan_fault)
+ 			return 0444;
+ 		break;
+ 	case hwmon_pwm:
+@@ -148,10 +155,14 @@ static const struct hwmon_ops gxp_fan_ctrl_ops = {
+ 
+ static const struct hwmon_channel_info * const gxp_fan_ctrl_info[] = {
+ 	HWMON_CHANNEL_INFO(fan,
+-			   HWMON_F_FAULT, HWMON_F_FAULT,
+-			   HWMON_F_FAULT, HWMON_F_FAULT,
+-			   HWMON_F_FAULT, HWMON_F_FAULT,
+-			   HWMON_F_FAULT, HWMON_F_FAULT),
++			   HWMON_F_INPUT | HWMON_F_FAULT,
++			   HWMON_F_INPUT | HWMON_F_FAULT,
++			   HWMON_F_INPUT | HWMON_F_FAULT,
++			   HWMON_F_INPUT | HWMON_F_FAULT,
++			   HWMON_F_INPUT | HWMON_F_FAULT,
++			   HWMON_F_INPUT | HWMON_F_FAULT,
++			   HWMON_F_INPUT | HWMON_F_FAULT,
++			   HWMON_F_INPUT | HWMON_F_FAULT),
+ 	HWMON_CHANNEL_INFO(pwm,
+ 			   HWMON_PWM_INPUT | HWMON_PWM_ENABLE,
+ 			   HWMON_PWM_INPUT | HWMON_PWM_ENABLE,
+-- 
+2.52.0
+

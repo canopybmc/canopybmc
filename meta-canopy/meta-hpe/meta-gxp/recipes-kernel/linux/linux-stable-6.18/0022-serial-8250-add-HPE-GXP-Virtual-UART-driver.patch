@@ -1,0 +1,483 @@
+From 9dbe7e8cdc426714c61c204b5cb4f8189b9dbf40 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Tue, 10 Feb 2026 12:38:34 +0100
+Subject: [PATCH] serial: 8250: add HPE GXP Virtual UART driver
+
+Add the 8250_gxp_vuart driver for the HPE GXP BMC SoC Virtual UART.
+The VUART is a 16550A-compatible device that connects the BMC to the
+host CPU over an internal LPC bus path, with GXP-specific control
+registers for FIFO management, baud rate, and host-side interrupt
+routing via a separate syscon configuration block.
+
+Co-developed-by: John Chung <john.chung@hpe.com>
+Signed-off-by: John Chung <john.chung@hpe.com>
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/tty/serial/8250/8250_gxp_vuart.c | 418 +++++++++++++++++++++++
+ drivers/tty/serial/8250/Kconfig          |  12 +
+ drivers/tty/serial/8250/Makefile         |   1 +
+ 3 files changed, 431 insertions(+)
+ create mode 100644 drivers/tty/serial/8250/8250_gxp_vuart.c
+
+diff --git a/drivers/tty/serial/8250/8250_gxp_vuart.c b/drivers/tty/serial/8250/8250_gxp_vuart.c
+new file mode 100644
+index 000000000000..ee3a584fd319
+--- /dev/null
++++ b/drivers/tty/serial/8250/8250_gxp_vuart.c
+@@ -0,0 +1,418 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Serial Port driver for HPE GXP Virtual UART device
++ *
++ * Copyright (C) 2019 Hewlett Packard Enterprise Development LP.
++ * Copyright (C) 2026 9elements GmbH
++ */
++
++#include <linux/device.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_irq.h>
++#include <linux/platform_device.h>
++#include <linux/regmap.h>
++#include <linux/mfd/syscon.h>
++#include <linux/tty.h>
++#include <linux/tty_flip.h>
++#include <linux/clk.h>
++
++#include "8250.h"
++
++/* Offset from register base to standard 16550A registers */
++#define GXP_VUART_16550A_BASE		0x18
++
++/* GXP VUART control and status registers */
++#define GXP_VUART_CMD			0x08
++#define GXP_VUART_VSR			0x10
++#define GXP_VUART_VCR			0x14
++#define GXP_VUART_VBRD			0x16
++
++/* VSR (Virtual Status Register) event flags */
++#define GXP_VUART_VSR_INT_EVENT		0x7d
++#define GXP_VUART_VSR_RX_DATAVAIL	BIT(0)
++#define GXP_VUART_VSR_OVERRUN		BIT(1)
++#define GXP_VUART_VSR_DTR		BIT(2)
++#define GXP_VUART_VSR_RTS		BIT(3)
++#define GXP_VUART_VSR_TX_DRAIN		BIT(4)
++#define GXP_VUART_VSR_MSR		BIT(5)
++#define GXP_VUART_VSR_LSR		BIT(6)
++#define GXP_VUART_VSR_RXCNT_SHIFT	20
++
++/* VCR (Virtual Control Register) fields */
++#define GXP_VUART_VCR_ENABLE		BIT(0)
++#define GXP_VUART_VCR_RFIFO_DRAIN	GENMASK(11, 8)
++#define GXP_VUART_VCR_TFIFO_DRAIN	GENMASK(15, 12)
++
++/* VUART configuration registers (in syscon) */
++#define GXP_VUART_CFG_DES_HIGH		0x30
++#define GXP_VUART_CFG_DES_LOW		0x31
++#define GXP_VUART_CFG_INT_SELECT	0x40
++#define GXP_VUART_CFG_INT_MASK		0x0f
++
++#define UART_LCR_DLAB_CLEAR_MASK	0x7f
++
++struct gxp_vuart {
++	struct device	*dev;
++	void __iomem	*regs;
++	struct regmap	*cfg_regmap;
++	int		line;
++};
++
++static ssize_t lpc_address_show(struct device *dev,
++				struct device_attribute *attr, char *buf)
++{
++	struct gxp_vuart *vuart = dev_get_drvdata(dev);
++	u32 high, low;
++	int rc;
++
++	rc = regmap_read(vuart->cfg_regmap, GXP_VUART_CFG_DES_HIGH, &high);
++	if (rc)
++		return rc;
++
++	rc = regmap_read(vuart->cfg_regmap, GXP_VUART_CFG_DES_LOW, &low);
++	if (rc)
++		return rc;
++
++	return sysfs_emit(buf, "0x%x\n", (u16)((high << 8) | low));
++}
++
++static ssize_t lpc_address_store(struct device *dev,
++				 struct device_attribute *attr,
++				 const char *buf, size_t count)
++{
++	struct gxp_vuart *vuart = dev_get_drvdata(dev);
++	u32 val;
++	int rc;
++
++	rc = kstrtou32(buf, 0, &val);
++	if (rc)
++		return rc;
++
++	if (val > U16_MAX)
++		return -EINVAL;
++
++	rc = regmap_write(vuart->cfg_regmap, GXP_VUART_CFG_DES_HIGH,
++			  (val >> 8) & 0xff);
++	if (rc)
++		return rc;
++
++	rc = regmap_write(vuart->cfg_regmap, GXP_VUART_CFG_DES_LOW,
++			  val & 0xff);
++	if (rc)
++		return rc;
++
++	return count;
++}
++
++static DEVICE_ATTR_RW(lpc_address);
++
++static ssize_t sirq_show(struct device *dev,
++			 struct device_attribute *attr, char *buf)
++{
++	struct gxp_vuart *vuart = dev_get_drvdata(dev);
++	u32 val;
++	int rc;
++
++	rc = regmap_read(vuart->cfg_regmap, GXP_VUART_CFG_INT_SELECT, &val);
++	if (rc)
++		return rc;
++
++	return sysfs_emit(buf, "%u\n", val & GXP_VUART_CFG_INT_MASK);
++}
++
++static ssize_t sirq_store(struct device *dev, struct device_attribute *attr,
++			  const char *buf, size_t count)
++{
++	struct gxp_vuart *vuart = dev_get_drvdata(dev);
++	unsigned long val;
++	int rc;
++
++	rc = kstrtoul(buf, 0, &val);
++	if (rc)
++		return rc;
++
++	rc = regmap_update_bits(vuart->cfg_regmap, GXP_VUART_CFG_INT_SELECT,
++				GXP_VUART_CFG_INT_MASK,
++				val & GXP_VUART_CFG_INT_MASK);
++	if (rc)
++		return rc;
++
++	return count;
++}
++
++static DEVICE_ATTR_RW(sirq);
++
++static ssize_t vuart_enable_show(struct device *dev,
++				 struct device_attribute *attr, char *buf)
++{
++	struct gxp_vuart *vuart = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "%u\n",
++			  !!(readw(vuart->regs + GXP_VUART_VCR) &
++			     GXP_VUART_VCR_ENABLE));
++}
++
++static ssize_t vuart_enable_store(struct device *dev,
++				  struct device_attribute *attr,
++				  const char *buf, size_t count)
++{
++	struct gxp_vuart *vuart = dev_get_drvdata(dev);
++	u16 reg;
++	unsigned long val;
++	int rc;
++
++	rc = kstrtoul(buf, 0, &val);
++	if (rc)
++		return rc;
++
++	reg = readw(vuart->regs + GXP_VUART_VCR);
++	if (val)
++		reg |= GXP_VUART_VCR_ENABLE;
++	else
++		reg &= ~GXP_VUART_VCR_ENABLE;
++	writew(reg, vuart->regs + GXP_VUART_VCR);
++
++	return count;
++}
++
++static DEVICE_ATTR_RW(vuart_enable);
++
++static struct attribute *gxp_vuart_attrs[] = {
++	&dev_attr_sirq.attr,
++	&dev_attr_lpc_address.attr,
++	&dev_attr_vuart_enable.attr,
++	NULL,
++};
++
++ATTRIBUTE_GROUPS(gxp_vuart);
++
++static void gxp_vuart_set_enabled(struct gxp_vuart *vuart, bool enabled)
++{
++	u16 reg = readw(vuart->regs + GXP_VUART_VCR);
++	unsigned int i;
++
++	if (enabled)
++		reg |= GXP_VUART_VCR_ENABLE | GXP_VUART_VCR_TFIFO_DRAIN |
++		       GXP_VUART_VCR_RFIFO_DRAIN;
++	else
++		reg &= ~(GXP_VUART_VCR_ENABLE | GXP_VUART_VCR_TFIFO_DRAIN |
++			 GXP_VUART_VCR_RFIFO_DRAIN);
++
++	writew(reg, vuart->regs + GXP_VUART_VCR);
++
++	/* Drain any residual data from the RX FIFO */
++	if (enabled)
++		for (i = 0; i < 32; i++)
++			readb(vuart->regs + GXP_VUART_16550A_BASE);
++}
++
++static int gxp_vuart_handle_irq(struct uart_port *port)
++{
++	struct uart_8250_port *up = up_to_u8250p(port);
++	void __iomem *base = port->membase - GXP_VUART_16550A_BASE;
++	unsigned long flags;
++	u32 vsr;
++	unsigned int rxcnt;
++	u8 ch;
++
++	uart_port_lock_irqsave(port, &flags);
++
++	vsr = readl(base + GXP_VUART_VSR);
++
++	if (!(vsr & GXP_VUART_VSR_INT_EVENT)) {
++		uart_port_unlock_irqrestore(port, flags);
++		return 0;
++	}
++
++	if (vsr & GXP_VUART_VSR_RX_DATAVAIL) {
++		rxcnt = vsr >> GXP_VUART_VSR_RXCNT_SHIFT;
++		while (rxcnt--) {
++			ch = serial_in(up, UART_RX);
++			tty_insert_flip_char(&port->state->port, ch,
++					     TTY_NORMAL);
++		}
++		writel(GXP_VUART_VSR_RX_DATAVAIL, base + GXP_VUART_VSR);
++		tty_flip_buffer_push(&port->state->port);
++	}
++
++	if (vsr & GXP_VUART_VSR_TX_DRAIN) {
++		serial8250_modem_status(up);
++		serial8250_tx_chars(up);
++		writel(GXP_VUART_VSR_TX_DRAIN, base + GXP_VUART_VSR);
++	}
++
++	if (vsr & GXP_VUART_VSR_OVERRUN)
++		writel(GXP_VUART_VSR_OVERRUN, base + GXP_VUART_VSR);
++
++	if (vsr & GXP_VUART_VSR_DTR)
++		writel(GXP_VUART_VSR_DTR, base + GXP_VUART_VSR);
++
++	if (vsr & GXP_VUART_VSR_RTS)
++		writel(GXP_VUART_VSR_RTS, base + GXP_VUART_VSR);
++
++	if (vsr & GXP_VUART_VSR_MSR)
++		writel(GXP_VUART_VSR_MSR, base + GXP_VUART_VSR);
++
++	if (vsr & GXP_VUART_VSR_LSR)
++		writel(GXP_VUART_VSR_LSR, base + GXP_VUART_VSR);
++
++	uart_port_unlock_irqrestore(port, flags);
++
++	return 1;
++}
++
++static u32 gxp_vuart_serial_in(struct uart_port *p, unsigned int offset)
++{
++	return readb(p->membase + (offset << p->regshift));
++}
++
++static void gxp_vuart_serial_out(struct uart_port *p, unsigned int offset,
++				 u32 value)
++{
++	writeb(value, p->membase + (offset << p->regshift));
++
++	/* Trigger RX_PROMPT after every register write */
++	writeb(1, p->membase - GXP_VUART_16550A_BASE + GXP_VUART_CMD);
++}
++
++static void gxp_vuart_set_termios(struct uart_port *port,
++				  struct ktermios *termios,
++				  const struct ktermios *old)
++{
++	struct uart_8250_port *up = up_to_u8250p(port);
++
++	up->fcr |= UART_FCR_ENABLE_FIFO | UART_FCR_R_TRIG_10 |
++		    UART_FCR_CLEAR_RCVR | UART_FCR_CLEAR_XMIT;
++
++	serial8250_do_set_termios(port, termios, old);
++}
++
++static void gxp_vuart_set_divisor(struct uart_port *port, unsigned int baud,
++				  unsigned int quot, unsigned int quot_frac)
++{
++	struct uart_8250_port *up = up_to_u8250p(port);
++	struct gxp_vuart *vuart = port->private_data;
++
++	gxp_vuart_serial_out(port, UART_LCR, up->lcr | UART_LCR_DLAB);
++	writew(0x01, vuart->regs + GXP_VUART_VBRD);
++	gxp_vuart_serial_out(port, UART_LCR, up->lcr & UART_LCR_DLAB_CLEAR_MASK);
++}
++
++static int gxp_vuart_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct device_node *np = dev->of_node;
++	struct uart_8250_port port;
++	struct gxp_vuart *vuart;
++	struct resource *res;
++	u32 clk, prop;
++	int rc;
++
++	vuart = devm_kzalloc(dev, sizeof(*vuart), GFP_KERNEL);
++	if (!vuart)
++		return -ENOMEM;
++
++	vuart->dev = dev;
++
++	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	if (!res)
++		return -EINVAL;
++
++	vuart->regs = devm_ioremap_resource(dev, res);
++	if (IS_ERR(vuart->regs))
++		return PTR_ERR(vuart->regs);
++
++	vuart->cfg_regmap = syscon_regmap_lookup_by_phandle(np, "vuart-cfg");
++	if (IS_ERR(vuart->cfg_regmap))
++		return dev_err_probe(dev, PTR_ERR(vuart->cfg_regmap),
++				     "failed to get vuart-cfg regmap\n");
++
++	memset(&port, 0, sizeof(port));
++	port.port.private_data = vuart;
++	port.port.membase = vuart->regs + GXP_VUART_16550A_BASE;
++	port.port.mapbase = res->start + GXP_VUART_16550A_BASE;
++	port.port.mapsize = resource_size(res);
++	port.port.serial_in = gxp_vuart_serial_in;
++	port.port.serial_out = gxp_vuart_serial_out;
++	port.port.set_termios = gxp_vuart_set_termios;
++	port.port.set_divisor = gxp_vuart_set_divisor;
++	port.port.dev = dev;
++
++	if (device_property_read_u32(dev, "clock-frequency", &clk))
++		return dev_err_probe(dev, -EINVAL,
++				     "clock-frequency not defined\n");
++
++	if (of_property_read_u32(np, "current-speed", &prop) == 0)
++		port.port.custom_divisor = clk / (16 * prop);
++
++	if (of_property_read_u32(np, "reg-offset", &prop) == 0)
++		port.port.mapbase += prop;
++
++	if (device_property_read_u32(dev, "reg-shift", &prop) == 0)
++		port.port.regshift = prop;
++
++	if (of_property_read_u32(np, "fifo-size", &prop) == 0)
++		port.port.fifosize = prop;
++
++	if (of_property_read_u32(np, "serial-line", &prop) == 0)
++		port.port.line = prop;
++
++	port.port.irq = irq_of_parse_and_map(np, 0);
++	port.port.irqflags = IRQF_SHARED;
++	port.port.handle_irq = gxp_vuart_handle_irq;
++	port.port.iotype = UPIO_MEM;
++	port.port.type = PORT_16550A;
++	port.port.uartclk = clk;
++	port.port.flags = UPF_SHARE_IRQ | UPF_BOOT_AUTOCONF |
++			  UPF_FIXED_PORT | UPF_FIXED_TYPE;
++
++	if (of_property_read_bool(np, "no-loopback-test"))
++		port.port.flags |= UPF_SKIP_TEST;
++
++	if (port.port.fifosize)
++		port.capabilities = UART_CAP_FIFO;
++
++	if (of_property_read_bool(np, "auto-flow-control"))
++		port.capabilities |= UART_CAP_AFE;
++
++	rc = serial8250_register_8250_port(&port);
++	if (rc < 0)
++		return dev_err_probe(dev, rc, "failed to register port\n");
++
++	vuart->line = rc;
++	gxp_vuart_set_enabled(vuart, true);
++	platform_set_drvdata(pdev, vuart);
++
++	return 0;
++}
++
++static void gxp_vuart_remove(struct platform_device *pdev)
++{
++	struct gxp_vuart *vuart = platform_get_drvdata(pdev);
++
++	gxp_vuart_set_enabled(vuart, false);
++	serial8250_unregister_port(vuart->line);
++}
++
++static const struct of_device_id gxp_vuart_table[] = {
++	{ .compatible = "hpe,gxp-vuart" },
++	{ },
++};
++MODULE_DEVICE_TABLE(of, gxp_vuart_table);
++
++static struct platform_driver gxp_vuart_driver = {
++	.driver = {
++		.name = "gxp-vuart",
++		.of_match_table = gxp_vuart_table,
++		.dev_groups = gxp_vuart_groups,
++	},
++	.probe = gxp_vuart_probe,
++	.remove = gxp_vuart_remove,
++};
++
++module_platform_driver(gxp_vuart_driver);
++
++MODULE_AUTHOR("John Chung <john.chung@hpe.com>");
++MODULE_LICENSE("GPL");
++MODULE_DESCRIPTION("Driver for HPE GXP Virtual UART device");
+diff --git a/drivers/tty/serial/8250/Kconfig b/drivers/tty/serial/8250/Kconfig
+index f64ef0819cd4..1fed359d101c 100644
+--- a/drivers/tty/serial/8250/Kconfig
++++ b/drivers/tty/serial/8250/Kconfig
+@@ -270,6 +270,18 @@ config SERIAL_8250_ASPEED_VUART
+ 	  compatible device on the local LPC bus, giving a UART device
+ 	  with no physical RS232 connections.
+ 
++config SERIAL_8250_GXP_VUART
++	tristate "HPE GXP Virtual UART"
++	depends on SERIAL_8250
++	depends on OF
++	depends on ARCH_HPE_GXP || COMPILE_TEST
++	select MFD_SYSCON
++	help
++	  If you want to use the virtual UART (VUART) device on HPE GXP
++	  BMC platforms, enable this option. This enables the 16550A-
++	  compatible device on the local LPC bus, giving a UART device
++	  with no physical RS232 connections.
++
+ config SERIAL_8250_BOCA
+ 	tristate "Support Boca cards"
+ 	depends on SERIAL_8250 != n && ISA && SERIAL_8250_MANY_PORTS
+diff --git a/drivers/tty/serial/8250/Makefile b/drivers/tty/serial/8250/Makefile
+index 9ec4d5fe64de..262b29479e79 100644
+--- a/drivers/tty/serial/8250/Makefile
++++ b/drivers/tty/serial/8250/Makefile
+@@ -21,6 +21,7 @@ obj-$(CONFIG_SERIAL_8250_CONSOLE)	+= 8250_early.o
+ obj-$(CONFIG_SERIAL_8250_ACCENT)	+= 8250_accent.o
+ obj-$(CONFIG_SERIAL_8250_ACORN)		+= 8250_acorn.o
+ obj-$(CONFIG_SERIAL_8250_ASPEED_VUART)	+= 8250_aspeed_vuart.o
++obj-$(CONFIG_SERIAL_8250_GXP_VUART)	+= 8250_gxp_vuart.o
+ obj-$(CONFIG_SERIAL_8250_BCM2835AUX)	+= 8250_bcm2835aux.o
+ obj-$(CONFIG_SERIAL_8250_BCM7271)	+= 8250_bcm7271.o
+ obj-$(CONFIG_SERIAL_8250_BOCA)		+= 8250_boca.o
+-- 
+2.52.0
+

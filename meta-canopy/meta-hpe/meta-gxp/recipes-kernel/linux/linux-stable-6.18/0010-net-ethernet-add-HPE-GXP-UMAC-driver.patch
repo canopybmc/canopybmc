@@ -1,0 +1,1302 @@
+From 7ac19528012887324280feb7c292107b73428f9a Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Tue, 27 Jan 2026 23:48:29 +0100
+Subject: [PATCH] net: ethernet: add HPE GXP UMAC driver
+
+Add the ethernet MAC driver for the HPE GXP BMC SoC used in ProLiant
+Gen10/Gen11 servers. The UMAC controller provides:
+
+- Standard MII PHY support via phylib with Marvell 88E1514 fixup
+- NCSI support for sideband management through host NIC
+- NAPI for interrupt mitigation
+- Standard ethtool operations
+
+The GXP includes two UMAC instances - one for dedicated BMC management
+connected to an external PHY, and one for NCSI communication.
+
+Co-developed-by: Jean-Marie Verdun <jean-marie.verdun@hpe.com>
+Signed-off-by: Jean-Marie Verdun <jean-marie.verdun@hpe.com>
+Co-developed-by: Michal Gorlas <michal.gorlas@9elements.com>
+Signed-off-by: Michal Gorlas <michal.gorlas@9elements.com>
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/net/ethernet/Kconfig             |   1 +
+ drivers/net/ethernet/Makefile            |   1 +
+ drivers/net/ethernet/hpe/Kconfig         |  45 ++
+ drivers/net/ethernet/hpe/Makefile        |   7 +
+ drivers/net/ethernet/hpe/gxp-umac-mdio.c | 161 +++++
+ drivers/net/ethernet/hpe/gxp-umac-mdio.h |  23 +
+ drivers/net/ethernet/hpe/gxp-umac.c      | 835 +++++++++++++++++++++++
+ drivers/net/ethernet/hpe/gxp-umac.h      | 130 ++++
+ 8 files changed, 1203 insertions(+)
+ create mode 100644 drivers/net/ethernet/hpe/Kconfig
+ create mode 100644 drivers/net/ethernet/hpe/Makefile
+ create mode 100644 drivers/net/ethernet/hpe/gxp-umac-mdio.c
+ create mode 100644 drivers/net/ethernet/hpe/gxp-umac-mdio.h
+ create mode 100644 drivers/net/ethernet/hpe/gxp-umac.c
+ create mode 100644 drivers/net/ethernet/hpe/gxp-umac.h
+
+diff --git a/drivers/net/ethernet/Kconfig b/drivers/net/ethernet/Kconfig
+index aead145dd91d..3cefedd84cfc 100644
+--- a/drivers/net/ethernet/Kconfig
++++ b/drivers/net/ethernet/Kconfig
+@@ -78,6 +78,7 @@ source "drivers/net/ethernet/fujitsu/Kconfig"
+ source "drivers/net/ethernet/fungible/Kconfig"
+ source "drivers/net/ethernet/google/Kconfig"
+ source "drivers/net/ethernet/hisilicon/Kconfig"
++source "drivers/net/ethernet/hpe/Kconfig"
+ source "drivers/net/ethernet/huawei/Kconfig"
+ source "drivers/net/ethernet/i825xx/Kconfig"
+ source "drivers/net/ethernet/ibm/Kconfig"
+diff --git a/drivers/net/ethernet/Makefile b/drivers/net/ethernet/Makefile
+index 998dd628b202..a4f4982dce14 100644
+--- a/drivers/net/ethernet/Makefile
++++ b/drivers/net/ethernet/Makefile
+@@ -46,6 +46,7 @@ obj-$(CONFIG_NET_VENDOR_FUJITSU) += fujitsu/
+ obj-$(CONFIG_NET_VENDOR_FUNGIBLE) += fungible/
+ obj-$(CONFIG_NET_VENDOR_GOOGLE) += google/
+ obj-$(CONFIG_NET_VENDOR_HISILICON) += hisilicon/
++obj-$(CONFIG_NET_VENDOR_HPE) += hpe/
+ obj-$(CONFIG_NET_VENDOR_HUAWEI) += huawei/
+ obj-$(CONFIG_NET_VENDOR_IBM) += ibm/
+ obj-$(CONFIG_NET_VENDOR_INTEL) += intel/
+diff --git a/drivers/net/ethernet/hpe/Kconfig b/drivers/net/ethernet/hpe/Kconfig
+new file mode 100644
+index 000000000000..6c5683c20f63
+--- /dev/null
++++ b/drivers/net/ethernet/hpe/Kconfig
+@@ -0,0 +1,45 @@
++# SPDX-License-Identifier: GPL-2.0-only
++#
++# HPE network device configuration
++#
++
++config NET_VENDOR_HPE
++	bool "Hewlett Packard Enterprise devices"
++	default y
++	depends on ARCH_HPE
++	help
++	  If you have a network (Ethernet) card belonging to this class, say Y.
++
++	  Note that the answer to this question doesn't directly affect the
++	  kernel: saying N will just cause the configurator to skip all
++	  the questions about HPE devices. If you say Y, you will be asked
++	  for your specific card in the following questions.
++
++if NET_VENDOR_HPE
++
++config GXP_UMAC
++	tristate "HPE GXP UMAC support"
++	depends on ARCH_HPE
++	select CRC32
++	select MII
++	select PHYLIB
++	select GXP_UMAC_MDIO
++	help
++	  This driver supports the UMAC ethernet controller found on
++	  HPE GXP BMC SoCs. The GXP is used in HPE ProLiant Gen10/Gen11
++	  servers. Say Y here if you want to use the ethernet interface
++	  on these systems.
++
++	  To compile this driver as a module, choose M here. The module
++	  will be called gxp-umac.
++
++config GXP_UMAC_MDIO
++	tristate "HPE GXP UMAC MDIO bus support"
++	depends on ARCH_HPE
++	help
++	  This driver supports the MDIO bus controller integrated into
++	  the HPE GXP UMAC ethernet MAC. It is needed for PHY management.
++
++	  This is typically selected automatically when GXP_UMAC is enabled.
++
++endif # NET_VENDOR_HPE
+diff --git a/drivers/net/ethernet/hpe/Makefile b/drivers/net/ethernet/hpe/Makefile
+new file mode 100644
+index 000000000000..690cf29369e5
+--- /dev/null
++++ b/drivers/net/ethernet/hpe/Makefile
+@@ -0,0 +1,7 @@
++# SPDX-License-Identifier: GPL-2.0-only
++#
++# Makefile for HPE network device drivers
++#
++
++obj-$(CONFIG_GXP_UMAC_MDIO) += gxp-umac-mdio.o
++obj-$(CONFIG_GXP_UMAC) += gxp-umac.o
+diff --git a/drivers/net/ethernet/hpe/gxp-umac-mdio.c b/drivers/net/ethernet/hpe/gxp-umac-mdio.c
+new file mode 100644
+index 000000000000..79aab3c76b40
+--- /dev/null
++++ b/drivers/net/ethernet/hpe/gxp-umac-mdio.c
+@@ -0,0 +1,161 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * HPE GXP UMAC MDIO bus driver
++ *
++ * Copyright (C) 2019 Hewlett Packard Enterprise Development LP.
++ * Copyright (C) 2026 9elements GmbH
++ */
++
++#include <linux/module.h>
++#include <linux/kernel.h>
++#include <linux/platform_device.h>
++#include <linux/delay.h>
++#include <linux/sched.h>
++#include <linux/slab.h>
++#include <linux/phy.h>
++#include <linux/clk.h>
++#include <linux/err.h>
++#include <linux/io.h>
++#include <linux/iopoll.h>
++
++#include <linux/of.h>
++#include <linux/of_device.h>
++#include <linux/of_mdio.h>
++#include "gxp-umac-mdio.h"
++
++struct umac_mdio_priv {
++	void __iomem *base;
++};
++
++static int umac_mdio_read(struct mii_bus *bus, int phy_id, int reg)
++{
++	struct umac_mdio_priv *umac_mdio = bus->priv;
++	unsigned int value;
++	unsigned int status;
++	int ret;
++
++	status = __raw_readl(umac_mdio->base + UMAC_MII);
++
++	status &= ~(UMAC_MII_PHY_ADDR_MASK | UMAC_MII_REG_ADDR_MASK);
++	status |= ((phy_id << UMAC_MII_PHY_ADDR_SHIFT) &
++			UMAC_MII_PHY_ADDR_MASK);
++	status |= (reg & UMAC_MII_REG_ADDR_MASK);
++	status |= UMAC_MII_MRNW;
++	__raw_writel(status, umac_mdio->base + UMAC_MII);
++
++	status |= UMAC_MII_MOWNER;
++	__raw_writel(status, umac_mdio->base + UMAC_MII);
++
++	ret = readl_poll_timeout(umac_mdio->base + UMAC_MII, status,
++				 !(status & UMAC_MII_MOWNER), 1000, 100000);
++	if (ret) {
++		dev_warn(bus->parent, "mdio read time out\n");
++		return -ETIMEDOUT;
++	}
++
++	value = __raw_readl(umac_mdio->base + UMAC_MII_DATA);
++	return value;
++}
++
++static int umac_mdio_write(struct mii_bus *bus, int phy_id, int reg, u16 value)
++{
++	struct umac_mdio_priv *umac_mdio = bus->priv;
++	unsigned int status;
++	int ret;
++
++	__raw_writel(value, umac_mdio->base + UMAC_MII_DATA);
++
++	status = __raw_readl(umac_mdio->base + UMAC_MII);
++
++	status &= ~(UMAC_MII_PHY_ADDR_MASK | UMAC_MII_REG_ADDR_MASK);
++	status |= ((phy_id << UMAC_MII_PHY_ADDR_SHIFT) &
++			UMAC_MII_PHY_ADDR_MASK);
++	status |= (reg & UMAC_MII_REG_ADDR_MASK);
++	status &= ~UMAC_MII_MRNW;
++	__raw_writel(status, umac_mdio->base + UMAC_MII);
++
++	status |= UMAC_MII_MOWNER;
++	__raw_writel(status, umac_mdio->base + UMAC_MII);
++
++	ret = readl_poll_timeout(umac_mdio->base + UMAC_MII, status,
++				 !(status & UMAC_MII_MOWNER), 1000, 100000);
++	if (ret) {
++		dev_warn(bus->parent, "mdio write time out\n");
++		return -ETIMEDOUT;
++	}
++
++	return 0;
++}
++
++static int umac_mdio_probe(struct platform_device *pdev)
++{
++	struct resource *res;
++	struct mii_bus *bus;
++	struct umac_mdio_priv *umac_mdio;
++	int ret;
++
++	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	if (!res) {
++		dev_err(&pdev->dev, "fail to get resource\n");
++		return -ENODEV;
++	}
++
++	bus = devm_mdiobus_alloc_size(&pdev->dev,
++				      sizeof(struct umac_mdio_priv));
++	if (!bus) {
++		dev_err(&pdev->dev, "failed to alloc mii bus\n");
++		return -ENOMEM;
++	}
++
++	snprintf(bus->id, MII_BUS_ID_SIZE, "%s", dev_name(&pdev->dev));
++
++	bus->name	= dev_name(&pdev->dev);
++	bus->read	= umac_mdio_read,
++	bus->write	= umac_mdio_write,
++	bus->parent	= &pdev->dev;
++	umac_mdio = bus->priv;
++	umac_mdio->base = devm_ioremap_resource(&pdev->dev, res);
++	if (IS_ERR(umac_mdio->base)) {
++		dev_err(&pdev->dev, "failed to do ioremap\n");
++		return PTR_ERR(umac_mdio->base);
++	}
++
++	platform_set_drvdata(pdev, bus);
++
++	ret = of_mdiobus_register(bus, pdev->dev.of_node);
++	if (ret < 0) {
++		dev_err(&pdev->dev, "Cannot register MDIO bus (%d)\n", ret);
++		return ret;
++	}
++
++	return 0;
++}
++
++static void umac_mdio_remove(struct platform_device *pdev)
++{
++	struct mii_bus *bus = platform_get_drvdata(pdev);
++
++	if (bus)
++		mdiobus_unregister(bus);
++}
++
++static const struct of_device_id umac_mdio_of_matches[] = {
++	{ .compatible = "hpe,gxp-umac-mdio", },
++	{},
++};
++MODULE_DEVICE_TABLE(of, umac_mdio_of_matches);
++
++static struct platform_driver umac_mdio_driver = {
++	.driver	= {
++		.name    = "gxp-umac-mdio",
++		.of_match_table = umac_mdio_of_matches,
++	},
++	.probe   = umac_mdio_probe,
++	.remove  = umac_mdio_remove,
++};
++
++module_platform_driver(umac_mdio_driver);
++
++MODULE_AUTHOR("Gilbert Chen <gilbert.chen@hpe.com>");
++MODULE_DESCRIPTION("HPE GXP UMAC MDIO driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/net/ethernet/hpe/gxp-umac-mdio.h b/drivers/net/ethernet/hpe/gxp-umac-mdio.h
+new file mode 100644
+index 000000000000..260dc9fddff8
+--- /dev/null
++++ b/drivers/net/ethernet/hpe/gxp-umac-mdio.h
+@@ -0,0 +1,23 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * HPE GXP UMAC MDIO bus driver
++ *
++ * Copyright (C) 2019 Hewlett Packard Enterprise Development LP.
++ * Copyright (C) 2026 9elements GmbH
++ */
++
++#ifndef _UMAC_MDIO_H_
++#define _UMAC_MDIO_H_
++
++#define UMAC_MII                0x00
++#define UMAC_MII_NMRST          0x00008000
++#define UMAC_MII_PHY_ADDR_MASK  0x001F0000
++#define UMAC_MII_PHY_ADDR_SHIFT 16
++#define UMAC_MII_MOWNER         0x00000200
++#define UMAC_MII_MRNW           0x00000100
++#define UMAC_MII_REG_ADDR_MASK  0x0000001F
++#define UMAC_MII_DATA           0x04
++#define UMAC_MII_LINK           0x08
++#define UMAC_MII_CFG            0x0C
++
++#endif
+diff --git a/drivers/net/ethernet/hpe/gxp-umac.c b/drivers/net/ethernet/hpe/gxp-umac.c
+new file mode 100644
+index 000000000000..8af492ef0d5b
+--- /dev/null
++++ b/drivers/net/ethernet/hpe/gxp-umac.c
+@@ -0,0 +1,835 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * HPE GXP UMAC ethernet driver
++ *
++ * Copyright (C) 2019 Hewlett Packard Enterprise Development LP.
++ * Copyright (C) 2026 9elements GmbH
++ */
++
++#include <linux/dma-mapping.h>
++#include <linux/module.h>
++#include <linux/ioport.h>
++#include <linux/netdevice.h>
++#include <linux/etherdevice.h>
++#include <linux/interrupt.h>
++#include <linux/skbuff.h>
++#include <linux/crc32.h>
++#include <linux/mii.h>
++#include <linux/of.h>
++#include <linux/of_device.h>
++#include <linux/of_mdio.h>
++#include <linux/of_net.h>
++#include <linux/ethtool.h>
++#include <linux/platform_device.h>
++#include <linux/irq.h>
++#include <net/ip.h>
++#include <net/ncsi.h>
++#include <linux/phy.h>
++#include <linux/errno.h>
++#include <linux/io.h>
++#include <linux/iopoll.h>
++#include "gxp-umac.h"
++
++/* Marvell 88E1514 PHY registers */
++#define PHY_88E1514_COPPER_CONTROL_REG		0
++#define PHY_88E1514_PAGE_ADDRESS		22
++#define PHY_88E1514_GENERAL_CONTROL_REG1	20
++
++#define DRV_MODULE_NAME		"gxp-umac"
++#define DRV_MODULE_VERSION	"0.1"
++
++struct umac_priv {
++	void __iomem *base;
++	int irq;
++	struct platform_device *pdev;
++
++	struct umac_tx_descs	*tx_descs;
++	struct umac_rx_descs	*rx_descs;
++	dma_addr_t tx_descs_dma_addr;
++	dma_addr_t rx_descs_dma_addr;
++
++	unsigned int tx_cur;
++	unsigned int tx_done;
++	unsigned int rx_cur;
++
++	struct napi_struct napi;
++	struct net_device *ndev;
++
++	struct phy_device *phy_dev;
++	struct phy_device *int_phy_dev;
++
++	struct ncsi_dev *ncsidev;
++	bool use_ncsi;
++};
++
++static void umac_get_drvinfo(struct net_device *ndev,
++			     struct ethtool_drvinfo *info)
++{
++	strscpy(info->driver, DRV_MODULE_NAME, sizeof(info->driver));
++	strscpy(info->version, DRV_MODULE_VERSION, sizeof(info->version));
++}
++
++static int umac_get_link_ksettings(struct net_device *ndev,
++				   struct ethtool_link_ksettings *cmd)
++{
++	phy_ethtool_ksettings_get(ndev->phydev, cmd);
++	return 0;
++}
++
++static int umac_set_link_ksettings(struct net_device *ndev,
++				   const struct ethtool_link_ksettings *cmd)
++{
++	return phy_ethtool_ksettings_set(ndev->phydev, cmd);
++}
++
++static int umac_nway_reset(struct net_device *ndev)
++{
++	return genphy_restart_aneg(ndev->phydev);
++}
++
++static u32 umac_get_link(struct net_device *ndev)
++{
++	int err;
++
++	err = genphy_update_link(ndev->phydev);
++	if (err)
++		return ethtool_op_get_link(ndev);
++
++	return ndev->phydev->link;
++}
++
++static struct net_device_stats *umac_get_stats(struct net_device *ndev)
++{
++	return &ndev->stats;
++}
++
++static int umac_ioctl(struct net_device *ndev, struct ifreq *ifr, int cmd)
++{
++	if (!netif_running(ndev))
++		return -EINVAL;
++
++	if (!ndev->phydev)
++		return -ENODEV;
++
++	return phy_mii_ioctl(ndev->phydev, ifr, cmd);
++}
++
++static void umac_set_mac_address(struct net_device *ndev, void *p_addr)
++{
++	struct umac_priv *umac = netdev_priv(ndev);
++	char *addr = (char *)p_addr;
++	unsigned int value;
++
++	value = addr[0] << 8 | addr[1];
++	writel(value, umac->base + UMAC_MAC_ADDR_HI);
++	value = addr[2] << 8 | addr[3];
++	writel(value, umac->base + UMAC_MAC_ADDR_MID);
++	value = addr[4] << 8 | addr[5];
++	writel(value, umac->base + UMAC_MAC_ADDR_LO);
++}
++
++static int umac_eth_mac_addr(struct net_device *ndev, void *p)
++{
++	int ret;
++	struct sockaddr *addr = p;
++
++	ret = eth_prepare_mac_addr_change(ndev, p);
++	if (ret < 0)
++		return ret;
++
++	eth_commit_mac_addr_change(ndev, p);
++	umac_set_mac_address(ndev, addr->sa_data);
++
++	return 0;
++}
++
++static void umac_channel_enable(struct umac_priv *umac)
++{
++	unsigned int value;
++
++	value = readl(umac->base + UMAC_CONFIG_STATUS);
++	value |= UMAC_CFG_TXEN | UMAC_CFG_RXEN;
++	writel(value, umac->base + UMAC_CONFIG_STATUS);
++
++	writel(0, umac->base + UMAC_RING_PROMPT);
++}
++
++static void umac_channel_disable(struct umac_priv *umac)
++{
++	writel(0, umac->base + UMAC_CONFIG_STATUS);
++}
++
++static int umac_init_ring_descriptors(struct net_device *ndev)
++{
++	struct umac_priv *umac = netdev_priv(ndev);
++	struct platform_device *pdev = umac->pdev;
++	struct umac_tx_desc_entry *ptxdesc;
++	struct umac_rx_desc_entry *prxdesc;
++	unsigned int i;
++
++	if (dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32))) {
++		netdev_warn(ndev, "No suitable DMA available\n");
++		return -ENOMEM;
++	}
++
++	umac->tx_descs = dma_alloc_coherent(&pdev->dev,
++					    sizeof(struct umac_tx_descs),
++					    &umac->tx_descs_dma_addr,
++					    GFP_KERNEL);
++	if (!umac->tx_descs)
++		return -ENOMEM;
++
++	umac->rx_descs = dma_alloc_coherent(&pdev->dev,
++					    sizeof(struct umac_rx_descs),
++					    &umac->rx_descs_dma_addr,
++					    GFP_KERNEL);
++	if (!umac->rx_descs) {
++		dma_free_coherent(&pdev->dev, sizeof(struct umac_tx_descs),
++				  umac->tx_descs, umac->tx_descs_dma_addr);
++		return -ENOMEM;
++	}
++
++	for (i = 0; i < UMAC_MAX_TX_DESC_ENTRIES; i++) {
++		ptxdesc = &umac->tx_descs->entrylist[i];
++		ptxdesc->dmaaddress = cpu_to_le32(umac->tx_descs_dma_addr +
++						  offsetof(struct umac_tx_descs,
++							   framelist[i][0]));
++	}
++
++	for (i = 0; i < UMAC_MAX_RX_DESC_ENTRIES; i++) {
++		prxdesc = &umac->rx_descs->entrylist[i];
++		prxdesc->dmaaddress = cpu_to_le32(umac->rx_descs_dma_addr +
++						  offsetof(struct umac_rx_descs,
++							   framelist[i][0]));
++		prxdesc->status = UMAC_RING_ENTRY_HW_OWN;
++		prxdesc->count = UMAC_MAX_RX_FRAME_SIZE;
++	}
++
++	umac->tx_cur = 0;
++	umac->tx_done = 0;
++	umac->rx_cur = 0;
++
++	return 0;
++}
++
++static int umac_int_phy_init(struct umac_priv *umac)
++{
++	struct phy_device *phy_dev = umac->int_phy_dev;
++	unsigned int value;
++
++	value = phy_read(phy_dev, 0);
++	if (value & 0x4000)
++		pr_info("Internal PHY loopback is enabled - clearing\n");
++
++	value &= ~0x4000;
++	phy_write(phy_dev, 0, value);
++
++	value = phy_read(phy_dev, 0);
++	value |= 0x1000;
++	value |= 0x8000;
++	phy_write(phy_dev, 0, value);
++
++	do {
++		value = phy_read(phy_dev, 0);
++	} while (value & 0x8000);
++
++	return 0;
++}
++
++static int umac_phy_fixup(struct phy_device *phy_dev)
++{
++	unsigned int value;
++
++	phy_write(phy_dev, PHY_88E1514_PAGE_ADDRESS, 18);
++	value = phy_read(phy_dev, PHY_88E1514_GENERAL_CONTROL_REG1);
++	value &= ~0x07;
++	value |= 0x01;
++	phy_write(phy_dev, PHY_88E1514_GENERAL_CONTROL_REG1, value);
++
++	phy_write(phy_dev, PHY_88E1514_GENERAL_CONTROL_REG1, value | 0x8000);
++
++	do {
++		value = phy_read(phy_dev, PHY_88E1514_GENERAL_CONTROL_REG1);
++	} while (value & 0x8000);
++
++	phy_write(phy_dev, PHY_88E1514_PAGE_ADDRESS, 0);
++
++	value = phy_read(phy_dev, PHY_88E1514_COPPER_CONTROL_REG);
++	value |= 0x8000;
++	phy_write(phy_dev, PHY_88E1514_COPPER_CONTROL_REG, value);
++
++	do {
++		value = phy_read(phy_dev, PHY_88E1514_COPPER_CONTROL_REG);
++	} while (value & 0x8000);
++
++	return 0;
++}
++
++static int umac_init_hw(struct net_device *ndev)
++{
++	struct umac_priv *umac = netdev_priv(ndev);
++	unsigned int value;
++
++	writel(0, umac->base + UMAC_RING_PTR);
++	writel(0, umac->base + UMAC_CLEAR_STATUS);
++	writel(0, umac->base + UMAC_CKSUM_CONFIG);
++
++	value = ((UMAC_RING_SIZE_256 << UMAC_TX_RING_SIZE_SHIFT) &
++		 UMAC_TX_RING_SIZE_MASK) |
++		((UMAC_RING_SIZE_256 << UMAC_RX_RING_SIZE_SHIFT) &
++		 UMAC_RX_RING_SIZE_MASK);
++	writel(value, umac->base + UMAC_RING_SIZE);
++
++	writel(cpu_to_le32(umac->rx_descs_dma_addr),
++	       umac->base + UMAC_RX_RING_ADDR);
++	writel(cpu_to_le32(umac->tx_descs_dma_addr),
++	       umac->base + UMAC_TX_RING_ADDR);
++
++	writel(0x22, umac->base + UMAC_DMA_CONFIG);
++
++	umac_channel_disable(umac);
++
++	value = readl(umac->base + UMAC_CONFIG_STATUS);
++	value &= 0xfffff9ff;
++	writel(value, umac->base + UMAC_CONFIG_STATUS);
++	udelay(2);
++
++	if (umac->use_ncsi) {
++		value &= UMAC_CFG_TX_CLK_EN;
++		value &= ~UMAC_CFG_GTX_CLK_EN;
++		value &= ~UMAC_CFG_GIGABIT_MODE;
++		value |= UMAC_CFG_FULL_DUPLEX;
++	} else {
++		if (ndev->phydev->duplex)
++			value |= UMAC_CFG_FULL_DUPLEX;
++		else
++			value &= ~UMAC_CFG_FULL_DUPLEX;
++
++		if (ndev->phydev->speed == SPEED_1000) {
++			value &= ~UMAC_CFG_TX_CLK_EN;
++			value |= UMAC_CFG_GTX_CLK_EN;
++			value |= UMAC_CFG_GIGABIT_MODE;
++		} else {
++			value |= UMAC_CFG_TX_CLK_EN;
++			value &= ~UMAC_CFG_GTX_CLK_EN;
++			value &= ~UMAC_CFG_GIGABIT_MODE;
++		}
++	}
++	writel(value, umac->base + UMAC_CONFIG_STATUS);
++	udelay(2);
++
++	umac_channel_enable(umac);
++
++	return 0;
++}
++
++static netdev_tx_t umac_start_xmit(struct sk_buff *skb, struct net_device *ndev)
++{
++	struct umac_priv *umac = netdev_priv(ndev);
++	struct umac_tx_desc_entry *ptxdesc;
++	u8 *pframe;
++	unsigned int length;
++
++	ptxdesc = &umac->tx_descs->entrylist[umac->tx_cur];
++	pframe = umac->tx_descs->framelist[umac->tx_cur];
++
++	length = skb->len;
++	if (length > 1514) {
++		netdev_err(ndev, "send data %d bytes > 1514, clamp it to 1514\n",
++			   skb->len);
++		length = 1514;
++	}
++
++	memset(pframe, 0, UMAC_MAX_FRAME_SIZE);
++	memcpy(pframe, skb->data, length);
++
++	if (length < ETH_ZLEN)
++		length = ETH_ZLEN;
++
++	ptxdesc->count = length;
++	ptxdesc->status = UMAC_RING_ENTRY_HW_OWN;
++	ptxdesc->cksumoffset = 0;
++
++	umac->tx_cur++;
++	if (umac->tx_cur >= UMAC_MAX_TX_DESC_ENTRIES)
++		umac->tx_cur = 0;
++
++	ptxdesc = &umac->tx_descs->entrylist[umac->tx_cur];
++	if (ptxdesc->status & UMAC_RING_ENTRY_HW_OWN)
++		netif_stop_queue(ndev);
++
++	writel(0, umac->base + UMAC_RING_PROMPT);
++	dev_kfree_skb(skb);
++
++	return NETDEV_TX_OK;
++}
++
++static int umac_rx(struct net_device *ndev, int budget)
++{
++	struct umac_priv *umac = netdev_priv(ndev);
++	struct umac_rx_desc_entry *prxdesc;
++	struct sk_buff *skb;
++	unsigned int rxlength;
++	int rxpktcount = 0;
++	u8 *pframe;
++	u8 *skb_buf;
++
++	prxdesc = &umac->rx_descs->entrylist[umac->rx_cur];
++	pframe = umac->rx_descs->framelist[umac->rx_cur];
++
++	while (!(prxdesc->status & UMAC_RING_ENTRY_HW_OWN)) {
++		rxlength = prxdesc->count;
++		skb = netdev_alloc_skb(ndev, rxlength);
++		if (!skb) {
++			ndev->stats.rx_dropped++;
++			return rxpktcount;
++		}
++
++		skb_buf = skb_put(skb, rxlength);
++		memcpy(skb_buf, pframe, rxlength);
++
++		skb->protocol = eth_type_trans(skb, ndev);
++		netif_receive_skb(skb);
++		rxpktcount++;
++
++		prxdesc->status = UMAC_RING_ENTRY_HW_OWN;
++		prxdesc->count = UMAC_MAX_FRAME_SIZE;
++
++		ndev->stats.rx_packets++;
++		ndev->stats.rx_bytes += rxlength;
++
++		umac->rx_cur++;
++		if (umac->rx_cur >= UMAC_MAX_RX_DESC_ENTRIES)
++			umac->rx_cur = 0;
++
++		if (rxpktcount >= budget)
++			break;
++
++		prxdesc = &umac->rx_descs->entrylist[umac->rx_cur];
++		pframe = umac->rx_descs->framelist[umac->rx_cur];
++	}
++
++	writel(0, umac->base + UMAC_RING_PROMPT);
++
++	return rxpktcount;
++}
++
++static void umac_tx_done(struct net_device *ndev)
++{
++	struct umac_priv *umac = netdev_priv(ndev);
++	unsigned int txptr;
++	unsigned int value;
++	struct umac_tx_desc_entry *ptxdesc;
++
++	value = readl(umac->base + UMAC_RING_PTR);
++	txptr = (value & UMAC_TX_RING_PTR_MASK) >> UMAC_TX_RING_PTR_SHIFT;
++
++	ptxdesc = &umac->tx_descs->entrylist[umac->tx_done];
++
++	while (!(ptxdesc->status & UMAC_RING_ENTRY_HW_OWN)) {
++		if (umac->tx_done == txptr)
++			break;
++
++		ndev->stats.tx_packets++;
++		ndev->stats.tx_bytes += ptxdesc->count;
++
++		umac->tx_done++;
++		if (umac->tx_done >= UMAC_MAX_TX_DESC_ENTRIES)
++			umac->tx_done = 0;
++		ptxdesc = &umac->tx_descs->entrylist[umac->tx_done];
++	}
++
++	value = readl(umac->base + UMAC_INTERRUPT);
++	value &= ~UMAC_TX_INT;
++	writel(value, umac->base + UMAC_INTERRUPT);
++
++	if (netif_queue_stopped(ndev))
++		netif_wake_queue(ndev);
++}
++
++static void umac_irq_enable(struct umac_priv *umac)
++{
++	unsigned int value;
++
++	value = readl(umac->base + UMAC_INTERRUPT);
++	value |= (UMAC_RX_INTEN | UMAC_TX_INTEN);
++	writel(value, umac->base + UMAC_INTERRUPT);
++}
++
++static void umac_irq_disable(struct umac_priv *umac)
++{
++	unsigned int value;
++
++	value = readl(umac->base + UMAC_INTERRUPT);
++	value |= (UMAC_RX_INT | UMAC_TX_INT);
++	value &= ~(UMAC_RX_INTEN | UMAC_TX_INTEN);
++	writel(value, umac->base + UMAC_INTERRUPT);
++}
++
++static irqreturn_t umac_interrupt(int irq, void *p_ndev)
++{
++	struct net_device *ndev = (struct net_device *)p_ndev;
++	struct umac_priv *umac = netdev_priv(ndev);
++
++	if (umac->use_ncsi || netif_running(ndev)) {
++		umac_irq_disable(umac);
++		napi_schedule(&umac->napi);
++	}
++
++	return IRQ_HANDLED;
++}
++
++static int umac_poll(struct napi_struct *napi, int budget)
++{
++	struct umac_priv *umac = container_of(napi, struct umac_priv, napi);
++	struct net_device *ndev = umac->ndev;
++	unsigned int value;
++	int rx_done = 0;
++
++	umac_tx_done(ndev);
++
++	rx_done = umac_rx(ndev, budget);
++
++	if (rx_done < budget) {
++		napi_complete_done(napi, rx_done);
++
++		value = readl(umac->base + UMAC_INTERRUPT);
++		value &= ~UMAC_RX_INT;
++		writel(value, umac->base + UMAC_INTERRUPT);
++
++		umac_irq_enable(umac);
++	}
++
++	return rx_done;
++}
++
++static int umac_open(struct net_device *ndev)
++{
++	struct umac_priv *umac = netdev_priv(ndev);
++	int err;
++
++	if (request_irq(ndev->irq, umac_interrupt, 0x0, ndev->name, ndev)) {
++		netdev_err(ndev, "failed to register irq\n");
++		return -EAGAIN;
++	}
++
++	umac_init_ring_descriptors(ndev);
++	umac_init_hw(ndev);
++
++	if (umac->use_ncsi)
++		netif_carrier_on(ndev);
++	else
++		phy_start(ndev->phydev);
++
++	napi_enable(&umac->napi);
++	netif_start_queue(ndev);
++	umac_irq_enable(umac);
++
++	if (umac->use_ncsi) {
++		err = ncsi_start_dev(umac->ncsidev);
++		if (err) {
++			netdev_err(ndev, "failed to start ncsi\n");
++			free_irq(ndev->irq, ndev);
++			return err;
++		}
++	}
++
++	netdev_info(ndev, "%s is OPENED\n", ndev->name);
++	return 0;
++}
++
++static int umac_stop(struct net_device *ndev)
++{
++	struct umac_priv *umac = netdev_priv(ndev);
++	struct platform_device *pdev = umac->pdev;
++
++	dma_free_coherent(&pdev->dev, sizeof(struct umac_tx_descs),
++			  umac->tx_descs, umac->tx_descs_dma_addr);
++	dma_free_coherent(&pdev->dev, sizeof(struct umac_rx_descs),
++			  umac->rx_descs, umac->rx_descs_dma_addr);
++	netif_stop_queue(ndev);
++
++	if (umac->use_ncsi)
++		ncsi_stop_dev(umac->ncsidev);
++	else
++		phy_stop(ndev->phydev);
++	umac_irq_disable(umac);
++	umac_channel_disable(umac);
++	napi_disable(&umac->napi);
++
++	free_irq(ndev->irq, ndev);
++
++	return 0;
++}
++
++static const struct ethtool_ops umac_ethtool_ops = {
++	.get_ts_info		= ethtool_op_get_ts_info,
++	.get_link_ksettings	= umac_get_link_ksettings,
++	.set_link_ksettings	= umac_set_link_ksettings,
++	.get_drvinfo		= umac_get_drvinfo,
++	.nway_reset		= umac_nway_reset,
++	.get_link		= umac_get_link,
++};
++
++static const struct net_device_ops umac_netdev_ops = {
++	.ndo_open		= umac_open,
++	.ndo_stop		= umac_stop,
++	.ndo_start_xmit		= umac_start_xmit,
++	.ndo_get_stats		= umac_get_stats,
++	.ndo_eth_ioctl		= umac_ioctl,
++	.ndo_validate_addr	= eth_validate_addr,
++	.ndo_set_mac_address	= umac_eth_mac_addr,
++};
++
++static int umac_init_mac_address(struct net_device *ndev)
++{
++	struct umac_priv *umac = netdev_priv(ndev);
++	struct platform_device *pdev = umac->pdev;
++	u8 addr[ETH_ALEN];
++	int ret;
++
++	ret = of_get_mac_address(pdev->dev.of_node, addr);
++	if (ret || !is_valid_ether_addr(addr)) {
++		eth_hw_addr_random(ndev);
++		netdev_info(ndev, "Generated random MAC address %pM\n",
++			    ndev->dev_addr);
++	} else {
++		eth_hw_addr_set(ndev, addr);
++		netdev_info(ndev, "Read MAC address %pM from DTB\n",
++			    ndev->dev_addr);
++	}
++
++	umac_set_mac_address(ndev, ndev->dev_addr);
++
++	return 0;
++}
++
++static void umac_ncsi_handler(struct ncsi_dev *ncsidev)
++{
++	if (unlikely(ncsidev->state != ncsi_dev_state_functional))
++		return;
++
++	netdev_info(ncsidev->dev, "NCSI interface %s\n",
++		    ncsidev->link_up ? "up" : "down");
++}
++
++static void umac_adjust_link(struct net_device *ndev)
++{
++	struct umac_priv *umac = netdev_priv(ndev);
++	int value;
++
++	if (ndev->phydev->link) {
++		value = readl(umac->base + UMAC_CONFIG_STATUS);
++		value &= 0xfffff9ff;
++		writel(value, umac->base + UMAC_CONFIG_STATUS);
++		udelay(2);
++
++		if (ndev->phydev->duplex)
++			value |= UMAC_CFG_FULL_DUPLEX;
++		else
++			value &= ~UMAC_CFG_FULL_DUPLEX;
++
++		switch (ndev->phydev->speed) {
++		case SPEED_1000:
++			value &= ~UMAC_CFG_TX_CLK_EN;
++			value |= UMAC_CFG_GTX_CLK_EN;
++			value |= UMAC_CFG_GIGABIT_MODE;
++			break;
++		case SPEED_100:
++			value |= UMAC_CFG_TX_CLK_EN;
++			value &= ~UMAC_CFG_GTX_CLK_EN;
++			value &= ~UMAC_CFG_GIGABIT_MODE;
++			break;
++		}
++
++		writel(value, umac->base + UMAC_CONFIG_STATUS);
++		udelay(2);
++
++		netif_carrier_on(ndev);
++	} else {
++		value = readl(umac->base + UMAC_CONFIG_STATUS);
++		value &= 0xfffff9ff;
++		writel(value, umac->base + UMAC_CONFIG_STATUS);
++		udelay(2);
++
++		value &= ~UMAC_CFG_FULL_DUPLEX;
++		value &= ~UMAC_CFG_GTX_CLK_EN;
++		value &= ~UMAC_CFG_GIGABIT_MODE;
++		value |= UMAC_CFG_TX_CLK_EN;
++		writel(value, umac->base + UMAC_CONFIG_STATUS);
++		udelay(2);
++
++		netif_carrier_off(ndev);
++	}
++}
++
++static int umac_setup_phy(struct net_device *ndev)
++{
++	struct umac_priv *umac = netdev_priv(ndev);
++	struct platform_device *pdev = umac->pdev;
++	struct device_node *phy_handle;
++	phy_interface_t interface;
++	int ret;
++	int err;
++
++	phy_handle = of_parse_phandle(pdev->dev.of_node, "int-phy-handle", 0);
++	if (phy_handle) {
++		umac->int_phy_dev = of_phy_find_device(phy_handle);
++		if (!umac->int_phy_dev)
++			return -ENODEV;
++
++		umac_int_phy_init(umac);
++	}
++
++	phy_handle = of_parse_phandle(pdev->dev.of_node, "phy-handle", 0);
++	if (phy_handle) {
++		ret = phy_register_fixup_for_uid(0x01410dd1, 0xffffffff,
++						 umac_phy_fixup);
++		if (ret)
++			pr_info("cannot register phy board fixup\n");
++
++		err = of_get_phy_mode(phy_handle, &interface);
++		if (err)
++			interface = PHY_INTERFACE_MODE_NA;
++
++		umac->phy_dev = of_phy_connect(ndev, phy_handle,
++					       &umac_adjust_link, 0, interface);
++
++		if (!umac->phy_dev)
++			return -ENODEV;
++	}
++
++	if (of_phy_is_fixed_link(phy_handle)) {
++		struct device_node *fixed_link_node =
++			of_get_child_by_name(phy_handle, "fixed-link");
++
++		netdev_info(ndev, "Setting fixed link configuration for PHY\n");
++		if (of_property_read_u32(fixed_link_node, "speed",
++					 &umac->phy_dev->speed)) {
++			netdev_err(ndev, "Invalid fixed-link specified.\n");
++			return -EINVAL;
++		}
++		umac->phy_dev->duplex = of_property_read_bool(fixed_link_node,
++							      "full-duplex");
++		umac->phy_dev->pause = of_property_read_bool(fixed_link_node,
++							     "pause");
++		umac->phy_dev->asym_pause =
++			of_property_read_bool(fixed_link_node, "asym-pause");
++		umac->phy_dev->autoneg = AUTONEG_DISABLE;
++		__clear_bit(ETHTOOL_LINK_MODE_Autoneg_BIT,
++			    umac->phy_dev->advertising);
++	}
++
++	return 0;
++}
++
++static int umac_probe(struct platform_device *pdev)
++{
++	struct umac_priv *umac;
++	struct net_device *ndev;
++	struct resource *res;
++	int ret = 0;
++
++	ndev = alloc_etherdev(sizeof(struct umac_priv));
++	if (!ndev)
++		return -ENOMEM;
++
++	SET_NETDEV_DEV(ndev, &pdev->dev);
++
++	umac = netdev_priv(ndev);
++	umac->pdev = pdev;
++	umac->ndev = ndev;
++
++	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	if (!res) {
++		netdev_err(ndev, "failed to get I/O memory\n");
++		free_netdev(ndev);
++		return -ENXIO;
++	}
++
++	umac->base = devm_ioremap_resource(&pdev->dev, res);
++	if (IS_ERR(umac->base)) {
++		netdev_err(ndev, "failed to remap I/O memory\n");
++		free_netdev(ndev);
++		return PTR_ERR(umac->base);
++	}
++
++	ndev->irq = platform_get_irq(pdev, 0);
++	if (ndev->irq < 0) {
++		netdev_err(ndev, "failed to get irq\n");
++		free_netdev(ndev);
++		return -ENXIO;
++	}
++
++	platform_set_drvdata(pdev, ndev);
++
++	ndev->netdev_ops = &umac_netdev_ops;
++	ndev->ethtool_ops = &umac_ethtool_ops;
++
++	umac_init_mac_address(ndev);
++	umac_channel_disable(umac);
++	ret = umac_setup_phy(ndev);
++	if (ret != 0) {
++		netdev_err(ndev, "failed to setup phy ret=%d\n", ret);
++		return -ENODEV;
++	}
++
++	umac->use_ncsi = false;
++	if (of_get_property(pdev->dev.of_node, "use-ncsi", NULL)) {
++		if (!IS_ENABLED(CONFIG_NET_NCSI)) {
++			netdev_err(ndev, "NCSI stack not enabled\n");
++			free_netdev(ndev);
++			return 0;
++		}
++
++		dev_info(&pdev->dev, "Using NCSI interface\n");
++		umac->use_ncsi = true;
++		umac->ncsidev = ncsi_register_dev(ndev, umac_ncsi_handler);
++		if (!umac->ncsidev) {
++			free_netdev(ndev);
++			return -ENODEV;
++		}
++	}
++
++	netif_napi_add(ndev, &umac->napi, umac_poll);
++	ret = register_netdev(ndev);
++	if (ret != 0) {
++		netdev_err(ndev, "failed to register UMAC ret=%d\n", ret);
++		netif_napi_del(&umac->napi);
++		free_netdev(ndev);
++		return -ENODEV;
++	}
++
++	return ret;
++}
++
++static void umac_remove(struct platform_device *pdev)
++{
++	struct net_device *ndev = platform_get_drvdata(pdev);
++	struct umac_priv *umac = netdev_priv(ndev);
++
++	unregister_netdev(ndev);
++	iounmap(umac->base);
++	free_netdev(ndev);
++}
++
++static const struct of_device_id umac_of_matches[] = {
++	{ .compatible = "hpe,gxp-umac", },
++	{},
++};
++MODULE_DEVICE_TABLE(of, umac_of_matches);
++
++static struct platform_driver umac_driver = {
++	.driver	= {
++		.name    = "gxp-umac",
++		.of_match_table = umac_of_matches,
++	},
++	.probe   = umac_probe,
++	.remove  = umac_remove,
++};
++
++module_platform_driver(umac_driver);
++
++MODULE_AUTHOR("Gilbert Chen <gilbert.chen@hpe.com>");
++MODULE_DESCRIPTION("HPE GXP UMAC driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/net/ethernet/hpe/gxp-umac.h b/drivers/net/ethernet/hpe/gxp-umac.h
+new file mode 100644
+index 000000000000..84bd6fb35f91
+--- /dev/null
++++ b/drivers/net/ethernet/hpe/gxp-umac.h
+@@ -0,0 +1,130 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * HPE GXP UMAC ethernet driver
++ *
++ * Copyright (C) 2019 Hewlett Packard Enterprise Development LP.
++ * Copyright (C) 2026 9elements GmbH
++ */
++
++#ifndef _UMAC_H_
++#define _UMAC_H_
++
++#define UMAC_CONFIG_STATUS      0x00
++#define UMAC_CFG_PROMISC        0x00008000
++#define UMAC_CFG_FE_LOOPBK      0x00004000
++#define UMAC_CFG_ACCEPT         0x00002000
++#define UMAC_CFG_TXEN           0x00001000
++#define UMAC_CFG_RXEN           0x00000800
++#define UMAC_CFG_GTX_CLK_EN     0x00000400
++#define UMAC_CFG_TX_CLK_EN      0x00000200
++#define UMAC_CFG_KEEP_CORRUPT   0x00000100
++#define UMAC_STS_RX_PKT_MISSED  0x00000080
++#define UMAC_STS_MAC_RX_BUSY    0x00000020
++#define UMAC_STS_RX_FLOODED     0x00000010
++#define UMAC_CFG_GIGABIT_MODE   0x00000004
++#define UMAC_CFG_FIFO_LOOPBK    0x00000002
++#define UMAC_CFG_FULL_DUPLEX    0x00000001
++#define UMAC_RING_PTR           0x04
++#define UMAC_TX_RING_PTR_MASK   0x7FFF0000
++#define UMAC_TX_RING_PTR_SHIFT  16
++#define UMAC_RX_RING_PTR_MASK   0x00007FFF
++#define UMAC_RX_RING_PTR_SHIFT  0
++
++#define UMAC_RING_PROMPT      0x08
++#define UMAC_CLEAR_STATUS     0x0C
++#define UMAC_CKSUM_CONFIG     0x10
++#define UMAC_RING_SIZE        0x14
++#define UMAC_TX_RING_SIZE_MASK  0xFF000000
++#define UMAC_TX_RING_SIZE_SHIFT 24
++#define UMAC_RX_RING_SIZE_MASK  0x00FF0000
++#define UMAC_RX_RING_SIZE_SHIFT 16
++#define UMAC_LAST_RX_PKT_SIZE   0x0000FFFF
++
++#define UMAC_RING_SIZE_4        0x00
++#define UMAC_RING_SIZE_8        0x01
++#define UMAC_RING_SIZE_16       0x03
++#define UMAC_RING_SIZE_32       0x07
++#define UMAC_RING_SIZE_64       0x0F
++#define UMAC_RING_SIZE_128      0x1F
++#define UMAC_RING_SIZE_256      0x3F
++
++#define UMAC_MAC_ADDR_HI      0x18
++#define UMAC_MAC_ADDR_MID     0x1C
++#define UMAC_MAC_ADDR_LO      0x20
++#define UMAC_MC_ADDR_FILT_HI  0x24
++#define UMAC_MC_ADDR_FILT_LO  0x28
++#define UMAC_CONFIG_STATUS2   0x2C
++#define UMAC_INTERRUPT        0x30
++#define UMAC_RX_INT_OFLOW       0x00000080
++#define UMAC_TX_INT_OFLOW       0x00000040
++#define UMAC_OVERRRUN_INT       0x00000010
++#define UMAC_RX_INTEN           0x00000008
++#define UMAC_RX_INT             0x00000004
++#define UMAC_TX_INTEN           0x00000002
++#define UMAC_TX_INT             0x00000001
++
++#define UMAC_OVERRUN_COUNT    0x34
++#define UMAC_RX_INT_CONFIG    0x38
++#define UMAC_TX_INT_CONFIG    0x3C
++#define UMAC_PACKET_LENGTH    0x40
++#define UMAC_BCAST_FILTER     0x44
++#define UMAC_BCAST_PROMPT     0x48
++#define UMAC_RX_RING_ADDR     0x4C
++#define UMAC_TX_RING_ADDR     0x50
++#define UMAC_DMA_CONFIG       0x54
++#define UMAC_BURST_CONFIG     0x58
++#define UMAC_PAUSE_CONFIG     0x5C
++#define UMAC_PAUSE_CONTROL    0x60
++#define UMAC_CONGESTN_CONFIG  0x64
++
++#define UMAC_MAX_TX_DESC_ENTRIES	0x100
++#define UMAC_MAX_RX_DESC_ENTRIES	0x100
++#define UMAC_MAX_TX_FRAME_SIZE		0x600
++#define UMAC_MAX_RX_FRAME_SIZE		0x600
++
++#define UMAC_RING_ENTRY_HW_OWN		0x8000
++
++#define UMAC_RING_RX_FRAME_ERR      0x4000
++#define UMAC_RING_RX_CRC_ERR        0x2000
++#define UMAC_RING_RX_LEN_ERR        0x1000
++#define UMAC_RING_RX_OVERRUN        0x0800
++#define UMAC_RING_RX_PKT_TYPE_MASK  0x0700
++#define UMAC_RING_RX_MII_ERR        0x0080
++#define UMAC_RING_RX_CAR_EXT_ERR    0x0040
++#define UMAC_RING_RX_BAD_PAUSE_ERR  0x0020
++#define UMAC_RING_RX_ERR_MASK       0x38E0
++
++#define UMAC_MIN_FRAME_SIZE       60
++#define UMAC_MAX_PAYLOAD_SIZE     1500
++#define UMAC_MAX_FRAME_SIZE       1514
++#define UMAC_MAX_PACKET_ROUNDED   0x600
++#define MAX_PKT_SIZE		  1518
++
++struct umac_rx_desc_entry {
++	u32  dmaaddress;
++	u16  status;
++	u16  count;
++	u16  checksum;
++	u16  control;
++	u32  reserved;
++} __aligned(16);
++
++struct umac_rx_descs {
++	struct umac_rx_desc_entry entrylist[UMAC_MAX_RX_DESC_ENTRIES];
++	u8 framelist[UMAC_MAX_RX_DESC_ENTRIES][UMAC_MAX_RX_FRAME_SIZE];
++} __packed;
++
++struct umac_tx_desc_entry {
++	u32  dmaaddress;
++	u16  status;
++	u16  count;
++	u32  cksumoffset;
++	u32  reserved;
++} __aligned(16);
++
++struct umac_tx_descs {
++	struct umac_tx_desc_entry entrylist[UMAC_MAX_TX_DESC_ENTRIES];
++	u8 framelist[UMAC_MAX_TX_DESC_ENTRIES][UMAC_MAX_TX_FRAME_SIZE];
++} __packed;
++
++#endif
+-- 
+2.52.0
+
