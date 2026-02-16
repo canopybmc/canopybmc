@@ -1,0 +1,118 @@
+From 368bfe35eb1376380f283b0fe40a67fca028e4e6 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 23 Jan 2026 02:55:10 +0100
+Subject: [PATCH] board: hpe: gxp: dynamic dtb configuration based on server id
+
+Add board_fit_config_name_match() for runtime FIT configuration
+selection based on server ID register.
+Add ft_board_setup() to populate device tree with board properties.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ board/hpe/gxp/gxp_board.c | 59 +++++++++++++++++++++++++++++++++++++--
+ configs/gxp_defconfig     |  1 +
+ 2 files changed, 57 insertions(+), 3 deletions(-)
+
+diff --git a/board/hpe/gxp/gxp_board.c b/board/hpe/gxp/gxp_board.c
+index d94d9b8a19e..9d40702e0cf 100644
+--- a/board/hpe/gxp/gxp_board.c
++++ b/board/hpe/gxp/gxp_board.c
+@@ -1,22 +1,76 @@
+ // SPDX-License-Identifier: GPL-2.0+
+ /*
+- * GXP timer driver
++ * GXP board support
+  *
+  * (C) Copyright 2022 Hewlett Packard Enterprise Development LP.
+  * Author: Nick Hawkins <nick.hawkins@hpe.com>
+  * Author: Jean-Marie Verdun <verdun@hpe.com>
++ *
++ * Copyright (C) 2026 9elements GmbH
+  */
+ 
+ #include <linux/sizes.h>
+ #include <asm/io.h>
+ #include <dm.h>
+ #include <dm/uclass.h>
+-#include <ram.h>
++#include <fdt_support.h>
++#include <init.h>
++#include <sysinfo.h>
+ 
+ DECLARE_GLOBAL_DATA_PTR;
+ 
+ #define ECHI_CMD 0xcefe0010
+ 
++#define GXP_XREG_BASE	0xd1000000
++
++static u16 gxp_get_server_id(void)
++{
++	return (readl(GXP_XREG_BASE) >> 8) & 0xffff;
++}
++
++int board_fit_config_name_match(const char *name)
++{
++	char expected[16];
++	u16 server_id;
++
++	server_id = gxp_get_server_id();
++	snprintf(expected, sizeof(expected), "gxp-0x%04x", server_id);
++
++	if (strstr(name, expected))
++		return 0;
++
++	return -1;
++}
++
++int ft_board_setup(void *blob, struct bd_info *bd)
++{
++	struct udevice *dev;
++	char str[64];
++	int ret;
++
++	ret = sysinfo_get(&dev);
++	if (ret)
++		return 0;
++
++	ret = sysinfo_detect(dev);
++	if (ret)
++		return 0;
++
++	ret = sysinfo_get_str(dev, SYSID_BOARD_MANUFACTURER, sizeof(str), str);
++	if (!ret)
++		fdt_setprop_string(blob, 0, "manufacturer", str);
++
++	ret = sysinfo_get_str(dev, SYSID_SM_SYSTEM_SERIAL, sizeof(str), str);
++	if (!ret)
++		fdt_setprop_string(blob, 0, "serial-number", str);
++
++	ret = sysinfo_get_str(dev, SYSID_SM_BASEBOARD_PRODUCT, sizeof(str), str);
++	if (!ret)
++		fdt_setprop_string(blob, 0, "part-number", str);
++
++	return 0;
++}
++
+ int board_init(void)
+ {
+ 	writel(0x00080002, ECHI_CMD);
+@@ -72,4 +126,3 @@ int dram_init(void)
+ 
+ 	return 0;
+ }
+-
+diff --git a/configs/gxp_defconfig b/configs/gxp_defconfig
+index 52998c6e5dd..73b4af323b6 100644
+--- a/configs/gxp_defconfig
++++ b/configs/gxp_defconfig
+@@ -28,6 +28,7 @@ CONFIG_BOOTCOMMAND="run spiboot"
+ # CONFIG_DISPLAY_CPUINFO is not set
+ # CONFIG_DISPLAY_BOARDINFO is not set
+ CONFIG_SYSINFO=y
++CONFIG_OF_BOARD_SETUP=y
+ CONFIG_HUSH_PARSER=y
+ CONFIG_SYS_PROMPT="gxp# "
+ # CONFIG_BOOTM_NETBSD is not set
+-- 
+2.52.0
+

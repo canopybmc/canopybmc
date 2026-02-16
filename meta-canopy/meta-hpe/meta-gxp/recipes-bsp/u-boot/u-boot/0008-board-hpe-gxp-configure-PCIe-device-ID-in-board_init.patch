@@ -1,0 +1,44 @@
+From 8ac647a4dcc046ea30eb318b0cbdb56f52356c2d Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Mon, 9 Feb 2026 15:06:28 +0100
+Subject: [PATCH] board: hpe: gxp: configure PCIe device ID in board_init
+
+Write the BMC's PCIe device ID (0x03D8) to the FN2 pcie_dev_id
+register during board_init.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ board/hpe/gxp/gxp_board.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/board/hpe/gxp/gxp_board.c b/board/hpe/gxp/gxp_board.c
+index cb17e439338..4f80e47ba74 100644
+--- a/board/hpe/gxp/gxp_board.c
++++ b/board/hpe/gxp/gxp_board.c
+@@ -19,9 +19,11 @@
+ 
+ DECLARE_GLOBAL_DATA_PTR;
+ 
+-#define ECHI_CMD 0xcefe0010
++#define ECHI_CMD		0xcefe0010
++#define GXP_FN2_PCIE_DEV_ID	0x802f002e
++#define GXP_PCIE_DEV_ID_VAL	0x03d8
+ 
+-#define GXP_XREG_BASE	0xd1000000
++#define GXP_XREG_BASE		0xd1000000
+ 
+ static u16 gxp_get_server_id(void)
+ {
+@@ -120,6 +122,9 @@ int board_init(void)
+ {
+ 	writel(0x00080002, ECHI_CMD);
+ 
++	/* Configure PCIe device ID presented to the host */
++	writew(GXP_PCIE_DEV_ID_VAL, GXP_FN2_PCIE_DEV_ID);
++
+ 	return 0;
+ }
+ 
+-- 
+2.52.0
+
