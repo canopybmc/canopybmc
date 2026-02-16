@@ -1,0 +1,350 @@
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index f591685921f1..1a3f823ba27f 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -88,6 +88,13 @@ csm: csm@80000000 {
+ 			compatible = "hpe,gxp-csm", "simple-mfd", "syscon";
+ 			reg = <0x80000000 0x400>;
+ 		};
++		post@800000a0 {
++			compatible = "hpe,gxp-dbg";
++			reg = <0x800000a0 0x8>, <0x800000be 0x2>;
++			interrupts = <10>;
++			interrupt-parent = <&vic1>;
++		};
++
+ 
+ 		vuhc0: vuhc@80400000 {
+ 			compatible = "syscon";
+diff --git a/drivers/soc/hpe/Kconfig b/drivers/soc/hpe/Kconfig
+index 6ebcc9678b09..2e14dff991ce 100644
+--- a/drivers/soc/hpe/Kconfig
++++ b/drivers/soc/hpe/Kconfig
+@@ -86,4 +86,16 @@ config SOC_HPE_GXP_CHIF
+ 	  (/dev/chif24) for bidirectional host-BMC communication
+ 	  via 1MB DMA-coherent shared memory.
+ 
++
++config SOC_HPE_GXP_DBG
++	tristate "HPE GXP POST code capture support"
++	depends on ARCH_HPE_GXP || COMPILE_TEST
++	select SOC_HPE_GXP
++	help
++	  Say Y here to add support for the HPE GXP POST code
++	  capture block. This creates a /dev/postcode character
++	  device that returns host POST codes as they are written
++	  to port 80h. The device blocks on read until a new
++	  POST code is available. Used by phosphor-host-postd for
++	  publishing POST codes via D-Bus.
+ endif # SOC_HPE
+diff --git a/drivers/soc/hpe/Makefile b/drivers/soc/hpe/Makefile
+index 5fefa0ddee15..10451257fedc 100644
+--- a/drivers/soc/hpe/Makefile
++++ b/drivers/soc/hpe/Makefile
+@@ -9,3 +9,4 @@ obj-$(CONFIG_SOC_HPE_GXP_XREG)		+= gxp-xreg.o
+ obj-$(CONFIG_SOC_HPE_GXP_FN2)		+= gxp-fn2.o
+ obj-$(CONFIG_SOC_HPE_GXP_POWER_CTRL)	+= gxp-power-ctrl.o
+ obj-$(CONFIG_SOC_HPE_GXP_CHIF)		+= gxp-chif.o
++obj-$(CONFIG_SOC_HPE_GXP_DBG)		+= gxp-dbg.o
+diff --git a/drivers/soc/hpe/gxp-dbg.c b/drivers/soc/hpe/gxp-dbg.c
+new file mode 100644
+index 000000000000..e7bc7b071fa2
+--- /dev/null
++++ b/drivers/soc/hpe/gxp-dbg.c
+@@ -0,0 +1,296 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * HPE GXP POST code capture driver
++ *
++ * Copyright (C) 2021 Hewlett Packard Enterprise Development LP.
++ * Copyright (C) 2026 9elements GmbH
++ *
++ * Creates /dev/postcode character device for reading host POST codes.
++ * Interrupt-driven: blocks on read until a new POST code arrives.
++ *
++ * Based on the original gxp-dbg driver by Jean-Marie Verdun.
++ */
++
++#include <linux/cdev.h>
++#include <linux/device.h>
++#include <linux/fs.h>
++#include <linux/interrupt.h>
++#include <linux/io.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/mod_devicetable.h>
++#include <linux/platform_device.h>
++#include <linux/poll.h>
++#include <linux/wait.h>
++
++#include "gxp-soclib.h"
++
++#define DBG_POST_PORTDATA	0x04
++#define DBG_POST_CSR		0x1e
++
++/* CSR bits: enable all four POST code capture channels */
++#define DBG_CSR_ENABLE		0x000f
++/* CSR bits: clear interrupt status */
++#define DBG_CSR_CLEAR		0x000c
++
++struct gxp_dbg_drvdata {
++	struct platform_device *pdev;
++	struct device *dev;
++	void __iomem *base;
++	void __iomem *csr;
++	struct mutex mutex;
++	int irq;
++	u16 postcode;
++	u16 prev_postcode;
++	int open_count;
++	dev_t devnum;
++	struct cdev cdev;
++	struct class *chardev_class;
++};
++
++static DECLARE_WAIT_QUEUE_HEAD(postcode_wq);
++
++static int postcode_open(struct inode *inode, struct file *file)
++{
++	struct gxp_dbg_drvdata *drvdata =
++		container_of(inode->i_cdev, struct gxp_dbg_drvdata, cdev);
++
++	mutex_lock(&drvdata->mutex);
++	if (drvdata->open_count > 0) {
++		mutex_unlock(&drvdata->mutex);
++		return -EBUSY;
++	}
++
++	drvdata->postcode = readl(drvdata->base + DBG_POST_PORTDATA);
++	drvdata->prev_postcode = 0xff;
++	drvdata->open_count++;
++	file->private_data = drvdata;
++	mutex_unlock(&drvdata->mutex);
++
++	return 0;
++}
++
++static int postcode_release(struct inode *inode, struct file *file)
++{
++	struct gxp_dbg_drvdata *drvdata = file->private_data;
++
++	mutex_lock(&drvdata->mutex);
++	drvdata->open_count--;
++	mutex_unlock(&drvdata->mutex);
++
++	return 0;
++}
++
++static ssize_t postcode_read(struct file *file, char __user *buf,
++			     size_t len, loff_t *off)
++{
++	struct gxp_dbg_drvdata *drvdata = file->private_data;
++	int ret;
++
++	ret = wait_event_interruptible(postcode_wq,
++		drvdata->postcode != drvdata->prev_postcode);
++	if (ret)
++		return ret;
++
++	drvdata->prev_postcode = drvdata->postcode;
++
++	if (copy_to_user(buf, &drvdata->postcode, sizeof(drvdata->postcode)))
++		return -EFAULT;
++
++	return sizeof(drvdata->postcode);
++}
++
++static __poll_t postcode_poll(struct file *file,
++			      struct poll_table_struct *pt)
++{
++	struct gxp_dbg_drvdata *drvdata = file->private_data;
++
++	poll_wait(file, &postcode_wq, pt);
++
++	if (drvdata->postcode != drvdata->prev_postcode)
++		return EPOLLIN | EPOLLRDNORM;
++
++	return 0;
++}
++
++static const struct file_operations postcode_fops = {
++	.owner		= THIS_MODULE,
++	.open		= postcode_open,
++	.read		= postcode_read,
++	.poll		= postcode_poll,
++	.release	= postcode_release,
++};
++
++static irqreturn_t gxp_dbg_irq(int irq, void *data)
++{
++	struct gxp_dbg_drvdata *drvdata = data;
++	u16 value, csr;
++
++	value = readl(drvdata->base + DBG_POST_PORTDATA);
++	if (drvdata->postcode != value) {
++		mutex_lock(&drvdata->mutex);
++		drvdata->prev_postcode = drvdata->postcode;
++		drvdata->postcode = value;
++		mutex_unlock(&drvdata->mutex);
++	}
++
++	/* Acknowledge interrupt */
++	csr = readw(drvdata->csr);
++	writew(csr | DBG_CSR_CLEAR, drvdata->csr);
++
++	wake_up_interruptible(&postcode_wq);
++
++	return IRQ_HANDLED;
++}
++
++static ssize_t postcode_enable_show(struct device *dev,
++				    struct device_attribute *attr, char *buf)
++{
++	struct gxp_dbg_drvdata *drvdata = dev_get_drvdata(dev);
++	u16 csr = readw(drvdata->csr);
++
++	return sysfs_emit(buf, "%d\n", !!(csr & DBG_CSR_ENABLE));
++}
++
++static ssize_t postcode_enable_store(struct device *dev,
++				     struct device_attribute *attr,
++				     const char *buf, size_t count)
++{
++	struct gxp_dbg_drvdata *drvdata = dev_get_drvdata(dev);
++	unsigned int input;
++	u16 csr;
++	int ret;
++
++	ret = kstrtouint(buf, 0, &input);
++	if (ret < 0)
++		return ret;
++
++	if (input != 0 && input != 1)
++		return -EINVAL;
++
++	mutex_lock(&drvdata->mutex);
++	csr = readw(drvdata->csr);
++	if (input)
++		writew(csr | DBG_CSR_ENABLE, drvdata->csr);
++	else
++		writew(csr & ~DBG_CSR_ENABLE, drvdata->csr);
++	mutex_unlock(&drvdata->mutex);
++
++	return count;
++}
++
++static DEVICE_ATTR_RW(postcode_enable);
++
++static struct attribute *dbg_attrs[] = {
++	&dev_attr_postcode_enable.attr,
++	NULL,
++};
++ATTRIBUTE_GROUPS(dbg);
++
++static int gxp_dbg_probe(struct platform_device *pdev)
++{
++	struct gxp_dbg_drvdata *drvdata;
++	struct device *dev_ret;
++	struct resource *res;
++	u16 csr;
++	int ret;
++
++	drvdata = devm_kzalloc(&pdev->dev, sizeof(*drvdata), GFP_KERNEL);
++	if (!drvdata)
++		return -ENOMEM;
++
++	drvdata->pdev = pdev;
++	platform_set_drvdata(pdev, drvdata);
++
++	drvdata->postcode = 0x00;
++	drvdata->prev_postcode = 0xff;
++	drvdata->open_count = 0;
++
++	/* Map POST code data registers */
++	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	drvdata->base = devm_ioremap(&pdev->dev, res->start,
++				     resource_size(res));
++	if (IS_ERR(drvdata->base))
++		return PTR_ERR(drvdata->base);
++
++	/* Map CSR register */
++	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
++	drvdata->csr = devm_ioremap(&pdev->dev, res->start,
++				    resource_size(res));
++	if (IS_ERR(drvdata->csr))
++		return PTR_ERR(drvdata->csr);
++
++	ret = platform_get_irq(pdev, 0);
++	if (ret < 0)
++		return dev_err_probe(&pdev->dev, ret, "unable to obtain IRQ\n");
++	drvdata->irq = ret;
++
++	ret = devm_request_irq(&pdev->dev, drvdata->irq, gxp_dbg_irq,
++			       IRQF_SHARED, "gxp-dbg-post", drvdata);
++	if (ret)
++		return dev_err_probe(&pdev->dev, ret, "unable to request IRQ\n");
++
++	mutex_init(&drvdata->mutex);
++
++	/* Create /dev/postcode character device */
++	ret = alloc_chrdev_region(&drvdata->devnum, 0, 1, "gxp-dbg-post");
++	if (ret < 0)
++		return ret;
++
++	drvdata->chardev_class = class_create("postcode");
++	if (IS_ERR(drvdata->chardev_class)) {
++		unregister_chrdev_region(drvdata->devnum, 1);
++		return PTR_ERR(drvdata->chardev_class);
++	}
++
++	dev_ret = device_create(drvdata->chardev_class, NULL,
++				drvdata->devnum, NULL, "postcode");
++	if (IS_ERR(dev_ret)) {
++		class_destroy(drvdata->chardev_class);
++		unregister_chrdev_region(drvdata->devnum, 1);
++		return PTR_ERR(dev_ret);
++	}
++
++	cdev_init(&drvdata->cdev, &postcode_fops);
++	ret = cdev_add(&drvdata->cdev, drvdata->devnum, 1);
++	if (ret < 0) {
++		device_destroy(drvdata->chardev_class, drvdata->devnum);
++		class_destroy(drvdata->chardev_class);
++		unregister_chrdev_region(drvdata->devnum, 1);
++		return ret;
++	}
++
++	/* Enable POST code capture */
++	csr = readw(drvdata->csr);
++	writew(csr | DBG_CSR_ENABLE, drvdata->csr);
++
++	/* Register sysfs interface under gxp-soc class */
++	drvdata->dev = device_create_with_groups(gxp_soc_class, &pdev->dev, 0,
++						 drvdata, dbg_groups, "dbg");
++	if (IS_ERR(drvdata->dev))
++		dev_warn(&pdev->dev, "failed to create sysfs device\n");
++
++	dev_info(&pdev->dev, "POST code capture enabled (/dev/postcode)\n");
++
++	return 0;
++}
++
++static const struct of_device_id gxp_dbg_of_match[] = {
++	{ .compatible = "hpe,gxp-dbg" },
++	{},
++};
++MODULE_DEVICE_TABLE(of, gxp_dbg_of_match);
++
++static struct platform_driver gxp_dbg_driver = {
++	.probe = gxp_dbg_probe,
++	.driver = {
++		.name = "gxp-dbg",
++		.of_match_table = gxp_dbg_of_match,
++	},
++};
++module_platform_driver(gxp_dbg_driver);
++
++MODULE_AUTHOR("Jean-Marie Verdun <jean-marie.verdun@hpe.com>");
++MODULE_AUTHOR("Marcello Sylvester Bauer <marcello.bauer@9elements.com>");
++MODULE_DESCRIPTION("HPE GXP POST code capture driver");
++MODULE_LICENSE("GPL");
