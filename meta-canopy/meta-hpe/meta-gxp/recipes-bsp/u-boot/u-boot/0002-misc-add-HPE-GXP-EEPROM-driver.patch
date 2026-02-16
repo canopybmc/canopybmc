@@ -1,0 +1,237 @@
+From bcb15b58e97622438db56dd956226257c8197c7d Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 23 Jan 2026 00:59:58 +0100
+Subject: [PATCH] misc: add HPE GXP EEPROM driver
+
+Add driver providing access to the memory-mapped system information
+area on HPE GXP BMC SoCs. The 256-byte region at 0xa0017f00 contains
+board data organized in two 128-byte blocks, each protected by a
+16-bit checksum.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ MAINTAINERS               |   1 +
+ arch/arm/dts/hpe-gxp.dtsi |  32 ++++++++++++
+ configs/gxp_defconfig     |   2 +
+ drivers/misc/Kconfig      |   9 ++++
+ drivers/misc/Makefile     |   1 +
+ drivers/misc/gxp_eeprom.c | 107 ++++++++++++++++++++++++++++++++++++++
+ 6 files changed, 152 insertions(+)
+ create mode 100644 drivers/misc/gxp_eeprom.c
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index 8b0d0845705..ae11c0a4464 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -343,6 +343,7 @@ F:	arch/arm/mach-hpe/
+ F:	board/hpe/
+ F:	configs/gxp_defconfig
+ F:	doc/device-tree-bindings/spi/hpe,gxp-spi.yaml
++F:	drivers/misc/gxp_eeprom.c
+ F:	drivers/timer/gxp-timer.c
+ F:	drivers/spi/gxp_spi.c
+ 
+diff --git a/arch/arm/dts/hpe-gxp.dtsi b/arch/arm/dts/hpe-gxp.dtsi
+index cf735b3c4f3..fa174bdc582 100644
+--- a/arch/arm/dts/hpe-gxp.dtsi
++++ b/arch/arm/dts/hpe-gxp.dtsi
+@@ -45,6 +45,38 @@
+ 		ranges;
+ 		dma-ranges;
+ 
++		eeprom: eeprom@a0017f00 {
++			compatible = "hpe,gxp-eeprom";
++			reg = <0xa0017f00 0x100>;
++			#address-cells = <1>;
++			#size-cells = <1>;
++			bootph-all;
++
++			serial_number: serial-number@1 {
++				reg = <0x01 0x10>;
++			};
++
++			part_number: part-number@6d {
++				reg = <0x6d 0x10>;
++			};
++
++			mac_address0: mac-address@84 {
++				reg = <0x84 0x6>;
++			};
++
++			mac_address1: mac-address@8a {
++				reg = <0x8a 0x6>;
++			};
++
++			pca_serial_number: pca-serial-number@90 {
++				reg = <0x90 0x10>;
++			};
++
++			pca_part_number: pca-part-number@a0 {
++				reg = <0xa0 0x10>;
++			};
++		};
++
+ 		L2: cache-controller@b0040000 {
+ 			compatible = "arm,pl310-cache";
+ 			reg = <0xb0040000 0x1000>;
+diff --git a/configs/gxp_defconfig b/configs/gxp_defconfig
+index 9578468bc48..ea732b09bd7 100644
+--- a/configs/gxp_defconfig
++++ b/configs/gxp_defconfig
+@@ -40,6 +40,8 @@ CONFIG_ENV_IS_IN_SPI_FLASH=y
+ CONFIG_ENV_REDUNDANT=y
+ CONFIG_NETCONSOLE=y
+ CONFIG_MISC=y
++CONFIG_NVMEM=y
++CONFIG_GXP_EEPROM=y
+ # CONFIG_MMC is not set
+ CONFIG_MTD=y
+ CONFIG_DM_SPI_FLASH=y
+diff --git a/drivers/misc/Kconfig b/drivers/misc/Kconfig
+index dde773ab6b1..be4d20d8c5e 100644
+--- a/drivers/misc/Kconfig
++++ b/drivers/misc/Kconfig
+@@ -83,6 +83,15 @@ config GATEWORKS_SC
+ 	  boards to provide a boot watchdog, power control, temperature monitor,
+ 	  voltage ADCs, and EEPROM.
+ 
++config GXP_EEPROM
++	bool "HPE GXP EEPROM driver"
++	depends on MISC
++	select NVMEM
++	help
++	  Enable access to the memory-mapped system information area
++	  on HPE GXP BMC SoCs. This region contains board data such as
++	  MAC addresses, serial number, and part number.
++
+ config QCOM_GENI
+ 	bool "Qualcomm Generic Interface (GENI) driver"
+ 	depends on MISC
+diff --git a/drivers/misc/Makefile b/drivers/misc/Makefile
+index 1d950f7a0ab..7c38ae38092 100644
+--- a/drivers/misc/Makefile
++++ b/drivers/misc/Makefile
+@@ -38,6 +38,7 @@ obj-$(CONFIG_FSL_IIM) += fsl_iim.o
+ obj-$(CONFIG_FSL_SEC_MON) += fsl_sec_mon.o
+ obj-$(CONFIG_$(PHASE_)FS_LOADER) += fs_loader.o
+ obj-$(CONFIG_GATEWORKS_SC) += gsc.o
++obj-$(CONFIG_GXP_EEPROM) += gxp_eeprom.o
+ obj-$(CONFIG_GDSYS_IOEP) += gdsys_ioep.o
+ obj-$(CONFIG_GDSYS_RXAUI_CTRL) += gdsys_rxaui_ctrl.o
+ obj-$(CONFIG_GDSYS_SOC) += gdsys_soc.o
+diff --git a/drivers/misc/gxp_eeprom.c b/drivers/misc/gxp_eeprom.c
+new file mode 100644
+index 00000000000..0d8c7ede6e4
+--- /dev/null
++++ b/drivers/misc/gxp_eeprom.c
+@@ -0,0 +1,107 @@
++// SPDX-License-Identifier: GPL-2.0+
++/*
++ * HPE GXP EEPROM driver
++ *
++ * Copyright (C) 2026 9elements GmbH
++ */
++
++#include <dm.h>
++#include <misc.h>
++#include <asm/io.h>
++#include <dm/device_compat.h>
++
++#define GXP_EEPROM_BLOCK_SIZE		128
++
++struct gxp_eeprom_priv {
++	void __iomem *base;
++	size_t size;
++};
++
++static bool gxp_eeprom_validate_checksum(void __iomem *block)
++{
++	u8 version;
++	u16 sum = 0;
++	int i;
++
++	version = readb(block);
++	if (version != 2 && version != 3)
++		return false;
++
++	for (i = 0; i < GXP_EEPROM_BLOCK_SIZE / sizeof(u16); i++)
++		sum += readw(block + i * sizeof(u16));
++
++	return sum == 0;
++}
++
++static int gxp_eeprom_read(struct udevice *dev, int offset, void *buf,
++			   int size)
++{
++	struct gxp_eeprom_priv *priv = dev_get_priv(dev);
++	u8 *dst = buf;
++	int i;
++
++	if (offset < 0 || size <= 0 || offset + size > priv->size)
++		return -EINVAL;
++
++	for (i = 0; i < size; i++)
++		dst[i] = readb(priv->base + offset + i);
++
++	return size;
++}
++
++static int gxp_eeprom_probe(struct udevice *dev)
++{
++	struct gxp_eeprom_priv *priv = dev_get_priv(dev);
++	fdt_addr_t addr;
++	fdt_size_t size;
++	int i, num_blocks;
++
++	addr = dev_read_addr_size(dev, &size);
++	if (addr == FDT_ADDR_T_NONE) {
++		dev_err(dev, "failed to get address\n");
++		return -EINVAL;
++	}
++
++	if (size == 0 || size % GXP_EEPROM_BLOCK_SIZE != 0) {
++		dev_err(dev, "size must be a multiple of %d bytes\n",
++			GXP_EEPROM_BLOCK_SIZE);
++		return -EINVAL;
++	}
++
++	priv->base = map_physmem(addr, size, MAP_NOCACHE);
++	if (!priv->base) {
++		dev_err(dev, "failed to map memory\n");
++		return -ENOMEM;
++	}
++	priv->size = size;
++
++	num_blocks = size / GXP_EEPROM_BLOCK_SIZE;
++	for (i = 0; i < num_blocks; i++) {
++		if (!gxp_eeprom_validate_checksum(priv->base +
++					       i * GXP_EEPROM_BLOCK_SIZE)) {
++			dev_err(dev, "checksum failed for block %d\n", i);
++			return -EBADMSG;
++		}
++	}
++
++	return 0;
++}
++
++static const struct misc_ops gxp_eeprom_ops = {
++	.read = gxp_eeprom_read,
++};
++
++static const struct udevice_id gxp_eeprom_ids[] = {
++	{ .compatible = "hpe,gxp-eeprom" },
++	{ }
++};
++
++U_BOOT_DRIVER(gxp_eeprom) = {
++	.name		= "gxp_eeprom",
++	.id		= UCLASS_MISC,
++	.of_match	= gxp_eeprom_ids,
++	.probe		= gxp_eeprom_probe,
++	.ops		= &gxp_eeprom_ops,
++	.priv_auto	= sizeof(struct gxp_eeprom_priv),
++	.flags		= DM_FLAG_PRE_RELOC,
++};
+-- 
+2.52.0
+

@@ -1,0 +1,55 @@
+From 0c6527858d259fcc61e6ace0eaaada566c763b2f Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 23 Jan 2026 11:32:06 +0100
+Subject: [PATCH] board: hpe: gxp: add boardinfo support
+
+Add support to display server identification during boot.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ board/hpe/gxp/gxp_board.c | 29 +++++++++++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+diff --git a/board/hpe/gxp/gxp_board.c b/board/hpe/gxp/gxp_board.c
+index 9d40702e0cf..dd72aec1065 100644
+--- a/board/hpe/gxp/gxp_board.c
++++ b/board/hpe/gxp/gxp_board.c
+@@ -28,6 +28,35 @@ static u16 gxp_get_server_id(void)
+ 	return (readl(GXP_XREG_BASE) >> 8) & 0xffff;
+ }
+ 
++int checkboard(void)
++{
++	struct udevice *dev;
++	char str[64];
++	u16 server_id;
++	int ret;
++
++	server_id = gxp_get_server_id();
++	printf("Server ID: 0x%04x\n", server_id);
++
++	ret = sysinfo_get(&dev);
++	if (ret)
++		return 0;
++
++	ret = sysinfo_detect(dev);
++	if (ret)
++		return 0;
++
++	ret = sysinfo_get_str(dev, SYSID_SM_SYSTEM_SERIAL, sizeof(str), str);
++	if (!ret)
++		printf("Serial Number: %s\n", str);
++
++	ret = sysinfo_get_str(dev, SYSID_SM_BASEBOARD_PRODUCT, sizeof(str), str);
++	if (!ret)
++		printf("Part Number: %s\n", str);
++
++	return 0;
++}
++
+ int board_fit_config_name_match(const char *name)
+ {
+ 	char expected[16];
+-- 
+2.52.0
+

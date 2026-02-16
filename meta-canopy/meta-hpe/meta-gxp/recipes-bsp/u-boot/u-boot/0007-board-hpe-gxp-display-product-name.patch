@@ -1,0 +1,64 @@
+From 93ffb8e06c36e740fb14877c4c79f5d34a04051e Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 23 Jan 2026 11:47:12 +0100
+Subject: [PATCH] board: hpe: gxp: display product name
+
+Print the product name provided by the Linux device tree during
+ft_board_setup().
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ board/hpe/gxp/gxp_board.c | 20 ++++++++++++++++++--
+ 1 file changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/board/hpe/gxp/gxp_board.c b/board/hpe/gxp/gxp_board.c
+index dd72aec1065..cb17e439338 100644
+--- a/board/hpe/gxp/gxp_board.c
++++ b/board/hpe/gxp/gxp_board.c
+@@ -71,6 +71,17 @@ int board_fit_config_name_match(const char *name)
+ 	return -1;
+ }
+ 
++#if CONFIG_IS_ENABLED(DISPLAY_BOARDINFO)
++static void ft_board_show_product(void *blob)
++{
++	const char *model;
++
++	model = fdt_getprop(blob, 0, "model", NULL);
++	if (model)
++		printf("Product: %s\n", model);
++}
++#endif
++
+ int ft_board_setup(void *blob, struct bd_info *bd)
+ {
+ 	struct udevice *dev;
+@@ -79,11 +90,11 @@ int ft_board_setup(void *blob, struct bd_info *bd)
+ 
+ 	ret = sysinfo_get(&dev);
+ 	if (ret)
+-		return 0;
++		goto skip_sysinfo;
+ 
+ 	ret = sysinfo_detect(dev);
+ 	if (ret)
+-		return 0;
++		goto skip_sysinfo;
+ 
+ 	ret = sysinfo_get_str(dev, SYSID_BOARD_MANUFACTURER, sizeof(str), str);
+ 	if (!ret)
+@@ -97,6 +108,11 @@ int ft_board_setup(void *blob, struct bd_info *bd)
+ 	if (!ret)
+ 		fdt_setprop_string(blob, 0, "part-number", str);
+ 
++skip_sysinfo:
++#if CONFIG_IS_ENABLED(DISPLAY_BOARDINFO)
++	ft_board_show_product(blob);
++#endif
++
+ 	return 0;
+ }
+ 
+-- 
+2.52.0
+

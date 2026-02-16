@@ -1,0 +1,197 @@
+From 23b4916d6cc4a42b772a60e3c62336d16ec48f86 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Fri, 23 Jan 2026 01:09:23 +0100
+Subject: [PATCH] sysinfo: add HPE GXP sysinfo driver
+
+Add sysinfo driver for HPE GXP BMC SoCs providing board information.
+It reads serial and part numbers from nvmem cells defined in the device
+tree.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ MAINTAINERS               |  2 +
+ arch/arm/dts/hpe-gxp.dtsi |  7 +++
+ configs/gxp_defconfig     |  1 +
+ drivers/sysinfo/Kconfig   |  8 ++++
+ drivers/sysinfo/Makefile  |  1 +
+ drivers/sysinfo/gxp.c     | 99 +++++++++++++++++++++++++++++++++++++++
+ 6 files changed, 118 insertions(+)
+ create mode 100644 drivers/sysinfo/gxp.c
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index c96ae0bde66..e7105fb0a0c 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -346,6 +346,8 @@ F:	doc/device-tree-bindings/spi/hpe,gxp-spi.yaml
+ F:	drivers/misc/gxp_eeprom.c
+ F:	drivers/net/gxp_umac.c
+ F:	drivers/net/gxp_umac.h
++F:	drivers/sysinfo/gxp.c
++F:	drivers/sysinfo/gxp.h
+ F:	drivers/timer/gxp-timer.c
+ F:	drivers/spi/gxp_spi.c
+ 
+diff --git a/arch/arm/dts/hpe-gxp.dtsi b/arch/arm/dts/hpe-gxp.dtsi
+index a517108c1a7..a2855a75237 100644
+--- a/arch/arm/dts/hpe-gxp.dtsi
++++ b/arch/arm/dts/hpe-gxp.dtsi
+@@ -10,6 +10,13 @@
+ 	#address-cells = <1>;
+ 	#size-cells = <1>;
+ 
++	sysinfo {
++		compatible = "hpe,gxp-sysinfo";
++		nvmem-cells = <&serial_number>, <&part_number>;
++		nvmem-cell-names = "serial-number", "part-number";
++		bootph-all;
++	};
++
+ 	cpus {
+ 		#address-cells = <1>;
+ 		#size-cells = <0>;
+diff --git a/configs/gxp_defconfig b/configs/gxp_defconfig
+index 59c1e8c2cd2..52998c6e5dd 100644
+--- a/configs/gxp_defconfig
++++ b/configs/gxp_defconfig
+@@ -27,6 +27,7 @@ CONFIG_USE_BOOTCOMMAND=y
+ CONFIG_BOOTCOMMAND="run spiboot"
+ # CONFIG_DISPLAY_CPUINFO is not set
+ # CONFIG_DISPLAY_BOARDINFO is not set
++CONFIG_SYSINFO=y
+ CONFIG_HUSH_PARSER=y
+ CONFIG_SYS_PROMPT="gxp# "
+ # CONFIG_BOOTM_NETBSD is not set
+diff --git a/drivers/sysinfo/Kconfig b/drivers/sysinfo/Kconfig
+index df83df69ffb..89f74d8de93 100644
+--- a/drivers/sysinfo/Kconfig
++++ b/drivers/sysinfo/Kconfig
+@@ -59,4 +59,12 @@ config SYSINFO_GPIO
+ 	  This ternary number is then mapped to a board revision name using
+ 	  device tree properties.
+ 
++config SYSINFO_GXP
++	bool "HPE GXP sysinfo driver"
++	depends on ARCH_GXP && GXP_EEPROM
++	default y if ARCH_GXP
++	help
++	  Support querying board information for HPE GXP BMC SoCs.
++	  Uses the GXP EEPROM driver to retrieve serial and part numbers.
++
+ endif
+diff --git a/drivers/sysinfo/Makefile b/drivers/sysinfo/Makefile
+index 26ca3150999..470bf0d17ed 100644
+--- a/drivers/sysinfo/Makefile
++++ b/drivers/sysinfo/Makefile
+@@ -9,3 +9,4 @@ obj-$(CONFIG_SYSINFO_IOT2050) += iot2050.o
+ obj-$(CONFIG_SYSINFO_RCAR3) += rcar3.o
+ obj-$(CONFIG_SYSINFO_SANDBOX) += sandbox.o
+ obj-$(CONFIG_SYSINFO_SMBIOS) += smbios.o
++obj-$(CONFIG_SYSINFO_GXP) += gxp.o
+diff --git a/drivers/sysinfo/gxp.c b/drivers/sysinfo/gxp.c
+new file mode 100644
+index 00000000000..a1f33be11df
+--- /dev/null
++++ b/drivers/sysinfo/gxp.c
+@@ -0,0 +1,99 @@
++// SPDX-License-Identifier: GPL-2.0+
++/*
++ * HPE GXP sysinfo driver
++ *
++ * Copyright (C) 2026 9elements GmbH
++ */
++
++#include <dm.h>
++#include <nvmem.h>
++#include <sysinfo.h>
++#include <dm/device_compat.h>
++
++#define GXP_SYSINFO_MODEL		"GXP"
++#define GXP_SYSINFO_MANUFACTURER	"Hewlett Packard Enterprise"
++
++/**
++ * struct gxp_sysinfo_priv - GXP sysinfo private data
++ * @serial_cell: NVMEM cell for serial number
++ * @part_cell: NVMEM cell for part number
++ */
++struct gxp_sysinfo_priv {
++	struct nvmem_cell serial_cell;
++	struct nvmem_cell part_cell;
++};
++
++static int gxp_sysinfo_detect(struct udevice *dev)
++{
++	return 0;
++}
++
++static int gxp_sysinfo_get_str(struct udevice *dev, int id, size_t size,
++			       char *val)
++{
++	struct gxp_sysinfo_priv *priv = dev_get_priv(dev);
++	struct nvmem_cell *cell;
++	int ret;
++
++	switch (id) {
++	case SYSID_BOARD_MODEL:
++		strlcpy(val, GXP_SYSINFO_MODEL, size);
++		return 0;
++	case SYSID_BOARD_MANUFACTURER:
++		strlcpy(val, GXP_SYSINFO_MANUFACTURER, size);
++		return 0;
++	case SYSID_SM_SYSTEM_SERIAL:
++		if (!priv->serial_cell.nvmem)
++			return -ENODEV;
++		cell = &priv->serial_cell;
++		break;
++	case SYSID_SM_BASEBOARD_PRODUCT:
++		if (!priv->part_cell.nvmem)
++			return -ENODEV;
++		cell = &priv->part_cell;
++		break;
++	default:
++		return -EINVAL;
++	}
++
++	if (size <= cell->size)
++		return -ENOSPC;
++
++	ret = nvmem_cell_read(cell, val, cell->size);
++	if (ret)
++		return ret;
++
++	val[cell->size] = '\0';
++
++	return 0;
++}
++
++static int gxp_sysinfo_probe(struct udevice *dev)
++{
++	struct gxp_sysinfo_priv *priv = dev_get_priv(dev);
++
++	nvmem_cell_get_by_name(dev, "serial-number", &priv->serial_cell);
++	nvmem_cell_get_by_name(dev, "part-number", &priv->part_cell);
++
++	return 0;
++}
++
++static const struct sysinfo_ops gxp_sysinfo_ops = {
++	.detect = gxp_sysinfo_detect,
++	.get_str = gxp_sysinfo_get_str,
++};
++
++static const struct udevice_id gxp_sysinfo_ids[] = {
++	{ .compatible = "hpe,gxp-sysinfo" },
++	{ }
++};
++
++U_BOOT_DRIVER(gxp_sysinfo) = {
++	.name		= "gxp_sysinfo",
++	.id		= UCLASS_SYSINFO,
++	.of_match	= gxp_sysinfo_ids,
++	.probe		= gxp_sysinfo_probe,
++	.ops		= &gxp_sysinfo_ops,
++	.priv_auto	= sizeof(struct gxp_sysinfo_priv),
++	.flags		= DM_FLAG_PRE_RELOC,
++};
+-- 
+2.52.0
+
