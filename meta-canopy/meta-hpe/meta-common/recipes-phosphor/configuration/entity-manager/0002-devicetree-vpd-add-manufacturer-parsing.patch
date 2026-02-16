@@ -1,0 +1,34 @@
+From 330c0d82ef0a3122eb1d83f3af7379aeedfb49bb Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 22 Jan 2026 14:57:52 +0100
+Subject: [PATCH] devicetree-vpd: add manufacturer parsing
+
+Parse the manufacturer property from the device tree root node and
+expose it via the Asset D-Bus interface.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ src/devicetree_vpd_parser/machine_context.cpp | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/src/devicetree_vpd_parser/machine_context.cpp b/src/devicetree_vpd_parser/machine_context.cpp
+index 8c9878b..34358eb 100644
+--- a/src/devicetree_vpd_parser/machine_context.cpp
++++ b/src/devicetree_vpd_parser/machine_context.cpp
+@@ -29,6 +29,13 @@ void MachineContext::populateFromDeviceTree()
+         MachineContext::Asset::part_number(nodeVal);
+         vpdStream.close();
+     }
++
++    vpdStream.open(nodeBasePath + std::string("manufacturer"));
++    if (vpdStream && std::getline(vpdStream, nodeVal))
++    {
++        MachineContext::Asset::manufacturer(nodeVal);
++        vpdStream.close();
++    }
+ };
+ 
+ bool MachineContext::keyNodeExists()
+-- 
+2.52.0
+
