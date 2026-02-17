@@ -1,6 +1,6 @@
-From de50238ee22638f32a2baed04e6423cc5f37e414 Mon Sep 17 00:00:00 2001
+From 0ecfb79cd78d5738828be7f5e2cf4c42c6fc12b5 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
-Date: Fri, 13 Feb 2026 20:12:17 +0100
+Date: Tue, 17 Feb 2026 22:00:46 +0100
 Subject: [PATCH] hwmon: add HPE GXP PSU driver
 
 Add a hardware monitoring driver for HPE GXP Power Supply Units. The
@@ -18,33 +18,20 @@ with hwmon_ops callbacks.
 Upstream-Status: Pending
 Signed-off-by: Christian Walter <christian.walter@9elements.com>
 ---
- arch/arm/configs/gxp_defconfig |   1 +
- drivers/hwmon/Kconfig          |   8 +
- drivers/hwmon/Makefile         |   1 +
- drivers/hwmon/gxp-psu.c        | 390 +++++++++++++++++++++++++++++++++
- 4 files changed, 400 insertions(+)
+ drivers/hwmon/Kconfig   |   8 +
+ drivers/hwmon/Makefile  |   1 +
+ drivers/hwmon/gxp-psu.c | 390 ++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 399 insertions(+)
  create mode 100644 drivers/hwmon/gxp-psu.c
 
-diff --git a/arch/arm/configs/gxp_defconfig b/arch/arm/configs/gxp_defconfig
-index f07f4bb8082f..a164e64d4cfc 100644
---- a/arch/arm/configs/gxp_defconfig
-+++ b/arch/arm/configs/gxp_defconfig
-@@ -63,6 +63,7 @@ CONFIG_SPI_GXP=y
- CONFIG_GPIOLIB=y
- CONFIG_GPIO_GXP=y
- CONFIG_SENSORS_GXP_FAN_CTRL=y
-+CONFIG_SENSORS_GXP_PSU=m
- CONFIG_WATCHDOG=y
- CONFIG_GXP_WATCHDOG=y
- CONFIG_REGULATOR=y
 diff --git a/drivers/hwmon/Kconfig b/drivers/hwmon/Kconfig
-index 18d5d4d9589c..05a45d6d1898 100644
+index bda5b5e87084..bf3ef8fc9548 100644
 --- a/drivers/hwmon/Kconfig
 +++ b/drivers/hwmon/Kconfig
-@@ -821,6 +821,14 @@ config SENSORS_GXP_FAN_CTRL
- 	  The GXP controls fan function via the CPLD through the use of PWM
- 	  registers. This driver reports status and pwm setting of the fans.
+@@ -829,6 +829,14 @@ config SENSORS_GXP_CORETEMP
+ 	  temperature sensor.
  
+ 	  This driver provides the die temperature of the GXP BMC processor.
 +config SENSORS_GXP_PSU
 +	tristate "HPE GXP PSU driver"
 +	depends on I2C
@@ -53,24 +40,24 @@ index 18d5d4d9589c..05a45d6d1898 100644
 +	  If you say yes here you get support for HPE GXP power supply unit
 +	  monitoring via I2C including sensor readings and FRU EEPROM access.
 +
+ 
  config SENSORS_HIH6130
  	tristate "Honeywell Humidicon HIH-6130 humidity/temperature sensor"
- 	depends on I2C
 diff --git a/drivers/hwmon/Makefile b/drivers/hwmon/Makefile
-index 73b2abdcc6dd..2bf83cfe864e 100644
+index 35ffb0681cb1..ce168a6637ba 100644
 --- a/drivers/hwmon/Makefile
 +++ b/drivers/hwmon/Makefile
-@@ -91,6 +91,7 @@ obj-$(CONFIG_SENSORS_GSC)	+= gsc-hwmon.o
- obj-$(CONFIG_SENSORS_GPD)	+= gpd-fan.o
+@@ -92,6 +92,7 @@ obj-$(CONFIG_SENSORS_GPD)	+= gpd-fan.o
  obj-$(CONFIG_SENSORS_GPIO_FAN)	+= gpio-fan.o
  obj-$(CONFIG_SENSORS_GXP_FAN_CTRL) += gxp-fan-ctrl.o
+ obj-$(CONFIG_SENSORS_GXP_CORETEMP) += gxp-coretemp.o
 +obj-$(CONFIG_SENSORS_GXP_PSU)	+= gxp-psu.o
  obj-$(CONFIG_SENSORS_HIH6130)	+= hih6130.o
  obj-$(CONFIG_SENSORS_HS3001)	+= hs3001.o
  obj-$(CONFIG_SENSORS_HTU31)	+= htu31.o
 diff --git a/drivers/hwmon/gxp-psu.c b/drivers/hwmon/gxp-psu.c
 new file mode 100644
-index 000000000000..e3c77e73ec6a
+index 000000000000..489d5d2f05d9
 --- /dev/null
 +++ b/drivers/hwmon/gxp-psu.c
 @@ -0,0 +1,390 @@
@@ -465,5 +452,5 @@ index 000000000000..e3c77e73ec6a
 +MODULE_DESCRIPTION("HPE GXP PSU driver");
 +MODULE_LICENSE("GPL");
 -- 
-2.53.0
+2.48.1
 
