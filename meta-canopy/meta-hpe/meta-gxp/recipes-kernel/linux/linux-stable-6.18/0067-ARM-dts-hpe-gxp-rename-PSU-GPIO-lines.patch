@@ -1,23 +1,28 @@
-From ed2e3ab2b1652dbe6a9c8e4c87ba84db0c08be01 Mon Sep 17 00:00:00 2001
+From 27608fa1aed3ecf9f7fd6d4ebb34f5842fa3aab7 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
-Date: Sun, 15 Feb 2026 23:54:17 +0100
-Subject: [PATCH] ARM: dts: hpe-gxp: rename PSU GPIO lines to match
- entity-manager
+Date: Tue, 17 Feb 2026 22:05:28 +0100
+Subject: [PATCH] ARM: dts: hpe-gxp: rename PSU GPIO lines
 
-Rename the xreg PSU GPIO line names from the lowercase-hyphenated
-convention (psu1-installed, psu1-ac-ok, psu1-dc-ok) to the uppercase
-convention used by HPE entity-manager configs (INST_PSU1, PSU1_AC,
-PSU1_DC). This allows psusensor to resolve the PresenceGpio names
-from the entity-manager PSU configuration template.
+Rename PSU GPIO lines from lowercase-hyphenated format to uppercase
+convention expected by entity-manager:
+
+  psu<N>-installed  ->  INST_PSU<N>
+  psu<N>-ac-ok      ->  PSU<N>_AC
+  psu<N>-dc-ok      ->  PSU<N>_DC
+
+This naming convention matches the GPIO line names referenced in the
+entity-manager PSU configuration for the HPE ProLiant Gen11 platform.
+
+Signed-off-by: Nabla <nabla@9e.network>
 ---
  arch/arm/boot/dts/hpe/hpe-gxp.dts | 24 ++++++++++++------------
  1 file changed, 12 insertions(+), 12 deletions(-)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index 8aa307e13b79..9973947d978e 100644
+index b7b49835dbd7..da251ea92480 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-@@ -157,24 +157,24 @@ xreg: xreg@d1000000 {
+@@ -159,24 +159,24 @@ xreg: xreg@d1000000 {
  				"", "", "", "", "", "", "", "",
  				"", "", "", "", "", "", "", "", "",
  				/* 90-97: PSU installed */
@@ -51,9 +56,9 @@ index 8aa307e13b79..9973947d978e 100644
 +				"PSU3_DC", "PSU4_DC",
 +				"PSU5_DC", "PSU6_DC",
 +				"PSU7_DC", "PSU8_DC";
- 		};
  
- 		fn2: fn2@80200000 {
+ 			i2c_mux_ctrl: mux-controller {
+ 				compatible = "mmio-mux";
 -- 
 2.48.1
 
