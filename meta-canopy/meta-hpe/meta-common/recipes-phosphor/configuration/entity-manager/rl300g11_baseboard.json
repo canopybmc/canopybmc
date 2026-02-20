@@ -573,6 +573,16 @@
             "vout2_Name": "S0_DIMM_VR1_Volt",
             "vout3_Name": "S0_DIMM_VR2_Volt",
             "vout4_Name": "S0_RCA_VR_Volt"
+        },
+        {
+            "Name": "GenericPowerPort",
+            "PortType": "powered_by",
+            "Type": "Port"
+        },
+        {
+            "Name": "GenericContainPort",
+            "PortType": "containing",
+            "Type": "Port"
         }
     ],
     "Name": "chassis",

@@ -343,6 +343,16 @@
             "Name": "P1 DIMM 11",
             "PowerState": "On",
             "Type": "SPD5118"
+        },
+        {
+            "Name": "GenericPowerPort",
+            "PortType": "powered_by",
+            "Type": "Port"
+        },
+        {
+            "Name": "GenericContainPort",
+            "PortType": "containing",
+            "Type": "Port"
         }
     ],
     "Name": "chassis",
