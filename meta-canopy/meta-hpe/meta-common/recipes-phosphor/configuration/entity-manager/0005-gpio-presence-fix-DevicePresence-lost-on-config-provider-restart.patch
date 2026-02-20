@@ -1,0 +1,118 @@
+From 45abd094c7c6a5ff34f0eea56aa280e6888f1ce4 Mon Sep 17 00:00:00 2001
+From: Christian Walter <christian.walter@9elements.com>
+Date: Sat, 21 Feb 2026 23:24:59 +0100
+Subject: [PATCH] gpio-presence: fix DevicePresence lost on config provider
+ restart
+
+When a config provider (e.g., entity-manager) restarts, it does not emit
+InterfacesRemoved signals before exiting. The new process re-publishes
+its configs, triggering InterfacesAdded signals. In addConfig(), the new
+DevicePresence replaces the old one via insert_or_assign(), destroying
+the old D-Bus interface. However, since the GPIO lines are already
+tracked (from the first add), the GPIO setup loop skips them entirely.
+No readGPIOAsyncEvent is spawned, no initial GPIO read occurs, and
+updatePresence() is never called - so the new DevicePresence never
+creates its D-Bus interface.
+
+Fix this by updating the new config presence state from cached GPIO
+values before the GPIO setup loop. This ensures that re-added configs
+get their initial D-Bus interfaces created even when GPIO lines are
+already tracked.
+
+Tested: Unit tests pass. On HPE ProLiant DL360 G11, verified that
+DevicePresence D-Bus objects are correctly recreated after
+entity-manager restart.
+
+Change-Id: Ieafd021c088cd9e4c809feae7d5b08376a3acfb1
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ src/gpio-presence/gpio_presence_manager.cpp |  9 ++++
+ test/test_gpio_presence.cpp                 | 55 +++++++++++++++++++++
+ 2 files changed, 64 insertions(+)
+
+diff --git a/src/gpio-presence/gpio_presence_manager.cpp b/src/gpio-presence/gpio_presence_manager.cpp
+index 46bbca7..1c91f21 100644
+--- a/src/gpio-presence/gpio_presence_manager.cpp
++++ b/src/gpio-presence/gpio_presence_manager.cpp
+@@ -74,6 +74,15 @@ auto GPIOPresenceManager::addConfig(const sdbusplus::message::object_path& obj,
+ 
+     auto gpioConfigs = presenceMap[obj]->gpioPolarity;
+ 
++    // Re-add: restore presence from cached GPIO state.
++    for (const auto& [gpioName, _] : gpioConfigs)
++    {
++        if (gpioState.contains(gpioName))
++        {
++            presenceMap[obj]->updateGPIOPresence(gpioName);
++        }
++    }
++
+     // populate fdios
+     for (auto& [gpioName, _] : gpioConfigs)
+     {
+diff --git a/test/test_gpio_presence.cpp b/test/test_gpio_presence.cpp
+index d6d5609..7af3534 100644
+--- a/test/test_gpio_presence.cpp
++++ b/test/test_gpio_presence.cpp
+@@ -174,3 +174,58 @@ TEST(GpioPresence, DevicePresentThenDisappearDbus)
+     ctx.spawn(testDevicePresentThenDisappearDbus(ctx));
+     ctx.run();
+ }
++
++auto testReAddConfigRestoresPresenceDbus(sdbusplus::async::context& ctx)
++    -> sdbusplus::async::task<>
++{
++    gpio_presence::GPIOPresenceManager sensor(ctx);
++
++    std::string busName = sensor.setupBusName();
++
++    std::string name = "cable0";
++    std::string gpioName = "TEST_GPIO";
++
++    std::vector<std::string> gpioNames = {gpioName};
++    std::vector<uint64_t> gpioValues = {0};
++    std::vector<std::string> parentInvCompatible = {};
++
++    // First add: find_line fails (no real GPIO), but c1 is stored in
++    // presenceMap. Do NOT call updatePresence -- c1 must not create a
++    // D-Bus interface so there is no path conflict when c2 creates one.
++    auto c1 = std::make_unique<gpio_presence::DevicePresence>(
++        ctx, gpioNames, gpioValues, name, sensor.gpioState,
++        parentInvCompatible);
++
++    sensor.addConfig(name, std::move(c1));
++
++    // Simulate readGPIOAsyncEvent having cached the GPIO state.
++    sensor.gpioState[gpioName] = false;
++
++    // Re-add: simulate config provider restart. The fix should create
++    // c2 D-Bus interface from the cached GPIO state.
++    auto c2 = std::make_unique<gpio_presence::DevicePresence>(
++        ctx, gpioNames, gpioValues, name, sensor.gpioState,
++        parentInvCompatible);
++
++    sdbusplus::message::object_path objPath = c2->getObjPath();
++
++    sensor.addConfig(name, std::move(c2));
++
++    auto client = sdbusplus::client::xyz::openbmc_project::inventory::source::
++                      DevicePresence<>(ctx)
++                          .service(busName)
++                          .path(objPath.str);
++
++    std::string nameFound = co_await client.name();
++    EXPECT_EQ(nameFound, "cable0");
++
++    ctx.request_stop();
++    co_return;
++}
++
++TEST(GpioPresence, ReAddConfigRestoresPresenceDbus)
++{
++    sdbusplus::async::context ctx;
++    ctx.spawn(testReAddConfigRestoresPresenceDbus(ctx));
++    ctx.run();
++}
+-- 
+2.53.0
+
