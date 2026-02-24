@@ -486,6 +486,7 @@
       chif {
         compatible = "hpe,gxp-chif";
         interrupts = <12>;
+        interrupt-parent = <&vic1>;
       };
     };
 

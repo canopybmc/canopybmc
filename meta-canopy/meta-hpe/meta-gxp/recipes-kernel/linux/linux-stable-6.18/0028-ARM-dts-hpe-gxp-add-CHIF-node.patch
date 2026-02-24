@@ -23,7 +23,7 @@ index 210b6900512d..f591685921f1 100644
 +			chif: chif {
 +				compatible = "hpe,gxp-chif";
 +				interrupts = <12>;
-+				interrupt-parent = <&vic0>;
++				interrupt-parent = <&vic1>;
 +			};
  		};
  
