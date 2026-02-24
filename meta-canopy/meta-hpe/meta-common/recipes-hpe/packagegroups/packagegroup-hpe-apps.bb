@@ -40,4 +40,6 @@ SUMMARY:${PN}-system = "HPE System"
 RDEPENDS:${PN}-system = " \
         entity-manager \
         dbus-sensors \
+        gxp-chif-service \
+        smbios-mdr \
         "

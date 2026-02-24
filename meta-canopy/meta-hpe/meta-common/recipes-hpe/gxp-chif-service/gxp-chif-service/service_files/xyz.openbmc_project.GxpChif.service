@@ -1,0 +1,28 @@
+[Unit]
+Description=GXP CHIF Service
+After=dbus.service
+Requires=dbus.service
+
+[Service]
+ExecStartPre=/bin/mkdir -p /var/lib/smbios
+ExecStart=/usr/bin/chif
+Restart=always
+RestartSec=5
+Type=dbus
+BusName=xyz.openbmc_project.GxpChif
+
+# Security hardening
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/smbios
+DeviceAllow=/dev/chif24 rw
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+SystemCallFilter=@system-service
+
+[Install]
+WantedBy=multi-user.target
