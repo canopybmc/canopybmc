@@ -1,10 +1,10 @@
 LICENSE = "CLOSED"
 LIC_FILES_CHKSUM = ""
 
-KBRANCH = "main"
+KBRANCH = "gxp2-bootblock"
 
-SRC_URI = "git://github.com/9elements/gxp-bootblock.git;protocol=https;branch=${KBRANCH}"
-SRCREV = "b2790dcbd5a6defe4d8f847cc554c70475adc27e"
+SRC_URI = "git://github.com/HewlettPackard/gxp-bootblock.git;protocol=https;branch=${KBRANCH}"
+SRCREV = "1714c07e0f6a3ab3888d474e49b818551c09bd93"
 S = "${WORKDIR}/git"
 
 inherit deploy
