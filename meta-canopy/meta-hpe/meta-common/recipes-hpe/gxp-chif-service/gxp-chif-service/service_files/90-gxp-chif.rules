@@ -1,0 +1,4 @@
+# Tag GXP CHIF devices for systemd device unit activation.
+# The gxp-soc subsystem is not tagged by default systemd udev rules,
+# so without this rule BindsTo=dev-chifNN.device will never activate.
+SUBSYSTEM=="gxp-soc", KERNEL=="chif*", TAG+="systemd"

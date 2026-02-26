@@ -30,4 +30,6 @@ DEPENDS += " \
 
 RDEPENDS:${PN} += "smbios-mdr"
 
+FILES:${PN} += "${nonarch_base_libdir}/udev/rules.d"
+
 EXTRA_OEMESON = "-Dtests=disabled"
