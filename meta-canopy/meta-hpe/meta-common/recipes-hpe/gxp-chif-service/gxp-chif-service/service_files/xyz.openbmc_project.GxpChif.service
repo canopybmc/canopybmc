@@ -1,20 +1,20 @@
 [Unit]
 Description=GXP CHIF Service
-After=dbus.service
+After=dbus.service dev-chif24.device
 Requires=dbus.service
+BindsTo=dev-chif24.device
 
 [Service]
-ExecStartPre=/bin/mkdir -p /var/lib/smbios
 ExecStart=/usr/bin/chif
-Restart=always
+Restart=on-failure
 RestartSec=5
 Type=dbus
 BusName=xyz.openbmc_project.GxpChif
+StateDirectory=smbios
 
 # Security hardening
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/var/lib/smbios
 DeviceAllow=/dev/chif24 rw
 PrivateTmp=yes
 NoNewPrivileges=yes

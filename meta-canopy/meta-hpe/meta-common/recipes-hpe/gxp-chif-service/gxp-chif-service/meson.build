@@ -26,6 +26,17 @@ install_data(
     install_dir: systemd_system_unit_dir,
 )
 
+udev_dep = dependency('udev')
+udev_rules_dir = udev_dep.get_variable(
+    'udev_dir',
+    pkgconfig_define: ['prefix', get_option('prefix')],
+) / 'rules.d'
+
+install_data(
+    'service_files/90-gxp-chif.rules',
+    install_dir: udev_rules_dir,
+)
+
 src_files = files(
     'src/main.cpp',
     'src/chif_daemon.cpp',
