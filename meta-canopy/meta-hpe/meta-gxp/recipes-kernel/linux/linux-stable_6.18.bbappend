@@ -77,3 +77,4 @@ SRC_URI += "file://0064-regulator-gxp-cpld-debounce-PGOOD-IRQ-before-notifyi.pat
 SRC_URI += "file://0065-ARM-dts-hpe-gxp-add-mmio-mux-for-i2c-bus-select.patch"
 SRC_URI += "file://0066-hwmon-add-HPE-GXP-PSU-driver.patch"
 SRC_URI += "file://0067-ARM-dts-hpe-gxp-rename-PSU-GPIO-lines.patch"
+SRC_URI += "file://0068-hwmon-sbtsi_temp-add-regulator-supply-and-probe-defe.patch"
