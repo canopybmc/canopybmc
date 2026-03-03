@@ -1,0 +1,3 @@
+name: hpe-dl320-g11-ci
+description: OpenBMC CI tests for HPE ProLiant DL320 Gen11 BMC
+runs-on: hpe-dl320
