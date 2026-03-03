@@ -1,0 +1,50 @@
+name: Boot Time
+description: >-
+  Regression test for BMC boot time. Flashes the image, powers on, and
+  asserts that the serial banner appears within 80s and SSH is reachable
+  within 25s after that. Baseline: 74s to banner, 19s to SSH (5-run avg).
+
+pre-stage:
+  - cmd: newdutctl
+    name: Power off DUT
+    parameters:
+      agent: "[[attributes.DutAgent]]"
+      device: "[[attributes.Device]]"
+      command: power
+      args: ["off"]
+
+  - cmd: newdutctl
+    name: Emulate Flash
+    parameters:
+      agent: "[[attributes.DutAgent]]"
+      device: "[[attributes.Device]]"
+      command: emulate-bmc
+      args: ["[[input.Binary]]"]
+
+  - cmd: newdutctl
+    name: Power on DUT
+    parameters:
+      agent: "[[attributes.DutAgent]]"
+      device: "[[attributes.Device]]"
+      command: power
+      args: ["on"]
+
+  - cmd: newdutctl
+    name: Boot banner within 80s
+    options:
+      timeout: 80s
+    parameters:
+      agent: "[[attributes.DutAgent]]"
+      device: "[[attributes.Device]]"
+      command: serial
+      args: ["Phosphor OpenBMC"]
+
+stages:
+  - name: SSH Readiness
+    steps:
+      - cmd: ping
+        name: SSH reachable within 25s
+        options:
+          timeout: 25s
+        parameters:
+          host: "[[attributes.BMC]]"

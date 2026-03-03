@@ -1,0 +1,183 @@
+name: Service Health
+description: >-
+  Verify all critical OpenBMC services are running.
+  Each step checks one systemd unit via systemctl is-active.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: Critical Services Running
+    steps:
+      - cmd: cmd
+        name: EntityManager
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.EntityManager.service"]
+      - cmd: cmd
+        name: CHIF Service
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.GxpChif.service"]
+      - cmd: cmd
+        name: SMBIOS MDR
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "smbios-mdrv2.service"]
+      - cmd: cmd
+        name: CPU Info
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.cpuinfo.service"]
+      - cmd: cmd
+        name: Fan Sensor
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.fansensor.service"]
+      - cmd: cmd
+        name: PSU Sensor
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.psusensor.service"]
+      - cmd: cmd
+        name: Hwmon Temp Sensor
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.hwmontempsensor.service"]
+      - cmd: cmd
+        name: Intel CPU Sensor
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.intelcpusensor.service"]
+      - cmd: cmd
+        name: PID Fan Control
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "phosphor-pid-control.service"]
+      - cmd: cmd
+        name: Power Control
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.Chassis.Control.Power@0.service"]
+      - cmd: cmd
+        name: BMC Web (Redfish)
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "bmcweb.service"]
+      - cmd: cmd
+        name: FRU Device
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.FruDevice.service"]
+      - cmd: cmd
+        name: LED Group Manager
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.LED.GroupManager.service"]
+      - cmd: cmd
+        name: GPIO Presence
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.gpiopresence.service"]
+      - cmd: cmd
+        name: Inventory Manager
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.Inventory.Manager.service"]
+      - cmd: cmd
+        name: Log Manager
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.Logging.service"]
+      - cmd: cmd
+        name: Dump Manager
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.Dump.Manager.service"]
+      - cmd: cmd
+        name: Network Manager
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.Network.service"]
+      - cmd: cmd
+        name: User Manager
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.User.Manager.service"]
+      - cmd: cmd
+        name: IPMI Host
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "phosphor-ipmi-host.service"]
+      - cmd: cmd
+        name: Software Manager
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.Software.Manager.service"]
+      - cmd: cmd
+        name: BMC State Manager
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.State.BMC.service"]
+      - cmd: cmd
+        name: Telemetry
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.Telemetry.service"]
+      - cmd: cmd
+        name: ADC Sensor
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.adcsensor.service"]
+      - cmd: cmd
+        name: Console VUART
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "obmc-console@ttyVUART0.service"]

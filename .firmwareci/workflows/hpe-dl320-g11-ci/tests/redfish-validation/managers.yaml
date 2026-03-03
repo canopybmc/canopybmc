@@ -1,0 +1,62 @@
+name: Redfish Managers Validation
+description: >-
+  Validate /redfish/v1/Managers tree including NetworkProtocol,
+  EthernetInterfaces, and LogServices against DMTF schemas.
+on-error: continue
+
+defaults:
+  transport: &local
+    proto: local
+
+stages:
+  - name: Validate Managers
+    steps:
+      - cmd: cmd
+        name: Check storage provisioning
+        transport: *local
+        parameters:
+          executable: ls
+          args:
+            - "-la"
+            - "[[storage.RedfishValidator]]"
+      - cmd: cmd
+        name: Check BMC connectivity
+        transport: *local
+        options:
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Managers | head -c 500"
+      - cmd: cmd
+        name: Validate Managers tree
+        transport: *local
+        options:
+          timeout: 15m
+          on-error: continue
+        parameters:
+          executable: rf_service_validator
+          args:
+            - "--user"
+            - "root"
+            - "--password"
+            - "[[attributes.BMCPassword]]"
+            - "--rhost"
+            - "https://[[attributes.BMC]]"
+            - "--payload"
+            - "tree"
+            - "/redfish/v1/Managers"
+            - "--nooemcheck"
+            - "--collectionlimit"
+            - "50"
+            - "--logdir"
+            - "/tmp/redfish-results-managers"
+      - cmd: cmd
+        name: Show validation report
+        transport: *local
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "cat /tmp/redfish-results-managers/RedfishServiceValidatorReport_*.html"

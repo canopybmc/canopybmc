@@ -1,0 +1,4 @@
+name: RedfishValidator
+uri: fwci://RedfishValidator
+commands:
+  - "pip install redfish_service_validator"

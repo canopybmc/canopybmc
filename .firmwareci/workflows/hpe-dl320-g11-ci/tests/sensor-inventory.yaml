@@ -1,0 +1,94 @@
+name: Sensor Inventory
+description: >-
+  Lock in the exact sensor inventory produced by entity-manager configs and
+  dbus-sensors patches. Checks sensor counts and presence for PSU, fan PWM,
+  temperature, and CPU sensors via Redfish.
+
+defaults:
+  transport: &local
+    proto: local
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: *local
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: Sensor Counts
+    steps:
+      - cmd: cmd
+        name: Total sensor count >= 38
+        transport: *local
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "COUNT=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors | grep -o '\"Members@odata.count\": *[0-9]*' | grep -o '[0-9]*$'); echo \"Sensor count: $COUNT\"; test \"$COUNT\" -ge 38"
+
+  - name: PSU Sensors Present
+    steps:
+      - cmd: cmd
+        name: All 16 PSU sensors present
+        transport: *local
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "DATA=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors); MISSING=''; for S in IINPUT_PSU1 IINPUT_PSU2 IOUTPUT_PSU1 IOUTPUT_PSU2 VINPUT_PSU1 VINPUT_PSU2 VOUTPUT_PSU1 VOUTPUT_PSU2 PINPUT_PSU1 PINPUT_PSU2 POUTPUT_PSU1 POUTPUT_PSU2 TEMP1_PSU1 TEMP1_PSU2 FAN1_PSU1 FAN1_PSU2; do echo \"$DATA\" | grep -q \"$S\" || MISSING=\"$MISSING $S\"; done; if [ -n \"$MISSING\" ]; then echo \"MISSING:$MISSING\"; exit 1; fi; echo 'All 16 PSU sensors present'"
+
+  - name: Fan PWM Sensors Present
+    steps:
+      - cmd: cmd
+        name: Pwm_3 through Pwm_7 present
+        transport: *local
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "DATA=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors); MISSING=''; for S in Pwm_3 Pwm_4 Pwm_5 Pwm_6 Pwm_7; do echo \"$DATA\" | grep -q \"$S\" || MISSING=\"$MISSING $S\"; done; if [ -n \"$MISSING\" ]; then echo \"MISSING:$MISSING\"; exit 1; fi; echo 'All 5 fan PWM sensors present'"
+
+  - name: Temperature Sensors Present
+    steps:
+      - cmd: cmd
+        name: GXP_Temp present
+        transport: *local
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors | grep -q 'GXP_Temp'"
+      - cmd: cmd
+        name: CPU core temps present (DTS_CPU1, Die_CPU1)
+        transport: *local
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "DATA=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors); MISSING=''; for S in DTS_CPU1 Die_CPU1; do echo \"$DATA\" | grep -q \"$S\" || MISSING=\"$MISSING $S\"; done; if [ -n \"$MISSING\" ]; then echo \"MISSING:$MISSING\"; exit 1; fi; echo 'CPU temp sensors present'"

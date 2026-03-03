@@ -1,0 +1,129 @@
+name: D-Bus Registrations
+description: >-
+  Verify all critical D-Bus well-known names are registered
+  on the system bus.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: D-Bus Services Registered
+    steps:
+      - cmd: cmd
+        name: GxpChif on D-Bus
+        transport: *bmc_ssh
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "busctl list --no-pager | grep xyz.openbmc_project.GxpChif"
+      - cmd: cmd
+        name: Smbios.MDR_V2 on D-Bus
+        transport: *bmc_ssh
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "busctl list --no-pager | grep xyz.openbmc_project.Smbios.MDR_V2"
+      - cmd: cmd
+        name: CPUInfo on D-Bus
+        transport: *bmc_ssh
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "busctl list --no-pager | grep xyz.openbmc_project.CPUInfo"
+      - cmd: cmd
+        name: EntityManager on D-Bus
+        transport: *bmc_ssh
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "busctl list --no-pager | grep xyz.openbmc_project.EntityManager"
+      - cmd: cmd
+        name: FanSensor on D-Bus
+        transport: *bmc_ssh
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "busctl list --no-pager | grep xyz.openbmc_project.FanSensor"
+      - cmd: cmd
+        name: PSUSensor on D-Bus
+        transport: *bmc_ssh
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "busctl list --no-pager | grep xyz.openbmc_project.PSUSensor"
+      - cmd: cmd
+        name: HwmonTempSensor on D-Bus
+        transport: *bmc_ssh
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "busctl list --no-pager | grep xyz.openbmc_project.HwmonTempSensor"
+      - cmd: cmd
+        name: IntelCPUSensor on D-Bus
+        transport: *bmc_ssh
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "busctl list --no-pager | grep xyz.openbmc_project.IntelCPUSensor"
+      - cmd: cmd
+        name: State.Host on D-Bus
+        transport: *bmc_ssh
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "busctl list --no-pager | grep xyz.openbmc_project.State.Host"
+      - cmd: cmd
+        name: State.Chassis on D-Bus
+        transport: *bmc_ssh
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "busctl list --no-pager | grep xyz.openbmc_project.State.Chassis"
+      - cmd: cmd
+        name: Hwmon.external on D-Bus
+        transport: *bmc_ssh
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "busctl list --no-pager | grep xyz.openbmc_project.Hwmon.external"
+      - cmd: cmd
+        name: State.FanCtrl on D-Bus
+        transport: *bmc_ssh
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "busctl list --no-pager | grep xyz.openbmc_project.State.FanCtrl"
