@@ -1,0 +1,80 @@
+name: Fan Control
+description: >-
+  Verify PID fan control is running and producing reasonable PWM values.
+  Covers phosphor-pid-control patches, fan sensor config, PID zones from
+  entity-manager, and fan presence monitoring.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: Fan Control Services
+    steps:
+      - cmd: cmd
+        name: phosphor-pid-control active
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: systemctl
+          args: ["is-active", "phosphor-pid-control.service"]
+      - cmd: cmd
+        name: Fan presence service active
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: systemctl
+          args: ["is-active", "phosphor-fan-presence-tach@0.service"]
+
+  - name: Fan PWM Values in Range
+    steps:
+      - cmd: cmd
+        name: All PWMs in 5-100% range
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "OK=true; for P in Pwm_3 Pwm_4 Pwm_5 Pwm_6 Pwm_7; do VAL=$(busctl get-property xyz.openbmc_project.FanSensor /xyz/openbmc_project/sensors/fan_pwm/$P xyz.openbmc_project.Sensor.Value Value 2>/dev/null | awk '{print $2}'); echo \"$P=$VAL%\"; if [ -z \"$VAL\" ]; then echo \"FAIL: $P not found\"; OK=false; elif ! echo \"$VAL\" | awk '{v=$1+0; if (v>=5 && v<=100) exit 0; else exit 1}'; then echo \"FAIL: $P out of range\"; OK=false; fi; done; $OK"
+
+  - name: PID Zone Configuration
+    steps:
+      - cmd: cmd
+        name: PID zone exists on D-Bus
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "busctl tree xyz.openbmc_project.State.FanCtrl --no-pager | grep -q zone"

@@ -1,0 +1,34 @@
+pre-stage:
+  - cmd: newdutctl
+    name: Power off DUT
+    parameters:
+      agent: "[[attributes.DutAgent]]"
+      device: "[[attributes.Device]]"
+      command: power
+      args: ["off"]
+
+  - cmd: newdutctl
+    name: Emulate Flash
+    parameters:
+      agent: "[[attributes.DutAgent]]"
+      device: "[[attributes.Device]]"
+      command: emulate-bmc
+      args: ["[[input.Binary]]"]
+
+  - cmd: newdutctl
+    name: Power on DUT
+    parameters:
+      agent: "[[attributes.DutAgent]]"
+      device: "[[attributes.Device]]"
+      command: power
+      args: ["on"]
+
+  - cmd: newdutctl
+    name: Wait for boot banner on serial
+    options:
+      timeout: 10m
+    parameters:
+      agent: "[[attributes.DutAgent]]"
+      device: "[[attributes.Device]]"
+      command: serial
+      args: ["Phosphor OpenBMC"]

@@ -1,0 +1,280 @@
+name: VUART Kernel
+description: >-
+  Verify the GXP Virtual UART kernel driver (8250_gxp_vuart) is loaded and
+  functional. Checks device node, driver binding, sysfs attributes (LPC
+  address, SIRQ, enable), interrupt delivery, and that the VUART receives
+  host POST data when the host boots. This is a kernel-level test — it
+  bypasses obmc-console and reads directly from /dev/ttyS3.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+pre-stage:
+  - cmd: newdutctl
+    name: Power off DUT
+    parameters:
+      agent: "[[attributes.DutAgent]]"
+      device: "[[attributes.Device]]"
+      command: power
+      args: ["off"]
+
+  - cmd: newdutctl
+    name: Emulate Flash
+    parameters:
+      agent: "[[attributes.DutAgent]]"
+      device: "[[attributes.Device]]"
+      command: emulate-bmc
+      args: ["[[input.Binary]]"]
+
+  - cmd: newdutctl
+    name: Power on DUT
+    parameters:
+      agent: "[[attributes.DutAgent]]"
+      device: "[[attributes.Device]]"
+      command: power
+      args: ["on"]
+
+  - cmd: newdutctl
+    name: Wait for boot banner on serial
+    options:
+      timeout: 10m
+    parameters:
+      agent: "[[attributes.DutAgent]]"
+      device: "[[attributes.Device]]"
+      command: serial
+      args: ["Phosphor OpenBMC"]
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["30"]
+
+  - name: Device Node
+    steps:
+      - cmd: cmd
+        name: ttyVUART0 symlink exists
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "readlink /dev/ttyVUART0 | grep -q ttyS3"
+      - cmd: cmd
+        name: ttyS3 character device exists
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "test -c /dev/ttyS3"
+
+  - name: Driver Binding
+    steps:
+      - cmd: cmd
+        name: VUART bound to 80fd0200.serial
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "test -d /sys/devices/platform/ahb@80000000/80fd0200.serial"
+      - cmd: cmd
+        name: Compatible is hpe,gxp-vuart
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "cat /sys/firmware/devicetree/base/ahb@80000000/serial@80fd0200/compatible | grep -q 'hpe,gxp-vuart'"
+      - cmd: cmd
+        name: Detected as 16550A in dmesg
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "dmesg | grep '80fd0200.serial' | grep -q '16550A'"
+
+  - name: Sysfs Attributes
+    steps:
+      - cmd: cmd
+        name: VUART is enabled
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "VAL=$(cat /sys/devices/platform/ahb@80000000/80fd0200.serial/vuart_enable); echo \"vuart_enable=$VAL\"; test \"$VAL\" = \"1\""
+      - cmd: cmd
+        name: LPC address is 0x2f8 (COM2)
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "VAL=$(cat /sys/devices/platform/ahb@80000000/80fd0200.serial/lpc_address); echo \"lpc_address=$VAL\"; echo \"$VAL\" | grep -q '0x2f8'"
+      - cmd: cmd
+        name: SIRQ is 3 (COM2 IRQ)
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "VAL=$(cat /sys/devices/platform/ahb@80000000/80fd0200.serial/sirq); echo \"sirq=$VAL\"; test \"$VAL\" = \"3\""
+
+  - name: Interrupt Delivery
+    steps:
+      - cmd: cmd
+        name: ttyS3 has received interrupts
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "COUNT=$(cat /proc/interrupts | grep ttyS3 | awk '{print $2}'); echo \"ttyS3 interrupts=$COUNT\"; test \"$COUNT\" -gt 0"
+
+  - name: Host Data Reception
+    steps:
+      - cmd: cmd
+        name: Power off host for data capture test
+        transport: &local
+          proto: local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"ForceOff\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}' | grep -qE '200|204'"
+      - cmd: cmd
+        name: Wait for power off
+        transport: *local
+        parameters:
+          executable: sleep
+          args: ["10"]
+      - cmd: cmd
+        name: Record baseline interrupt count
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "BEFORE=$(cat /proc/interrupts | grep ttyS3 | awk '{print $2}'); echo \"$BEFORE\" > /tmp/vuart_irq_before; echo \"baseline_irq=$BEFORE\""
+      - cmd: cmd
+        name: Stop obmc-console and start raw capture
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "systemctl stop obmc-console@ttyVUART0.service; rm -f /tmp/vuart_test.bin; nohup sh -c 'dd if=/dev/ttyS3 of=/tmp/vuart_test.bin bs=1 count=4096 2>/dev/null' </dev/null >/dev/null 2>&1 &"
+      - cmd: cmd
+        name: Power on host
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}' | grep -qE '200|204'"
+      - cmd: cmd
+        name: Wait for host POST data
+        transport: *local
+        options:
+          timeout: 4m
+        parameters:
+          executable: sleep
+          args: ["180"]
+      - cmd: cmd
+        name: VUART received bytes from host
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "SIZE=$(wc -c < /tmp/vuart_test.bin 2>/dev/null); echo \"captured_bytes=$SIZE\"; test \"$SIZE\" -gt 100"
+      - cmd: cmd
+        name: Interrupt count increased during host boot
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "BEFORE=$(cat /tmp/vuart_irq_before 2>/dev/null); AFTER=$(cat /proc/interrupts | grep ttyS3 | awk '{print $2}'); echo \"irq_before=$BEFORE irq_after=$AFTER\"; if [ -n \"$BEFORE\" ] && [ -n \"$AFTER\" ]; then DELTA=$((AFTER - BEFORE)); echo \"delta=$DELTA\"; test \"$DELTA\" -gt 10; else echo 'SKIP: interrupt line not available after console stop'; true; fi"
+      - cmd: cmd
+        name: Captured data contains BIOS POST text
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "strings /tmp/vuart_test.bin > /tmp/vuart_strings.txt; FOUND=0; for PAT in 'Initialization' 'CHIF' 'Memory' 'BMC'; do grep -qi \"$PAT\" /tmp/vuart_strings.txt && FOUND=$((FOUND+1)); done; echo \"matched_patterns=$FOUND/4\"; test \"$FOUND\" -ge 1"
+      - cmd: cmd
+        name: Restart obmc-console-server
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "kill $(pidof dd) 2>/dev/null; rm -f /tmp/vuart_test.bin /tmp/vuart_strings.txt /tmp/vuart_irq_before; systemctl start obmc-console@ttyVUART0.service"

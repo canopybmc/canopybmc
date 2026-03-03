@@ -1,0 +1,12 @@
+name: Boot Test
+description: Checks if the system boots successfully and is accessible via SSH.
+
+stages:
+  - name: Check SSH connectivity
+    steps:
+      - cmd: ping
+        name: Wait for SSH service
+        options:
+          timeout: 10m
+        parameters:
+          host: "[[attributes.BMC]]"
