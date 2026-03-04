@@ -151,6 +151,7 @@
 				compatible = "amd,sbrmi";
 				dimm-count = <12>;
 				reg = <0x3c>;
+				sbrmi-supply = <&host_power>;
 			};
 			sbtsi@4c {
 				compatible = "amd,sbtsi";
@@ -167,6 +168,7 @@
 				compatible = "amd,sbrmi";
 				dimm-count = <12>;
 				reg = <0x38>;
+				sbrmi-supply = <&host_power>;
 			};
 			sbtsi@48 {
 				compatible = "amd,sbtsi";
