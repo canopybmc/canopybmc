@@ -1,0 +1,58 @@
+From 52579a5f73d6bc4f2a2f7814c0c2b5684005d6ca Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Mon, 2 Mar 2026 19:36:34 -0300
+Subject: [PATCH] misc: sbrmi: add regulator supply support
+
+Add optional "sbrmi-supply" regulator support. Probe is deferred if
+the supply is present but not yet enabled.
+
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ drivers/misc/amd-sbi/rmi-core.h |  2 ++
+ drivers/misc/amd-sbi/rmi-i2c.c  | 13 +++++++++++++
+ 2 files changed, 15 insertions(+)
+
+diff --git a/drivers/misc/amd-sbi/rmi-core.h b/drivers/misc/amd-sbi/rmi-core.h
+index 975ae858e9fd..6f5c2c96ed5f 100644
+--- a/drivers/misc/amd-sbi/rmi-core.h
++++ b/drivers/misc/amd-sbi/rmi-core.h
+@@ -12,6 +12,7 @@
+ #include <linux/platform_device.h>
+ #include <linux/regmap.h>
+ #include <uapi/misc/amd-apml.h>
++#include <linux/regulator/consumer.h>
+ 
+ /* SB-RMI registers */
+ enum sbrmi_reg {
+@@ -54,6 +55,7 @@ enum sbrmi_msg_id {
+ struct sbrmi_data {
+ 	struct miscdevice sbrmi_misc_dev;
+ 	struct regmap *regmap;
++	struct regulator *supply;
+ 	/* Mutex locking */
+ 	struct mutex lock;
+ 	u32 pwr_limit_max;
+diff --git a/drivers/misc/amd-sbi/rmi-i2c.c b/drivers/misc/amd-sbi/rmi-i2c.c
+index f891f5af4bc6..205ef7b6d3be 100644
+--- a/drivers/misc/amd-sbi/rmi-i2c.c
++++ b/drivers/misc/amd-sbi/rmi-i2c.c
+@@ -63,6 +63,19 @@ static int sbrmi_i2c_probe(struct i2c_client *client)
+ 	data = devm_kzalloc(dev, sizeof(struct sbrmi_data), GFP_KERNEL);
+ 	if (!data)
+ 		return -ENOMEM;
++	/* The regulator is a optional property */
++	data->supply = devm_regulator_get_optional(dev, "sbrmi");
++	if (IS_ERR(data->supply)) {
++		if (PTR_ERR(data->supply) == -EPROBE_DEFER)
++			return -EPROBE_DEFER;
++		/* Not defined in DTS */
++		data->supply = NULL;
++	}
++
++	if (data->supply && !regulator_is_enabled(data->supply)) {
++		dev_info(dev, "sbrmi-supply not enabled, deferring probe\n");
++		return -EPROBE_DEFER;
++	}
+ 
+ 	mutex_init(&data->lock);
+ 
