@@ -155,6 +155,7 @@
 			sbtsi@4c {
 				compatible = "amd,sbtsi";
 				reg = <0x4c>;
+				sbtsi-supply = <&host_power>;
 			};
 		};
 		i2c1@2 {
@@ -170,6 +171,7 @@
 			sbtsi@48 {
 				compatible = "amd,sbtsi";
 				reg = <0x48>;
+				sbtsi-supply = <&host_power>;
 			};
 		};
 	};
