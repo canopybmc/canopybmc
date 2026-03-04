@@ -1,0 +1,486 @@
+From 21613e78e45da0f5aa332695c9d701b3b3e5df18 Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Tue, 3 Mar 2026 13:38:22 -0300
+Subject: [PATCH] misc: amd-sbi: add SB-RMI revision 0x21 (Turin) protocol
+ support
+
+Turin processors implement APML SB-RMI rev 0x21, which uses a 16-bit
+I2C register address space and a u16 thread field in the CPUID/MCA MSR
+protocol, replacing the 8-bit address and the THREAD128CS workaround
+used in rev 0x20.
+
+Add configure_regmap to auto-detect the correct register
+address width at probe time.  The 16-bit path is attempted first since
+issuing a 1-byte address transaction on a Turin device can cause an
+unrecoverable error requiring a system reboot.  If the revision read
+does not return 0x21, the driver falls back to an 8-bit regmap.  Up to
+MAX_RETRY (5) attempts are made to tolerate slow firmware init.
+
+Return -EPROBE_DEFER from sbrmi_get_max_pwr_limit() when firmware
+signals not-ready (fw_ret_code == 0x01).  Defer the power_cap_max cache
+population to the first hwmon read to tolerate late firmware readiness.
+Use READ_ONCE/WRITE_ONCE for the pwr_limit_max cache to signal intent
+and prevent compiler optimizations on the lockless fast path.
+
+Tested on DL365:
+
+```
+root@hpe-proliant-g11:~# dmesg | grep -i sbr
+[    2.851824] sbrmi-i2c 42-0038: sbrmi-supply not enabled, deferring probe
+[    2.872904] sbrmi-i2c 43-003c: sbrmi-supply not enabled, deferring probe
+root@hpe-proliant-g11:~# cat /sys/bus/i2c/devices/43-003c/hwmon/hwmon5/power1_input
+53625000
+root@hpe-proliant-g11:~# cat /sys/bus/i2c/devices/43-003c/hwmon/hwmon5/power1_cap
+155000000
+root@hpe-proliant-g11:~# cat /sys/bus/i2c/devices/43-003c/hwmon/hwmon5/power1_cap_max
+155000000
+root@hpe-proliant-g11:~# ls /dev/sbrmi-*
+/dev/sbrmi-3c
+```
+
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ drivers/misc/amd-sbi/rmi-core.c  | 200 +++++++++++++++++++++++--------
+ drivers/misc/amd-sbi/rmi-hwmon.c |  11 +-
+ drivers/misc/amd-sbi/rmi-i2c.c   | 102 ++++++++++++++--
+ 3 files changed, 254 insertions(+), 59 deletions(-)
+
+diff --git a/drivers/misc/amd-sbi/rmi-core.c b/drivers/misc/amd-sbi/rmi-core.c
+index 3dec2fc..af03200 100644
+--- a/drivers/misc/amd-sbi/rmi-core.c
++++ b/drivers/misc/amd-sbi/rmi-core.c
+@@ -28,13 +28,17 @@
+ /* CPUID */
+ #define CPUID_RD_DATA_LEN	0x8
+ #define CPUID_WR_DATA_LEN	0x8
++#define CPUID_WR_DATA_LEN_v21	0x9
+ #define CPUID_RD_REG_LEN	0xa
+ #define CPUID_WR_REG_LEN	0x9
++#define CPUID_WR_REG_LEN_v21	0xa
+ /* MSR */
+ #define MSR_RD_REG_LEN		0xa
+ #define MSR_WR_REG_LEN		0x8
++#define MSR_WR_REG_LEN_v21	0x9
+ #define MSR_RD_DATA_LEN		0x8
+ #define MSR_WR_DATA_LEN		0x7
++#define MSR_WR_DATA_LEN_v21	0x8
+ 
+ /* CPUID MSR Command Ids */
+ #define CPUID_MCA_CMD	0x73
+@@ -59,6 +63,19 @@ struct cpu_msr_indata {
+ 	u8 ext; /* extended function */
+ };
+ 
++/* input for bulk write to v21 of CPUID and MSR protocol */
++struct cpu_msr_indata_v21 {
++	u8 wr_len;	/* const value */
++	u8 rd_len;	/* const value */
++	u8 proto_cmd;	/* const value */
++	u16 thread;	/* thread number */
++	union {
++		u8 reg_offset[4];	/* input value */
++		u32 value;
++	};
++	u8 ext; /* extended function */
++} __packed;
++
+ /* output for bulk read from CPUID protocol */
+ struct cpu_msr_outdata {
+ 	u8 num_bytes;	/* number of bytes return */
+@@ -105,48 +122,136 @@ static int sbrmi_get_rev(struct sbrmi_data *data)
+ 	return 0;
+ }
+ 
+-/* Read CPUID function protocol */
+-static int rmi_cpuid_read(struct sbrmi_data *data,
+-			  struct apml_cpuid_msg *msg)
++/* MCA MSR v20 data input helper */
++static int msr_datain_v20(struct sbrmi_data *data, struct apml_mcamsr_msg *msg)
+ {
+ 	struct cpu_msr_indata input = {0};
+-	struct cpu_msr_outdata output = {0};
+-	int val = 0;
+-	int ret, hw_status;
++	int ret, val = 0;
+ 	u16 thread;
+ 
+-	mutex_lock(&data->lock);
+-	/* cache the rev value to identify if protocol is supported or not */
+-	if (!data->rev) {
+-		ret = sbrmi_get_rev(data);
+-		if (ret < 0)
+-			goto exit_unlock;
+-	}
+-	/* CPUID protocol for REV 0x10 is not supported*/
+-	if (data->rev == 0x10) {
+-		ret = -EOPNOTSUPP;
+-		goto exit_unlock;
++	thread = msg->mcamsr_in_out >> CPUID_MCA_THRD_INDEX;
++
++	/* Thread > 127, Thread128 CS register bit needs to be set to 1 */
++	if (thread > 127) {
++		thread -= 128;
++		val = 1;
+ 	}
+ 
++	ret = regmap_write(data->regmap, SBRMI_THREAD128CS, val);
++	if (ret < 0)
++		return ret;
++
++	prepare_mca_msr_input_message(&input, thread,
++				      msg->mcamsr_in_out & CPUID_MCA_FUNC_MASK);
++
++	return regmap_bulk_write(data->regmap, CPUID_MCA_CMD, &input,
++				 MSR_WR_REG_LEN);
++}
++
++/* MCA MSR v21 data input helper - uses u16 thread, no THREAD128CS */
++static int msr_datain_v21(struct sbrmi_data *data, struct apml_mcamsr_msg *msg)
++{
++	struct cpu_msr_indata_v21 input = {0};
++	u16 thread;
++
++	thread = msg->mcamsr_in_out >> CPUID_MCA_THRD_INDEX;
++
++	input.rd_len = MSR_RD_DATA_LEN;
++	input.wr_len = MSR_WR_DATA_LEN_v21;
++	input.proto_cmd = RD_MCA_CMD;
++	input.thread = thread << 1;
++	input.value = msg->mcamsr_in_out & CPUID_MCA_FUNC_MASK;
++
++	return regmap_bulk_write(data->regmap, CPUID_MCA_CMD, &input,
++				 MSR_WR_REG_LEN_v21);
++}
++
++/* CPUID v20 data input helper */
++static int cpuid_datain_v20(struct sbrmi_data *data, struct apml_cpuid_msg *msg)
++{
++	struct cpu_msr_indata input = {0};
++	int ret, val = 0;
++	u16 thread;
++
+ 	thread = msg->cpu_in_out >> CPUID_MCA_THRD_INDEX;
+ 
+-	/* Thread > 127, Thread128 CS register, 1'b1 needs to be set to 1 */
++	/* Thread > 127, Thread128 CS register bit needs to be set to 1 */
+ 	if (thread > 127) {
+ 		thread -= 128;
+ 		val = 1;
+ 	}
++
+ 	ret = regmap_write(data->regmap, SBRMI_THREAD128CS, val);
+ 	if (ret < 0)
+-		goto exit_unlock;
++		return ret;
+ 
+ 	prepare_cpuid_input_message(&input, thread,
+ 				    msg->cpu_in_out & CPUID_MCA_FUNC_MASK,
+ 				    msg->cpu_in_out >> CPUID_EXT_FUNC_INDEX);
+ 
+-	ret = regmap_bulk_write(data->regmap, CPUID_MCA_CMD,
+-				&input, CPUID_WR_REG_LEN);
+-	if (ret < 0)
++	return regmap_bulk_write(data->regmap, CPUID_MCA_CMD, &input,
++				 CPUID_WR_REG_LEN);
++}
++
++/* CPUID v21 data input helper - uses u16 thread, no THREAD128CS */
++static int cpuid_datain_v21(struct sbrmi_data *data, struct apml_cpuid_msg *msg)
++{
++	struct cpu_msr_indata_v21 input = {0};
++	u16 thread;
++
++	thread = msg->cpu_in_out >> CPUID_MCA_THRD_INDEX;
++
++	input.rd_len = CPUID_RD_DATA_LEN;
++	input.wr_len = CPUID_WR_DATA_LEN_v21;
++	input.proto_cmd = RD_CPUID_CMD;
++	input.thread = thread << 1;
++	input.value = msg->cpu_in_out & CPUID_MCA_FUNC_MASK;
++	input.ext = msg->cpu_in_out >> CPUID_EXT_FUNC_INDEX;
++
++	return regmap_bulk_write(data->regmap, CPUID_MCA_CMD, &input,
++				 CPUID_WR_REG_LEN_v21);
++}
++
++/* Read CPUID function protocol */
++static int rmi_cpuid_read(struct sbrmi_data *data,
++			  struct apml_cpuid_msg *msg)
++{
++	struct cpu_msr_outdata output = {0};
++	int ret, hw_status;
++
++	mutex_lock(&data->lock);
++
++	if (!data->regmap) {
++		ret = -ENODEV;
+ 		goto exit_unlock;
++	}
++
++	/* cache the rev value to identify if protocol is supported or not */
++	if (!data->rev) {
++		ret = sbrmi_get_rev(data);
++		if (ret < 0)
++			goto exit_unlock;
++	}
++
++	switch (data->rev) {
++	/* CPUID protocol for REV 0x10 is not supported */
++	case 0x10:
++		ret = -EOPNOTSUPP;
++		goto exit_unlock;
++	case 0x20:
++		ret = cpuid_datain_v20(data, msg);
++		if (ret < 0)
++			goto exit_unlock;
++		break;
++	case 0x21:
++		ret = cpuid_datain_v21(data, msg);
++		if (ret < 0)
++			goto exit_unlock;
++		break;
++	default:
++		ret = -EOPNOTSUPP;
++		goto exit_unlock;
++	}
+ 
+ 	/*
+ 	 * For RMI Rev 0x20, new h/w status bit is introduced. which is used
+@@ -188,45 +293,44 @@ exit_unlock:
+ 
+ /* MCA MSR protocol */
+ static int rmi_mca_msr_read(struct sbrmi_data *data,
+-			    struct apml_mcamsr_msg  *msg)
++			    struct apml_mcamsr_msg *msg)
+ {
+ 	struct cpu_msr_outdata output = {0};
+-	struct cpu_msr_indata input = {0};
+-	int ret, val = 0;
+-	int hw_status;
+-	u16 thread;
++	int ret, hw_status;
+ 
+ 	mutex_lock(&data->lock);
++
++	if (!data->regmap) {
++		ret = -ENODEV;
++		goto exit_unlock;
++	}
++
+ 	/* cache the rev value to identify if protocol is supported or not */
+ 	if (!data->rev) {
+ 		ret = sbrmi_get_rev(data);
+ 		if (ret < 0)
+ 			goto exit_unlock;
+ 	}
+-	/* MCA MSR protocol for REV 0x10 is not supported*/
+-	if (data->rev == 0x10) {
+-		ret = -EOPNOTSUPP;
+-		goto exit_unlock;
+-	}
+-
+-	thread = msg->mcamsr_in_out >> CPUID_MCA_THRD_INDEX;
+ 
+-	/* Thread > 127, Thread128 CS register, 1'b1 needs to be set to 1 */
+-	if (thread > 127) {
+-		thread -= 128;
+-		val = 1;
+-	}
+-	ret = regmap_write(data->regmap, SBRMI_THREAD128CS, val);
+-	if (ret < 0)
++	switch (data->rev) {
++	/* MCA MSR protocol for REV 0x10 is not supported */
++	case 0x10:
++		ret = -EOPNOTSUPP;
+ 		goto exit_unlock;
+-
+-	prepare_mca_msr_input_message(&input, thread,
+-				      msg->mcamsr_in_out & CPUID_MCA_FUNC_MASK);
+-
+-	ret = regmap_bulk_write(data->regmap, CPUID_MCA_CMD,
+-				&input, MSR_WR_REG_LEN);
+-	if (ret < 0)
++	case 0x20:
++		ret = msr_datain_v20(data, msg);
++		if (ret < 0)
++			goto exit_unlock;
++		break;
++	case 0x21:
++		ret = msr_datain_v21(data, msg);
++		if (ret < 0)
++			goto exit_unlock;
++		break;
++	default:
++		ret = -EOPNOTSUPP;
+ 		goto exit_unlock;
++	}
+ 
+ 	/*
+ 	 * For RMI Rev 0x20, new h/w status bit is introduced. which is used
+diff --git a/drivers/misc/amd-sbi/rmi-hwmon.c b/drivers/misc/amd-sbi/rmi-hwmon.c
+index f4f0156..63f1c1a 100644
+--- a/drivers/misc/amd-sbi/rmi-hwmon.c
++++ b/drivers/misc/amd-sbi/rmi-hwmon.c
+@@ -35,7 +35,16 @@ static int sbrmi_read(struct device *dev, enum hwmon_sensor_types type,
+ 		ret = rmi_mailbox_xfer(data, &msg);
+ 		break;
+ 	case hwmon_power_cap_max:
+-		msg.mb_in_out = data->pwr_limit_max;
++		/* Populate cache on first read if probe couldn't */
++		if (READ_ONCE(data->pwr_limit_max) == 0) {
++			msg.cmd = SBRMI_READ_PKG_PWR_LIMIT;
++			ret = rmi_mailbox_xfer(data, &msg);
++			if (ret < 0)
++				return ret;
++
++			WRITE_ONCE(data->pwr_limit_max, msg.mb_in_out);
++		}
++		msg.mb_in_out = READ_ONCE(data->pwr_limit_max);
+ 		ret = 0;
+ 		break;
+ 	default:
+diff --git a/drivers/misc/amd-sbi/rmi-i2c.c b/drivers/misc/amd-sbi/rmi-i2c.c
+index 205ef7b..011d70e 100644
+--- a/drivers/misc/amd-sbi/rmi-i2c.c
++++ b/drivers/misc/amd-sbi/rmi-i2c.c
+@@ -16,6 +16,82 @@
+ #include <linux/regmap.h>
+ #include "rmi-core.h"
+ 
++/* Try 2-byte address size before falling back to 1-byte */
++#define MAX_RETRY 5
++
++/*
++ * There are processors with RMI address size as 2 bytes and others with 1 byte,
++ * with no clear detection mechanism in place.
++ * Execute 2-byte access first, and then fall back to 1-byte.
++ * Sending 2-byte first is safer: sending 1-byte address size on
++ * Turin (2-byte) can cause an unrecoverable error requiring a system reboot.
++ */
++static int configure_regmap(struct i2c_client *client, struct sbrmi_data *data)
++{
++	struct regmap_config sbrmi_i2c_regmap_config = {
++		.reg_bits = 8,
++		.val_bits = 8,
++	};
++	struct regmap_config sbrmi_i2c_regmap_config_2_bytes = {
++		.reg_bits = 16,
++		.val_bits = 8,
++		.reg_format_endian = REGMAP_ENDIAN_LITTLE,
++	};
++	u32 i;
++	int ret, rev;
++
++	if (!client || !data)
++		return -ENODEV;
++
++	/* Try 2-byte register address first (Turin/v21) */
++	data->regmap =
++		devm_regmap_init_i2c(client, &sbrmi_i2c_regmap_config_2_bytes);
++	if (IS_ERR(data->regmap))
++		return PTR_ERR(data->regmap);
++
++	for (i = 0; i < MAX_RETRY; i++) {
++		ret = regmap_read(data->regmap, SBRMI_REV, &rev);
++		if (ret < 0) {
++			usleep_range(10000, 20000);
++			continue;
++		} else {
++			break;
++		}
++	}
++
++	/*
++	 * Fall back to 1-byte register address size.
++	 * Check for revision 0x21 to not break backward compatibility
++	 * for some Family:0x19 processors.
++	 */
++	if (ret || rev != 0x21) {
++		data->regmap =
++			devm_regmap_init_i2c(client, &sbrmi_i2c_regmap_config);
++		if (IS_ERR(data->regmap))
++			return PTR_ERR(data->regmap);
++
++		ret = regmap_read(data->regmap, SBRMI_REV, &rev);
++		if (ret < 0)
++			return ret;
++	}
++	data->rev = rev;
++
++	/*
++	 * For some Turin platforms, the first 1-byte transaction can succeed.
++	 * Verify the revision: if 0x21, switch to 2-byte address size.
++	 */
++	if (data->rev == 0x21)
++		data->regmap = devm_regmap_init_i2c(
++			client, &sbrmi_i2c_regmap_config_2_bytes);
++	else
++		data->regmap =
++			devm_regmap_init_i2c(client, &sbrmi_i2c_regmap_config);
++	if (IS_ERR(data->regmap))
++		return PTR_ERR(data->regmap);
++
++	return ret;
++}
++
+ static int sbrmi_enable_alert(struct sbrmi_data *data)
+ {
+ 	int ctrl, ret;
+@@ -43,8 +119,14 @@ static int sbrmi_get_max_pwr_limit(struct sbrmi_data *data)
+ 
+ 	msg.cmd = SBRMI_READ_PKG_MAX_PWR_LIMIT;
+ 	ret = rmi_mailbox_xfer(data, &msg);
+-	if (ret < 0)
++	if (ret < 0) {
++		if (msg.fw_ret_code == 0x01) {
++			/* Handle case where FW is not ready */
++			return -EPROBE_DEFER;
++		}
+ 		return ret;
++	}
++
+ 	data->pwr_limit_max = msg.mb_in_out;
+ 
+ 	return ret;
+@@ -54,10 +136,6 @@ static int sbrmi_i2c_probe(struct i2c_client *client)
+ {
+ 	struct device *dev = &client->dev;
+ 	struct sbrmi_data *data;
+-	struct regmap_config sbrmi_i2c_regmap_config = {
+-		.reg_bits = 8,
+-		.val_bits = 8,
+-	};
+ 	int ret;
+ 
+ 	data = devm_kzalloc(dev, sizeof(struct sbrmi_data), GFP_KERNEL);
+@@ -79,9 +157,9 @@ static int sbrmi_i2c_probe(struct i2c_client *client)
+ 
+ 	mutex_init(&data->lock);
+ 
+-	data->regmap = devm_regmap_init_i2c(client, &sbrmi_i2c_regmap_config);
+-	if (IS_ERR(data->regmap))
+-		return PTR_ERR(data->regmap);
++	ret = configure_regmap(client, data);
++	if (ret)
++		return ret;
+ 
+ 	/* Enable alert for SB-RMI sequence */
+ 	ret = sbrmi_enable_alert(data);
+@@ -90,8 +168,12 @@ static int sbrmi_i2c_probe(struct i2c_client *client)
+ 
+ 	/* Cache maximum power limit */
+ 	ret = sbrmi_get_max_pwr_limit(data);
+-	if (ret < 0)
+-		return ret;
++	if (ret < 0) {
++		/*
++		 * Ignore failure on probe — FW might not be ready.
++		 * The hwmon read path will retry on first access.
++		 */
++	}
+ 
+ 	data->dev_static_addr = client->addr;
+ 	dev_set_drvdata(dev, data);
+-- 
+2.53.0
+
