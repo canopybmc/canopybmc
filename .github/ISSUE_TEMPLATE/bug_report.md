@@ -33,4 +33,5 @@ OS:
 	<Ubuntu x.y|Fedora x|Arch>
 Python: <version>
 GCC: <version>
+Selected build target: <target>
 ```
