@@ -151,12 +151,12 @@
 				compatible = "amd,sbrmi";
 				dimm-count = <12>;
 				reg = <0x3c>;
-				sbrmi-supply = <&host_power>;
+				sbrmi-supply = <&i2c_passthrough>;
 			};
 			sbtsi@4c {
 				compatible = "amd,sbtsi";
 				reg = <0x4c>;
-				sbtsi-supply = <&host_power>;
+				sbtsi-supply = <&i2c_passthrough>;
 			};
 		};
 		i2c1@2 {
@@ -168,12 +168,12 @@
 				compatible = "amd,sbrmi";
 				dimm-count = <12>;
 				reg = <0x38>;
-				sbrmi-supply = <&host_power>;
+				sbrmi-supply = <&i2c_passthrough>;
 			};
 			sbtsi@48 {
 				compatible = "amd,sbtsi";
 				reg = <0x48>;
-				sbtsi-supply = <&host_power>;
+				sbtsi-supply = <&i2c_passthrough>;
 			};
 		};
 	};
