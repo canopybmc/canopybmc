@@ -1,0 +1,35 @@
+From: Christian Walter <christian.walter@9elements.com>
+Date: Sat, 8 Mar 2026 00:00:00 +0000
+Subject: [PATCH] ARM: dts: hpe-gxp: add I2C passthrough node
+
+Add the I2C passthrough controller node to the GXP device tree.
+The node references the CSM syscon for register access and consumes
+the host_power regulator to detect power state changes. It exposes
+itself as the i2c_passthrough regulator label for use as a supply
+by downstream I2C client drivers (sbtsi, sbrmi, spd5118) in
+platform-specific overlay files.
+
+Upstream-Status: Pending
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -534,4 +534,11 @@ fanctrl: fan-controller@c1000c00 {
+ 			fan-supply = <&host_power>;
+ 		};
+
++		i2c_passthrough: i2c-passthrough {
++			compatible = "hpe,gxp-i2c-passthrough";
++			hpe,csm = <&csm>;
++			host-power-supply = <&host_power>;
++			regulator-name = "i2c-passthrough";
++		};
++
+ 		spifi1: spi@c0000280 {
+-- 
+2.53.0
+
