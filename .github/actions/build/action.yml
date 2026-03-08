@@ -37,3 +37,9 @@ runs:
       with:
         name: obmc-phosphor-image-${{ inputs.board }}.static.mtd.tar
         path: build/${{ inputs.board }}/tmp/deploy/images/${{ inputs.board }}/obmc-phosphor-image-${{ inputs.board }}.static.mtd.tar
+
+    - name: Upload provisioning images
+      uses: actions/upload-artifact@v4
+      with:
+        name: provisioning-images-${{ inputs.board }}
+        path: build/${{ inputs.board }}/tmp/deploy/images/${{ inputs.board }}/obmc-phosphor-image-hpe-proliant-*.static.mtd

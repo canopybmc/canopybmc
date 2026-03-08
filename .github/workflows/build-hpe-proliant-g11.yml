@@ -9,6 +9,7 @@ on:
       - 'openbmc/**'
       - 'meta-canopy/**'
       - '.github/**'
+      - '.firmwareci/**'
   pull_request:
     branches:
       - hpe/main
@@ -16,6 +17,7 @@ on:
       - 'openbmc/**'
       - 'meta-canopy/**'
       - '.github/**'
+      - '.firmwareci/**'
   workflow_dispatch:
 
 jobs:
@@ -31,3 +33,20 @@ jobs:
         uses: ./.github/actions/build
         with:
           board: hpe-proliant-g11
+
+  firmwareci:
+    runs-on: [self-hosted, Hydra, Large]
+    needs: build
+    steps:
+      - name: Download provisioning image
+        uses: actions/download-artifact@v4
+        with:
+          name: provisioning-images-hpe-proliant-g11
+
+      - name: Upload to FirmwareCI
+        uses: docker://firmwareci/action:v5.1
+        with:
+          TOKEN: ${{ secrets.FWCI_TOKEN }}
+          WORKFLOW_ID: ${{ secrets.FWCI_WORKFLOW_ID }}
+          COMMIT_HASH: ${{ github.sha }}
+          BINARIES: Binary=obmc-phosphor-image-hpe-proliant-dl320-g11.static.mtd
