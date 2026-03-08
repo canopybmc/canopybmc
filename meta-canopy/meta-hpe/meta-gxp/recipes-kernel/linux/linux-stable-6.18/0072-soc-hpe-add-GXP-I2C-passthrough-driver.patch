@@ -1,0 +1,379 @@
+From: Christian Walter <christian.walter@9elements.com>
+Date: Sat, 8 Mar 2026 00:00:00 +0000
+Subject: [PATCH] soc: hpe: add GXP I2C passthrough driver
+
+Add a platform driver that enables CPU-side I2C bus access on HPE
+GXP-based servers after host power-on. The GXP ROM holds I2C buses
+during boot and releases them ~158s into POST. This driver:
+
+- Subscribes to the host power regulator notifier (PGOOD events)
+- On power-on: polls CSM ROM state register for ROM release (bit 3)
+- Writes passthrough enable registers (CSM offsets 0xb0 and 0x110)
+- Handles the BMC-reflash case (host already running) with a timeout
+  fallback and late ROM release detection
+- On power-off: clears passthrough and fires DISABLE event
+- Exposes itself as a regulator so downstream I2C client drivers
+  (sbtsi, sbrmi, spd5118) can defer probe until buses are available
+
+The driver integrates into the existing regulator notification chain:
+PGOOD -> i2c-passthrough -> sbtsi/sbrmi/spd5118.
+
+Upstream-Status: Pending
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ drivers/soc/hpe/Kconfig              |  13 ++
+ drivers/soc/hpe/Makefile             |   1 +
+ drivers/soc/hpe/gxp-i2c-passthrough.c| 295 ++++++++++++++++++++++++++
+ include/linux/soc/hpe/gxp-regs.h     |   3 +
+ 4 files changed, 312 insertions(+)
+ create mode 100644 drivers/soc/hpe/gxp-i2c-passthrough.c
+
+diff --git a/drivers/soc/hpe/Kconfig b/drivers/soc/hpe/Kconfig
+index 1a2b3c4d5e6f..7a8b9c0d1e2f 100644
+--- a/drivers/soc/hpe/Kconfig
++++ b/drivers/soc/hpe/Kconfig
+@@ -73,4 +73,17 @@ config SOC_HPE_GXP_CHIF
+ 	  support for the HPE GXP CHIF interface used in HPE ProLiant servers
+ 	  for communication between the BMC and host firmware.
+
++config SOC_HPE_GXP_I2C_PASSTHROUGH
++	tristate "HPE GXP I2C passthrough controller"
++	depends on ARCH_HPE_GXP || COMPILE_TEST
++	depends on REGULATOR
++	help
++	  Say Y here to enable support for the HPE GXP I2C passthrough
++	  controller. On HPE ProLiant Gen11 servers, the GXP ROM holds
++	  certain I2C buses during boot. This driver waits for the ROM
++	  to release the buses after host power-on, then enables I2C
++	  passthrough. It exposes the passthrough state as a regulator
++	  for downstream I2C client drivers (sbtsi, sbrmi, spd5118) to
++	  defer probe until the buses are available. If unsure, say N.
++
+ endif # SOC_HPE
+diff --git a/drivers/soc/hpe/Makefile b/drivers/soc/hpe/Makefile
+index 2b3c4d5e6f7a..8a9b0c1d2e3f 100644
+--- a/drivers/soc/hpe/Makefile
++++ b/drivers/soc/hpe/Makefile
+@@ -5,2 +5,3 @@ obj-$(CONFIG_SOC_HPE_GXP_FN2)		+= gxp-fn2.o
+ obj-$(CONFIG_SOC_HPE_GXP_POWER_CTRL)	+= gxp-power-ctrl.o
+ obj-$(CONFIG_SOC_HPE_GXP_CHIF)		+= gxp-chif.o
++obj-$(CONFIG_SOC_HPE_GXP_I2C_PASSTHROUGH)	+= gxp-i2c-passthrough.o
+diff --git a/drivers/soc/hpe/gxp-i2c-passthrough.c b/drivers/soc/hpe/gxp-i2c-passthrough.c
+new file mode 100644
+index 000000000000..b1c2d3e4f5a6
+--- /dev/null
++++ b/drivers/soc/hpe/gxp-i2c-passthrough.c
+@@ -0,0 +1,295 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * HPE GXP I2C Passthrough Controller
++ *
++ * On HPE ProLiant Gen11 servers, the GXP SoC ROM holds certain I2C
++ * buses during boot. After the host powers on, the ROM eventually
++ * releases the buses (indicated by bit 3 of CSM register 0xb0).
++ * This driver waits for the ROM release, writes the passthrough
++ * enable registers, and exposes the passthrough state as a regulator
++ * for downstream I2C client drivers.
++ *
++ * Copyright (C) 2026 9elements GmbH
++ */
++
++#include <linux/atomic.h>
++#include <linux/delay.h>
++#include <linux/device.h>
++#include <linux/device/bus.h>
++#include <linux/i2c.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/platform_device.h>
++#include <linux/regulator/consumer.h>
++#include <linux/regulator/driver.h>
++#include <linux/soc/hpe/gxp-regs.h>
++#include <linux/workqueue.h>
++
++/* Polling parameters */
++#define GXP_I2C_PT_POLL_INTERVAL_MS	1000
++#define GXP_I2C_PT_POLL_TIMEOUT_S	300
++#define GXP_I2C_PT_VERIFY_DELAY_MS	200
++#define GXP_I2C_PT_VERIFY_COUNT		3
++
++struct gxp_i2c_passthrough {
++	struct device		*dev;
++	void __iomem		*csm_base;
++	struct regulator	*host_supply;
++	struct regulator_dev	*rdev;
++	struct notifier_block	supply_nb;
++	struct delayed_work	enable_work;
++	struct work_struct	disable_work;
++	unsigned int		poll_count;
++	atomic_t		enabled;
++};
++
++static void gxp_i2c_pt_write_passthrough(struct gxp_i2c_passthrough *pt)
++{
++	u8 val;
++
++	val = readb(pt->csm_base + CSM_SPD_CONFIG);
++	writeb(val | CSM_SPD_CONFIG_PASSTHROUGH, pt->csm_base + CSM_SPD_CONFIG);
++
++	val = readb(pt->csm_base + CSM_ROM_STATE);
++	writeb(val | CSM_ROM_STATE_PASSTHROUGH, pt->csm_base + CSM_ROM_STATE);
++}
++
++static void gxp_i2c_pt_clear_passthrough(struct gxp_i2c_passthrough *pt)
++{
++	u8 val;
++
++	val = readb(pt->csm_base + CSM_SPD_CONFIG);
++	writeb(val & ~CSM_SPD_CONFIG_PASSTHROUGH, pt->csm_base + CSM_SPD_CONFIG);
++
++	val = readb(pt->csm_base + CSM_ROM_STATE);
++	writeb(val & ~CSM_ROM_STATE_PASSTHROUGH, pt->csm_base + CSM_ROM_STATE);
++}
++
++static bool gxp_i2c_pt_rom_released(struct gxp_i2c_passthrough *pt)
++{
++	u8 val = readb(pt->csm_base + CSM_ROM_STATE);
++
++	return !!(val & CSM_ROM_STATE_ROM_RELEASED);
++}
++
++static bool gxp_i2c_pt_verify(struct gxp_i2c_passthrough *pt)
++{
++	u8 rom_val = readb(pt->csm_base + CSM_ROM_STATE);
++
++	return !!(rom_val & CSM_ROM_STATE_PASSTHROUGH);
++}
++
++static void gxp_i2c_pt_enable_work_fn(struct work_struct *work)
++{
++	struct gxp_i2c_passthrough *pt =
++		container_of(work, struct gxp_i2c_passthrough,
++			     enable_work.work);
++	bool rom_released;
++	int i;
++
++	rom_released = gxp_i2c_pt_rom_released(pt);
++
++	if (!rom_released && pt->poll_count < GXP_I2C_PT_POLL_TIMEOUT_S) {
++		pt->poll_count++;
++		schedule_delayed_work(&pt->enable_work,
++				      msecs_to_jiffies(GXP_I2C_PT_POLL_INTERVAL_MS));
++		return;
++	}
++
++	if (rom_released)
++		dev_info(pt->dev, "ROM released I2C bus after %us\n",
++			 pt->poll_count);
++	else
++		dev_info(pt->dev,
++			 "ROM release not seen after %us (host likely already running)\n",
++			 pt->poll_count);
++
++	/* Write passthrough enable registers */
++	gxp_i2c_pt_write_passthrough(pt);
++
++	/*
++	 * The ROM does a full byte write to CSM_ROM_STATE when it releases.
++	 * This can overwrite the passthrough bit we just set. Verify and
++	 * re-enable if needed.
++	 */
++	for (i = 0; i < GXP_I2C_PT_VERIFY_COUNT; i++) {
++		msleep(GXP_I2C_PT_VERIFY_DELAY_MS);
++
++		if (!gxp_i2c_pt_verify(pt)) {
++			dev_info(pt->dev,
++				 "passthrough bit cleared (ROM overwrote), re-enabling\n");
++			gxp_i2c_pt_write_passthrough(pt);
++		} else {
++			break;
++		}
++	}
++
++	atomic_set(&pt->enabled, 1);
++	regulator_notifier_call_chain(pt->rdev, REGULATOR_EVENT_ENABLE, NULL);
++	bus_rescan_devices(&i2c_bus_type);
++	dev_info(pt->dev, "I2C passthrough enabled\n");
++}
++
++static void gxp_i2c_pt_disable_work_fn(struct work_struct *work)
++{
++	struct gxp_i2c_passthrough *pt =
++		container_of(work, struct gxp_i2c_passthrough, disable_work);
++
++	gxp_i2c_pt_clear_passthrough(pt);
++	atomic_set(&pt->enabled, 0);
++	regulator_notifier_call_chain(pt->rdev, REGULATOR_EVENT_DISABLE, NULL);
++	dev_info(pt->dev, "I2C passthrough disabled\n");
++}
++
++static int gxp_i2c_pt_supply_event(struct notifier_block *nb,
++				    unsigned long event, void *data)
++{
++	struct gxp_i2c_passthrough *pt =
++		container_of(nb, struct gxp_i2c_passthrough, supply_nb);
++
++	if (event & REGULATOR_EVENT_ENABLE) {
++		pt->poll_count = 0;
++		schedule_delayed_work(&pt->enable_work, 0);
++	} else if (event & REGULATOR_EVENT_DISABLE) {
++		cancel_delayed_work(&pt->enable_work);
++		schedule_work(&pt->disable_work);
++	}
++
++	return NOTIFY_OK;
++}
++
++static int gxp_i2c_pt_is_enabled(struct regulator_dev *rdev)
++{
++	struct gxp_i2c_passthrough *pt = rdev_get_drvdata(rdev);
++
++	return atomic_read(&pt->enabled);
++}
++
++/* No-op: passthrough is controlled by hardware, not software */
++static int gxp_i2c_pt_noop(struct regulator_dev *rdev)
++{
++	return 0;
++}
++
++static const struct regulator_ops gxp_i2c_pt_ops = {
++	.is_enabled = gxp_i2c_pt_is_enabled,
++	.enable     = gxp_i2c_pt_noop,
++	.disable    = gxp_i2c_pt_noop,
++};
++
++static const struct regulator_desc gxp_i2c_pt_desc = {
++	.name  = "i2c-passthrough",
++	.type  = REGULATOR_VOLTAGE,
++	.ops   = &gxp_i2c_pt_ops,
++	.owner = THIS_MODULE,
++};
++
++static void gxp_i2c_pt_iounmap(void *data)
++{
++	iounmap(data);
++}
++
++static void gxp_i2c_pt_cancel_work(void *data)
++{
++	struct gxp_i2c_passthrough *pt = data;
++
++	cancel_delayed_work_sync(&pt->enable_work);
++	cancel_work_sync(&pt->disable_work);
++}
++
++static int gxp_i2c_pt_probe(struct platform_device *pdev)
++{
++	struct gxp_i2c_passthrough *pt;
++	struct regulator_config config = {};
++	struct device *dev = &pdev->dev;
++	struct device_node *np;
++	void __iomem *base;
++	int ret;
++
++	pt = devm_kzalloc(dev, sizeof(*pt), GFP_KERNEL);
++	if (!pt)
++		return -ENOMEM;
++
++	pt->dev = dev;
++	platform_set_drvdata(pdev, pt);
++
++	/* Map CSM register region via phandle */
++	np = of_parse_phandle(dev->of_node, "hpe,csm", 0);
++	if (!np)
++		return dev_err_probe(dev, -ENODEV,
++				     "missing hpe,csm phandle\n");
++
++	base = of_iomap(np, 0);
++	of_node_put(np);
++	if (!base)
++		return dev_err_probe(dev, -ENOMEM,
++				     "failed to map CSM region\n");
++
++	pt->csm_base = base;
++	ret = devm_add_action_or_reset(dev, gxp_i2c_pt_iounmap, base);
++	if (ret)
++		return ret;
++
++	/* Get upstream host power regulator */
++	pt->host_supply = devm_regulator_get(dev, "host-power");
++	if (IS_ERR(pt->host_supply))
++		return dev_err_probe(dev, PTR_ERR(pt->host_supply),
++				     "failed to get host-power supply\n");
++
++	/* Register this driver as a regulator */
++	config.dev = dev;
++	config.of_node = dev->of_node;
++	config.driver_data = pt;
++
++	pt->rdev = devm_regulator_register(dev, &gxp_i2c_pt_desc, &config);
++	if (IS_ERR(pt->rdev))
++		return dev_err_probe(dev, PTR_ERR(pt->rdev),
++				     "failed to register regulator\n");
++
++	/* Set up work items */
++	INIT_DELAYED_WORK(&pt->enable_work, gxp_i2c_pt_enable_work_fn);
++	INIT_WORK(&pt->disable_work, gxp_i2c_pt_disable_work_fn);
++
++	ret = devm_add_action_or_reset(dev, gxp_i2c_pt_cancel_work, pt);
++	if (ret)
++		return ret;
++
++	/* Subscribe to host power events */
++	pt->supply_nb.notifier_call = gxp_i2c_pt_supply_event;
++	ret = devm_regulator_register_notifier(pt->host_supply,
++					       &pt->supply_nb);
++	if (ret)
++		return dev_err_probe(dev, ret,
++				     "failed to register supply notifier\n");
++
++	/*
++	 * If host is already powered on (e.g. BMC reflash while host
++	 * is running), start polling immediately.
++	 */
++	if (regulator_is_enabled(pt->host_supply) > 0) {
++		dev_info(dev, "host already on, starting ROM release poll\n");
++		schedule_delayed_work(&pt->enable_work, 0);
++	}
++
++	return 0;
++}
++
++static const struct of_device_id gxp_i2c_pt_of_match[] = {
++	{ .compatible = "hpe,gxp-i2c-passthrough" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, gxp_i2c_pt_of_match);
++
++static struct platform_driver gxp_i2c_pt_driver = {
++	.probe = gxp_i2c_pt_probe,
++	.driver = {
++		.name = "gxp-i2c-passthrough",
++		.of_match_table = gxp_i2c_pt_of_match,
++	},
++};
++module_platform_driver(gxp_i2c_pt_driver);
++
++MODULE_AUTHOR("Christian Walter <christian.walter@9elements.com>");
++MODULE_DESCRIPTION("HPE GXP I2C Passthrough Controller");
++MODULE_LICENSE("GPL");
+diff --git a/include/linux/soc/hpe/gxp-regs.h b/include/linux/soc/hpe/gxp-regs.h
+index c3d4e5f6a7b8..d4e5f6a7b8c9 100644
+--- a/include/linux/soc/hpe/gxp-regs.h
++++ b/include/linux/soc/hpe/gxp-regs.h
+@@ -43,7 +43,10 @@
+ /* ROM state */
+ #define CSM_ROM_STATE		0xb0	/* ROM ready / DIMM access state (RW) */
++#define CSM_ROM_STATE_ROM_RELEASED	BIT(3)	/* ROM has released I2C */
++#define CSM_ROM_STATE_PASSTHROUGH	BIT(6)	/* I2C passthrough enable */
+
+ /* SPD config */
+ #define CSM_SPD_CONFIG		0x110	/* SPD read mode configuration (RW) */
++#define CSM_SPD_CONFIG_PASSTHROUGH	BIT(6)	/* SPD passthrough enable */
+
+ /* GPI (General Purpose Input) data registers */
+-- 
+2.53.0
+
