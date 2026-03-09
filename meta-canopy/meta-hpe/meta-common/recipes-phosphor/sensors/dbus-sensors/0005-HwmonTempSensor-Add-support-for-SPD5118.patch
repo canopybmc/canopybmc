@@ -1,0 +1,27 @@
+From 434ff83eba115126aaf788cd4ea5369e1b350e9c Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Mon, 9 Mar 2026 20:19:03 -0300
+Subject: [PATCH] HwmonTempSensor: Add support for SPD5118
+
+Add support for jedec spd5118 ddr5 dimm temperature sensor.
+
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ src/hwmon-temp/HwmonTempMain.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/hwmon-temp/HwmonTempMain.cpp b/src/hwmon-temp/HwmonTempMain.cpp
+index e9ddb5c7a..37b47d9d0 100644
+--- a/src/hwmon-temp/HwmonTempMain.cpp
++++ b/src/hwmon-temp/HwmonTempMain.cpp
+@@ -85,6 +85,7 @@ static const I2CDeviceTypeMap sensorTypes{
+     {"NCT7802", I2CDeviceType{"nct7802", true}},
+     {"PT5161L", I2CDeviceType{"pt5161l", true}},
+     {"SBTSI", I2CDeviceType{"sbtsi", true}},
++    {"SPD5118", I2CDeviceType{"spd5118", true}},
+     {"SI7020", I2CDeviceType{"si7020", false}},
+     {"TMP100", I2CDeviceType{"tmp100", true}},
+     {"TMP1075", I2CDeviceType{"tmp1075", true}},
+-- 
+2.53.0
+
