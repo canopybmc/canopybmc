@@ -35,6 +35,62 @@
             "Type": "EMC1412"
         },
         {
+            "Address": "0x4c",
+            "Bus": 43,
+            "CpuID": 1,
+            "DtsCritOffset": -2,
+            "Name": "CPU 1",
+            "PowerState": "On",
+            "PresenceGpioName": "CPU1_PRSNT",
+            "PresenceGpioPolarity": "High",
+            "TempScaleFactor": 0.001,
+            "Thresholds": [
+                {
+                    "Direction": "greater than",
+                    "Label": "CPU 1 Temp",
+                    "Name": "upper critical",
+                    "Severity": 1,
+                    "Value": 99
+                },
+                {
+                    "Direction": "greater than",
+                    "Label": "CPU 1 Temp",
+                    "Name": "upper non critical",
+                    "Severity": 0,
+                    "Value": 90
+                }
+            ],
+            "Type": "SBTSI"
+        },
+        {
+            "Address": "0x48",
+            "Bus": 42,
+            "CpuID": 2,
+            "DtsCritOffset": -2,
+            "Name": "CPU 2",
+            "PowerState": "On",
+            "PresenceGpioName": "CPU2_PRSNT",
+            "PresenceGpioPolarity": "High",
+            "TempScaleFactor": 0.001,
+            "Thresholds": [
+                {
+                    "Direction": "greater than",
+                    "Label": "CPU 2 Temp",
+                    "Name": "upper critical",
+                    "Severity": 1,
+                    "Value": 99
+                },
+                {
+                    "Direction": "greater than",
+                    "Label": "CPU 2 Temp",
+                    "Name": "upper non critical",
+                    "Severity": 0,
+                    "Value": 90
+                }
+            ],
+            "Type": "SBTSI"
+        },
+        {
             "Connector": {
                 "Fail": "fan1-fail",
                 "Inst": "fan1-installed",
@@ -275,169 +331,169 @@
         },
         {
             "Address": "0x50",
-            "Bus": 12,
-            "Name": "P2 DIMM 0",
-            "PowerState": "On",
-            "Type": "SPD5118"
-        },
-        {
-            "Address": "0x50",
-            "Bus": 10,
+            "Bus": 47,
             "Name": "P1 DIMM 0",
             "PowerState": "On",
             "Type": "SPD5118"
         },
         {
-            "Address": "0x50",
-            "Bus": 13,
-            "Name": "P2 DIMM 6",
-            "PowerState": "On",
-            "Type": "SPD5118"
-        },
-        {
-            "Address": "0x50",
-            "Bus": 11,
-            "Name": "P1 DIMM 6",
-            "PowerState": "On",
-            "Type": "SPD5118"
-        },
-        {
             "Address": "0x51",
-            "Bus": 13,
-            "Name": "P2 DIMM 7",
-            "PowerState": "On",
-            "Type": "SPD5118"
-        },
-        {
-            "Address": "0x51",
-            "Bus": 11,
-            "Name": "P1 DIMM 7",
-            "PowerState": "On",
-            "Type": "SPD5118"
-        },
-        {
-            "Address": "0x51",
-            "Bus": 12,
-            "Name": "P2 DIMM 1",
-            "PowerState": "On",
-            "Type": "SPD5118"
-        },
-        {
-            "Address": "0x51",
-            "Bus": 10,
+            "Bus": 47,
             "Name": "P1 DIMM 1",
             "PowerState": "On",
             "Type": "SPD5118"
         },
         {
             "Address": "0x52",
-            "Bus": 12,
-            "Name": "P2 DIMM 2",
-            "PowerState": "On",
-            "Type": "SPD5118"
-        },
-        {
-            "Address": "0x52",
-            "Bus": 10,
+            "Bus": 47,
             "Name": "P1 DIMM 2",
             "PowerState": "On",
             "Type": "SPD5118"
         },
         {
-            "Address": "0x52",
-            "Bus": 13,
-            "Name": "P2 DIMM 8",
+            "Address": "0x53",
+            "Bus": 47,
+            "Name": "P1 DIMM 3",
+            "PowerState": "On",
+            "Type": "SPD5118"
+        },
+        {
+            "Address": "0x54",
+            "Bus": 47,
+            "Name": "P1 DIMM 4",
+            "PowerState": "On",
+            "Type": "SPD5118"
+        },
+        {
+            "Address": "0x55",
+            "Bus": 47,
+            "Name": "P1 DIMM 5",
+            "PowerState": "On",
+            "Type": "SPD5118"
+        },
+        {
+            "Address": "0x50",
+            "Bus": 46,
+            "Name": "P1 DIMM 6",
+            "PowerState": "On",
+            "Type": "SPD5118"
+        },
+        {
+            "Address": "0x51",
+            "Bus": 46,
+            "Name": "P1 DIMM 7",
             "PowerState": "On",
             "Type": "SPD5118"
         },
         {
             "Address": "0x52",
-            "Bus": 11,
+            "Bus": 46,
             "Name": "P1 DIMM 8",
             "PowerState": "On",
             "Type": "SPD5118"
         },
         {
             "Address": "0x53",
-            "Bus": 12,
-            "Name": "P2 DIMM 3",
-            "PowerState": "On",
-            "Type": "SPD5118"
-        },
-        {
-            "Address": "0x53",
-            "Bus": 10,
-            "Name": "P1 DIMM 3",
-            "PowerState": "On",
-            "Type": "SPD5118"
-        },
-        {
-            "Address": "0x53",
-            "Bus": 13,
-            "Name": "P2 DIMM 9",
-            "PowerState": "On",
-            "Type": "SPD5118"
-        },
-        {
-            "Address": "0x53",
-            "Bus": 11,
+            "Bus": 46,
             "Name": "P1 DIMM 9",
             "PowerState": "On",
             "Type": "SPD5118"
         },
         {
             "Address": "0x54",
-            "Bus": 12,
-            "Name": "P2 DIMM 4",
-            "PowerState": "On",
-            "Type": "SPD5118"
-        },
-        {
-            "Address": "0x54",
-            "Bus": 10,
-            "Name": "P1 DIMM 4",
-            "PowerState": "On",
-            "Type": "SPD5118"
-        },
-        {
-            "Address": "0x54",
-            "Bus": 13,
-            "Name": "P2 DIMM 10",
-            "PowerState": "On",
-            "Type": "SPD5118"
-        },
-        {
-            "Address": "0x54",
-            "Bus": 11,
+            "Bus": 46,
             "Name": "P1 DIMM 10",
             "PowerState": "On",
             "Type": "SPD5118"
         },
         {
             "Address": "0x55",
-            "Bus": 12,
+            "Bus": 46,
+            "Name": "P1 DIMM 11",
+            "PowerState": "On",
+            "Type": "SPD5118"
+        },
+        {
+            "Address": "0x50",
+            "Bus": 45,
+            "Name": "P2 DIMM 0",
+            "PowerState": "On",
+            "Type": "SPD5118"
+        },
+        {
+            "Address": "0x51",
+            "Bus": 45,
+            "Name": "P2 DIMM 1",
+            "PowerState": "On",
+            "Type": "SPD5118"
+        },
+        {
+            "Address": "0x52",
+            "Bus": 45,
+            "Name": "P2 DIMM 2",
+            "PowerState": "On",
+            "Type": "SPD5118"
+        },
+        {
+            "Address": "0x53",
+            "Bus": 45,
+            "Name": "P2 DIMM 3",
+            "PowerState": "On",
+            "Type": "SPD5118"
+        },
+        {
+            "Address": "0x54",
+            "Bus": 45,
+            "Name": "P2 DIMM 4",
+            "PowerState": "On",
+            "Type": "SPD5118"
+        },
+        {
+            "Address": "0x55",
+            "Bus": 45,
             "Name": "P2 DIMM 5",
             "PowerState": "On",
             "Type": "SPD5118"
         },
         {
-            "Address": "0x55",
-            "Bus": 10,
-            "Name": "P1 DIMM 5",
+            "Address": "0x50",
+            "Bus": 44,
+            "Name": "P2 DIMM 6",
+            "PowerState": "On",
+            "Type": "SPD5118"
+        },
+        {
+            "Address": "0x51",
+            "Bus": 44,
+            "Name": "P2 DIMM 7",
+            "PowerState": "On",
+            "Type": "SPD5118"
+        },
+        {
+            "Address": "0x52",
+            "Bus": 44,
+            "Name": "P2 DIMM 8",
+            "PowerState": "On",
+            "Type": "SPD5118"
+        },
+        {
+            "Address": "0x53",
+            "Bus": 44,
+            "Name": "P2 DIMM 9",
+            "PowerState": "On",
+            "Type": "SPD5118"
+        },
+        {
+            "Address": "0x54",
+            "Bus": 44,
+            "Name": "P2 DIMM 10",
             "PowerState": "On",
             "Type": "SPD5118"
         },
         {
             "Address": "0x55",
-            "Bus": 13,
+            "Bus": 44,
             "Name": "P2 DIMM 11",
-            "PowerState": "On",
-            "Type": "SPD5118"
-        },
-        {
-            "Address": "0x55",
-            "Bus": 11,
-            "Name": "P1 DIMM 11",
             "PowerState": "On",
             "Type": "SPD5118"
         },
