@@ -1,4 +1,4 @@
-IMAGE_FEATURES:remove = "obmc-ikvm"
+# KVM enabled: obmc-ikvm provides VNC-based KVM over IP
 
 # Remove the cracklib package to save space.
 PACKAGE_INSTALL:remove = "cracklib"
