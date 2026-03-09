@@ -1,0 +1,72 @@
+From: Christian Walter <christian.walter@9elements.com>
+Date: Sat, 8 Mar 2026 00:00:00 +0000
+Subject: [PATCH] ARM: dts: hpe-gxp: add video thumbnail and USB UDC nodes
+
+Add device tree nodes for the GXP video thumbnail engine and USB
+device controllers required for KVM-over-IP functionality:
+
+- thumbnail video capture engine at 0xc0000500
+- UDC group controller (udcg) syscon at 0x80400800
+- Three USB device controller instances (udc0-udc2)
+
+UDC allocation follows HPE convention:
+  udc0: HID gadget (keyboard + mouse for KVM)
+  udc2: reserved for virtual NIC (ECM)
+
+Upstream-Status: Pending
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 41 ++++++++++++++++++++++++++++++
+ 1 file changed, 41 insertions(+)
+
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -616,4 +616,45 @@ fanctrl: fan-controller@c1000c00 {
+ 			fan-shutdown-percent = <50>;
+ 		};
+
++		thumbnail: video@c0000500 {
++			compatible = "hpe,gxp-video-thumbnail";
++			reg = <0xc0000500 0x20>;
++			hpe,bits-per-pixel = <32>;
++		};
++
++		udcg: syscon@80400800 {
++			compatible = "hpe,gxp-udcg", "syscon";
++			reg = <0x80400800 0x200>;
++		};
++
++		udc0: usb@80401000 {
++			compatible = "hpe,gxp-udc";
++			reg = <0x80401000 0x1000>;
++			interrupts = <13>;
++			interrupt-parent = <&vic1>;
++			hpe,vdev-num = <0>;
++			hpe,num-flex-endpoints = <4>;
++			hpe,udcg = <&udcg>;
++		};
++
++		udc1: usb@80402000 {
++			compatible = "hpe,gxp-udc";
++			reg = <0x80402000 0x1000>;
++			interrupts = <13>;
++			interrupt-parent = <&vic1>;
++			hpe,vdev-num = <1>;
++			hpe,num-flex-endpoints = <4>;
++			hpe,udcg = <&udcg>;
++		};
++
++		udc2: usb@80403000 {
++			compatible = "hpe,gxp-udc";
++			reg = <0x80403000 0x1000>;
++			interrupts = <13>;
++			interrupt-parent = <&vic1>;
++			hpe,vdev-num = <2>;
++			hpe,num-flex-endpoints = <4>;
++			hpe,udcg = <&udcg>;
++		};
++
+ 		spifi1: spi@c0000280 {
+--
+2.53.0

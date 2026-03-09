@@ -1,0 +1,1255 @@
+From: Richard Yu <richard.yu@hpe.com>
+Date: Sat, 8 Mar 2026 00:00:00 +0000
+Subject: [PATCH] usb: gadget: udc: add HPE GXP USB device controller driver
+
+Add the USB Device Controller driver for the HPE GXP SoC. The GXP has
+up to 8 virtual USB device controllers that share a common group
+controller (UDCG). Each virtual device supports up to 7 flexible
+endpoints and operates at USB High Speed.
+
+The driver is used together with USB configfs gadget to provide HID
+(keyboard/mouse) input for KVM-over-IP functionality.
+
+Includes a connect-retry mechanism: after pullup, the driver checks
+whether the host has enumerated the device. If not, it toggles the
+connect bit and retries up to 24 times at 5-second intervals. This
+handles the common case where the BMC boots before the host USB
+controller is ready.
+
+Based on the upstream submission by Richard Yu:
+https://lore.kernel.org/linux-arm-kernel/20221103160625.15574-2-richard.yu@hpe.com/
+
+Upstream-Status: Pending
+Signed-off-by: Richard Yu <richard.yu@hpe.com>
+---
+ drivers/usb/gadget/udc/Kconfig   |    7 +
+ drivers/usb/gadget/udc/Makefile  |    1 +
+ drivers/usb/gadget/udc/gxp_udc.c | 1188 +++++++++++++++++++++++++++++
+ 3 files changed, 1196 insertions(+)
+ create mode 100644 drivers/usb/gadget/udc/gxp_udc.c
+
+diff --git a/drivers/usb/gadget/udc/Kconfig b/drivers/usb/gadget/udc/Kconfig
+index 8487599a3969..b1c2e0d3a5f6 100644
+--- a/drivers/usb/gadget/udc/Kconfig
++++ b/drivers/usb/gadget/udc/Kconfig
+@@ -106,6 +106,13 @@ config USB_GR_UDC
+ 	  Select this to support Aeroflex Gaisler GRUSBDC cores from the GRLIB
+ 	  VHDL IP core library.
+
++config USB_GXP_UDC
++	tristate "HPE GXP UDC Driver"
++	depends on ARCH_HPE_GXP || COMPILE_TEST
++	help
++	  Say "y" to enable support for the HPE GXP USB Device Controller.
++	  This is used for USB gadget (HID, network) on GXP BMC platforms.
++
+ config USB_OMAP
+ 	tristate "OMAP USB Device Controller"
+ 	depends on ARCH_OMAP1
+diff --git a/drivers/usb/gadget/udc/Makefile b/drivers/usb/gadget/udc/Makefile
+index ba2391f58c65..c3d3c3a4e5f6 100644
+--- a/drivers/usb/gadget/udc/Makefile
++++ b/drivers/usb/gadget/udc/Makefile
+@@ -31,5 +31,6 @@ obj-$(CONFIG_USB_LPC32XX)	+= lpc32xx_udc.o
+ obj-$(CONFIG_USB_EG20T)		+= pch_udc.o
+ obj-$(CONFIG_USB_GR_UDC)	+= gr_udc.o
++obj-$(CONFIG_USB_GXP_UDC)	+= gxp_udc.o
+ obj-$(CONFIG_USB_GADGET_XILINX)	+= udc-xilinx.o
+ obj-$(CONFIG_USB_SNP_UDC_PLAT) += snps_udc_plat.o
+ obj-$(CONFIG_USB_ASPEED_VHUB)	+= aspeed-vhub/
+diff --git a/drivers/usb/gadget/udc/gxp_udc.c b/drivers/usb/gadget/udc/gxp_udc.c
+new file mode 100644
+index 000000000000..b1c2e0d3a5f6
+--- /dev/null
++++ b/drivers/usb/gadget/udc/gxp_udc.c
+@@ -0,0 +1,1188 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/* Copyright (C) 2022 Hewlett-Packard Enterprise Development Company, L.P. */
++
++#include <linux/delay.h>
++#include <linux/dma-mapping.h>
++#include <linux/interrupt.h>
++#include <linux/io.h>
++#include <linux/kernel.h>
++#include <linux/mfd/syscon.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_platform.h>
++#include <linux/platform_device.h>
++#include <linux/regmap.h>
++#include <linux/slab.h>
++#include <linux/spinlock.h>
++#include <linux/usb/ch9.h>
++#include <linux/usb/gadget.h>
++#include <linux/workqueue.h>
++
++#define EVGISTAT		0x0000
++#define EVGIEN			0x0004
++#define EVFEMAP			0x0010
++#define EVFEMAP_VDEVNUM_MASK	0x07
++#define EVFEMAP_VDEVNUM(val)	(val)
++#define EVFEMAP_EPNUM_MASK	0x70
++#define EVFEMAP_EPNUM(val)	((val) << 4)
++
++#define EVDISTAT		0x0000
++#define EVDISTAT_ALL_EP_INT	0x000000ff
++#define EVDISTAT_EP0_INT	0x00000001
++#define EVDISTAT_SETUP_DAT_RCV	0x00010000
++#define EVDISTAT_PORTEN_CHANGE	0x00100000
++#define EVDISTAT_PORTRST	0x80000000
++
++#define EVDIEN			0x0004
++
++#define EVDISTAT_MASK	(EVDISTAT_SETUP_DAT_RCV | EVDISTAT_PORTEN_CHANGE | \
++			 EVDISTAT_PORTRST | EVDISTAT_ALL_EP_INT)
++#define EVDIEN_MASK	(EVDISTAT_SETUP_DAT_RCV | EVDISTAT_PORTEN_CHANGE | \
++			 EVDISTAT_PORTRST | EVDISTAT_EP0_INT)
++
++#define EVDCS			0x0008
++#define EVDCS_CONNECT		0x00000001
++#define EVDCS_PORTENABLESTS	0x01000000
++
++#define EVDADDR			0x000c
++#define EVDSETUPL		0x0010
++#define EVDSETUPH		0x0014
++
++#define EVDEPCC				0x0000
++#define EVDEPCC_EPENABLE		0x00000001
++#define EVDEPCC_CFGINOUT		0x00000002
++#define EVDEPCC_DT_RESET		0x00000004
++#define EVDEPCC_DISARMCMD		0x00000020
++#define EVDEPCC_STALL			0x00000080
++#define EVDEPCC_TXN_PER_UFRAME_MASK	0x00030000
++#define EVDEPCC_TXN_PER_UFRAME(val)	((val) << 16)
++#define EVDEPCC_EP_TYPE_MASK		0x000c0000
++#define EVDEPCC_EP_TYPE(val)		((val) << 18)
++#define EVDEPCC_EP_SIZE_MASK		0x00700000
++#define EVDEPCC_EP_SIZE(val)		((val) << 20)
++
++#define EP_TYPE_CONTROL	0x00
++#define EP_TYPE_BULK	0x01
++#define EP_TYPE_INT	0x02
++#define EP_TYPE_ISOC	0x03
++
++#define EVDEPSTS		0x0004
++#define EVDEPSTS_DONE		0x00000001
++#define EVDEPSTS_SHORT		0x00000002
++#define EVDEPSTS_STALLDET	0x00000004
++
++#define EVDEPEVTEN		0x0008
++#define EVDEPEVTEN_DONE		0x00000001
++#define EVDEPEVTEN_SHORT	0x00000002
++#define EVDEPEVTEN_STALLDET	0x00000004
++#define EVDEPADDR		0x000c
++#define EVDEPLEN		0x0010
++
++#define GXP_UDC_MAX_NUM_EP		8
++#define GXP_UDC_MAX_NUM_FLEX_EP		16
++#define GXP_UDC_MAX_NUM_VDEVICE		8
++#define GXP_UDC_MAX_NUM_FLEX_EP_PER_VDEV	7
++
++#define GXP_UDC_CONNECT_RETRY_MS	5000
++#define GXP_UDC_CONNECT_MAX_RETRIES	24
++#define GXP_UDC_IRQ_MAX_ITERATIONS	100
++
++static DEFINE_MUTEX(udcg_init_mutex);
++static bool udcg_init_done;
++
++static const char * const gxp_udc_name[] = {
++	"gxp-udc0", "gxp-udc1", "gxp-udc2", "gxp-udc3",
++	"gxp-udc4", "gxp-udc5", "gxp-udc6", "gxp-udc7"
++};
++
++static const char * const gxp_udc_ep_name[] = {
++	"ep0", "ep1", "ep2", "ep3", "ep4", "ep5", "ep6", "ep7"
++};
++
++struct gxp_udc_req {
++	struct usb_request req;
++	struct list_head queue;
++};
++
++struct gxp_udc_ep {
++	void __iomem *base;
++	struct gxp_udc_drvdata *drvdata;
++	struct usb_ep ep;
++	struct list_head queue;
++	unsigned char epnum;
++	unsigned char type;
++	bool stall;
++	bool wedged;
++	int is_in;
++};
++
++struct gxp_udc_drvdata {
++	void __iomem *base;
++	struct platform_device *pdev;
++	struct regmap *udcg_map;
++	struct gxp_udc_ep ep[GXP_UDC_MAX_NUM_EP];
++	int irq;
++	struct usb_gadget gadget;
++	struct usb_gadget_driver *driver;
++	u32 vdevnum;
++	u32 fepnum;
++	u32 devaddr;
++	__le16 ep0_data;
++	struct usb_request *ep0_req;
++	bool defer_set_address;
++	spinlock_t lock;
++	struct delayed_work connect_work;
++	unsigned int connect_retries;
++};
++
++static void gxp_udc_out_0byte_status(struct gxp_udc_ep *ep);
++static void gxp_udc_in_0byte_status(struct gxp_udc_ep *ep);
++
++static unsigned char gxp_udc_femap_read(struct gxp_udc_drvdata *drvdata,
++					int fep)
++{
++	unsigned int value;
++	int i = fep & 0x03;
++
++	regmap_read(drvdata->udcg_map, EVFEMAP + (fep & ~0x03), &value);
++	value = (value >> (8 * i)) & 0xff;
++
++	return (unsigned char)value;
++}
++
++static void gxp_udc_femap_write(struct gxp_udc_drvdata *drvdata, int fep,
++				unsigned char value)
++{
++	unsigned int reg;
++	unsigned int tmp = value;
++	int i = fep & 0x03;
++
++	regmap_read(drvdata->udcg_map, EVFEMAP + (fep & ~0x03), &reg);
++	tmp = tmp << (8 * i);
++	reg &= ~(0xff << (8 * i));
++	reg |= tmp;
++	regmap_write(drvdata->udcg_map, EVFEMAP + (fep & ~0x03), reg);
++}
++
++static int gxp_udc_start_dma(struct gxp_udc_ep *ep, struct gxp_udc_req *req)
++{
++	writel(req->req.dma, ep->base + EVDEPADDR);
++	writel(req->req.length, ep->base + EVDEPLEN);
++	return 0;
++}
++
++static int gxp_udc_done_dma(struct gxp_udc_ep *ep, struct gxp_udc_req *req)
++{
++	u32 len;
++
++	len = readl(ep->base + EVDEPLEN);
++	req->req.actual = req->req.length - len;
++
++	if (len && ep->is_in) {
++		writel(len, ep->base + EVDEPLEN);
++		return 0;
++	}
++	return 1;
++}
++
++static u32 evdepcc_ep_type(int value)
++{
++	switch (value) {
++	case USB_ENDPOINT_XFER_CONTROL:
++		return EP_TYPE_CONTROL;
++	case USB_ENDPOINT_XFER_ISOC:
++		return EP_TYPE_ISOC;
++	case USB_ENDPOINT_XFER_BULK:
++		return EP_TYPE_BULK;
++	case USB_ENDPOINT_XFER_INT:
++		return EP_TYPE_INT;
++	default:
++		return 0;
++	}
++}
++
++static u32 evdepcc_ep_size(int value)
++{
++	switch (value) {
++	case 8:		return 0x00;
++	case 16:	return 0x01;
++	case 32:	return 0x02;
++	case 64:	return 0x03;
++	case 128:	return 0x04;
++	case 256:	return 0x05;
++	case 512:	return 0x06;
++	case 1024:
++	default:	return 0x07;
++	}
++}
++
++static int gxp_udc_ep_init(struct gxp_udc_ep *ep, int type, int dir_in,
++			   int size)
++{
++	u32 val;
++	u32 tmp;
++
++	ep->is_in = dir_in;
++	ep->type = type;
++	ep->ep.maxpacket = size;
++
++	val = readl(ep->base + EVDEPCC);
++	if (dir_in)
++		val |= EVDEPCC_CFGINOUT;
++	else
++		val &= ~EVDEPCC_CFGINOUT;
++
++	tmp = evdepcc_ep_type(type);
++	val &= ~EVDEPCC_EP_TYPE_MASK;
++	val |= EVDEPCC_EP_TYPE(tmp);
++
++	tmp = evdepcc_ep_size(size);
++	val &= ~EVDEPCC_EP_SIZE_MASK;
++	val |= EVDEPCC_EP_SIZE(tmp);
++
++	val &= ~EVDEPCC_TXN_PER_UFRAME_MASK;
++	if (type == USB_ENDPOINT_XFER_INT || type == USB_ENDPOINT_XFER_ISOC)
++		val |= EVDEPCC_TXN_PER_UFRAME(1);
++
++	val |= EVDEPCC_EPENABLE;
++	writel(val, ep->base + EVDEPCC);
++
++	val = readl(ep->base + EVDEPSTS);
++	val &= ~(EVDEPSTS_DONE | EVDEPSTS_SHORT | EVDEPSTS_STALLDET);
++	writel(val, ep->base + EVDEPSTS);
++
++	val = readl(ep->base + EVDEPEVTEN);
++	val |= EVDEPEVTEN_DONE | EVDEPEVTEN_SHORT | EVDEPEVTEN_STALLDET;
++	writel(val, ep->base + EVDEPEVTEN);
++
++	return 0;
++}
++
++static struct usb_request *gxp_udc_ep_alloc_request(struct usb_ep *_ep,
++						    gfp_t gfp_flags)
++{
++	struct gxp_udc_req *req;
++
++	req = kzalloc(sizeof(*req), gfp_flags);
++	if (!req)
++		return NULL;
++
++	INIT_LIST_HEAD(&req->queue);
++	return &req->req;
++}
++
++static void gxp_udc_ep_free_request(struct usb_ep *_ep,
++				    struct usb_request *_req)
++{
++	struct gxp_udc_req *req;
++
++	if (!_req)
++		return;
++
++	req = container_of(_req, struct gxp_udc_req, req);
++	WARN_ON(!list_empty(&req->queue));
++	kfree(req);
++}
++
++static int gxp_udc_ep_queue(struct usb_ep *_ep, struct usb_request *_req,
++			    gfp_t gfp_flags)
++{
++	struct gxp_udc_req *req;
++	struct gxp_udc_ep *ep;
++	unsigned long flags;
++	u32 val;
++	int ret;
++
++	if (!_req || !_ep)
++		return -EINVAL;
++
++	ep = container_of(_ep, struct gxp_udc_ep, ep);
++	req = container_of(_req, struct gxp_udc_req, req);
++
++	if (!ep->drvdata->driver ||
++	    ep->drvdata->gadget.speed == USB_SPEED_UNKNOWN)
++		return -ESHUTDOWN;
++
++	spin_lock_irqsave(&ep->drvdata->lock, flags);
++
++	if (ep->epnum == 0) {
++		val = readl(ep->base + EVDEPCC);
++		ep->is_in = (val & EVDEPCC_CFGINOUT) ? 1 : 0;
++
++		if (!_req->length) {
++			_req->status = 0;
++			if (_req->complete) {
++				spin_unlock(&ep->drvdata->lock);
++				usb_gadget_giveback_request(_ep, _req);
++				spin_lock(&ep->drvdata->lock);
++			}
++			gxp_udc_in_0byte_status(ep);
++			spin_unlock_irqrestore(&ep->drvdata->lock, flags);
++			return 0;
++		}
++	}
++
++	ret = usb_gadget_map_request(&ep->drvdata->gadget,
++				     &req->req, ep->is_in);
++	if (ret) {
++		spin_unlock_irqrestore(&ep->drvdata->lock, flags);
++		return ret;
++	}
++
++	req->req.actual = 0;
++	req->req.status = -EINPROGRESS;
++
++	if (list_empty(&ep->queue)) {
++		list_add_tail(&req->queue, &ep->queue);
++		gxp_udc_start_dma(ep, req);
++	} else {
++		list_add_tail(&req->queue, &ep->queue);
++	}
++
++	spin_unlock_irqrestore(&ep->drvdata->lock, flags);
++	return 0;
++}
++
++/* Must be called with drvdata->lock held */
++static void __gxp_udc_ep_dequeue(struct gxp_udc_ep *ep,
++				  struct usb_request *_req)
++{
++	struct gxp_udc_req *req;
++
++	req = container_of(_req, struct gxp_udc_req, req);
++
++	if (ep->drvdata->gadget.speed == USB_SPEED_UNKNOWN)
++		_req->status = -ESHUTDOWN;
++	else
++		_req->status = -ECONNRESET;
++
++	list_del_init(&req->queue);
++	usb_gadget_unmap_request(&ep->drvdata->gadget, &req->req, ep->is_in);
++	if (req->req.complete) {
++		spin_unlock(&ep->drvdata->lock);
++		usb_gadget_giveback_request(&ep->ep, _req);
++		spin_lock(&ep->drvdata->lock);
++	}
++}
++
++static int gxp_udc_ep_dequeue(struct usb_ep *_ep, struct usb_request *_req)
++{
++	struct gxp_udc_req *req;
++	struct gxp_udc_ep *ep;
++	unsigned long flags;
++
++	if (!_ep || !_req)
++		return -EINVAL;
++
++	ep = container_of(_ep, struct gxp_udc_ep, ep);
++
++	spin_lock_irqsave(&ep->drvdata->lock, flags);
++
++	list_for_each_entry(req, &ep->queue, queue) {
++		if (&req->req == _req)
++			break;
++	}
++	if (&req->req != _req) {
++		spin_unlock_irqrestore(&ep->drvdata->lock, flags);
++		return -EINVAL;
++	}
++
++	__gxp_udc_ep_dequeue(ep, _req);
++
++	spin_unlock_irqrestore(&ep->drvdata->lock, flags);
++	return 0;
++}
++
++static int gxp_udc_ep_enable(struct usb_ep *_ep,
++			     const struct usb_endpoint_descriptor *desc)
++{
++	struct gxp_udc_ep *ep;
++	struct gxp_udc_drvdata *drvdata;
++	u32 val;
++
++	if (!_ep)
++		return -EINVAL;
++
++	ep = container_of(_ep, struct gxp_udc_ep, ep);
++	drvdata = ep->drvdata;
++
++	if (!drvdata->driver || drvdata->gadget.speed == USB_SPEED_UNKNOWN)
++		return -ESHUTDOWN;
++
++	if (usb_endpoint_num(desc) >= GXP_UDC_MAX_NUM_EP)
++		return -EINVAL;
++
++	ep->ep.desc = desc;
++	ep->stall = false;
++	ep->wedged = false;
++
++	gxp_udc_ep_init(ep, usb_endpoint_type(desc),
++			usb_endpoint_dir_in(desc),
++			usb_endpoint_maxp(desc));
++
++	val = readl(drvdata->base + EVDIEN);
++	val |= 1 << ep->epnum;
++	writel(val, drvdata->base + EVDIEN);
++
++	return 0;
++}
++
++static int gxp_udc_ep_disable(struct usb_ep *_ep)
++{
++	struct gxp_udc_ep *ep;
++	struct gxp_udc_req *req;
++	unsigned long flags;
++	u32 val;
++
++	if (!_ep || !_ep->desc)
++		return -EINVAL;
++
++	_ep->desc = NULL;
++	ep = container_of(_ep, struct gxp_udc_ep, ep);
++	ep->stall = false;
++	ep->wedged = false;
++
++	spin_lock_irqsave(&ep->drvdata->lock, flags);
++
++	while (!list_empty(&ep->queue)) {
++		req = list_first_entry(&ep->queue, struct gxp_udc_req, queue);
++		__gxp_udc_ep_dequeue(ep, &req->req);
++	}
++
++	val = readl(ep->base + EVDEPCC);
++	val &= ~EVDEPCC_EPENABLE;
++	writel(val, ep->base + EVDEPCC);
++
++	val = readl(ep->drvdata->base + EVDIEN);
++	val &= ~(1 << ep->epnum);
++	writel(val, ep->drvdata->base + EVDIEN);
++
++	spin_unlock_irqrestore(&ep->drvdata->lock, flags);
++	return 0;
++}
++
++static int gxp_udc_ep_set_halt_and_wedge(struct usb_ep *_ep,
++					 int value, int wedge)
++{
++	struct gxp_udc_ep *ep;
++	struct gxp_udc_req *req;
++	u32 val;
++
++	if (!_ep)
++		return -EINVAL;
++
++	ep = container_of(_ep, struct gxp_udc_ep, ep);
++	val = readl(ep->base + EVDEPCC);
++
++	if (value) {
++		ep->stall = true;
++		if (wedge)
++			ep->wedged = true;
++		val |= EVDEPCC_STALL;
++		writel(val, ep->base + EVDEPCC);
++	} else {
++		ep->stall = false;
++		ep->wedged = false;
++		val &= ~EVDEPCC_STALL;
++		val |= EVDEPCC_DT_RESET;
++		writel(val, ep->base + EVDEPCC);
++
++		if (ep->is_in && !list_empty(&ep->queue)) {
++			req = list_entry(ep->queue.next,
++					 struct gxp_udc_req, queue);
++			gxp_udc_start_dma(ep, req);
++		}
++	}
++
++	return 0;
++}
++
++static int gxp_udc_ep_set_halt(struct usb_ep *_ep, int value)
++{
++	return gxp_udc_ep_set_halt_and_wedge(_ep, value, 0);
++}
++
++static int gxp_udc_ep_set_wedge(struct usb_ep *_ep)
++{
++	return gxp_udc_ep_set_halt_and_wedge(_ep, 1, 1);
++}
++
++static const struct usb_ep_ops gxp_udc_ep_ops = {
++	.enable		= gxp_udc_ep_enable,
++	.disable	= gxp_udc_ep_disable,
++	.alloc_request	= gxp_udc_ep_alloc_request,
++	.free_request	= gxp_udc_ep_free_request,
++	.queue		= gxp_udc_ep_queue,
++	.dequeue	= gxp_udc_ep_dequeue,
++	.set_halt	= gxp_udc_ep_set_halt,
++	.set_wedge	= gxp_udc_ep_set_wedge,
++};
++
++static int gxp_udc_connect(struct gxp_udc_drvdata *drvdata)
++{
++	unsigned int val;
++	unsigned char femap;
++	int i, j;
++
++	val = readl(drvdata->base + EVDISTAT);
++	val |= EVDISTAT_MASK;
++	writel(val, drvdata->base + EVDISTAT);
++
++	gxp_udc_ep_init(&drvdata->ep[0], USB_ENDPOINT_XFER_CONTROL, 1, 64);
++
++	val = readl(drvdata->base + EVDIEN);
++	val |= EVDIEN_MASK;
++	writel(val, drvdata->base + EVDIEN);
++
++	regmap_update_bits(drvdata->udcg_map, EVGIEN, BIT(drvdata->vdevnum),
++			   BIT(drvdata->vdevnum));
++
++	for (j = 1; j < drvdata->fepnum + 1; j++) {
++		for (i = 0; i < GXP_UDC_MAX_NUM_FLEX_EP; i++) {
++			femap = gxp_udc_femap_read(drvdata, i);
++			if (!(femap & EVFEMAP_EPNUM_MASK)) {
++				femap &= ~EVFEMAP_EPNUM_MASK;
++				femap |= EVFEMAP_EPNUM(j);
++				femap &= ~EVFEMAP_VDEVNUM_MASK;
++				femap |= EVFEMAP_VDEVNUM(drvdata->vdevnum);
++				gxp_udc_femap_write(drvdata, i, femap);
++				break;
++			}
++		}
++		if (i == GXP_UDC_MAX_NUM_FLEX_EP) {
++			dev_err(&drvdata->pdev->dev,
++				"vdev%d: no free flex ep\n", drvdata->vdevnum);
++			return -ENODEV;
++		}
++	}
++
++	val = readl(drvdata->base + EVDCS);
++	val |= EVDCS_CONNECT;
++	writel(val, drvdata->base + EVDCS);
++
++	return 0;
++}
++
++static int gxp_udc_disconnect(struct gxp_udc_drvdata *drvdata)
++{
++	unsigned int val;
++	unsigned char femap;
++	int i;
++
++	val = readl(drvdata->base + EVDIEN);
++	val &= ~EVDIEN_MASK;
++	writel(val, drvdata->base + EVDIEN);
++
++	regmap_update_bits(drvdata->udcg_map, EVGIEN,
++			   BIT(drvdata->vdevnum), 0);
++
++	val = readl(drvdata->base + EVDCS);
++	val &= ~EVDCS_CONNECT;
++	writel(val, drvdata->base + EVDCS);
++
++	for (i = 0; i < GXP_UDC_MAX_NUM_FLEX_EP; i++) {
++		femap = gxp_udc_femap_read(drvdata, i);
++		if (EVFEMAP_VDEVNUM(drvdata->vdevnum) ==
++		    (femap & EVFEMAP_VDEVNUM_MASK))
++			gxp_udc_femap_write(drvdata, i, 0);
++	}
++
++	return 0;
++}
++
++static int gxp_udc_start(struct usb_gadget *gadget,
++			 struct usb_gadget_driver *driver)
++{
++	struct gxp_udc_drvdata *drvdata;
++	unsigned long flags;
++
++	if (!gadget)
++		return -ENODEV;
++
++	drvdata = container_of(gadget, struct gxp_udc_drvdata, gadget);
++	spin_lock_irqsave(&drvdata->lock, flags);
++
++	if (drvdata->driver) {
++		spin_unlock_irqrestore(&drvdata->lock, flags);
++		return -EBUSY;
++	}
++
++	drvdata->defer_set_address = false;
++	drvdata->driver = driver;
++
++	spin_unlock_irqrestore(&drvdata->lock, flags);
++	return 0;
++}
++
++static int gxp_udc_stop(struct usb_gadget *gadget)
++{
++	struct gxp_udc_drvdata *drvdata;
++	unsigned long flags;
++
++	if (!gadget)
++		return -ENODEV;
++
++	drvdata = container_of(gadget, struct gxp_udc_drvdata, gadget);
++	spin_lock_irqsave(&drvdata->lock, flags);
++
++	gxp_udc_disconnect(drvdata);
++	drvdata->gadget.speed = USB_SPEED_UNKNOWN;
++	drvdata->driver = NULL;
++
++	spin_unlock_irqrestore(&drvdata->lock, flags);
++	return 0;
++}
++
++static void gxp_udc_connect_retry_work(struct work_struct *work)
++{
++	struct gxp_udc_drvdata *drvdata =
++		container_of(work, struct gxp_udc_drvdata, connect_work.work);
++	unsigned long flags;
++	u32 evdcs;
++
++	spin_lock_irqsave(&drvdata->lock, flags);
++
++	if (!drvdata->driver) {
++		spin_unlock_irqrestore(&drvdata->lock, flags);
++		return;
++	}
++
++	evdcs = readl(drvdata->base + EVDCS);
++	if (evdcs & EVDCS_PORTENABLESTS) {
++		/* Port is enabled, host enumerated us — done */
++		spin_unlock_irqrestore(&drvdata->lock, flags);
++		return;
++	}
++
++	if (drvdata->connect_retries >= GXP_UDC_CONNECT_MAX_RETRIES) {
++		spin_unlock_irqrestore(&drvdata->lock, flags);
++		dev_warn(&drvdata->pdev->dev,
++			 "vdev%d: host did not enumerate after %d retries\n",
++			 drvdata->vdevnum, GXP_UDC_CONNECT_MAX_RETRIES);
++		return;
++	}
++
++	drvdata->connect_retries++;
++	dev_dbg(&drvdata->pdev->dev,
++		"vdev%d: connect retry %d/%d\n",
++		drvdata->vdevnum, drvdata->connect_retries,
++		GXP_UDC_CONNECT_MAX_RETRIES);
++
++	/* Toggle connect bit: disconnect */
++	evdcs &= ~EVDCS_CONNECT;
++	writel(evdcs, drvdata->base + EVDCS);
++	spin_unlock_irqrestore(&drvdata->lock, flags);
++
++	/* Brief disconnect period for host to notice */
++	msleep(100);
++
++	spin_lock_irqsave(&drvdata->lock, flags);
++	if (!drvdata->driver) {
++		spin_unlock_irqrestore(&drvdata->lock, flags);
++		return;
++	}
++
++	/* Reconnect */
++	evdcs = readl(drvdata->base + EVDCS);
++	evdcs |= EVDCS_CONNECT;
++	writel(evdcs, drvdata->base + EVDCS);
++	spin_unlock_irqrestore(&drvdata->lock, flags);
++
++	/* Schedule another check */
++	schedule_delayed_work(&drvdata->connect_work,
++			      msecs_to_jiffies(GXP_UDC_CONNECT_RETRY_MS));
++}
++
++static int gxp_udc_pullup(struct usb_gadget *gadget, int is_on)
++{
++	struct gxp_udc_drvdata *drvdata =
++		container_of(gadget, struct gxp_udc_drvdata, gadget);
++	unsigned long flags;
++
++	if (is_on) {
++		spin_lock_irqsave(&drvdata->lock, flags);
++		gxp_udc_connect(drvdata);
++		drvdata->connect_retries = 0;
++		spin_unlock_irqrestore(&drvdata->lock, flags);
++
++		/* Schedule connect check — host may not be ready yet */
++		schedule_delayed_work(&drvdata->connect_work,
++				      msecs_to_jiffies(GXP_UDC_CONNECT_RETRY_MS));
++	} else {
++		cancel_delayed_work_sync(&drvdata->connect_work);
++		spin_lock_irqsave(&drvdata->lock, flags);
++		gxp_udc_disconnect(drvdata);
++		spin_unlock_irqrestore(&drvdata->lock, flags);
++	}
++
++	return 0;
++}
++
++static const struct usb_gadget_ops gxp_udc_gadget_ops = {
++	.pullup    = gxp_udc_pullup,
++	.udc_start = gxp_udc_start,
++	.udc_stop  = gxp_udc_stop,
++};
++
++static void gxp_udc_out_0byte_status(struct gxp_udc_ep *ep)
++{
++	u32 evdepcc;
++
++	evdepcc = readl(ep->base + EVDEPCC);
++	evdepcc &= ~EVDEPCC_CFGINOUT;
++	writel(evdepcc, ep->base + EVDEPCC);
++	writel(0, ep->base + EVDEPLEN);
++}
++
++static void gxp_udc_in_0byte_status(struct gxp_udc_ep *ep)
++{
++	u32 evdepcc;
++
++	evdepcc = readl(ep->base + EVDEPCC);
++	evdepcc |= EVDEPCC_CFGINOUT;
++	writel(evdepcc, ep->base + EVDEPCC);
++	writel(0, ep->base + EVDEPLEN);
++}
++
++/* Must be called with drvdata->lock held */
++static int gxp_udc_ep_nuke(struct gxp_udc_ep *ep)
++{
++	u32 evdepcc;
++	struct gxp_udc_req *req;
++
++	if (!ep)
++		return -EINVAL;
++
++	evdepcc = readl(ep->base + EVDEPCC);
++	evdepcc |= EVDEPCC_DISARMCMD;
++	writel(evdepcc, ep->base + EVDEPCC);
++
++	while (!list_empty(&ep->queue)) {
++		req = list_first_entry(&ep->queue, struct gxp_udc_req, queue);
++		__gxp_udc_ep_dequeue(ep, &req->req);
++	}
++
++	return 0;
++}
++
++static int gxp_udc_set_feature(struct gxp_udc_drvdata *drvdata,
++			       struct usb_ctrlrequest *ctrl)
++{
++	struct gxp_udc_ep *ep;
++
++	if (ctrl->bRequestType == USB_RECIP_ENDPOINT) {
++		ep = &drvdata->ep[ctrl->wIndex & USB_ENDPOINT_NUMBER_MASK];
++		if (le16_to_cpu(ctrl->wValue) == USB_ENDPOINT_HALT) {
++			gxp_udc_ep_set_halt(&ep->ep, 1);
++			return 1;
++		}
++	}
++	return 0;
++}
++
++static int gxp_udc_clear_feature(struct gxp_udc_drvdata *drvdata,
++				 struct usb_ctrlrequest *ctrl)
++{
++	struct gxp_udc_ep *ep;
++
++	if (ctrl->bRequestType == USB_RECIP_ENDPOINT) {
++		ep = &drvdata->ep[ctrl->wIndex & USB_ENDPOINT_NUMBER_MASK];
++		if (le16_to_cpu(ctrl->wValue) == USB_ENDPOINT_HALT) {
++			if (!ep->wedged)
++				gxp_udc_ep_set_halt(&ep->ep, 0);
++			return 1;
++		}
++	}
++	return 0;
++}
++
++static int gxp_udc_get_status(struct gxp_udc_drvdata *drvdata,
++			      struct usb_ctrlrequest *ctrl)
++{
++	u32 evdepcc;
++
++	switch (ctrl->bRequestType & USB_RECIP_MASK) {
++	case USB_RECIP_DEVICE:
++		drvdata->ep0_data = cpu_to_le16(1);
++		drvdata->ep0_req->length = 2;
++		drvdata->ep0_req->buf = &drvdata->ep0_data;
++		gxp_udc_ep_queue(&drvdata->ep[0].ep, drvdata->ep0_req,
++				 GFP_ATOMIC);
++		return 1;
++
++	case USB_RECIP_ENDPOINT:
++		evdepcc = readl(drvdata->ep[ctrl->wIndex &
++			USB_ENDPOINT_NUMBER_MASK].base + EVDEPCC);
++		drvdata->ep0_data = (evdepcc & EVDEPCC_STALL) ?
++				    cpu_to_le16(1) : cpu_to_le16(0);
++		drvdata->ep0_req->length = 2;
++		drvdata->ep0_req->buf = &drvdata->ep0_data;
++		gxp_udc_ep_queue(&drvdata->ep[0].ep, drvdata->ep0_req,
++				 GFP_ATOMIC);
++		return 1;
++
++	default:
++		return 0;
++	}
++}
++
++static void gxp_udc_handle_ep0_int(struct gxp_udc_ep *ep)
++{
++	struct gxp_udc_drvdata *drvdata = ep->drvdata;
++	struct gxp_udc_req *req;
++	u32 evdepsts;
++	u32 evdepcc;
++
++	evdepcc = readl(ep->base + EVDEPCC);
++	evdepsts = readl(ep->base + EVDEPSTS);
++	writel(evdepsts, ep->base + EVDEPSTS);
++
++	if (evdepsts & EVDEPSTS_STALLDET) {
++		evdepcc &= ~EVDEPCC_STALL;
++		evdepcc |= EVDEPCC_DT_RESET;
++		writel(evdepcc, ep->base + EVDEPCC);
++	}
++
++	if (evdepsts & (EVDEPSTS_DONE | EVDEPSTS_SHORT)) {
++		if (drvdata->defer_set_address) {
++			writel(drvdata->devaddr, drvdata->base + EVDADDR);
++			drvdata->defer_set_address = false;
++		} else if (!list_empty(&ep->queue)) {
++			req = list_entry(ep->queue.next,
++					 struct gxp_udc_req, queue);
++			if (gxp_udc_done_dma(ep, req)) {
++				list_del_init(&req->queue);
++				usb_gadget_unmap_request(&drvdata->gadget,
++							 &req->req, ep->is_in);
++				if (req->req.complete) {
++					req->req.status = 0;
++					usb_gadget_giveback_request(&ep->ep,
++								    &req->req);
++				}
++				if (!list_empty(&ep->queue)) {
++					req = list_entry(ep->queue.next,
++							 struct gxp_udc_req,
++							 queue);
++					gxp_udc_start_dma(ep, req);
++				} else {
++					if (evdepcc & EVDEPCC_CFGINOUT)
++						gxp_udc_out_0byte_status(ep);
++					else
++						gxp_udc_in_0byte_status(ep);
++				}
++			}
++		}
++	}
++}
++
++static void gxp_udc_handle_ep_int(struct gxp_udc_ep *ep)
++{
++	struct gxp_udc_req *req;
++	u32 evdepsts;
++	u32 evdepcc;
++
++	evdepsts = readl(ep->base + EVDEPSTS);
++	writel(evdepsts, ep->base + EVDEPSTS);
++
++	if (evdepsts & EVDEPSTS_STALLDET) {
++		evdepcc = readl(ep->base + EVDEPCC);
++		evdepcc &= ~EVDEPCC_STALL;
++		evdepcc |= EVDEPCC_DT_RESET;
++		writel(evdepcc, ep->base + EVDEPCC);
++	}
++
++	if (evdepsts & (EVDEPSTS_DONE | EVDEPSTS_SHORT)) {
++		if (!list_empty(&ep->queue)) {
++			req = list_entry(ep->queue.next,
++					 struct gxp_udc_req, queue);
++			if (gxp_udc_done_dma(ep, req)) {
++				list_del_init(&req->queue);
++				usb_gadget_unmap_request(&ep->drvdata->gadget,
++							 &req->req, ep->is_in);
++				if (req->req.complete) {
++					req->req.status = 0;
++					usb_gadget_giveback_request(&ep->ep,
++								    &req->req);
++				}
++				if (!list_empty(&ep->queue)) {
++					req = list_entry(ep->queue.next,
++							 struct gxp_udc_req,
++							 queue);
++					gxp_udc_start_dma(ep, req);
++				}
++			}
++		}
++	}
++}
++
++static void gxp_udc_handle_setup_data_rcv(struct gxp_udc_drvdata *drvdata)
++{
++	struct usb_ctrlrequest ctrl = {0};
++	u32 *ptr;
++	u32 val;
++	int handled = 0;
++	int ret;
++
++	ptr = (u32 *)&ctrl;
++	ptr[0] = readl(drvdata->base + EVDSETUPL);
++	ptr[1] = readl(drvdata->base + EVDSETUPH);
++
++	if ((ctrl.bRequestType & USB_TYPE_MASK) == USB_TYPE_STANDARD) {
++		switch (ctrl.bRequest) {
++		case USB_REQ_SET_ADDRESS:
++			drvdata->devaddr = le16_to_cpu(ctrl.wValue) & 0x7f;
++			drvdata->defer_set_address = true;
++			gxp_udc_in_0byte_status(&drvdata->ep[0]);
++			handled = 1;
++			break;
++		case USB_REQ_SET_FEATURE:
++			handled = gxp_udc_set_feature(drvdata, &ctrl);
++			break;
++		case USB_REQ_CLEAR_FEATURE:
++			handled = gxp_udc_clear_feature(drvdata, &ctrl);
++			break;
++		case USB_REQ_GET_STATUS:
++			handled = gxp_udc_get_status(drvdata, &ctrl);
++			break;
++		default:
++			break;
++		}
++	}
++
++	if (drvdata->driver && !handled) {
++		ret = drvdata->driver->setup(&drvdata->gadget, &ctrl);
++		if (ret < 0) {
++			dev_err(&drvdata->pdev->dev,
++				"setup failed, return %d\n", ret);
++			val = readl(drvdata->ep[0].base + EVDEPCC);
++			val |= EVDEPCC_STALL;
++			writel(val, drvdata->ep[0].base + EVDEPCC);
++		}
++	}
++}
++
++static irqreturn_t gxp_udc_irq(int irq, void *_drvdata)
++{
++	struct gxp_udc_drvdata *drvdata = _drvdata;
++	u32 evgistat;
++	u32 evdistat;
++	u32 evdcs;
++	u32 i;
++	int loops = 0;
++
++	regmap_read(drvdata->udcg_map, EVGISTAT, &evgistat);
++	if (!(evgistat & (1 << drvdata->vdevnum)))
++		return IRQ_NONE;
++
++	evdistat = readl(drvdata->base + EVDISTAT);
++	while ((evdistat & EVDISTAT_MASK) && loops++ < GXP_UDC_IRQ_MAX_ITERATIONS) {
++		if (evdistat & EVDISTAT_PORTEN_CHANGE) {
++			evdcs = readl(drvdata->base + EVDCS);
++			drvdata->gadget.speed =
++				(evdcs & EVDCS_PORTENABLESTS) ?
++				USB_SPEED_HIGH : USB_SPEED_UNKNOWN;
++			writel(EVDISTAT_PORTEN_CHANGE,
++			       drvdata->base + EVDISTAT);
++		}
++
++		if (evdistat & EVDISTAT_PORTRST) {
++			writel(0, drvdata->base + EVDADDR);
++			spin_lock(&drvdata->lock);
++			for (i = 0; i < drvdata->fepnum + 1; i++)
++				gxp_udc_ep_nuke(&drvdata->ep[i]);
++			spin_unlock(&drvdata->lock);
++			usb_gadget_udc_reset(&drvdata->gadget,
++					     drvdata->driver);
++			writel(EVDISTAT_PORTRST, drvdata->base + EVDISTAT);
++		}
++
++		if (evdistat & EVDISTAT_SETUP_DAT_RCV) {
++			gxp_udc_handle_setup_data_rcv(drvdata);
++			writel(EVDISTAT_SETUP_DAT_RCV,
++			       drvdata->base + EVDISTAT);
++		}
++
++		if (evdistat & EVDISTAT_EP0_INT)
++			gxp_udc_handle_ep0_int(&drvdata->ep[0]);
++
++		for (i = 1; i < GXP_UDC_MAX_NUM_EP; i++)
++			if (evdistat & (1 << i))
++				gxp_udc_handle_ep_int(&drvdata->ep[i]);
++
++		evdistat = readl(drvdata->base + EVDISTAT);
++	}
++
++	if (loops >= GXP_UDC_IRQ_MAX_ITERATIONS)
++		dev_warn_ratelimited(&drvdata->pdev->dev,
++				     "IRQ storm detected\n");
++
++	return IRQ_HANDLED;
++}
++
++static int gxp_udc_init(struct gxp_udc_drvdata *drvdata)
++{
++	int i;
++	struct gxp_udc_ep *ep;
++
++	INIT_DELAYED_WORK(&drvdata->connect_work, gxp_udc_connect_retry_work);
++	writel(0, drvdata->base + EVDIEN);
++
++	drvdata->gadget.max_speed = USB_SPEED_HIGH;
++	drvdata->gadget.speed = USB_SPEED_UNKNOWN;
++	drvdata->gadget.ops = &gxp_udc_gadget_ops;
++	drvdata->gadget.name = gxp_udc_name[drvdata->vdevnum];
++
++	drvdata->gadget.ep0 = &drvdata->ep[0].ep;
++	drvdata->ep0_req = gxp_udc_ep_alloc_request(&drvdata->ep[0].ep,
++						    GFP_KERNEL);
++	if (!drvdata->ep0_req)
++		return -ENOMEM;
++
++	INIT_LIST_HEAD(&drvdata->gadget.ep_list);
++
++	for (i = 0; i < drvdata->fepnum + 1; i++) {
++		ep = &drvdata->ep[i];
++		ep->drvdata = drvdata;
++
++		INIT_LIST_HEAD(&ep->queue);
++		INIT_LIST_HEAD(&ep->ep.ep_list);
++		if (i > 0)
++			list_add_tail(&ep->ep.ep_list,
++				      &drvdata->gadget.ep_list);
++
++		usb_ep_set_maxpacket_limit(&ep->ep, (i > 0) ? 512 : 64);
++		ep->epnum = i;
++		ep->ep.name = gxp_udc_ep_name[i];
++		ep->ep.ops = &gxp_udc_ep_ops;
++		ep->base = drvdata->base + 0x20 * (i + 1);
++
++		if (i == 0) {
++			ep->ep.caps.type_control = true;
++		} else {
++			ep->ep.caps.type_iso = true;
++			ep->ep.caps.type_bulk = true;
++			ep->ep.caps.type_int = true;
++		}
++		ep->ep.caps.dir_in = true;
++		ep->ep.caps.dir_out = true;
++	}
++
++	return 0;
++}
++
++static void gxp_udcg_init(struct gxp_udc_drvdata *drvdata)
++{
++	int i;
++
++	mutex_lock(&udcg_init_mutex);
++	if (!udcg_init_done) {
++		regmap_write(drvdata->udcg_map, EVGIEN, 0);
++		for (i = 0; i < GXP_UDC_MAX_NUM_FLEX_EP; i += 4)
++			regmap_write(drvdata->udcg_map, EVFEMAP + i, 0);
++		udcg_init_done = true;
++	}
++	mutex_unlock(&udcg_init_mutex);
++}
++
++static int gxp_udc_probe(struct platform_device *pdev)
++{
++	struct gxp_udc_drvdata *drvdata;
++	int ret;
++	u32 vdevnum;
++	u32 fepnum;
++
++	drvdata = devm_kzalloc(&pdev->dev, sizeof(*drvdata), GFP_KERNEL);
++	if (!drvdata)
++		return -ENOMEM;
++
++	platform_set_drvdata(pdev, drvdata);
++	drvdata->pdev = pdev;
++	spin_lock_init(&drvdata->lock);
++
++	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
++	if (ret)
++		return ret;
++
++	drvdata->base = devm_platform_ioremap_resource(pdev, 0);
++	if (IS_ERR(drvdata->base))
++		return PTR_ERR(drvdata->base);
++
++	ret = platform_get_irq(pdev, 0);
++	if (ret < 0)
++		return ret;
++	drvdata->irq = ret;
++
++	if (of_property_read_u32(pdev->dev.of_node, "hpe,vdev-num", &vdevnum))
++		return dev_err_probe(&pdev->dev, -EINVAL,
++				     "missing hpe,vdev-num property\n");
++
++	if (vdevnum >= GXP_UDC_MAX_NUM_VDEVICE)
++		return dev_err_probe(&pdev->dev, -EINVAL,
++				     "vdevnum %d out of range\n", vdevnum);
++	drvdata->vdevnum = vdevnum;
++
++	if (of_property_read_u32(pdev->dev.of_node, "hpe,num-flex-endpoints",
++				 &fepnum))
++		return dev_err_probe(&pdev->dev, -EINVAL,
++				     "missing hpe,num-flex-endpoints property\n");
++
++	if (fepnum > GXP_UDC_MAX_NUM_FLEX_EP_PER_VDEV)
++		return dev_err_probe(&pdev->dev, -EINVAL,
++				     "fepnum %d out of range\n", fepnum);
++	drvdata->fepnum = fepnum;
++
++	drvdata->udcg_map = syscon_regmap_lookup_by_phandle(pdev->dev.of_node,
++							    "hpe,udcg");
++	if (IS_ERR(drvdata->udcg_map))
++		return dev_err_probe(&pdev->dev, -ENODEV,
++				     "failed to map udcg\n");
++
++	gxp_udcg_init(drvdata);
++
++	ret = gxp_udc_init(drvdata);
++	if (ret)
++		return ret;
++
++	ret = usb_add_gadget_udc(&pdev->dev, &drvdata->gadget);
++	if (ret)
++		return dev_err_probe(&pdev->dev, ret, "add gadget failed\n");
++
++	ret = devm_request_irq(&pdev->dev, drvdata->irq, gxp_udc_irq,
++			       IRQF_SHARED, gxp_udc_name[vdevnum], drvdata);
++	if (ret < 0) {
++		usb_del_gadget_udc(&drvdata->gadget);
++		return dev_err_probe(&pdev->dev, ret, "irq request failed\n");
++	}
++
++	return 0;
++}
++
++static void gxp_udc_remove(struct platform_device *pdev)
++{
++	struct gxp_udc_drvdata *drvdata = platform_get_drvdata(pdev);
++
++	cancel_delayed_work_sync(&drvdata->connect_work);
++	usb_del_gadget_udc(&drvdata->gadget);
++	if (drvdata->ep0_req)
++		gxp_udc_ep_free_request(&drvdata->ep[0].ep, drvdata->ep0_req);
++}
++
++static const struct of_device_id gxp_udc_of_match[] = {
++	{ .compatible = "hpe,gxp-udc" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, gxp_udc_of_match);
++
++static struct platform_driver gxp_udc_driver = {
++	.driver	= {
++		.name		= "gxp-udc",
++		.of_match_table	= gxp_udc_of_match,
++	},
++	.probe	= gxp_udc_probe,
++	.remove	= gxp_udc_remove,
++};
++module_platform_driver(gxp_udc_driver);
++
++MODULE_AUTHOR("Richard Yu <richard.yu@hpe.com>");
++MODULE_DESCRIPTION("HPE GXP USB Device Controller driver");
++MODULE_LICENSE("GPL");
+--
+2.53.0
