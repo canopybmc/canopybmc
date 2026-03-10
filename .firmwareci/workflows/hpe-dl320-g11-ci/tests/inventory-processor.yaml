@@ -1,0 +1,110 @@
+name: "Inventory: Processors"
+description: >-
+  Verify CPU inventory via Redfish. Checks that SMBIOS processor data flows
+  correctly through cpuinfo to Redfish. Generic — works for 1-socket and
+  2-socket systems. Requires host POST complete.
+
+defaults:
+  transport: &local
+    proto: local
+
+stages:
+  - name: Wait for BMC and Host POST
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: cmd
+        name: Wait for BMC services
+        transport: *local
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+      - cmd: cmd
+        name: Check host PowerState is On
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
+          expect:
+            - regex: '"PowerState": "On"'
+      - cmd: cmd
+        name: Wait for SMBIOS transfer and i2c passthrough
+        transport: *local
+        options:
+          timeout: 4m
+        parameters:
+          executable: sleep
+          args: ["180"]
+
+  - name: Processors Collection
+    steps:
+      - cmd: cmd
+        name: Processors collection has >= 1 member
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "COUNT=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors | grep -o '\"Members@odata.count\": *[0-9]*' | grep -o '[0-9]*$'); echo \"Processors: $COUNT\"; test \"$COUNT\" -ge 1"
+      - cmd: cmd
+        name: At least 1 processor is Enabled
+        transport: *local
+        options:
+          timeout: 60s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "MEMBERS=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors | grep -o '\"@odata.id\": *\"/redfish/v1/Systems/system/Processors/[^\"]*\"' | grep -o '/redfish/v1/Systems/system/Processors/[^\"]*'); ENABLED=0; for P in $MEMBERS; do curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]$P 2>/dev/null | grep -q '\"State\": *\"Enabled\"' && ENABLED=$((ENABLED+1)); done; echo \"Enabled processors: $ENABLED\"; test \"$ENABLED\" -ge 1"
+
+  - name: Enabled Processor Attributes
+    steps:
+      - cmd: cmd
+        name: First Enabled processor has valid attributes
+        transport: *local
+        options:
+          timeout: 60s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "MEMBERS=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors | grep -o '\"@odata.id\": *\"/redfish/v1/Systems/system/Processors/[^\"]*\"' | grep -o '/redfish/v1/Systems/system/Processors/[^\"]*'); for P in $MEMBERS; do DATA=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]$P 2>/dev/null); echo \"$DATA\" | grep -q '\"State\": *\"Enabled\"' || continue; echo \"Checking $P\"; MFR=$(echo \"$DATA\" | grep -o '\"Manufacturer\": *\"[^\"]*\"' | head -1 | grep -o '[^\"]*$' | tr -d '\"'); echo \"Manufacturer=$MFR\"; test -n \"$MFR\" || { echo 'FAIL: Manufacturer missing'; exit 1; }; CORES=$(echo \"$DATA\" | grep -o '\"TotalCores\": *[0-9]*' | grep -o '[0-9]*$'); echo \"TotalCores=$CORES\"; test \"$CORES\" -ge 4 || { echo 'FAIL: TotalCores < 4'; exit 1; }; THREADS=$(echo \"$DATA\" | grep -o '\"TotalThreads\": *[0-9]*' | grep -o '[0-9]*$'); echo \"TotalThreads=$THREADS\"; test \"$THREADS\" -gt 0 || { echo 'FAIL: TotalThreads=0'; exit 1; }; SPEED=$(echo \"$DATA\" | grep -o '\"MaxSpeedMHz\": *[0-9]*' | grep -o '[0-9]*$'); echo \"MaxSpeedMHz=$SPEED\"; test \"$SPEED\" -gt 0 || { echo 'FAIL: MaxSpeedMHz=0'; exit 1; }; FAM=$(echo \"$DATA\" | grep -o '\"EffectiveFamily\": *\"[^\"]*\"' | head -1 | grep -o '[^\"]*$' | tr -d '\"'); echo \"EffectiveFamily=$FAM\"; test -n \"$FAM\" || { echo 'FAIL: EffectiveFamily missing'; exit 1; }; MDL=$(echo \"$DATA\" | grep -o '\"EffectiveModel\": *\"[^\"]*\"' | head -1 | grep -o '[^\"]*$' | tr -d '\"'); echo \"EffectiveModel=$MDL\"; test -n \"$MDL\" || { echo 'FAIL: EffectiveModel missing'; exit 1; }; echo 'First Enabled processor attributes OK'; exit 0; done; echo 'No Enabled processor found'; exit 1"
+      - cmd: cmd
+        name: Processor SerialNumber is not HPE fake data
+        transport: *local
+        options:
+          timeout: 60s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "MEMBERS=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors | grep -o '\"@odata.id\": *\"/redfish/v1/Systems/system/Processors/[^\"]*\"' | grep -o '/redfish/v1/Systems/system/Processors/[^\"]*'); for P in $MEMBERS; do DATA=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]$P 2>/dev/null); echo \"$DATA\" | grep -q '\"State\": *\"Enabled\"' || continue; SN=$(echo \"$DATA\" | grep -o '\"SerialNumber\": *\"[^\"]*\"' | head -1 | grep -o '[^\"]*$' | tr -d '\"'); echo \"SerialNumber=$SN\"; if [ -n \"$SN\" ]; then echo \"$SN\" | grep -q '^Proc [0-9]' && { echo 'FAIL: fake HPE SerialNumber'; exit 1; }; fi; echo 'SerialNumber OK (real or absent)'; exit 0; done; exit 0"
+
+  - name: System Processor Summary
+    steps:
+      - cmd: cmd
+        name: ProcessorSummary CoreCount > 0
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "CORES=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system | grep -o '\"CoreCount\": *[0-9]*' | grep -o '[0-9]*$'); echo \"ProcessorSummary.CoreCount=$CORES\"; test \"$CORES\" -gt 0"

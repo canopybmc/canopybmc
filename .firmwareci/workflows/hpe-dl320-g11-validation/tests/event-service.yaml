@@ -1,7 +1,6 @@
-name: Redfish Chassis Validation
+name: "Validator: Redfish EventService"
 description: >-
-  Validate /redfish/v1/Chassis tree including Thermal, Power,
-  Sensors, and PCIeSlots against DMTF schemas.
+  Validate /redfish/v1/EventService tree against DMTF schemas.
 on-error: continue
 
 defaults:
@@ -9,7 +8,7 @@ defaults:
     proto: local
 
 stages:
-  - name: Validate Chassis
+  - name: Validate EventService
     steps:
       - cmd: cmd
         name: Check storage provisioning
@@ -20,10 +19,10 @@ stages:
             - "-la"
             - "[[storage.RedfishValidator]]"
       - cmd: cmd
-        name: Validate Chassis tree
+        name: Validate EventService tree
         transport: *local
         options:
-          timeout: 15m
+          timeout: 5m
           on-error: continue
         parameters:
           executable: rf_service_validator
@@ -36,17 +35,13 @@ stages:
             - "https://[[attributes.BMC]]"
             - "--payload"
             - "tree"
-            - "/redfish/v1/Chassis"
+            - "/redfish/v1/EventService"
             - "--nooemcheck"
-            - "--collectionlimit"
-            - "50"
             - "--logdir"
-            - "/tmp/redfish-results-chassis"
+            - "/tmp/redfish-results-events"
       - cmd: cmd
         name: Show validation report
         transport: *local
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "cat /tmp/redfish-results-chassis/RedfishServiceValidatorReport_*.html"
+          executable: cat
+          args: ["/tmp/redfish-results-events/RedfishServiceValidatorReport_latest.html"]

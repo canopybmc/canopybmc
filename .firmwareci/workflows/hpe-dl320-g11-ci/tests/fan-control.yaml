@@ -1,4 +1,4 @@
-name: Fan Control
+name: "Sensor: Fan Control"
 description: >-
   Verify PID fan control is running and producing reasonable PWM values.
   Covers phosphor-pid-control patches, fan sensor config, PID zones from
@@ -74,7 +74,7 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "busctl tree xyz.openbmc_project.State.FanCtrl --no-pager | grep -q zone"
+          executable: busctl
+          args: [tree, xyz.openbmc_project.State.FanCtrl, --no-pager]
+          expect:
+            - regex: "zone"

@@ -1,4 +1,4 @@
-name: Service Health
+name: "Smoke: Service Health"
 description: >-
   Verify all critical OpenBMC services are running.
   Each step checks one systemd unit via systemctl is-active.

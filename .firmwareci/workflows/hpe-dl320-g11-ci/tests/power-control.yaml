@@ -1,4 +1,4 @@
-name: Power Control
+name: "Power: Host Control"
 description: >-
   Verify the full host power control chain end-to-end: kernel power-ctrl
   driver, x86-power-control, D-Bus state, and Redfish actions. Tests both
@@ -6,8 +6,12 @@ description: >-
   Run this test LAST as it power-cycles the host.
 
 defaults:
-  transport: &local
-    proto: local
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
 
 stages:
   - name: Wait for BMC
@@ -20,12 +24,7 @@ stages:
           host: "[[attributes.BMC]]"
       - cmd: cmd
         name: Wait for BMC services
-        transport: &bmc_ssh
-          proto: ssh
-          options:
-            host: "[[attributes.BMC]]"
-            user: "root"
-            password: "[[attributes.BMCPassword]]"
+        transport: *bmc_ssh
         options:
           timeout: 2m
         parameters:
@@ -36,7 +35,8 @@ stages:
     steps:
       - cmd: cmd
         name: Wait for PowerState On (poll 5min)
-        transport: *local
+        transport: &local
+          proto: local
         options:
           timeout: 6m
         parameters:
@@ -51,10 +51,10 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "STATE=$(busctl get-property xyz.openbmc_project.State.Host /xyz/openbmc_project/state/host0 xyz.openbmc_project.State.Host CurrentHostState | awk '{print $2}'); echo \"HostState=$STATE\"; echo \"$STATE\" | grep -q Running"
+          executable: busctl
+          args: [get-property, xyz.openbmc_project.State.Host, /xyz/openbmc_project/state/host0, xyz.openbmc_project.State.Host, CurrentHostState]
+          expect:
+            - regex: "Running"
       - cmd: cmd
         name: Chassis state On via D-Bus
         transport: *bmc_ssh
@@ -62,10 +62,10 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "STATE=$(busctl get-property xyz.openbmc_project.State.Chassis /xyz/openbmc_project/state/chassis0 xyz.openbmc_project.State.Chassis CurrentPowerState | awk '{print $2}'); echo \"ChassisState=$STATE\"; echo \"$STATE\" | grep -q On"
+          executable: busctl
+          args: [get-property, xyz.openbmc_project.State.Chassis, /xyz/openbmc_project/state/chassis0, xyz.openbmc_project.State.Chassis, CurrentPowerState]
+          expect:
+            - regex: "On"
       - cmd: cmd
         name: Power control service active
         transport: *bmc_ssh
@@ -96,13 +96,13 @@ stages:
         name: PowerState is Off via Redfish
         transport: *local
         options:
-          timeout: 5s
+          timeout: 30s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system | grep -q '\"PowerState\": *\"Off\"'"
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
+          expect:
+            - regex: '"PowerState": *"Off"'
       - cmd: cmd
         name: Host state Off via D-Bus
         transport: *bmc_ssh
@@ -110,10 +110,10 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "STATE=$(busctl get-property xyz.openbmc_project.State.Host /xyz/openbmc_project/state/host0 xyz.openbmc_project.State.Host CurrentHostState | awk '{print $2}'); echo \"HostState=$STATE\"; echo \"$STATE\" | grep -q Off"
+          executable: busctl
+          args: [get-property, xyz.openbmc_project.State.Host, /xyz/openbmc_project/state/host0, xyz.openbmc_project.State.Host, CurrentHostState]
+          expect:
+            - regex: "Off"
 
   - name: Power On Host via Redfish
     steps:
@@ -142,7 +142,7 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "STATE=$(busctl get-property xyz.openbmc_project.State.Host /xyz/openbmc_project/state/host0 xyz.openbmc_project.State.Host CurrentHostState | awk '{print $2}'); echo \"HostState=$STATE\"; echo \"$STATE\" | grep -q Running"
+          executable: busctl
+          args: [get-property, xyz.openbmc_project.State.Host, /xyz/openbmc_project/state/host0, xyz.openbmc_project.State.Host, CurrentHostState]
+          expect:
+            - regex: "Running"

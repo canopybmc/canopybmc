@@ -1,4 +1,4 @@
-name: Redfish AccountService Validation
+name: "Validator: Redfish AccountService"
 description: >-
   Validate /redfish/v1/AccountService tree including Accounts,
   Roles, and LDAP certificate resources against DMTF schemas.
@@ -44,7 +44,5 @@ stages:
         name: Show validation report
         transport: *local
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "cat /tmp/redfish-results-accounts/RedfishServiceValidatorReport_*.html"
+          executable: cat
+          args: ["/tmp/redfish-results-accounts/RedfishServiceValidatorReport_latest.html"]
