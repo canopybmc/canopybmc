@@ -1,0 +1,183 @@
+name: "Inventory: System Identity"
+description: >-
+  Verify chassis and system identity fields are populated correctly via Redfish.
+  Covers entity-manager VPD patches, devicetree-vpd-parser, and SMBIOS system
+  identity. Checks both Chassis and System resources for manufacturer, model,
+  serial, part number, asset tag, and boot configuration.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Wait for BMC and Host POST
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: cmd
+        name: Wait for BMC services
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+      - cmd: cmd
+        name: Check host PowerState is On
+        transport: &local
+          proto: local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
+          expect:
+            - regex: '"PowerState": "On"'
+      - cmd: cmd
+        name: Wait for SMBIOS transfer and i2c passthrough
+        transport: *local
+        options:
+          timeout: 4m
+        parameters:
+          executable: sleep
+          args: ["180"]
+
+  - name: Chassis Identity
+    steps:
+      - cmd: cmd
+        name: Chassis Model contains Gen11
+        transport: &local
+          proto: local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
+          expect:
+            - regex: '"Model".*"Gen11"'
+      - cmd: cmd
+        name: Chassis Manufacturer is Hewlett Packard Enterprise
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
+          expect:
+            - regex: '"Manufacturer".*"Hewlett Packard Enterprise"'
+      - cmd: cmd
+        name: Chassis SerialNumber populated
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
+          expect:
+            - regex: '"SerialNumber": *"[^"][^"]*"'
+      - cmd: cmd
+        name: Chassis PartNumber populated
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
+          expect:
+            - regex: '"PartNumber": *"[^"][^"]*"'
+      - cmd: cmd
+        name: Chassis AssetTag populated
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
+          expect:
+            - regex: '"AssetTag": *"[^"][^"]*"'
+      - cmd: cmd
+        name: ChassisType is RackMount
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
+          expect:
+            - regex: '"ChassisType".*"RackMount"'
+
+  - name: System Identity
+    steps:
+      - cmd: cmd
+        name: System Model contains Gen11
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
+          expect:
+            - regex: '"Model".*"Gen11"'
+      - cmd: cmd
+        name: System Manufacturer is Hewlett Packard Enterprise
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
+          expect:
+            - regex: '"Manufacturer".*"Hewlett Packard Enterprise"'
+      - cmd: cmd
+        name: System SerialNumber populated
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
+          expect:
+            - regex: '"SerialNumber": *"[^"][^"]*"'
+      - cmd: cmd
+        name: System UUID is not all-zeros
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "UUID=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system | grep -o '\"UUID\": *\"[^\"]*\"' | grep -o '[0-9a-fA-F-]*'); echo \"UUID=$UUID\"; test \"$UUID\" != '00000000-0000-0000-0000-000000000000' && test -n \"$UUID\""
+
+  - name: Boot Configuration
+    steps:
+      - cmd: cmd
+        name: BootSourceOverrideMode is UEFI
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
+          expect:
+            - regex: '"BootSourceOverrideMode".*"UEFI"'

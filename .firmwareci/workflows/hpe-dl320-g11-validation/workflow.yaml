@@ -1,0 +1,5 @@
+name: hpe-dl320-g11-validation
+description: >-
+  Redfish DMTF schema validation for HPE ProLiant DL320 Gen11 BMC.
+  Intended to run weekly or monthly — these tests should rarely change.
+runs-on: hpe-dl320

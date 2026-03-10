@@ -1,7 +1,7 @@
-name: Redfish Managers Validation
+name: "Validator: Redfish Chassis"
 description: >-
-  Validate /redfish/v1/Managers tree including NetworkProtocol,
-  EthernetInterfaces, and LogServices against DMTF schemas.
+  Validate /redfish/v1/Chassis tree including Thermal, Power,
+  Sensors, and PCIeSlots against DMTF schemas.
 on-error: continue
 
 defaults:
@@ -9,7 +9,7 @@ defaults:
     proto: local
 
 stages:
-  - name: Validate Managers
+  - name: Validate Chassis
     steps:
       - cmd: cmd
         name: Check storage provisioning
@@ -20,17 +20,7 @@ stages:
             - "-la"
             - "[[storage.RedfishValidator]]"
       - cmd: cmd
-        name: Check BMC connectivity
-        transport: *local
-        options:
-          on-error: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Managers | head -c 500"
-      - cmd: cmd
-        name: Validate Managers tree
+        name: Validate Chassis tree
         transport: *local
         options:
           timeout: 15m
@@ -46,17 +36,15 @@ stages:
             - "https://[[attributes.BMC]]"
             - "--payload"
             - "tree"
-            - "/redfish/v1/Managers"
+            - "/redfish/v1/Chassis"
             - "--nooemcheck"
             - "--collectionlimit"
             - "50"
             - "--logdir"
-            - "/tmp/redfish-results-managers"
+            - "/tmp/redfish-results-chassis"
       - cmd: cmd
         name: Show validation report
         transport: *local
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "cat /tmp/redfish-results-managers/RedfishServiceValidatorReport_*.html"
+          executable: cat
+          args: ["/tmp/redfish-results-chassis/RedfishServiceValidatorReport_latest.html"]

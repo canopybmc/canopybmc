@@ -1,0 +1,83 @@
+name: "Inventory: Sensors"
+description: >-
+  Verify sensor count and presence of platform-universal sensors via Redfish.
+  Covers entity-manager configs and dbus-sensors for GXP, CPU temperature
+  sensors. PSU sensors are verified in inventory-psu.yaml. Fan PWM sensors
+  are verified in fan-control.yaml.
+
+defaults:
+  transport: &local
+    proto: local
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: &bmc_ssh
+          proto: ssh
+          options:
+            host: "[[attributes.BMC]]"
+            user: "root"
+            password: "[[attributes.BMCPassword]]"
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: Sensor Counts
+    steps:
+      - cmd: cmd
+        name: Total sensor count >= 20
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "COUNT=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors | grep -o '\"Members@odata.count\": *[0-9]*' | grep -o '[0-9]*$'); echo \"Sensor count: $COUNT\"; test \"$COUNT\" -ge 20"
+
+  - name: Temperature Sensors Present
+    steps:
+      - cmd: cmd
+        name: GXP_Temp present
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors"]
+          expect:
+            - regex: "GXP_Temp"
+      - cmd: cmd
+        name: DTS_CPU1 present
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors"]
+          expect:
+            - regex: "DTS_CPU1"
+      - cmd: cmd
+        name: Die_CPU1 present
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors"]
+          expect:
+            - regex: "Die_CPU1"

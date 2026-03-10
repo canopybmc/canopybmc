@@ -1,4 +1,4 @@
-name: Boot Time
+name: "Smoke: Boot Time"
 description: >-
   Regression test for BMC boot time. Flashes the image, powers on, and
   asserts that the serial banner appears within 80s and SSH is reachable

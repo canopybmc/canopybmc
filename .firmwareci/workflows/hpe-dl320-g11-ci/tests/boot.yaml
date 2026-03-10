@@ -1,4 +1,4 @@
-name: Boot Test
+name: "Smoke: Boot"
 description: Checks if the system boots successfully and is accessible via SSH.
 
 stages:

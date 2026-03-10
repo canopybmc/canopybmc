@@ -1,4 +1,4 @@
-name: D-Bus Registrations
+name: "Smoke: D-Bus Registrations"
 description: >-
   Verify all critical D-Bus well-known names are registered
   on the system bus.
@@ -35,95 +35,95 @@ stages:
         name: GxpChif on D-Bus
         transport: *bmc_ssh
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "busctl list --no-pager | grep xyz.openbmc_project.GxpChif"
+          executable: busctl
+          args: [list, --no-pager]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.GxpChif"
       - cmd: cmd
         name: Smbios.MDR_V2 on D-Bus
         transport: *bmc_ssh
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "busctl list --no-pager | grep xyz.openbmc_project.Smbios.MDR_V2"
+          executable: busctl
+          args: [list, --no-pager]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.Smbios\\.MDR_V2"
       - cmd: cmd
         name: CPUInfo on D-Bus
         transport: *bmc_ssh
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "busctl list --no-pager | grep xyz.openbmc_project.CPUInfo"
+          executable: busctl
+          args: [list, --no-pager]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.CPUInfo"
       - cmd: cmd
         name: EntityManager on D-Bus
         transport: *bmc_ssh
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "busctl list --no-pager | grep xyz.openbmc_project.EntityManager"
+          executable: busctl
+          args: [list, --no-pager]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.EntityManager"
       - cmd: cmd
         name: FanSensor on D-Bus
         transport: *bmc_ssh
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "busctl list --no-pager | grep xyz.openbmc_project.FanSensor"
+          executable: busctl
+          args: [list, --no-pager]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.FanSensor"
       - cmd: cmd
         name: PSUSensor on D-Bus
         transport: *bmc_ssh
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "busctl list --no-pager | grep xyz.openbmc_project.PSUSensor"
+          executable: busctl
+          args: [list, --no-pager]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.PSUSensor"
       - cmd: cmd
         name: HwmonTempSensor on D-Bus
         transport: *bmc_ssh
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "busctl list --no-pager | grep xyz.openbmc_project.HwmonTempSensor"
+          executable: busctl
+          args: [list, --no-pager]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.HwmonTempSensor"
       - cmd: cmd
         name: IntelCPUSensor on D-Bus
         transport: *bmc_ssh
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "busctl list --no-pager | grep xyz.openbmc_project.IntelCPUSensor"
+          executable: busctl
+          args: [list, --no-pager]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.IntelCPUSensor"
       - cmd: cmd
         name: State.Host on D-Bus
         transport: *bmc_ssh
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "busctl list --no-pager | grep xyz.openbmc_project.State.Host"
+          executable: busctl
+          args: [list, --no-pager]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.State\\.Host"
       - cmd: cmd
         name: State.Chassis on D-Bus
         transport: *bmc_ssh
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "busctl list --no-pager | grep xyz.openbmc_project.State.Chassis"
+          executable: busctl
+          args: [list, --no-pager]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.State\\.Chassis"
       - cmd: cmd
         name: Hwmon.external on D-Bus
         transport: *bmc_ssh
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "busctl list --no-pager | grep xyz.openbmc_project.Hwmon.external"
+          executable: busctl
+          args: [list, --no-pager]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.Hwmon\\.external"
       - cmd: cmd
         name: State.FanCtrl on D-Bus
         transport: *bmc_ssh
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "busctl list --no-pager | grep xyz.openbmc_project.State.FanCtrl"
+          executable: busctl
+          args: [list, --no-pager]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.State\\.FanCtrl"
