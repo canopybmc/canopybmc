@@ -1,0 +1,4 @@
+# Restart HwmonTempSensor when I2C passthrough state changes so that
+# newly probed hwmon devices (sbtsi, sbrmi, spd5118) are picked up.
+ACTION=="change", SUBSYSTEM=="platform", DRIVER=="gxp-i2c-passthrough", \
+	RUN+="/bin/systemctl restart xyz.openbmc_project.hwmontempsensor.service"
