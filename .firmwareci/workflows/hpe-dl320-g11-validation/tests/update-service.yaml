@@ -1,7 +1,7 @@
-name: Redfish Service Root Validation
+name: "Validator: Redfish UpdateService"
 description: >-
-  Validate the Redfish service root and top-level resource links
-  against DMTF schemas using the Redfish Service Validator.
+  Validate /redfish/v1/UpdateService tree including FirmwareInventory
+  against DMTF schemas.
 on-error: continue
 
 defaults:
@@ -9,7 +9,7 @@ defaults:
     proto: local
 
 stages:
-  - name: Validate Service Root
+  - name: Validate UpdateService
     steps:
       - cmd: cmd
         name: Check storage provisioning
@@ -20,10 +20,10 @@ stages:
             - "-la"
             - "[[storage.RedfishValidator]]"
       - cmd: cmd
-        name: Validate service root
+        name: Validate UpdateService tree
         transport: *local
         options:
-          timeout: 5m
+          timeout: 10m
           on-error: continue
         parameters:
           executable: rf_service_validator
@@ -35,16 +35,14 @@ stages:
             - "--rhost"
             - "https://[[attributes.BMC]]"
             - "--payload"
-            - "single"
-            - "/redfish/v1/"
+            - "tree"
+            - "/redfish/v1/UpdateService"
             - "--nooemcheck"
             - "--logdir"
-            - "/tmp/redfish-results-root"
+            - "/tmp/redfish-results-update"
       - cmd: cmd
         name: Show validation report
         transport: *local
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "cat /tmp/redfish-results-root/RedfishServiceValidatorReport_*.html"
+          executable: cat
+          args: ["/tmp/redfish-results-update/RedfishServiceValidatorReport_latest.html"]

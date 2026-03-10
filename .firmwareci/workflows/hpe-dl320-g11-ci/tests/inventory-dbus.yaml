@@ -1,0 +1,98 @@
+name: "Inventory: D-Bus Objects"
+description: >-
+  Verify SMBIOS-derived inventory objects are present on D-Bus after host POST.
+  Covers the smbios-mdr service populating TPM, PCIe slots, BIOS, DIMM, and
+  CPU objects under xyz.openbmc_project.Smbios.MDR_V2. Requires host POST
+  complete.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Wait for BMC and Host POST
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: cmd
+        name: Wait for BMC services
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+      - cmd: cmd
+        name: Wait for host POST and SMBIOS transfer
+        transport: *bmc_ssh
+        options:
+          timeout: 3m
+        parameters:
+          executable: sleep
+          args: ["90"]
+
+  - name: SMBIOS D-Bus Objects
+    steps:
+      - cmd: cmd
+        name: TPM object on Smbios.MDR_V2
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: busctl
+          args: [tree, xyz.openbmc_project.Smbios.MDR_V2, --no-pager]
+          expect:
+            - regex: "tpm0"
+      - cmd: cmd
+        name: PCIe slot objects >= 4 on Smbios.MDR_V2
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "COUNT=$(busctl tree xyz.openbmc_project.Smbios.MDR_V2 --no-pager | grep -c pcieslot); echo \"PCIe slots: $COUNT\"; test \"$COUNT\" -ge 4"
+      - cmd: cmd
+        name: BIOS object on Smbios.MDR_V2
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: busctl
+          args: [tree, xyz.openbmc_project.Smbios.MDR_V2, --no-pager]
+          expect:
+            - regex: "bios"
+      - cmd: cmd
+        name: DIMM objects on Smbios.MDR_V2
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: busctl
+          args: [tree, xyz.openbmc_project.Smbios.MDR_V2, --no-pager]
+          expect:
+            - regex: "dimm"
+      - cmd: cmd
+        name: CPU objects on Smbios.MDR_V2
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: busctl
+          args: [tree, xyz.openbmc_project.Smbios.MDR_V2, --no-pager]
+          expect:
+            - regex: "cpu"

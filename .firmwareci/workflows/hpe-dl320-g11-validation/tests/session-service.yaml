@@ -1,4 +1,4 @@
-name: Redfish SessionService Validation
+name: "Validator: Redfish SessionService"
 description: >-
   Validate /redfish/v1/SessionService tree against DMTF schemas.
 on-error: continue
@@ -43,7 +43,5 @@ stages:
         name: Show validation report
         transport: *local
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "cat /tmp/redfish-results-sessions/RedfishServiceValidatorReport_*.html"
+          executable: cat
+          args: ["/tmp/redfish-results-sessions/RedfishServiceValidatorReport_latest.html"]

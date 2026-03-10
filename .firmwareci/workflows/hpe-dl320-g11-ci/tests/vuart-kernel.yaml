@@ -1,4 +1,4 @@
-name: VUART Kernel
+name: "Console: VUART Kernel"
 description: >-
   Verify the GXP Virtual UART kernel driver (8250_gxp_vuart) is loaded and
   functional. Checks device node, driver binding, sysfs attributes (LPC
@@ -76,10 +76,10 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "readlink /dev/ttyVUART0 | grep -q ttyS3"
+          executable: readlink
+          args: [/dev/ttyVUART0]
+          expect:
+            - regex: "ttyS3"
       - cmd: cmd
         name: ttyS3 character device exists
         transport: *bmc_ssh
@@ -87,10 +87,8 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "test -c /dev/ttyS3"
+          executable: test
+          args: ["-c", "/dev/ttyS3"]
 
   - name: Driver Binding
     steps:
@@ -101,10 +99,8 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "test -d /sys/devices/platform/ahb@80000000/80fd0200.serial"
+          executable: test
+          args: ["-d", "/sys/devices/platform/ahb@80000000/80fd0200.serial"]
       - cmd: cmd
         name: Compatible is hpe,gxp-vuart
         transport: *bmc_ssh
@@ -112,10 +108,10 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "cat /sys/firmware/devicetree/base/ahb@80000000/serial@80fd0200/compatible | grep -q 'hpe,gxp-vuart'"
+          executable: cat
+          args: ["/sys/firmware/devicetree/base/ahb@80000000/serial@80fd0200/compatible"]
+          expect:
+            - regex: "hpe,gxp-vuart"
       - cmd: cmd
         name: Detected as 16550A in dmesg
         transport: *bmc_ssh
@@ -123,10 +119,10 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "dmesg | grep '80fd0200.serial' | grep -q '16550A'"
+          executable: dmesg
+          args: []
+          expect:
+            - regex: "80fd0200\\.serial.*16550A"
 
   - name: Sysfs Attributes
     steps:
@@ -148,10 +144,10 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "VAL=$(cat /sys/devices/platform/ahb@80000000/80fd0200.serial/lpc_address); echo \"lpc_address=$VAL\"; echo \"$VAL\" | grep -q '0x2f8'"
+          executable: cat
+          args: ["/sys/devices/platform/ahb@80000000/80fd0200.serial/lpc_address"]
+          expect:
+            - regex: "0x2f8"
       - cmd: cmd
         name: SIRQ is 3 (COM2 IRQ)
         transport: *bmc_ssh
@@ -190,7 +186,7 @@ stages:
           executable: sh
           args:
             - "-c"
-            - "curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"ForceOff\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}' | grep -qE '200|204'"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"ForceOff\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"ForceOff HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
       - cmd: cmd
         name: Wait for power off
         transport: *local
@@ -226,7 +222,7 @@ stages:
           executable: sh
           args:
             - "-c"
-            - "curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}' | grep -qE '200|204'"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"On HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
       - cmd: cmd
         name: Wait for host POST data
         transport: *local

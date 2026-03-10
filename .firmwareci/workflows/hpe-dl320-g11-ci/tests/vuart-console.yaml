@@ -1,4 +1,4 @@
-name: VUART Console
+name: "Console: VUART Userspace"
 description: >-
   Verify the OpenBMC host console stack: obmc-console-server on ttyVUART0,
   obmc-console-ssh socket on port 2200, log file capture, and udev symlink.
@@ -52,7 +52,9 @@ stages:
           executable: sh
           args:
             - "-c"
-            - "PID=$(pidof obmc-console-server); test -n \"$PID\" && cat /proc/$PID/cmdline 2>/dev/null | tr '\\0' ' ' | grep -q ttyVUART0"
+            - "PID=$(pidof obmc-console-server); test -n \"$PID\" && cat /proc/$PID/cmdline 2>/dev/null | tr '\\0' ' '"
+          expect:
+            - regex: "ttyVUART0"
       - cmd: cmd
         name: Server has ttyS3 file descriptor open
         transport: *bmc_ssh
@@ -63,7 +65,9 @@ stages:
           executable: sh
           args:
             - "-c"
-            - "PID=$(pidof obmc-console-server); ls -la /proc/$PID/fd/ 2>/dev/null | grep -q ttyS3"
+            - "PID=$(pidof obmc-console-server); ls -la /proc/$PID/fd/ 2>/dev/null"
+          expect:
+            - regex: "ttyS3"
 
   - name: Console Configuration
     steps:
@@ -74,10 +78,10 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "grep -q 'logsize' /etc/obmc-console/server.ttyVUART0.conf"
+          executable: cat
+          args: ["/etc/obmc-console/server.ttyVUART0.conf"]
+          expect:
+            - regex: "logsize"
       - cmd: cmd
         name: No self-referencing local-tty in config
         transport: *bmc_ssh
@@ -102,7 +106,9 @@ stages:
           executable: sh
           args:
             - "-c"
-            - "test -L /dev/ttyVUART0 && readlink /dev/ttyVUART0 | grep -q ttyS3 && echo 'ttyVUART0 -> ttyS3'"
+            - "test -L /dev/ttyVUART0 && readlink /dev/ttyVUART0"
+          expect:
+            - regex: "ttyS3"
       - cmd: cmd
         name: GXP udev rule installed
         transport: *bmc_ssh
@@ -110,10 +116,8 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "ls /usr/lib/udev/rules.d/80-gxp-obmc-console-uart.rules 2>/dev/null && echo 'udev rule present'"
+          executable: ls
+          args: ["/usr/lib/udev/rules.d/80-gxp-obmc-console-uart.rules"]
 
   - name: Console Unix Socket
     steps:
@@ -124,10 +128,10 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "cat /proc/net/unix | grep -q '@obmc-console.default' && echo 'socket active'"
+          executable: cat
+          args: ["/proc/net/unix"]
+          expect:
+            - regex: "@obmc-console\\.default"
 
   - name: Console SSH Service
     steps:
@@ -138,10 +142,8 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "systemctl is-active obmc-console-ssh.socket | grep -q active"
+          executable: systemctl
+          args: ["is-active", "obmc-console-ssh.socket"]
       - cmd: cmd
         name: Dropbear config exists
         transport: *bmc_ssh
@@ -149,10 +151,8 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "test -f /etc/obmc-console/dropbear.env && echo 'dropbear.env present'"
+          executable: test
+          args: ["-f", "/etc/obmc-console/dropbear.env"]
       - cmd: cmd
         name: Port 2200 is listening
         transport: *bmc_ssh
@@ -160,10 +160,10 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "cat /proc/net/tcp6 | awk '{print $2}' | grep -qi ':0898' && echo 'port 2200 listening'"
+          executable: cat
+          args: ["/proc/net/tcp6"]
+          expect:
+            - regex: ":0898"
 
   - name: Console Log File
     steps:
@@ -174,10 +174,8 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "test -f /var/log/obmc-console.log && echo 'log file exists'"
+          executable: test
+          args: ["-f", "/var/log/obmc-console.log"]
       - cmd: cmd
         name: Log file writable by console server
         transport: *bmc_ssh
@@ -188,7 +186,9 @@ stages:
           executable: sh
           args:
             - "-c"
-            - "PID=$(pidof obmc-console-server); ls -la /proc/$PID/fd/ 2>/dev/null | grep -q 'obmc-console.log'"
+            - "PID=$(pidof obmc-console-server); ls -la /proc/$PID/fd/ 2>/dev/null"
+          expect:
+            - regex: "obmc-console\\.log"
 
   - name: obmc-console-client
     steps:
@@ -199,10 +199,8 @@ stages:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "test -x /usr/bin/obmc-console-client && echo 'client binary present'"
+          executable: test
+          args: ["-x", "/usr/bin/obmc-console-client"]
 
   - name: Console Data Flow
     steps:
@@ -216,7 +214,7 @@ stages:
           executable: sh
           args:
             - "-c"
-            - "curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"ForceOff\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}' | grep -qE '200|204'"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"ForceOff\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"ForceOff HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
       - cmd: cmd
         name: Wait for power off
         transport: *local
@@ -242,7 +240,7 @@ stages:
           executable: sh
           args:
             - "-c"
-            - "curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}' | grep -qE '200|204'"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"On HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
       - cmd: cmd
         name: Wait for host POST data
         transport: *local

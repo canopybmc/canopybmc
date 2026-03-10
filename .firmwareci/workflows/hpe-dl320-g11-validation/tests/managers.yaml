@@ -1,7 +1,7 @@
-name: Redfish UpdateService Validation
+name: "Validator: Redfish Managers"
 description: >-
-  Validate /redfish/v1/UpdateService tree including FirmwareInventory
-  against DMTF schemas.
+  Validate /redfish/v1/Managers tree including NetworkProtocol,
+  EthernetInterfaces, and LogServices against DMTF schemas.
 on-error: continue
 
 defaults:
@@ -9,7 +9,7 @@ defaults:
     proto: local
 
 stages:
-  - name: Validate UpdateService
+  - name: Validate Managers
     steps:
       - cmd: cmd
         name: Check storage provisioning
@@ -20,10 +20,20 @@ stages:
             - "-la"
             - "[[storage.RedfishValidator]]"
       - cmd: cmd
-        name: Validate UpdateService tree
+        name: Check BMC connectivity
         transport: *local
         options:
-          timeout: 10m
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Managers"]
+          expect:
+            - regex: "Members"
+      - cmd: cmd
+        name: Validate Managers tree
+        transport: *local
+        options:
+          timeout: 15m
           on-error: continue
         parameters:
           executable: rf_service_validator
@@ -36,15 +46,15 @@ stages:
             - "https://[[attributes.BMC]]"
             - "--payload"
             - "tree"
-            - "/redfish/v1/UpdateService"
+            - "/redfish/v1/Managers"
             - "--nooemcheck"
+            - "--collectionlimit"
+            - "50"
             - "--logdir"
-            - "/tmp/redfish-results-update"
+            - "/tmp/redfish-results-managers"
       - cmd: cmd
         name: Show validation report
         transport: *local
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "cat /tmp/redfish-results-update/RedfishServiceValidatorReport_*.html"
+          executable: cat
+          args: ["/tmp/redfish-results-managers/RedfishServiceValidatorReport_latest.html"]
