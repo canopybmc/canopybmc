@@ -33,15 +33,43 @@ jobs:
         uses: ./.github/actions/build
         with:
           board: hpe-proliant-g11
+          signing-key: ${{ secrets.HPE_9E_SIGNING_KEY }}
 
   firmwareci:
     runs-on: [self-hosted, Hydra, Large]
     needs: build
     steps:
-      - name: Download provisioning image
+      - name: Download firmware image
         uses: actions/download-artifact@v4
         with:
-          name: provisioning-images-hpe-proliant-g11
+          name: obmc-phosphor-image-hpe-proliant-g11.static.mtd
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.FETCHER_APP_ID }}
+          private-key: ${{ secrets.FETCHER_PRIVATE_KEY }}
+          owner: canopybmc
+          repositories: hpe-gxp-bootblock
+
+      - name: Fetch GXP bootblock
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
+          git clone https://github.com/canopybmc/hpe-gxp-bootblock.git
+          git config --global --unset url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf
+          cp hpe-gxp-bootblock/9elements/test-keys/9e-gxp-dl360.rom .
+
+      - name: Prepare flash image
+        run: |
+          cat obmc-phosphor-image-hpe-proliant-g11.static.mtd 9e-gxp-dl360.rom > flash-image-hpe-proliant-g11.rom
+          size=$(stat --printf='%s' flash-image-hpe-proliant-g11.rom)
+          if [ "$size" -ne 33554432 ]; then
+            echo "::error::Flash image size is ${size} bytes, expected 33554432 (32MB)"
+            exit 1
+          fi
 
       - name: Upload to FirmwareCI
         uses: docker://firmwareci/action:v5.1
@@ -49,4 +77,4 @@ jobs:
           TOKEN: ${{ secrets.FWCI_TOKEN }}
           WORKFLOW_ID: ${{ secrets.FWCI_WORKFLOW_ID }}
           COMMIT_HASH: ${{ github.sha }}
-          BINARIES: Binary=obmc-phosphor-image-hpe-proliant-dl320-g11.static.mtd
+          BINARIES: Binary=flash-image-hpe-proliant-g11.rom

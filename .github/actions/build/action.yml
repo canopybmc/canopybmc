@@ -5,6 +5,9 @@ inputs:
   board:
     description: 'The target machine name (e.g., hpe-proliant-g11)'
     required: true
+  signing-key:
+    description: 'PEM-encoded private signing key for GXP U-Boot signature'
+    required: false
 runs:
   using: 'composite'
   steps:
@@ -18,13 +21,26 @@ runs:
       shell: bash
       run: git submodule update --init --recursive --checkout
 
+    - name: Write signing key
+      if: inputs.signing-key != ''
+      shell: bash
+      run: |
+        echo "${{ inputs.signing-key }}" > "${{ runner.temp }}/signing_key.pem"
+        chmod 600 "${{ runner.temp }}/signing_key.pem"
+
     - name: Build OpenBMC
       shell: bash
       env:
         BB_ENV_PASSTHROUGH_ADDITIONS: "DL_DIR SSTATE_DIR"
         DL_DIR: "/home/runner/data/bitbake.downloads"
         SSTATE_DIR: "/home/runner/data/bitbake.sstate"
-      run: . setup ${{ inputs.board }} && bitbake obmc-phosphor-image
+        SIGNING_KEY_PATH: ${{ inputs.signing-key != '' && format('{0}/signing_key.pem', runner.temp) || '' }}
+      run: |
+        . setup ${{ inputs.board }}
+        if [ -n "$SIGNING_KEY_PATH" ]; then
+          echo "HPE_SIGNING_KEY = \"$SIGNING_KEY_PATH\"" >> conf/local.conf
+        fi
+        bitbake obmc-phosphor-image
 
     - name: Upload firmware image
       uses: actions/upload-artifact@v4
