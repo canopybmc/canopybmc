@@ -1,0 +1,150 @@
+name: "KVM: Userspace Services"
+description: >-
+  Verify the OpenBMC KVM-over-IP userspace stack: obmc-ikvm service
+  running with correct arguments, VNC port 5900 listening, HID gadget
+  setup script installed, and USB gadget UDC binding. This is a
+  userspace test — it validates the phosphor KVM infrastructure on
+  top of the GXP video and UDC kernel drivers.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: Service Status
+    steps:
+      - cmd: cmd
+        name: obmc-ikvm service is active
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: systemctl
+          args: ["is-active", "obmc-ikvm.service"]
+      - cmd: cmd
+        name: obmc-ikvm no restarts
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "RESTARTS=$(systemctl show obmc-ikvm.service -p NRestarts --value); echo \"obmc-ikvm NRestarts=$RESTARTS\"; test \"$RESTARTS\" = \"0\""
+      - cmd: cmd
+        name: obmc-ikvm process running with correct args
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "PID=$(pidof obmc-ikvm); test -n \"$PID\" && cat /proc/$PID/cmdline 2>/dev/null | tr '\\0' ' '"
+          expect:
+            - regex: "/dev/video0"
+            - regex: "/dev/hidg0"
+            - regex: "/dev/hidg1"
+            - regex: "80401000\\.usb"
+
+  - name: HID Gadget Setup
+    steps:
+      - cmd: cmd
+        name: create_usbhid.sh script installed
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: test
+          args: ["-x", "/usr/bin/create_usbhid.sh"]
+      - cmd: cmd
+        name: Gadget vendor is Linux Foundation (0x1d6b)
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: cat
+          args: ["/sys/kernel/config/usb_gadget/obmc_hid/idVendor"]
+          expect:
+            - regex: "0x1d6b"
+      - cmd: cmd
+        name: Gadget product string is virtual_input
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: cat
+          args: ["/sys/kernel/config/usb_gadget/obmc_hid/strings/0x409/product"]
+          expect:
+            - regex: "virtual_input"
+
+  - name: UDC Binding
+    steps:
+      - cmd: cmd
+        name: Gadget bound to 80401000.usb UDC
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: cat
+          args: ["/sys/kernel/config/usb_gadget/obmc_hid/UDC"]
+          expect:
+            - regex: "80401000\\.usb"
+
+  - name: VNC Port
+    steps:
+      - cmd: cmd
+        name: Port 5900 is listening
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "cat /proc/net/tcp /proc/net/tcp6 2>/dev/null"
+          expect:
+            - regex: ":170C"
+      - cmd: cmd
+        name: VNC port reachable from CI runner
+        transport:
+          proto: local
+        options:
+          timeout: 10s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "echo | nc -w 5 [[attributes.BMC]] 5900"
+          expect:
+            - regex: "RFB"
