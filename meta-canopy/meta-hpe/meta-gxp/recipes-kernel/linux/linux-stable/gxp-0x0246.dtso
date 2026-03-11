@@ -13,6 +13,22 @@
 		"CPU1_PRSNT", "CPU2_PRSNT", "CPU3_PRSNT", "CPU4_PRSNT", "", "", "","",
 		"", "", "", "", "", "", "", "";
 	};
+
+	kcs_conf: kcs_conf@80fc0430 {
+		compatible = "hpe,gxp-kcs-bmc-cfg", "simple-mfd", "syscon";
+		reg = <0x80fc0430 0x100>;
+	};
+
+	kcs_reg: kcs_reg@80fd0400 {
+		compatible = "hpe,gxp-kcs-bmc";
+		reg = <0x80fd0400 0x8>;
+		interrupts = <6>;
+		interrupt-parent = <&vic1>;
+		kcs-chan = <1>;
+		status = "okay";
+		kcs-bmc-cfg = <&kcs_conf>;
+	};
+
 	i2cmux@0 {
 		compatible = "i2c-mux";
 		i2c-parent = <&i2c0>;
