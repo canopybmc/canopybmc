@@ -44,4 +44,5 @@ RDEPENDS:${PN}-system = " \
         gxp-chif-service \
         smbios-mdr \
         udev-gxp-i2c-passthrough \
+        ipmitool \
         "
