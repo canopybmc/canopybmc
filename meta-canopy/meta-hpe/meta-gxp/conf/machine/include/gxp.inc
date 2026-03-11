@@ -31,6 +31,7 @@ MACHINE_FEATURES += "\
     obmc-host-state-mgmt \
     obmc-chassis-state-mgmt \
     obmc-bmc-state-mgmt \
+    obmc-host-ipmi \
     "
 
 VIRTUAL-RUNTIME_obmc-host-state-manager ?= "x86-power-control"
@@ -43,3 +44,4 @@ PREFERRED_PROVIDER_virtual/obmc-chassis-mgmt = "packagegroup-hpe-apps"
 PREFERRED_PROVIDER_virtual/obmc-fan-mgmt = "packagegroup-hpe-apps"
 PREFERRED_PROVIDER_virtual/obmc-flash-mgmt = "packagegroup-hpe-apps"
 PREFERRED_PROVIDER_virtual/obmc-system-mgmt = "packagegroup-hpe-apps"
+PREFERRED_PROVIDER_virtual/obmc-host-ipmi-hw = "phosphor-ipmi-kcs"
