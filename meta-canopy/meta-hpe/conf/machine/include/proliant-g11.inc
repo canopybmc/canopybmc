@@ -4,6 +4,7 @@ KERNEL_DTBVENDORED ?= "1"
 # bootblock loader variants in use
 HPE_GXP_LOADERS = "\
   GXP2loader-t277-t280-t285-sgn00 \
+  GXP2loader-t282-t288-sgn00 \
   GXP2loader-t26x-sgn00 \
 "
 

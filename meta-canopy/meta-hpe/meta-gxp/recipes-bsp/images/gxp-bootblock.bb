@@ -4,7 +4,7 @@ LIC_FILES_CHKSUM = ""
 KBRANCH = "gxp2-bootblock"
 
 SRC_URI = "git://github.com/HewlettPackard/gxp-bootblock.git;protocol=https;branch=${KBRANCH}"
-SRCREV = "1714c07e0f6a3ab3888d474e49b818551c09bd93"
+SRCREV = "0ff312da2b91603e31436e1b3c4ae646c6f16c94"
 S = "${WORKDIR}/git"
 
 inherit deploy
