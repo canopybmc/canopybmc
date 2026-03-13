@@ -1,8 +1,8 @@
 name: HPE-DL320
 label: hpe-dl320
 attributes:
-  BMC: dl320g11-bmc-fwci.sec.9e.network
+  BMC: dl320g11-bmc-fwci.lab.9e.network
   BMCPassword: 0penBmc
-  DutAgent: worker100.sec.9e.network:1024
+  DutAgent: worker102.lab.9e.network:1024
   Device: dl320
   Board: dl320
