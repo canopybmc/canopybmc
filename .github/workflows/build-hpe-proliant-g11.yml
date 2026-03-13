@@ -72,9 +72,10 @@ jobs:
           fi
 
       - name: Upload to FirmwareCI
-        uses: docker://firmwareci/action:v5.1
+        uses: docker://firmwareci/action:v5.2
         with:
           TOKEN: ${{ secrets.FWCI_TOKEN }}
-          WORKFLOW_ID: ${{ secrets.FWCI_WORKFLOW_ID }}
+          WORKFLOW_NAME: ${{ secrets.FWCI_WORKFLOW_NAME }}
           COMMIT_HASH: ${{ github.sha }}
           BINARIES: Binary=flash-image-hpe-proliant-g11.rom
+          GITHUB_INSTALLATION_ID: ${{ secrets.FWCI_GITHUB_INSTALLATION_ID }}
