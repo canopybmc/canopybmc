@@ -1,0 +1,203 @@
+name: "User: Persistence Across Reboot"
+description: >-
+  Verify user accounts persist across BMC power cycle. Creates a user,
+  verifies it exists, power cycles the BMC via newdutctl, then verifies
+  the user still exists and can authenticate after reboot.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: Create User Before Reboot
+    steps:
+      - cmd: cmd
+        name: Create persistuser with Operator role
+        transport: &local
+          proto: local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"UserName\":\"persistuser\",\"Password\":\"P3rsist77\",\"RoleId\":\"Operator\",\"Enabled\":true}' https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts -o /dev/null -w '%{http_code}'); echo \"Create persistuser HTTP=$HTTP\"; test \"$HTTP\" = \"201\""
+
+  - name: Verify Before Reboot
+    steps:
+      - cmd: cmd
+        name: persistuser exists with correct attributes
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
+                 "https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/persistuser"]
+          expect:
+            - regex: '"UserName": *"persistuser"'
+            - regex: '"RoleId": *"Operator"'
+            - regex: '"Enabled": *true'
+      - cmd: cmd
+        name: persistuser can login before reboot
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u persistuser:P3rsist77 https://[[attributes.BMC]]/redfish/v1/Systems/system -o /dev/null -w '%{http_code}'); echo \"Login before reboot HTTP=$HTTP\"; test \"$HTTP\" = \"200\""
+
+  - name: BMC Power Cycle
+    steps:
+      - cmd: newdutctl
+        name: Power off DUT
+        parameters:
+          agent: "[[attributes.DutAgent]]"
+          device: "[[attributes.Device]]"
+          command: power
+          args: ["off"]
+      - cmd: cmd
+        name: Wait for BMC to power down
+        transport: *local
+        parameters:
+          executable: sleep
+          args: ["10"]
+      - cmd: newdutctl
+        name: Power on DUT
+        parameters:
+          agent: "[[attributes.DutAgent]]"
+          device: "[[attributes.Device]]"
+          command: power
+          args: ["on"]
+      - cmd: newdutctl
+        name: Wait for boot banner on serial
+        options:
+          timeout: 10m
+        parameters:
+          agent: "[[attributes.DutAgent]]"
+          device: "[[attributes.Device]]"
+          command: serial
+          args: ["Phosphor OpenBMC"]
+
+  - name: Wait for BMC After Reboot
+    steps:
+      - cmd: ping
+        name: Wait for SSH after reboot
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: cmd
+        name: Wait for services to settle after reboot
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: Verify After Reboot
+    steps:
+      - cmd: cmd
+        name: persistuser still exists with correct attributes
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
+                 "https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/persistuser"]
+          expect:
+            - regex: '"UserName": *"persistuser"'
+            - regex: '"RoleId": *"Operator"'
+            - regex: '"Enabled": *true'
+      - cmd: cmd
+        name: persistuser can login after reboot
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u persistuser:P3rsist77 https://[[attributes.BMC]]/redfish/v1/Systems/system -o /dev/null -w '%{http_code}'); echo \"Login after reboot HTTP=$HTTP\"; test \"$HTTP\" = \"200\""
+
+  - name: Modify and Delete After Reboot
+    steps:
+      - cmd: cmd
+        name: Change persistuser role to ReadOnly after reboot
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X PATCH -H 'Content-Type: application/json' -d '{\"RoleId\":\"ReadOnly\"}' https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/persistuser -o /dev/null -w '%{http_code}'); echo \"PATCH role HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
+      - cmd: cmd
+        name: Verify role changed to ReadOnly
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
+                 "https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/persistuser"]
+          expect:
+            - regex: '"RoleId": *"ReadOnly"'
+      - cmd: cmd
+        name: Delete persistuser
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X DELETE https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/persistuser -o /dev/null -w '%{http_code}'); echo \"Delete HTTP=$HTTP\"; test \"$HTTP\" = \"200\""
+      - cmd: cmd
+        name: Verify persistuser is deleted
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/persistuser -o /dev/null -w '%{http_code}'); echo \"Get deleted HTTP=$HTTP\"; test \"$HTTP\" = \"404\""
+
+  - name: Cleanup
+    steps:
+      - cmd: cmd
+        name: Cleanup - delete persistuser if exists
+        transport: *local
+        options:
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "curl -sk -u root:[[attributes.BMCPassword]] -X DELETE https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/persistuser -o /dev/null -w '%{http_code}'"

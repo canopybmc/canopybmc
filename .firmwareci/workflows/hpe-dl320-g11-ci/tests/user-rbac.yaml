@@ -1,0 +1,167 @@
+name: "User: Role-Based Access Control"
+description: >-
+  Verify RBAC enforcement for Administrator, Operator, and ReadOnly roles.
+  Tests that ReadOnly and Operator users can read resources but cannot
+  create or modify other user accounts. BMC-only, no host power required.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: Create Test Users
+    steps:
+      - cmd: cmd
+        name: Create readonlyuser with ReadOnly role
+        transport: &local
+          proto: local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"UserName\":\"readonlyuser\",\"Password\":\"R3adOnly9\",\"RoleId\":\"ReadOnly\",\"Enabled\":true}' https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts -o /dev/null -w '%{http_code}'); echo \"Create readonlyuser HTTP=$HTTP\"; test \"$HTTP\" = \"201\""
+      - cmd: cmd
+        name: Create operatoruser with Operator role
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"UserName\":\"operatoruser\",\"Password\":\"Op3rator9\",\"RoleId\":\"Operator\",\"Enabled\":true}' https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts -o /dev/null -w '%{http_code}'); echo \"Create operatoruser HTTP=$HTTP\"; test \"$HTTP\" = \"201\""
+
+  - name: ReadOnly Access Tests
+    steps:
+      - cmd: cmd
+        name: ReadOnly can read Systems (HTTP 200)
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u readonlyuser:R3adOnly9 https://[[attributes.BMC]]/redfish/v1/Systems/system -o /dev/null -w '%{http_code}'); echo \"ReadOnly GET Systems HTTP=$HTTP\"; test \"$HTTP\" = \"200\""
+      - cmd: cmd
+        name: ReadOnly cannot create users (HTTP 403)
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u readonlyuser:R3adOnly9 -X POST -H 'Content-Type: application/json' -d '{\"UserName\":\"shouldfail\",\"Password\":\"F4ilPass9\",\"RoleId\":\"ReadOnly\",\"Enabled\":true}' https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts -o /dev/null -w '%{http_code}'); echo \"ReadOnly POST user HTTP=$HTTP\"; test \"$HTTP\" = \"403\""
+      - cmd: cmd
+        name: ReadOnly cannot modify other accounts (HTTP 403)
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u readonlyuser:R3adOnly9 -X PATCH -H 'Content-Type: application/json' -d '{\"Enabled\":false}' https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/root -o /dev/null -w '%{http_code}'); echo \"ReadOnly PATCH root HTTP=$HTTP\"; test \"$HTTP\" = \"403\""
+
+  - name: Operator Access Tests
+    steps:
+      - cmd: cmd
+        name: Operator can read Systems (HTTP 200)
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u operatoruser:Op3rator9 https://[[attributes.BMC]]/redfish/v1/Systems/system -o /dev/null -w '%{http_code}'); echo \"Operator GET Systems HTTP=$HTTP\"; test \"$HTTP\" = \"200\""
+      - cmd: cmd
+        name: Operator cannot create users (HTTP 403)
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u operatoruser:Op3rator9 -X POST -H 'Content-Type: application/json' -d '{\"UserName\":\"shouldfail2\",\"Password\":\"F4ilPass8\",\"RoleId\":\"ReadOnly\",\"Enabled\":true}' https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts -o /dev/null -w '%{http_code}'); echo \"Operator POST user HTTP=$HTTP\"; test \"$HTTP\" = \"403\""
+
+  - name: Wrong Password Test
+    steps:
+      - cmd: cmd
+        name: Wrong password returns 401
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u readonlyuser:WrongPass99 https://[[attributes.BMC]]/redfish/v1/Systems/system -o /dev/null -w '%{http_code}'); echo \"Wrong password HTTP=$HTTP\"; test \"$HTTP\" = \"401\""
+
+  - name: Cleanup
+    steps:
+      - cmd: cmd
+        name: Cleanup - delete readonlyuser
+        transport: *local
+        options:
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "curl -sk -u root:[[attributes.BMCPassword]] -X DELETE https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/readonlyuser -o /dev/null -w '%{http_code}'"
+      - cmd: cmd
+        name: Cleanup - delete operatoruser
+        transport: *local
+        options:
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "curl -sk -u root:[[attributes.BMCPassword]] -X DELETE https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/operatoruser -o /dev/null -w '%{http_code}'"
+      - cmd: cmd
+        name: Cleanup - delete shouldfail if created
+        transport: *local
+        options:
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "curl -sk -u root:[[attributes.BMCPassword]] -X DELETE https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/shouldfail -o /dev/null -w '%{http_code}'"
+      - cmd: cmd
+        name: Cleanup - delete shouldfail2 if created
+        transport: *local
+        options:
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "curl -sk -u root:[[attributes.BMCPassword]] -X DELETE https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/shouldfail2 -o /dev/null -w '%{http_code}'"

@@ -1,0 +1,208 @@
+name: "User: CRUD Operations"
+description: >-
+  Verify user create, read, update, delete lifecycle via Redfish.
+  Tests account creation, login verification, role change, password
+  change, disable/enable, and deletion. BMC-only, no host power required.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: Create User
+    steps:
+      - cmd: cmd
+        name: Create testuser with Administrator role
+        transport: &local
+          proto: local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"UserName\":\"testuser\",\"Password\":\"T3stPass99\",\"RoleId\":\"Administrator\",\"Enabled\":true}' https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts -o /dev/null -w '%{http_code}'); echo \"Create testuser HTTP=$HTTP\"; test \"$HTTP\" = \"201\""
+
+  - name: Read User
+    steps:
+      - cmd: cmd
+        name: testuser exists with correct attributes
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
+                 "https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/testuser"]
+          expect:
+            - regex: '"UserName": *"testuser"'
+            - regex: '"RoleId": *"Administrator"'
+            - regex: '"Enabled": *true'
+            - regex: '"Locked": *false'
+      - cmd: cmd
+        name: testuser can authenticate
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u testuser:T3stPass99 https://[[attributes.BMC]]/redfish/v1/Systems/system -o /dev/null -w '%{http_code}'); echo \"Login testuser HTTP=$HTTP\"; test \"$HTTP\" = \"200\""
+
+  - name: Modify Role
+    steps:
+      - cmd: cmd
+        name: Change testuser role to Operator
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X PATCH -H 'Content-Type: application/json' -d '{\"RoleId\":\"Operator\"}' https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/testuser -o /dev/null -w '%{http_code}'); echo \"PATCH role HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
+      - cmd: cmd
+        name: Verify role changed to Operator
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
+                 "https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/testuser"]
+          expect:
+            - regex: '"RoleId": *"Operator"'
+
+  - name: Modify Password
+    steps:
+      - cmd: cmd
+        name: Change testuser password
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X PATCH -H 'Content-Type: application/json' -d '{\"Password\":\"N3wPass88\"}' https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/testuser -o /dev/null -w '%{http_code}'); echo \"PATCH password HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
+      - cmd: cmd
+        name: New password works
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u testuser:N3wPass88 https://[[attributes.BMC]]/redfish/v1/Systems/system -o /dev/null -w '%{http_code}'); echo \"Login new pass HTTP=$HTTP\"; test \"$HTTP\" = \"200\""
+      - cmd: cmd
+        name: Old password fails
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u testuser:T3stPass99 https://[[attributes.BMC]]/redfish/v1/Systems/system -o /dev/null -w '%{http_code}'); echo \"Login old pass HTTP=$HTTP\"; test \"$HTTP\" = \"401\""
+
+  - name: Disable and Re-enable
+    steps:
+      - cmd: cmd
+        name: Disable testuser
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X PATCH -H 'Content-Type: application/json' -d '{\"Enabled\":false}' https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/testuser -o /dev/null -w '%{http_code}'); echo \"Disable HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
+      - cmd: cmd
+        name: Disabled user cannot login
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u testuser:N3wPass88 https://[[attributes.BMC]]/redfish/v1/Systems/system -o /dev/null -w '%{http_code}'); echo \"Login disabled HTTP=$HTTP\"; test \"$HTTP\" = \"401\""
+      - cmd: cmd
+        name: Re-enable testuser
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X PATCH -H 'Content-Type: application/json' -d '{\"Enabled\":true}' https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/testuser -o /dev/null -w '%{http_code}'); echo \"Re-enable HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
+      - cmd: cmd
+        name: Re-enabled user can login
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u testuser:N3wPass88 https://[[attributes.BMC]]/redfish/v1/Systems/system -o /dev/null -w '%{http_code}'); echo \"Login re-enabled HTTP=$HTTP\"; test \"$HTTP\" = \"200\""
+
+  - name: Delete User
+    steps:
+      - cmd: cmd
+        name: Delete testuser
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X DELETE https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/testuser -o /dev/null -w '%{http_code}'); echo \"Delete HTTP=$HTTP\"; test \"$HTTP\" = \"200\""
+      - cmd: cmd
+        name: Deleted user returns 404
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/testuser -o /dev/null -w '%{http_code}'); echo \"Get deleted HTTP=$HTTP\"; test \"$HTTP\" = \"404\""
+
+  - name: Cleanup
+    steps:
+      - cmd: cmd
+        name: Cleanup - delete testuser if exists
+        transport: *local
+        options:
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "curl -sk -u root:[[attributes.BMCPassword]] -X DELETE https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/testuser -o /dev/null -w '%{http_code}'"
