@@ -25,7 +25,7 @@ jobs:
     runs-on: [self-hosted, Hydra, Large]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -40,13 +40,13 @@ jobs:
     needs: build
     steps:
       - name: Download firmware image
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: obmc-phosphor-image-hpe-proliant-g11.static.mtd
 
       - name: Generate GitHub App token
         id: app-token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.FETCHER_APP_ID }}
           private-key: ${{ secrets.FETCHER_PRIVATE_KEY }}
