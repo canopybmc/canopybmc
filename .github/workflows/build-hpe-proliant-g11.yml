@@ -53,13 +53,21 @@ jobs:
           owner: canopybmc
           repositories: hpe-gxp-bootblock
 
-      - name: Fetch GXP bootblock
+      - name: Debug token access
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
-          git clone https://github.com/canopybmc/hpe-gxp-bootblock.git
-          git config --global --unset url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf
+          curl -H "Authorization: token ${GH_TOKEN}" https://api.github.com/repos/canopybmc/hpe-gxp-bootblock
+
+      - name: Fetch GXP bootblock
+        uses: actions/checkout@v6
+        with:
+          repository: canopybmc/hpe-gxp-bootblock
+          token: ${{ steps.app-token.outputs.token }}
+          path: hpe-gxp-bootblock
+       
+      - name: Copy GXP bootblock   
+        run: | 
           cp hpe-gxp-bootblock/9elements/test-keys/9e-gxp-dl360.rom .
 
       - name: Prepare flash image
