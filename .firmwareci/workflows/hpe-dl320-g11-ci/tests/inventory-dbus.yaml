@@ -14,7 +14,7 @@ defaults:
       password: "[[attributes.BMCPassword]]"
 
 stages:
-  - name: Wait for BMC and Host POST
+  - name: Wait for BMC and Power On Host
     steps:
       - cmd: ping
         name: Wait for SSH
@@ -31,13 +31,22 @@ stages:
           executable: sleep
           args: ["45"]
       - cmd: cmd
-        name: Wait for host POST and SMBIOS transfer
+        name: Power on host via Redfish
+        transport:
+          proto: local
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"Power On HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
+      - cmd: cmd
+        name: Wait 220s for host POST and SMBIOS transfer
         transport: *bmc_ssh
         options:
-          timeout: 3m
+          timeout: 5m
         parameters:
           executable: sleep
-          args: ["90"]
+          args: ["220"]
 
   - name: SMBIOS D-Bus Objects
     steps:
