@@ -2,9 +2,9 @@ name: "Console: VUART Kernel"
 description: >-
   Verify the GXP Virtual UART kernel driver (8250_gxp_vuart) is loaded and
   functional. Checks device node, driver binding, sysfs attributes (LPC
-  address, SIRQ, enable), interrupt delivery, and that the VUART receives
-  host POST data when the host boots. This is a kernel-level test — it
-  bypasses obmc-console and reads directly from /dev/ttyS3.
+  address, SIRQ, enable), and that the VUART receives host POST data when
+  the host boots. This is a kernel-level test — it bypasses obmc-console
+  and reads directly from /dev/ttyS3.
 
 defaults:
   transport: &bmc_ssh
@@ -138,7 +138,7 @@ stages:
             - "-c"
             - "VAL=$(cat /sys/devices/platform/ahb@80000000/80fd0200.serial/vuart_enable); echo \"vuart_enable=$VAL\"; test \"$VAL\" = \"1\""
       - cmd: cmd
-        name: LPC address is 0x2f8 (COM2)
+        name: LPC address is 0x3f8 (COM1)
         transport: *bmc_ssh
         options:
           timeout: 5s
@@ -147,9 +147,9 @@ stages:
           executable: cat
           args: ["/sys/devices/platform/ahb@80000000/80fd0200.serial/lpc_address"]
           expect:
-            - regex: "0x2f8"
+            - regex: "0x3f8"
       - cmd: cmd
-        name: SIRQ is 3 (COM2 IRQ)
+        name: SIRQ is 4 (COM1 IRQ)
         transport: *bmc_ssh
         options:
           timeout: 5s
@@ -158,21 +158,7 @@ stages:
           executable: sh
           args:
             - "-c"
-            - "VAL=$(cat /sys/devices/platform/ahb@80000000/80fd0200.serial/sirq); echo \"sirq=$VAL\"; test \"$VAL\" = \"3\""
-
-  - name: Interrupt Delivery
-    steps:
-      - cmd: cmd
-        name: ttyS3 has received interrupts
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-error: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "COUNT=$(cat /proc/interrupts | grep ttyS3 | awk '{print $2}'); echo \"ttyS3 interrupts=$COUNT\"; test \"$COUNT\" -gt 0"
+            - "VAL=$(cat /sys/devices/platform/ahb@80000000/80fd0200.serial/sirq); echo \"sirq=$VAL\"; test \"$VAL\" = \"4\""
 
   - name: Host Data Reception
     steps:

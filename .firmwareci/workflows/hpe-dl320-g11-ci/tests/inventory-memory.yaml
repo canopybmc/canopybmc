@@ -9,7 +9,7 @@ defaults:
     proto: local
 
 stages:
-  - name: Wait for BMC and Host POST
+  - name: Wait for BMC and Power On Host
     steps:
       - cmd: ping
         name: Wait for SSH
@@ -26,24 +26,29 @@ stages:
           executable: sleep
           args: ["45"]
       - cmd: cmd
-        name: Check host PowerState is On
+        name: Power on host via Redfish
+        transport: *local
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"Power On HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
+      - cmd: cmd
+        name: Wait 220s for host POST and SMBIOS transfer
         transport: *local
         options:
-          timeout: 30s
-          on-error: continue
+          timeout: 5m
+        parameters:
+          executable: sleep
+          args: ["220"]
+      - cmd: cmd
+        name: Verify host PowerState is On
+        transport: *local
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
           expect:
-            - regex: '"PowerState": "On"'
-      - cmd: cmd
-        name: Wait for SMBIOS transfer and i2c passthrough
-        transport: *local
-        options:
-          timeout: 4m
-        parameters:
-          executable: sleep
-          args: ["180"]
+            - regex: '"PowerState": *"On"'
 
   - name: Memory Collection
     steps:
@@ -54,10 +59,10 @@ stages:
           timeout: 30s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "COUNT=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory | grep -o '\"Members@odata.count\": *[0-9]*' | grep -o '[0-9]*$'); echo \"DIMM slots: $COUNT\"; test \"$COUNT\" -ge 1"
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory"]
+          expect:
+            - regex: '"Members@odata.count": *[1-9][0-9]*'
       - cmd: cmd
         name: At least 1 DIMM is Enabled
         transport: *local
@@ -92,63 +97,63 @@ stages:
             - "-c"
             - "MEMBERS=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory | grep -o '\"@odata.id\": *\"/redfish/v1/Systems/system/Memory/[^\"]*\"' | grep -o '/redfish/v1/Systems/system/Memory/[^\"]*'); ABSENT=0; for M in $MEMBERS; do curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]$M 2>/dev/null | grep -q '\"State\": *\"Absent\"' && ABSENT=$((ABSENT+1)); done; echo \"Absent DIMMs: $ABSENT\"; test \"$ABSENT\" -ge 1"
 
-  - name: DIMM2 Attributes
+  - name: DIMM6 Attributes
     steps:
       - cmd: cmd
-        name: dimm2 is Enabled
+        name: dimm6 is Enabled
         transport: *local
         options:
           timeout: 30s
           on-error: continue
         parameters:
           executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm2"]
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm6"]
           expect:
             - regex: '"State": "Enabled"'
       - cmd: cmd
-        name: dimm2 is DDR5
+        name: dimm6 is DDR5
         transport: *local
         options:
           timeout: 30s
           on-error: continue
         parameters:
           executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm2"]
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm6"]
           expect:
             - regex: '"MemoryDeviceType": "DDR5"'
       - cmd: cmd
-        name: dimm2 Manufacturer is Hynix
+        name: dimm6 Manufacturer is Hynix
         transport: *local
         options:
           timeout: 30s
           on-error: continue
         parameters:
           executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm2"]
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm6"]
           expect:
             - regex: '"Manufacturer": "Hynix"'
       - cmd: cmd
-        name: dimm2 PartNumber is HMCG88AGBRA619N
+        name: dimm6 PartNumber is HMCG88AGBRA619N
         transport: *local
         options:
           timeout: 30s
           on-error: continue
         parameters:
           executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm2"]
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm6"]
           expect:
             - regex: '"PartNumber": "HMCG88AGBRA619N"'
       - cmd: cmd
-        name: dimm2 SerialNumber is E3712D56
+        name: dimm6 SerialNumber is E3712D7D
         transport: *local
         options:
           timeout: 30s
           on-error: continue
         parameters:
           executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm2"]
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm6"]
           expect:
-            - regex: '"SerialNumber": "E3712D56"'
+            - regex: '"SerialNumber": "E3712D7D"'
 
   - name: DIMM9 Attributes
     steps:
@@ -197,7 +202,7 @@ stages:
           expect:
             - regex: '"PartNumber": "HMCG88AGBRA619N"'
       - cmd: cmd
-        name: dimm9 SerialNumber is E3712D81
+        name: dimm9 SerialNumber is E3712D3E
         transport: *local
         options:
           timeout: 30s
@@ -206,7 +211,7 @@ stages:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm9"]
           expect:
-            - regex: '"SerialNumber": "E3712D81"'
+            - regex: '"SerialNumber": "E3712D3E"'
 
   - name: System Memory Summary
     steps:
@@ -217,7 +222,7 @@ stages:
           timeout: 30s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "MEM=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system | grep -o '\"TotalSystemMemoryGiB\": *[0-9]*' | grep -o '[0-9]*$'); echo \"TotalSystemMemoryGiB=$MEM\"; test \"$MEM\" -gt 0"
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
+          expect:
+            - regex: '"TotalSystemMemoryGiB": *([1-9][0-9]*\.?[0-9]*|0\.[0-9]*[1-9][0-9]*)'

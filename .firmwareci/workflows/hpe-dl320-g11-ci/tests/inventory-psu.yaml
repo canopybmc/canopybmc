@@ -10,7 +10,7 @@ defaults:
     proto: local
 
 stages:
-  - name: Wait for BMC
+  - name: Wait for BMC and Power On Host
     steps:
       - cmd: ping
         name: Wait for SSH
@@ -26,6 +26,22 @@ stages:
         parameters:
           executable: sleep
           args: ["45"]
+      - cmd: cmd
+        name: Power on host via Redfish
+        transport: *local
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"Power On HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
+      - cmd: cmd
+        name: Wait 120s for host and PSU readings
+        transport: *local
+        options:
+          timeout: 3m
+        parameters:
+          executable: sleep
+          args: ["120"]
 
   - name: PSU1 Sensor Presence
     steps:
@@ -41,127 +57,141 @@ stages:
             - "-c"
             - "DATA=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors); MISSING=''; for S in IINPUT_PSU1 IOUTPUT_PSU1 VINPUT_PSU1 VOUTPUT_PSU1 PINPUT_PSU1 POUTPUT_PSU1 TEMP1_PSU1 FAN1_PSU1; do echo \"$DATA\" | grep -q \"$S\" || MISSING=\"$MISSING $S\"; done; if [ -n \"$MISSING\" ]; then echo \"MISSING:$MISSING\"; exit 1; fi; echo 'All 8 PSU1 sensors present'"
 
-  - name: PSU1 Power Readings
+  - name: PSU2 Power Readings
     steps:
       - cmd: cmd
-        name: PINPUT_PSU1 > 0 W
-        transport: *local
-        options:
-          timeout: 30s
-          on-error: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "READING=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/power_PINPUT_PSU1 | grep -o '\"Reading\": *[0-9.-]*' | head -1 | grep -o '[0-9.-]*$'); echo \"PINPUT_PSU1=$READING W\"; echo \"$READING\" | awk '{if ($1+0 > 0) exit 0; else exit 1}'"
-      - cmd: cmd
-        name: POUTPUT_PSU1 > 0 W
-        transport: *local
-        options:
-          timeout: 30s
-          on-error: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "READING=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/power_POUTPUT_PSU1 | grep -o '\"Reading\": *[0-9.-]*' | head -1 | grep -o '[0-9.-]*$'); echo \"POUTPUT_PSU1=$READING W\"; echo \"$READING\" | awk '{if ($1+0 > 0) exit 0; else exit 1}'"
-
-  - name: PSU1 Voltage Readings
-    steps:
-      - cmd: cmd
-        name: VINPUT_PSU1 in 100-250 V
-        transport: *local
-        options:
-          timeout: 30s
-          on-error: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "READING=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/voltage_VINPUT_PSU1 | grep -o '\"Reading\": *[0-9.-]*' | head -1 | grep -o '[0-9.-]*$'); echo \"VINPUT_PSU1=$READING V\"; echo \"$READING\" | awk '{v=$1+0; if (v>=100 && v<=250) exit 0; else exit 1}'"
-      - cmd: cmd
-        name: VOUTPUT_PSU1 in 11-14 V
-        transport: *local
-        options:
-          timeout: 30s
-          on-error: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "READING=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/voltage_VOUTPUT_PSU1 | grep -o '\"Reading\": *[0-9.-]*' | head -1 | grep -o '[0-9.-]*$'); echo \"VOUTPUT_PSU1=$READING V\"; echo \"$READING\" | awk '{v=$1+0; if (v>=11 && v<=14) exit 0; else exit 1}'"
-
-  - name: PSU1 Sensor Health
-    steps:
-      - cmd: cmd
-        name: PINPUT_PSU1 Health is OK
+        name: PINPUT_PSU2 > 0 W
         transport: *local
         options:
           timeout: 30s
           on-error: continue
         parameters:
           executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/power_PINPUT_PSU1"]
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/power_PINPUT_PSU2"]
+          expect:
+            - regex: '"Reading": *([1-9][0-9]*\.?[0-9]*|0\.[0-9]*[1-9][0-9]*)'
+      - cmd: cmd
+        name: POUTPUT_PSU2 > 0 W
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/power_POUTPUT_PSU2"]
+          expect:
+            - regex: '"Reading": *([1-9][0-9]*\.?[0-9]*|0\.[0-9]*[1-9][0-9]*)'
+
+  - name: PSU2 Voltage Readings
+    steps:
+      - cmd: cmd
+        name: VINPUT_PSU2 in 100-250 V
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/voltage_VINPUT_PSU2"]
+          expect:
+            - regex: '"Reading": *(1[0-9][0-9]|2[0-4][0-9]|250)\.?[0-9]*'
+      - cmd: cmd
+        name: VOUTPUT_PSU2 in 11-14 V
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/voltage_VOUTPUT_PSU2"]
+          expect:
+            - regex: '"Reading": *(1[1-4])\.?[0-9]*'
+
+  - name: PSU2 Sensor Health
+    steps:
+      - cmd: cmd
+        name: PINPUT_PSU2 Health is OK
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/power_PINPUT_PSU2"]
           expect:
             - regex: '"Health": *"OK"'
 
-  - name: PSU Identity
+  - name: PSU1 Identity
     steps:
       - cmd: cmd
-        name: PowerSupplies collection has >= 1 member
+        name: PSU1 Manufacturer populated
         transport: *local
         options:
           timeout: 30s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "COUNT=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies | grep -o '\"Members@odata.count\": *[0-9]*' | grep -o '[0-9]*$'); echo \"PowerSupplies: $COUNT\"; test \"$COUNT\" -ge 1"
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/HPE_POWER_SUPPLY_1"]
+          expect:
+            - regex: '"Manufacturer": *"[^"][^"]*"'
       - cmd: cmd
-        name: At least 1 PSU has Manufacturer populated
+        name: PSU1 SerialNumber populated
         transport: *local
         options:
           timeout: 30s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "MEMBERS=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies | grep -o '\"@odata.id\": *\"/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/[^\"]*\"' | grep -o '/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/[^\"]*'); for M in $MEMBERS; do MFR=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]$M 2>/dev/null | grep -o '\"Manufacturer\": *\"[^\"]*\"' | head -1 | grep -o '[^\"]*$' | tr -d '\"'); echo \"$M Manufacturer=$MFR\"; test -n \"$MFR\" && exit 0; done; echo 'No PSU with Manufacturer found'; exit 1"
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/HPE_POWER_SUPPLY_1"]
+          expect:
+            - regex: '"SerialNumber": *"[^"][^"]*"'
       - cmd: cmd
-        name: At least 1 PSU has SerialNumber populated
+        name: PSU1 PartNumber populated
         transport: *local
         options:
           timeout: 30s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "MEMBERS=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies | grep -o '\"@odata.id\": *\"/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/[^\"]*\"' | grep -o '/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/[^\"]*'); for M in $MEMBERS; do SN=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]$M 2>/dev/null | grep -o '\"SerialNumber\": *\"[^\"]*\"' | head -1 | grep -o '[^\"]*$' | tr -d '\"'); echo \"$M SerialNumber=$SN\"; test -n \"$SN\" && exit 0; done; echo 'No PSU with SerialNumber found'; exit 1"
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/HPE_POWER_SUPPLY_1"]
+          expect:
+            - regex: '"PartNumber": *"[^"][^"]*"'
+
+  - name: PSU2 Identity
+    steps:
       - cmd: cmd
-        name: At least 1 PSU has PartNumber populated
+        name: PSU2 Manufacturer populated
         transport: *local
         options:
           timeout: 30s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "MEMBERS=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies | grep -o '\"@odata.id\": *\"/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/[^\"]*\"' | grep -o '/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/[^\"]*'); for M in $MEMBERS; do PN=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]$M 2>/dev/null | grep -o '\"PartNumber\": *\"[^\"]*\"' | head -1 | grep -o '[^\"]*$' | tr -d '\"'); echo \"$M PartNumber=$PN\"; test -n \"$PN\" && exit 0; done; echo 'No PSU with PartNumber found'; exit 1"
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/HPE_POWER_SUPPLY_2"]
+          expect:
+            - regex: '"Manufacturer": *"[^"][^"]*"'
       - cmd: cmd
-        name: At least 1 PSU has EfficiencyPercent > 0
+        name: PSU2 SerialNumber populated
         transport: *local
         options:
           timeout: 30s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "MEMBERS=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies | grep -o '\"@odata.id\": *\"/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/[^\"]*\"' | grep -o '/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/[^\"]*'); for M in $MEMBERS; do EFF=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]$M 2>/dev/null | grep -o '\"EfficiencyPercent\": *[0-9]*' | grep -o '[0-9]*$'); echo \"$M EfficiencyPercent=$EFF\"; test -n \"$EFF\" && test \"$EFF\" -gt 0 && exit 0; done; echo 'No PSU with EfficiencyPercent > 0'; exit 1"
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/HPE_POWER_SUPPLY_2"]
+          expect:
+            - regex: '"SerialNumber": *"[^"][^"]*"'
+      - cmd: cmd
+        name: PSU2 PartNumber populated
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/HPE_POWER_SUPPLY_2"]
+          expect:
+            - regex: '"PartNumber": *"[^"][^"]*"'
 
   - name: PSU2 Checks
     steps:

@@ -24,26 +24,43 @@ stages:
           host: "[[attributes.BMC]]"
       - cmd: cmd
         name: Wait for BMC services
-        transport: *bmc_ssh
+        transport: &local
+          proto: local
         options:
           timeout: 2m
         parameters:
           executable: sleep
           args: ["45"]
 
-  - name: Verify Host Is On
+  - name: Power On Host
     steps:
       - cmd: cmd
-        name: Wait for PowerState On (poll 5min)
-        transport: &local
-          proto: local
-        options:
-          timeout: 6m
+        name: Send Power On via Redfish
+        transport: *local
         parameters:
           executable: sh
           args:
             - "-c"
-            - "for i in $(seq 1 30); do curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system | grep -q '\"PowerState\": *\"On\"' && echo \"Host is On (poll $i)\" && exit 0; echo \"Poll $i: not yet On\"; sleep 10; done; echo 'Timeout waiting for host On'; exit 1"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"Power On HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
+      - cmd: cmd
+        name: Wait 120s for host to boot
+        transport: *local
+        options:
+          timeout: 3m
+        parameters:
+          executable: sleep
+          args: ["120"]
+
+  - name: Verify Host Is On
+    steps:
+      - cmd: cmd
+        name: PowerState is On via Redfish
+        transport: *local
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
+          expect:
+            - regex: '"PowerState": *"On"'
       - cmd: cmd
         name: Host state Running via D-Bus
         transport: *bmc_ssh
