@@ -1,0 +1,210 @@
+name: "User: AccountService Configuration"
+description: >-
+  Verify AccountService configuration, predefined roles, root account
+  properties, session service defaults, and LDAP/AD endpoint availability.
+  BMC-only test, no host power required.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: AccountService Configuration
+    steps:
+      - cmd: cmd
+        name: MinPasswordLength is 8
+        transport: &local
+          proto: local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
+                 "https://[[attributes.BMC]]/redfish/v1/AccountService"]
+          expect:
+            - regex: '"MinPasswordLength": *8'
+      - cmd: cmd
+        name: MaxPasswordLength is 20
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
+                 "https://[[attributes.BMC]]/redfish/v1/AccountService"]
+          expect:
+            - regex: '"MaxPasswordLength": *20'
+      - cmd: cmd
+        name: AccountLockoutThreshold is 0
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
+                 "https://[[attributes.BMC]]/redfish/v1/AccountService"]
+          expect:
+            - regex: '"AccountLockoutThreshold": *0'
+      - cmd: cmd
+        name: AccountLockoutDuration is 0
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
+                 "https://[[attributes.BMC]]/redfish/v1/AccountService"]
+          expect:
+            - regex: '"AccountLockoutDuration": *0'
+
+  - name: Predefined Roles
+    steps:
+      - cmd: cmd
+        name: 3 predefined roles exist
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
+                 "https://[[attributes.BMC]]/redfish/v1/AccountService/Roles"]
+          expect:
+            - regex: '"Members@odata.count": *3'
+      - cmd: cmd
+        name: Administrator role has ConfigureManager
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
+                 "https://[[attributes.BMC]]/redfish/v1/AccountService/Roles/Administrator"]
+          expect:
+            - regex: '"RoleId": *"Administrator"'
+            - regex: '"ConfigureManager"'
+            - regex: '"ConfigureUsers"'
+      - cmd: cmd
+        name: Operator role exists
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
+                 "https://[[attributes.BMC]]/redfish/v1/AccountService/Roles/Operator"]
+          expect:
+            - regex: '"RoleId": *"Operator"'
+            - regex: '"Login"'
+            - regex: '"ConfigureSelf"'
+            - regex: '"ConfigureComponents"'
+      - cmd: cmd
+        name: ReadOnly role exists
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
+                 "https://[[attributes.BMC]]/redfish/v1/AccountService/Roles/ReadOnly"]
+          expect:
+            - regex: '"RoleId": *"ReadOnly"'
+            - regex: '"Login"'
+            - regex: '"ConfigureSelf"'
+
+  - name: Root Account
+    steps:
+      - cmd: cmd
+        name: root account exists and is Administrator
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
+                 "https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/root"]
+          expect:
+            - regex: '"UserName": *"root"'
+            - regex: '"RoleId": *"Administrator"'
+            - regex: '"Enabled": *true'
+            - regex: '"Locked": *false'
+      - cmd: cmd
+        name: root account cannot be deleted (returns 404)
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X DELETE https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/root -o /dev/null -w '%{http_code}'); echo \"DELETE root HTTP=$HTTP\"; test \"$HTTP\" = \"404\""
+
+  - name: Session Service
+    steps:
+      - cmd: cmd
+        name: SessionTimeout is 1800
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
+                 "https://[[attributes.BMC]]/redfish/v1/SessionService"]
+          expect:
+            - regex: '"SessionTimeout": *1800'
+      - cmd: cmd
+        name: Sessions collection accessible
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
+                 "https://[[attributes.BMC]]/redfish/v1/SessionService/Sessions"]
+          expect:
+            - regex: '"Members@odata.count"'
+
+  - name: LDAP and AD Endpoints
+    steps:
+      - cmd: cmd
+        name: LDAP Certificates endpoint exists
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/AccountService/LDAP/Certificates -o /dev/null -w '%{http_code}'); echo \"LDAP Certs HTTP=$HTTP\"; test \"$HTTP\" = \"200\""
+      - cmd: cmd
+        name: ActiveDirectory Certificates endpoint exists
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/AccountService/ActiveDirectory/Certificates -o /dev/null -w '%{http_code}'); echo \"AD Certs HTTP=$HTTP\"; test \"$HTTP\" = \"200\""
