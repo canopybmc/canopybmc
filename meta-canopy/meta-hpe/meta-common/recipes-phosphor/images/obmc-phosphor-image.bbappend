@@ -1,5 +1,9 @@
 IMAGE_FEATURES:remove = "obmc-ikvm"
 
+# Remove the cracklib package to save space.
+PACKAGE_INSTALL:remove = "cracklib"
+PACKAGE_EXCLUDE:append = "cracklib"
+
 # Append uboot-sig to the BMC image at the designated offset
 do_generate_static:append() {
     _append_image(os.path.join(d.getVar('DEPLOY_DIR_IMAGE', True), 'gxp-uboot-sig'),
