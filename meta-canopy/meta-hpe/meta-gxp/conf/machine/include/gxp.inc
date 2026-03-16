@@ -35,6 +35,8 @@ MACHINE_FEATURES += "\
 
 VIRTUAL-RUNTIME_obmc-host-state-manager ?= "x86-power-control"
 VIRTUAL-RUNTIME_obmc-chassis-state-manager ?= "x86-power-control"
+VIRTUAL-RUNTIME_obmc-sensors-hwmon = "dbus-sensors"
+VIRTUAL-RUNTIME_obmc-fan-control = "phosphor-pid-control"
 
 # HPE packagegroup providers
 PREFERRED_PROVIDER_virtual/obmc-chassis-mgmt = "packagegroup-hpe-apps"
