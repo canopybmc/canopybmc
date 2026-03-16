@@ -1,6 +1,7 @@
 FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 SRC_URI += " file://obmc-ikvm.service "
 SRC_URI += " file://create_usbhid.sh "
+SRC_URI += " file://0001-ikvm-add-zero-copy-XRGB32-framebuffer-support.patch "
 
 FILES:${PN} += " \
     ${systemd_system_unitdir}/obmc-ikvm.service \

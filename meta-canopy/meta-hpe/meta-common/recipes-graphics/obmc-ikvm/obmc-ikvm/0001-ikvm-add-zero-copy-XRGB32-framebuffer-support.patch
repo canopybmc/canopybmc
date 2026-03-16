@@ -1,0 +1,80 @@
+From: Christian Walter <christian.walter@9elements.com>
+Date: Sun, 16 Mar 2026 00:00:00 +0000
+Subject: [PATCH] ikvm: add zero-copy XRGB32 framebuffer support
+
+Add support for V4L2_PIX_FMT_XRGB32 pixel format and eliminate the
+framebuffer copy for raw pixel formats.
+
+For video capture devices that output raw 32-bit XRGB pixels (such as
+the HPE GXP thumbnail video engine), the current code copies the entire
+frame from the V4L2 mmap'd buffer into the VNC framebuffer vector via
+std::vector::assign(). On a 1024x768 display at 32bpp, this is a 3 MB
+memcpy per frame.
+
+This patch eliminates that copy by pointing the VNC server's
+frameBuffer pointer directly at the V4L2 mmap'd buffer. This is safe
+because:
+
+1. The obmc-ikvm manager uses lock-step thread synchronization: the
+   video thread and server thread never access the framebuffer
+   concurrently. sendFrame() runs in the video phase, and
+   rfbProcessEvents() (which reads the framebuffer for encoding)
+   runs in the server phase after sendFrame() returns.
+
+2. The V4L2 buffer lifecycle already supports this: getFrame() holds
+   one buffer (lastFrameIndex) out of the driver queue while the
+   other buffers are re-queued. The held buffer remains valid until
+   the next getFrame() call, which only happens after the server
+   thread completes.
+
+3. Modern VNC clients use CursorShapeUpdates, so libvncserver sends
+   cursor shape via the protocol rather than drawing into the
+   framebuffer.
+
+The JPEG path is unaffected - it already achieves zero-copy via
+rfbSendCompressedDataTight().
+
+Upstream-Status: Pending
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ ikvm_server.cpp | 12 ++++++++++++
+ ikvm_video.cpp  |  3 ++-
+ 2 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/ikvm_server.cpp b/ikvm_server.cpp
+index 9274a9b..5306d04 100644
+--- a/ikvm_server.cpp
++++ b/ikvm_server.cpp
+@@ -159,6 +159,18 @@ void Server::sendFrame()
+ 
+         switch (video.getPixelformat())
+         {
++            case V4L2_PIX_FMT_XRGB32:
++                /*
++                 * Zero-copy: point VNC framebuffer directly at the V4L2
++                 * mmap'd buffer instead of copying via assign().
++                 *
++                 * Safe due to lock-step threading in Manager::run() and
++                 * the hold-one-buffer pattern in Video::getFrame().
++                 */
++                server->frameBuffer = data;
++                rfbMarkRectAsModified(server, 0, 0, video.getWidth(),
++                                      video.getHeight());
++                break;
+             case V4L2_PIX_FMT_RGB24:
+                 framebuffer.assign(data, data + video.getFrameSize());
+                 rfbMarkRectAsModified(server, 0, 0, video.getWidth(),
+diff --git a/ikvm_video.cpp b/ikvm_video.cpp
+index 3445715..2f637d6 100644
+--- a/ikvm_video.cpp
++++ b/ikvm_video.cpp
+@@ -459,7 +459,8 @@ void Video::start()
+     width = fmt.fmt.pix.width;
+     pixelformat = fmt.fmt.pix.pixelformat;
+ 
+-    if (pixelformat != V4L2_PIX_FMT_RGB24 && pixelformat != V4L2_PIX_FMT_JPEG)
++    if (pixelformat != V4L2_PIX_FMT_RGB24 && pixelformat != V4L2_PIX_FMT_JPEG
++        && pixelformat != V4L2_PIX_FMT_XRGB32)
+     {
+         log<level::ERR>("Pixel Format not supported",
+                         entry("PIXELFORMAT=%d", pixelformat));
