@@ -5,3 +5,7 @@ SRC_URI += "file://0003-hwmontempsensor-add-platform-device-support.patch"
 SRC_URI += "file://0004-psusensor-add-gxp_psu-to-sensorTypes-whitelist.patch"
 SRC_URI += "file://0005-HwmonTempSensor-Add-support-for-SPD5118.patch"
 ERROR_QA:remove = "patch-status"
+
+# Disable sensor daemons that have no matching
+# entity-manager configuration on HPE platforms and run idle.
+PACKAGECONFIG:remove = "exitairtempsensor external ipmbsensor mcutempsensor"
