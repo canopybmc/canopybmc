@@ -87,3 +87,51 @@ jobs:
           COMMIT_HASH: ${{ github.sha }}
           BINARIES: Binary=flash-image-hpe-proliant-g11.rom
           GITHUB_INSTALLATION_ID: ${{ secrets.FWCI_GITHUB_INSTALLATION_ID }}
+
+  firmwareci-main:
+    runs-on: [self-hosted, Hydra, Large]
+    needs: build
+    if: github.event_name == 'push'
+    steps:
+      - name: Download firmware image
+        uses: actions/download-artifact@v8
+        with:
+          name: obmc-phosphor-image-hpe-proliant-g11.static.mtd
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FETCHER_APP_ID }}
+          private-key: ${{ secrets.FETCHER_PRIVATE_KEY }}
+          owner: canopybmc
+          repositories: hpe-gxp-bootblock
+
+      - name: Fetch GXP bootblock
+        uses: actions/checkout@v6
+        with:
+          repository: canopybmc/hpe-gxp-bootblock
+          token: ${{ steps.app-token.outputs.token }}
+          path: hpe-gxp-bootblock
+
+      - name: Copy GXP bootblock
+        run: |
+          cp hpe-gxp-bootblock/9elements/test-keys/9e-gxp-dl360.rom .
+
+      - name: Prepare flash image
+        run: |
+          cat obmc-phosphor-image-hpe-proliant-g11.static.mtd 9e-gxp-dl360.rom > flash-image-hpe-proliant-g11.rom
+          size=$(stat --printf='%s' flash-image-hpe-proliant-g11.rom)
+          if [ "$size" -ne 33554432 ]; then
+            echo "::error::Flash image size is ${size} bytes, expected 33554432 (32MB)"
+            exit 1
+          fi
+
+      - name: Upload to FirmwareCI
+        uses: docker://firmwareci/action:v5.2
+        with:
+          TOKEN: ${{ secrets.FWCI_TOKEN }}
+          WORKFLOW_NAME: ${{ secrets.FWCI_MAIN_WORKFLOW_NAME }}
+          COMMIT_HASH: ${{ github.sha }}
+          BINARIES: Binary=flash-image-hpe-proliant-g11.rom
+          GITHUB_INSTALLATION_ID: ${{ secrets.FWCI_GITHUB_INSTALLATION_ID }}
