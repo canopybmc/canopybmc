@@ -1,0 +1,6 @@
+name: hpe-dl320-g11-main
+description: >-
+  Comprehensive tests for HPE ProLiant DL320 Gen11 BMC, triggered on
+  pushes to hpe/main. Includes boot timing, fan control, console validation,
+  user management, deep inventory checks, and DMTF Redfish schema validation.
+runs-on: hpe-dl320
