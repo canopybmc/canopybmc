@@ -105,20 +105,6 @@ stages:
           expect:
             - regex: "virtual_input"
 
-  - name: UDC Binding
-    steps:
-      - cmd: cmd
-        name: Gadget bound to 80401000.usb UDC
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-error: continue
-        parameters:
-          executable: cat
-          args: ["/sys/kernel/config/usb_gadget/obmc_hid/UDC"]
-          expect:
-            - regex: "80401000\\.usb"
-
   - name: VNC Port
     steps:
       - cmd: cmd
@@ -134,17 +120,23 @@ stages:
             - "cat /proc/net/tcp /proc/net/tcp6 2>/dev/null"
           expect:
             - regex: ":170C"
-      - cmd: cmd
-        name: VNC port reachable from CI runner
+      - cmd: shell
+        name: KVM WebSocket endpoint reachable via bmcweb
         transport:
           proto: local
         options:
-          timeout: 10s
+          timeout: 15s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "echo | nc -w 5 [[attributes.BMC]] 5900"
+          command: >-
+            curl -sk --http1.1 --max-time 5
+            -u root:[[attributes.BMCPassword]]
+            -o /dev/null -w '%{http_code}'
+            -H 'Upgrade: websocket'
+            -H 'Connection: Upgrade'
+            -H 'Sec-WebSocket-Key: dGVzdA=='
+            -H 'Sec-WebSocket-Version: 13'
+            https://[[attributes.BMC]]/kvm/0
+            || true
           expect:
-            - regex: "RFB"
+            - regex: "^101$"

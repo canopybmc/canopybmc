@@ -1,0 +1,101 @@
+name: "Web: Interface Accessibility"
+description: >-
+  Validate bmcweb service status, HTTPS connectivity, TLS certificate,
+  and Redfish service root accessibility from the test runner.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+      port: 2222
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: cmd
+        name: Wait for SSH
+        transport: *bmc_ssh
+        options:
+          timeout: 5m
+        parameters:
+          executable: echo
+          args: ["SSH connected"]
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: bmcweb Service
+    steps:
+      - cmd: cmd
+        name: bmcweb is active
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "bmcweb"]
+      - cmd: cmd
+        name: bmcweb is enabled
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-enabled", "bmcweb"]
+
+  - name: HTTPS Connectivity
+    steps:
+      - cmd: cmd
+        name: HTTPS port responds
+        transport: &local
+          proto: local
+        options:
+          timeout: 15s
+        parameters:
+          executable: curl
+          args: [-sk, "-I", "--connect-timeout", "10",
+                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/"]
+          expect:
+            - regex: "HTTP/.*[0-9]{3}"
+      - cmd: cmd
+        name: TLS certificate present
+        transport: *local
+        options:
+          timeout: 15s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "echo | openssl s_client -connect [[attributes.BMC]]:[[attributes.RedfishPort]] 2>/dev/null | grep -c 'BEGIN CERTIFICATE'"
+          expect:
+            - regex: "1"
+
+  - name: Redfish Service Root
+    steps:
+      - cmd: cmd
+        name: Redfish v1 returns JSON
+        transport: *local
+        options:
+          timeout: 15s
+        parameters:
+          executable: curl
+          args: [-sk, "--max-time", "10",
+                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/"]
+          expect:
+            - regex: '"RedfishVersion"'
+      - cmd: cmd
+        name: Redfish requires authentication
+        transport: *local
+        options:
+          timeout: 15s
+        parameters:
+          executable: curl
+          args: [-sk, "-I", "--max-time", "10",
+                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/Systems"]
+          expect:
+            - regex: "HTTP/.*401"

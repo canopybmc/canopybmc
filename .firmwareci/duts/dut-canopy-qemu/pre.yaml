@@ -1,0 +1,36 @@
+pre-stage:
+  - cmd: qemu
+    name: Start QEMU AST2600 EVB
+    parameters:
+      mode: start
+      args: [
+        "-m", "1G",
+        "-M", "ast2600-evb",
+        "-nographic",
+        "-net", "nic",
+        "-net", "user,hostfwd=:127.0.0.1:2222-:22,hostfwd=:127.0.0.1:2443-:443,hostfwd=udp:127.0.0.1:2623-:623,hostname=qemu",
+        "-drive", "file=[[input.firmware]],if=mtd,format=raw",
+
+        # Bus 3 — temperature and power sensors
+        "-device", "tmp105,address=0x48,id=tmp105_cpu0,bus=aspeed.i2c.bus.3",
+        "-device", "tmp105,address=0x49,id=tmp105_cpu1,bus=aspeed.i2c.bus.3",
+        "-device", "tmp421,address=0x4c,id=tmp421_multi0,bus=aspeed.i2c.bus.3",
+        "-device", "tmp421,address=0x4d,id=tmp421_multi1,bus=aspeed.i2c.bus.3",
+        "-device", "adm1272,address=0x10,id=adm1272_hotswap0,bus=aspeed.i2c.bus.3",
+        "-device", "isl69259,address=0x58,id=vrm_cpu,bus=aspeed.i2c.bus.3",
+
+        # Bus 7 — VRM and board sensors
+        "-device", "raa228000,address=0x54,id=vrm_mem,bus=aspeed.i2c.bus.7",
+        "-device", "raa229004,address=0x55,id=vrm_io,bus=aspeed.i2c.bus.7",
+        "-device", "tmp105,address=0x56,id=tmp105_exhaust,bus=aspeed.i2c.bus.7",
+        "-device", "tmp105,address=0x57,id=tmp105_board,bus=aspeed.i2c.bus.7",
+        "-device", "max31785,address=0x59,id=max31785_fan_ctrl,bus=aspeed.i2c.bus.7"
+      ]
+      executable: qemu-system-arm-openBMC
+      firmware: "/tmp/firmware"
+      variable: qemu_pid
+
+  - cmd: sleep
+    name: Wait for QEMU to boot
+    parameters:
+      duration: 100s

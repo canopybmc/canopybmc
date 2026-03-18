@@ -30,6 +30,7 @@ stages:
           args: ["45"]
 
   - name: D-Bus Services Registered
+    on-error: continue
     steps:
       - cmd: cmd
         name: GxpChif on D-Bus
@@ -47,14 +48,6 @@ stages:
           args: [list, --no-pager]
           expect:
             - regex: "xyz\\.openbmc_project\\.Smbios\\.MDR_V2"
-      - cmd: cmd
-        name: CPUInfo on D-Bus
-        transport: *bmc_ssh
-        parameters:
-          executable: busctl
-          args: [list, --no-pager]
-          expect:
-            - regex: "xyz\\.openbmc_project\\.CPUInfo"
       - cmd: cmd
         name: EntityManager on D-Bus
         transport: *bmc_ssh

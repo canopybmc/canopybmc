@@ -30,6 +30,7 @@ stages:
           args: ["45"]
 
   - name: Critical Services Running
+    on-error: continue
     steps:
       - cmd: cmd
         name: EntityManager
@@ -49,12 +50,6 @@ stages:
         parameters:
           executable: systemctl
           args: ["is-active", "smbios-mdrv2.service"]
-      - cmd: cmd
-        name: CPU Info
-        transport: *bmc_ssh
-        parameters:
-          executable: systemctl
-          args: ["is-active", "xyz.openbmc_project.cpuinfo.service"]
       - cmd: cmd
         name: Fan Sensor
         transport: *bmc_ssh

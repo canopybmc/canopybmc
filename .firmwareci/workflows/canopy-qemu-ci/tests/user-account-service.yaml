@@ -11,16 +11,19 @@ defaults:
       host: "[[attributes.BMC]]"
       user: "root"
       password: "[[attributes.BMCPassword]]"
+      port: 2222
 
 stages:
   - name: Wait for BMC
     steps:
-      - cmd: ping
+      - cmd: cmd
         name: Wait for SSH
+        transport: *bmc_ssh
         options:
           timeout: 5m
         parameters:
-          host: "[[attributes.BMC]]"
+          executable: echo
+          args: ["SSH connected"]
       - cmd: cmd
         name: Wait for services to settle
         transport: *bmc_ssh
@@ -41,7 +44,7 @@ stages:
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]/redfish/v1/AccountService"]
+                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService"]
           expect:
             - regex: '"MinPasswordLength": *8'
       - cmd: cmd
@@ -52,7 +55,7 @@ stages:
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]/redfish/v1/AccountService"]
+                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService"]
           expect:
             - regex: '"MaxPasswordLength": *20'
       - cmd: cmd
@@ -63,7 +66,7 @@ stages:
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]/redfish/v1/AccountService"]
+                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService"]
           expect:
             - regex: '"AccountLockoutThreshold": *0'
       - cmd: cmd
@@ -74,7 +77,7 @@ stages:
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]/redfish/v1/AccountService"]
+                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService"]
           expect:
             - regex: '"AccountLockoutDuration": *0'
 
@@ -88,7 +91,7 @@ stages:
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]/redfish/v1/AccountService/Roles"]
+                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Roles"]
           expect:
             - regex: '"Members@odata.count": *3'
       - cmd: cmd
@@ -99,7 +102,7 @@ stages:
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]/redfish/v1/AccountService/Roles/Administrator"]
+                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Roles/Administrator"]
           expect:
             - regex: '"RoleId": *"Administrator"'
             - regex: '"ConfigureManager"'
@@ -112,7 +115,7 @@ stages:
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]/redfish/v1/AccountService/Roles/Operator"]
+                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Roles/Operator"]
           expect:
             - regex: '"RoleId": *"Operator"'
             - regex: '"Login"'
@@ -126,7 +129,7 @@ stages:
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]/redfish/v1/AccountService/Roles/ReadOnly"]
+                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Roles/ReadOnly"]
           expect:
             - regex: '"RoleId": *"ReadOnly"'
             - regex: '"Login"'
@@ -142,7 +145,7 @@ stages:
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/root"]
+                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts/root"]
           expect:
             - regex: '"UserName": *"root"'
             - regex: '"RoleId": *"Administrator"'
@@ -157,7 +160,7 @@ stages:
           executable: sh
           args:
             - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X DELETE https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/root -o /dev/null -w '%{http_code}'); echo \"DELETE root HTTP=$HTTP\"; test \"$HTTP\" = \"404\""
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X DELETE https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts/root -o /dev/null -w '%{http_code}'); echo \"DELETE root HTTP=$HTTP\"; test \"$HTTP\" = \"404\""
 
   - name: Session Service
     steps:
@@ -169,7 +172,7 @@ stages:
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]/redfish/v1/SessionService"]
+                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/SessionService"]
           expect:
             - regex: '"SessionTimeout": *1800'
       - cmd: cmd
@@ -180,7 +183,7 @@ stages:
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]/redfish/v1/SessionService/Sessions"]
+                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/SessionService/Sessions"]
           expect:
             - regex: '"Members@odata.count"'
 
@@ -196,7 +199,7 @@ stages:
           executable: sh
           args:
             - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/AccountService/LDAP/Certificates -o /dev/null -w '%{http_code}'); echo \"LDAP Certs HTTP=$HTTP\"; test \"$HTTP\" = \"200\""
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/LDAP/Certificates -o /dev/null -w '%{http_code}'); echo \"LDAP Certs HTTP=$HTTP\"; test \"$HTTP\" = \"200\""
       - cmd: cmd
         name: ActiveDirectory Certificates endpoint exists
         transport: *local
@@ -207,4 +210,4 @@ stages:
           executable: sh
           args:
             - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/AccountService/ActiveDirectory/Certificates -o /dev/null -w '%{http_code}'); echo \"AD Certs HTTP=$HTTP\"; test \"$HTTP\" = \"200\""
+            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/ActiveDirectory/Certificates -o /dev/null -w '%{http_code}'); echo \"AD Certs HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"404\""

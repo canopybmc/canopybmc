@@ -1,0 +1,132 @@
+name: "Services: D-Bus Infrastructure"
+description: >-
+  Validate D-Bus system bus accessibility, core phosphor service
+  registration, object tree structure, and essential OpenBMC services.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+      port: 2222
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: cmd
+        name: Wait for SSH
+        transport: *bmc_ssh
+        options:
+          timeout: 5m
+        parameters:
+          executable: echo
+          args: ["SSH connected"]
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: D-Bus System Bus
+    steps:
+      - cmd: cmd
+        name: D-Bus system bus is accessible
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: ["status"]
+          expect:
+            - regex: "BusAddress=unix:path="
+      - cmd: cmd
+        name: systemd1 and freedesktop.DBus registered
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: ["list", "--no-pager"]
+          expect:
+            - regex: "org\\.freedesktop\\.systemd1"
+            - regex: "org\\.freedesktop\\.DBus"
+
+  - name: Core Phosphor Services on D-Bus
+    steps:
+      - cmd: cmd
+        name: Inventory.Manager on D-Bus
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: ["list", "--no-pager"]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.Inventory\\.Manager"
+      - cmd: cmd
+        name: Logging on D-Bus
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: ["list", "--no-pager"]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.Logging"
+      - cmd: cmd
+        name: Settings on D-Bus
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: ["list", "--no-pager"]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.Settings"
+
+  - name: Phosphor Service Status
+    steps:
+      - cmd: cmd
+        name: Inventory Manager active
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.Inventory.Manager"]
+      - cmd: cmd
+        name: Logging active
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.Logging"]
+      - cmd: cmd
+        name: Settings active
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.Settings"]
+      - cmd: cmd
+        name: bmcweb active
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "bmcweb"]
+      - cmd: cmd
+        name: phosphor-ipmi-host active
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "phosphor-ipmi-host"]
+
+  - name: D-Bus Object Trees
+    steps:
+      - cmd: cmd
+        name: Inventory object tree exists
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: ["tree", "xyz.openbmc_project.Inventory.Manager", "--no-pager"]
+          expect:
+            - regex: "/xyz/openbmc_project/inventory"
+      - cmd: cmd
+        name: Logging.Create interface available
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: ["introspect", "xyz.openbmc_project.Logging", "/xyz/openbmc_project/logging", "--no-pager"]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.Logging\\.Create"

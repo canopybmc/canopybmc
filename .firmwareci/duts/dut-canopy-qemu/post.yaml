@@ -1,0 +1,6 @@
+post-stage:
+  - cmd: qemu
+    name: Stop QEMU
+    parameters:
+      mode: stop
+      variable: qemu_pid

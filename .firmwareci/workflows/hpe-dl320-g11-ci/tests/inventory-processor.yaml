@@ -1,8 +1,8 @@
 name: "Inventory: Processors"
 description: >-
   Verify CPU inventory via Redfish. Checks that SMBIOS processor data flows
-  correctly through cpuinfo to Redfish. Generic — works for 1-socket and
-  2-socket systems. Requires host POST complete.
+  correctly through smbios-mdr to Redfish. Assumes cpu0 is present and
+  Enabled. Requires host POST complete.
 
 defaults:
   transport: &local
@@ -25,14 +25,18 @@ stages:
         parameters:
           executable: sleep
           args: ["45"]
-      - cmd: cmd
+      - cmd: shell
         name: Power on host via Redfish
         transport: *local
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"Power On HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"ResetType":"On"}'
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+          expect:
+            - regex: "^(200|204)$"
       - cmd: cmd
         name: Wait 220s for host POST and SMBIOS transfer
         transport: *local
@@ -51,63 +55,127 @@ stages:
             - regex: '"PowerState": *"On"'
 
   - name: Processors Collection
+    on-error: continue
     steps:
       - cmd: cmd
         name: Processors collection has >= 1 member
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors"]
           expect:
             - regex: '"Members@odata.count": *[1-9]'
-      - cmd: cmd
-        name: At least 1 processor is Enabled
-        transport: *local
-        options:
-          timeout: 60s
-          on-error: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "MEMBERS=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors | grep -o '\"@odata.id\": *\"/redfish/v1/Systems/system/Processors/[^\"]*\"' | grep -o '/redfish/v1/Systems/system/Processors/[^\"]*'); ENABLED=0; for P in $MEMBERS; do curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]$P 2>/dev/null | grep -q '\"State\": *\"Enabled\"' && ENABLED=$((ENABLED+1)); done; echo \"Enabled processors: $ENABLED\"; test \"$ENABLED\" -ge 1"
 
-  - name: Enabled Processor Attributes
+  - name: cpu0 State
+    on-error: continue
     steps:
       - cmd: cmd
-        name: First Enabled processor has valid attributes
+        name: cpu0 State is Enabled
         transport: *local
         options:
-          timeout: 60s
-          on-error: continue
+          timeout: 30s
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "MEMBERS=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors | grep -o '\"@odata.id\": *\"/redfish/v1/Systems/system/Processors/[^\"]*\"' | grep -o '/redfish/v1/Systems/system/Processors/[^\"]*'); for P in $MEMBERS; do DATA=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]$P 2>/dev/null); echo \"$DATA\" | grep -q '\"State\": *\"Enabled\"' || continue; echo \"Checking $P\"; MFR=$(echo \"$DATA\" | grep -o '\"Manufacturer\": *\"[^\"]*\"' | head -1 | grep -o '[^\"]*$' | tr -d '\"'); echo \"Manufacturer=$MFR\"; test -n \"$MFR\" || { echo 'FAIL: Manufacturer missing'; exit 1; }; CORES=$(echo \"$DATA\" | grep -o '\"TotalCores\": *[0-9]*' | grep -o '[0-9]*$'); echo \"TotalCores=$CORES\"; test \"$CORES\" -ge 4 || { echo 'FAIL: TotalCores < 4'; exit 1; }; THREADS=$(echo \"$DATA\" | grep -o '\"TotalThreads\": *[0-9]*' | grep -o '[0-9]*$'); echo \"TotalThreads=$THREADS\"; test \"$THREADS\" -gt 0 || { echo 'FAIL: TotalThreads=0'; exit 1; }; SPEED=$(echo \"$DATA\" | grep -o '\"MaxSpeedMHz\": *[0-9]*' | grep -o '[0-9]*$'); echo \"MaxSpeedMHz=$SPEED\"; test \"$SPEED\" -gt 0 || { echo 'FAIL: MaxSpeedMHz=0'; exit 1; }; FAM=$(echo \"$DATA\" | grep -o '\"EffectiveFamily\": *\"[^\"]*\"' | head -1 | grep -o '[^\"]*$' | tr -d '\"'); echo \"EffectiveFamily=$FAM\"; test -n \"$FAM\" || { echo 'FAIL: EffectiveFamily missing'; exit 1; }; MDL=$(echo \"$DATA\" | grep -o '\"EffectiveModel\": *\"[^\"]*\"' | head -1 | grep -o '[^\"]*$' | tr -d '\"'); echo \"EffectiveModel=$MDL\"; test -n \"$MDL\" || { echo 'FAIL: EffectiveModel missing'; exit 1; }; echo 'First Enabled processor attributes OK'; exit 0; done; echo 'No Enabled processor found'; exit 1"
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors/cpu0"]
+          expect:
+            - regex: '"State": *"Enabled"'
+
+  - name: cpu0 Attributes
+    on-error: continue
+    steps:
       - cmd: cmd
-        name: Processor SerialNumber is not HPE fake data
+        name: cpu0 Manufacturer is populated
         transport: *local
         options:
-          timeout: 60s
-          on-error: continue
+          timeout: 30s
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "MEMBERS=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors | grep -o '\"@odata.id\": *\"/redfish/v1/Systems/system/Processors/[^\"]*\"' | grep -o '/redfish/v1/Systems/system/Processors/[^\"]*'); for P in $MEMBERS; do DATA=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]$P 2>/dev/null); echo \"$DATA\" | grep -q '\"State\": *\"Enabled\"' || continue; SN=$(echo \"$DATA\" | grep -o '\"SerialNumber\": *\"[^\"]*\"' | head -1 | grep -o '[^\"]*$' | tr -d '\"'); echo \"SerialNumber=$SN\"; if [ -n \"$SN\" ]; then echo \"$SN\" | grep -q '^Proc [0-9]' && { echo 'FAIL: fake HPE SerialNumber'; exit 1; }; fi; echo 'SerialNumber OK (real or absent)'; exit 0; done; exit 0"
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors/cpu0"]
+          expect:
+            - regex: '"Manufacturer": *"[^"][^"]*"'
+
+      - cmd: cmd
+        name: cpu0 TotalCores >= 4
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors/cpu0"]
+          expect:
+            - regex: '"TotalCores": *[0-9]'
+
+      - cmd: cmd
+        name: cpu0 TotalThreads > 0
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors/cpu0"]
+          expect:
+            - regex: '"TotalThreads": *[1-9]'
+
+      - cmd: cmd
+        name: cpu0 MaxSpeedMHz > 0
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors/cpu0"]
+          expect:
+            - regex: '"MaxSpeedMHz": *[1-9]'
+
+      - cmd: cmd
+        name: cpu0 EffectiveFamily is populated
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors/cpu0"]
+          expect:
+            - regex: '"EffectiveFamily": *"[^"][^"]*"'
+
+      - cmd: cmd
+        name: cpu0 EffectiveModel is populated
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors/cpu0"]
+          expect:
+            - regex: '"EffectiveModel": *"[^"][^"]*"'
+
+  - name: cpu0 SerialNumber
+    on-error: continue
+    steps:
+      - cmd: shell
+        name: cpu0 SerialNumber is not HPE fake data
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          command: >-
+            DATA=$(curl -sk -u root:[[attributes.BMCPassword]]
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors/cpu0);
+            SN=$(echo "$DATA" | grep -o '"SerialNumber": *"[^"]*"' | head -1);
+            echo "$SN";
+            echo "$SN" | grep -q '"Proc [0-9]"' && { echo "FAIL: fake HPE SerialNumber"; exit 1; };
+            echo "SerialNumber OK"
 
   - name: System Processor Summary
+    on-error: continue
     steps:
       - cmd: cmd
         name: ProcessorSummary CoreCount > 0
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]

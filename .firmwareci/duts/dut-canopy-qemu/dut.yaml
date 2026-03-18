@@ -1,0 +1,7 @@
+name: Canopy-QEMU
+label: canopy-qemu
+attributes:
+  BMC: "127.0.0.1"
+  BMCPassword: "0penBmc"
+  SSHPort: "2222"
+  RedfishPort: "2443"

@@ -1,0 +1,54 @@
+---
+name: canopy-qemu Build
+
+on:
+  push:
+    branches:
+      - hpe/main
+      - hpe/feat/qemu
+    paths:
+      - 'openbmc/**'
+      - 'meta-canopy/**'
+      - '.github/**'
+      - '.firmwareci/**'
+  pull_request:
+    branches:
+      - hpe/main
+    paths:
+      - 'openbmc/**'
+      - 'meta-canopy/**'
+      - '.github/**'
+      - '.firmwareci/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: [self-hosted, Hydra, Large]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Build
+        uses: ./.github/actions/build
+        with:
+          board: canopy-qemu
+
+  firmwareci:
+    runs-on: [self-hosted, Hydra, Large]
+    needs: build
+    steps:
+      - name: Download firmware image
+        uses: actions/download-artifact@v8
+        with:
+          name: obmc-phosphor-image-canopy-qemu.static.mtd
+
+      - name: Upload to FirmwareCI
+        uses: docker://firmwareci/action:v5.2
+        with:
+          TOKEN: ${{ secrets.FWCI_TOKEN }}
+          WORKFLOW_NAME: ${{ secrets.FWCI_QEMU_WORKFLOW_NAME }}
+          COMMIT_HASH: ${{ github.sha }}
+          BINARIES: firmware=obmc-phosphor-image-canopy-qemu.static.mtd
+          GITHUB_INSTALLATION_ID: ${{ secrets.FWCI_GITHUB_INSTALLATION_ID }}

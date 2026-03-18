@@ -1,0 +1,90 @@
+name: "Network: Interface Validation"
+description: >-
+  Validate network interface configuration, IP assignment, gateway,
+  loopback connectivity, and network service status on QEMU OpenBMC.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+      port: 2222
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: cmd
+        name: Wait for SSH
+        transport: *bmc_ssh
+        options:
+          timeout: 5m
+        parameters:
+          executable: echo
+          args: ["SSH connected"]
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: Interface Configuration
+    steps:
+      - cmd: cmd
+        name: eth0 interface is UP
+        transport: *bmc_ssh
+        parameters:
+          executable: ip
+          args: ["link", "show", "eth0"]
+          expect:
+            - regex: "UP"
+      - cmd: cmd
+        name: eth0 has IPv4 address
+        transport: *bmc_ssh
+        parameters:
+          executable: ip
+          args: ["addr", "show", "eth0"]
+          expect:
+            - regex: "inet [0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+/"
+      - cmd: cmd
+        name: Default gateway configured
+        transport: *bmc_ssh
+        options:
+          on-error: continue
+        parameters:
+          executable: ip
+          args: ["route", "show", "default"]
+          expect:
+            - regex: "default via [0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+"
+
+  - name: Connectivity
+    steps:
+      - cmd: cmd
+        name: Loopback ping succeeds
+        transport: *bmc_ssh
+        parameters:
+          executable: ping
+          args: ["-c", "3", "127.0.0.1"]
+          expect:
+            - regex: "3 packets transmitted, 3 packets received"
+
+  - name: Network Services
+    steps:
+      - cmd: cmd
+        name: systemd-networkd is active
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "systemd-networkd"]
+      - cmd: cmd
+        name: "[Report only] Network interface details"
+        transport: *bmc_ssh
+        options:
+          on-error: continue
+        parameters:
+          executable: ip
+          args: ["addr"]

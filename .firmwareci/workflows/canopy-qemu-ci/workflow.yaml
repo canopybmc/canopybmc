@@ -1,0 +1,5 @@
+name: canopy-qemu-ci
+description: >-
+  QEMU-based CI tests for Canopy OpenBMC. Runs user management,
+  Redfish API, and basic BMC functionality tests without hardware.
+runs-on: canopy-qemu

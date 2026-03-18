@@ -1,0 +1,257 @@
+name: "User: Account Limits"
+description: >-
+  Test user account limits and input validation: create multiple users,
+  verify duplicate rejection, invalid role, missing password,
+  and root account delete protection.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+      port: 2222
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: cmd
+        name: Wait for SSH
+        transport: *bmc_ssh
+        options:
+          timeout: 5m
+        parameters:
+          executable: echo
+          args: ["SSH connected"]
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: Create Multiple Users
+    steps:
+      - cmd: shell
+        name: Create limituser01 (ReadOnly)
+        transport: &local
+          proto: local
+        options:
+          timeout: 30s
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"UserName":"limituser01","Password":"T3stPass99","RoleId":"ReadOnly","Enabled":true}'
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts
+          expect:
+            - regex: "^201$"
+
+      - cmd: shell
+        name: Create limituser02 (ReadOnly)
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"UserName":"limituser02","Password":"T3stPass99","RoleId":"ReadOnly","Enabled":true}'
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts
+          expect:
+            - regex: "^201$"
+
+      - cmd: shell
+        name: Create limituser03 (ReadOnly)
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"UserName":"limituser03","Password":"T3stPass99","RoleId":"ReadOnly","Enabled":true}'
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts
+          expect:
+            - regex: "^201$"
+
+  - name: Verify Created Users
+    steps:
+      - cmd: shell
+        name: limituser01 can authenticate
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          command: >-
+            curl -sk -u limituser01:T3stPass99
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService
+          expect:
+            - regex: "^200$"
+
+      - cmd: shell
+        name: limituser02 can authenticate
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          command: >-
+            curl -sk -u limituser02:T3stPass99
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService
+          expect:
+            - regex: "^200$"
+
+      - cmd: shell
+        name: limituser03 can authenticate
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          command: >-
+            curl -sk -u limituser03:T3stPass99
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService
+          expect:
+            - regex: "^200$"
+
+      - cmd: shell
+        name: Account list contains all three users
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts
+          expect:
+            - regex: "limituser01"
+            - regex: "limituser02"
+            - regex: "limituser03"
+
+  - name: Input Validation
+    steps:
+      - cmd: shell
+        name: Duplicate username rejected
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"UserName":"limituser01","Password":"T3stPass99","RoleId":"ReadOnly","Enabled":true}'
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts
+          expect:
+            - regex: "^(400|409|500)$"
+
+      - cmd: shell
+        name: Invalid role rejected
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"UserName":"invalidrole","Password":"T3stPass99","RoleId":"InvalidRole","Enabled":true}'
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts
+          expect:
+            - regex: "^(400|422)$"
+
+      - cmd: shell
+        name: Missing password rejected
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"UserName":"nopassuser","RoleId":"ReadOnly","Enabled":true}'
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts
+          expect:
+            - regex: "^(400|422)$"
+
+  - name: Root Account Protection
+    steps:
+      - cmd: shell
+        name: Root account cannot be deleted
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X DELETE
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts/root
+          expect:
+            - regex: "^(403|404|405)$"
+
+  - name: Cleanup
+    steps:
+      - cmd: shell
+        name: Delete limituser01
+        transport: *local
+        options:
+          on-error: continue
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X DELETE -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts/limituser01
+
+      - cmd: shell
+        name: Delete limituser02
+        transport: *local
+        options:
+          on-error: continue
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X DELETE -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts/limituser02
+
+      - cmd: shell
+        name: Delete limituser03
+        transport: *local
+        options:
+          on-error: continue
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X DELETE -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts/limituser03
+
+      - cmd: shell
+        name: Delete invalidrole user (if created)
+        transport: *local
+        options:
+          on-error: continue
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X DELETE -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts/invalidrole
+
+      - cmd: shell
+        name: Delete nopassuser (if created)
+        transport: *local
+        options:
+          on-error: continue
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X DELETE -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts/nopassuser

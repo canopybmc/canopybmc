@@ -1,9 +1,9 @@
 name: "Power: Host Control"
 description: >-
   Verify the full host power control chain end-to-end: kernel power-ctrl
-  driver, x86-power-control, D-Bus state, Redfish actions, and host serial
-  console output. Captures the host console stream via SSH port 2200 on the
-  test runner and verifies the host actually produces POST output during boot.
+  driver, x86-power-control, D-Bus state, Redfish actions, and host POST
+  output. Reads the obmc-console ring buffer log on the BMC at
+  /var/log/obmc-console.log to verify the host produces POST messages.
   Run this test LAST as it power-cycles the host.
 
 defaults:
@@ -35,24 +35,19 @@ stages:
 
   - name: Power On Host
     steps:
-      - cmd: cmd
-        name: Start host console capture via port 2200
-        transport: *local
-        options:
-          timeout: 10s
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "sshpass -p '[[attributes.BMCPassword]]' ssh -p 2200 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@[[attributes.BMC]] > /tmp/host-console.log 2>/dev/null &"
-      - cmd: cmd
+      - cmd: shell
         name: Send Power On via Redfish
         transport: *local
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"Power On HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"ResetType":"On"}'
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+          expect:
+            - regex: "^(200|204)$"
+
       - cmd: cmd
         name: Wait 120s for host to boot
         transport: *local
@@ -64,53 +59,42 @@ stages:
 
   - name: Verify Host Is On
     steps:
-      - cmd: cmd
-        name: Host console captured bytes from boot
-        transport: *local
-        options:
-          timeout: 10s
-          on-error: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "SIZE=$(wc -c < /tmp/host-console.log 2>/dev/null || echo 0); echo \"captured_bytes=$SIZE\"; test \"$SIZE\" -gt 100"
-      - cmd: cmd
+      - cmd: shell
         name: Console contains Initialization output
-        transport: *local
+        transport: *bmc_ssh
         options:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: grep
-          args: [-qi, "Initialization", /tmp/host-console.log]
-      - cmd: cmd
+          command: "grep -qi 'Initialization' /var/log/obmc-console.log"
+
+      - cmd: shell
         name: Console contains BIOS output
-        transport: *local
+        transport: *bmc_ssh
         options:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: grep
-          args: [-qi, "BIOS", /tmp/host-console.log]
-      - cmd: cmd
+          command: "grep -qi 'BIOS' /var/log/obmc-console.log"
+
+      - cmd: shell
         name: Console contains Memory output
-        transport: *local
+        transport: *bmc_ssh
         options:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: grep
-          args: [-qi, "Memory", /tmp/host-console.log]
-      - cmd: cmd
+          command: "grep -qi 'Memory' /var/log/obmc-console.log"
+
+      - cmd: shell
         name: Console contains CHIF output
-        transport: *local
+        transport: *bmc_ssh
         options:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: grep
-          args: [-qi, "CHIF", /tmp/host-console.log]
+          command: "grep -qi 'CHIF' /var/log/obmc-console.log"
+
       - cmd: cmd
         name: PowerState is On via Redfish
         transport: *local
@@ -119,6 +103,7 @@ stages:
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
           expect:
             - regex: '"PowerState": *"On"'
+
       - cmd: cmd
         name: Host state Running via D-Bus
         transport: *bmc_ssh
@@ -130,6 +115,7 @@ stages:
           args: [get-property, xyz.openbmc_project.State.Host, /xyz/openbmc_project/state/host0, xyz.openbmc_project.State.Host, CurrentHostState]
           expect:
             - regex: "Running"
+
       - cmd: cmd
         name: Chassis state On via D-Bus
         transport: *bmc_ssh
@@ -141,6 +127,7 @@ stages:
           args: [get-property, xyz.openbmc_project.State.Chassis, /xyz/openbmc_project/state/chassis0, xyz.openbmc_project.State.Chassis, CurrentPowerState]
           expect:
             - regex: "On"
+
       - cmd: cmd
         name: Power control service active
         transport: *bmc_ssh
@@ -153,20 +140,26 @@ stages:
 
   - name: Power Off Host via Redfish
     steps:
-      - cmd: cmd
+      - cmd: shell
         name: Send ForceOff
         transport: *local
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"ForceOff\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"ForceOff HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"ResetType":"ForceOff"}'
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+          expect:
+            - regex: "^(200|204)$"
+
       - cmd: cmd
         name: Wait for power off
         transport: *local
         parameters:
           executable: sleep
           args: ["15"]
+
       - cmd: cmd
         name: PowerState is Off via Redfish
         transport: *local
@@ -178,6 +171,7 @@ stages:
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
           expect:
             - regex: '"PowerState": *"Off"'
+
       - cmd: cmd
         name: Host state Off via D-Bus
         transport: *bmc_ssh
@@ -192,24 +186,19 @@ stages:
 
   - name: Power On Host via Redfish
     steps:
-      - cmd: cmd
-        name: Start second console capture via port 2200
-        transport: *local
-        options:
-          timeout: 10s
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "sshpass -p '[[attributes.BMCPassword]]' ssh -p 2200 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@[[attributes.BMC]] > /tmp/host-console-2.log 2>/dev/null &"
-      - cmd: cmd
+      - cmd: shell
         name: Send Power On
         transport: *local
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"On HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"ResetType":"On"}'
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+          expect:
+            - regex: "^(200|204)$"
+
       - cmd: cmd
         name: Wait 120s for host to boot
         transport: *local
@@ -229,53 +218,43 @@ stages:
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
           expect:
             - regex: '"PowerState": *"On"'
-      - cmd: cmd
-        name: Second boot console captured bytes
-        transport: *local
-        options:
-          timeout: 10s
-          on-error: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "SIZE=$(wc -c < /tmp/host-console-2.log 2>/dev/null || echo 0); echo \"captured_bytes=$SIZE\"; test \"$SIZE\" -gt 100"
-      - cmd: cmd
+
+      - cmd: shell
         name: Console contains Initialization output
-        transport: *local
+        transport: *bmc_ssh
         options:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: grep
-          args: [-qi, "Initialization", /tmp/host-console-2.log]
-      - cmd: cmd
+          command: "grep -qi 'Initialization' /var/log/obmc-console.log"
+
+      - cmd: shell
         name: Console contains BIOS output
-        transport: *local
+        transport: *bmc_ssh
         options:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: grep
-          args: [-qi, "BIOS", /tmp/host-console-2.log]
-      - cmd: cmd
+          command: "grep -qi 'BIOS' /var/log/obmc-console.log"
+
+      - cmd: shell
         name: Console contains Memory output
-        transport: *local
+        transport: *bmc_ssh
         options:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: grep
-          args: [-qi, "Memory", /tmp/host-console-2.log]
-      - cmd: cmd
+          command: "grep -qi 'Memory' /var/log/obmc-console.log"
+
+      - cmd: shell
         name: Console contains CHIF output
-        transport: *local
+        transport: *bmc_ssh
         options:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: grep
-          args: [-qi, "CHIF", /tmp/host-console-2.log]
+          command: "grep -qi 'CHIF' /var/log/obmc-console.log"
+
       - cmd: cmd
         name: Host state Running via D-Bus
         transport: *bmc_ssh
@@ -287,26 +266,3 @@ stages:
           args: [get-property, xyz.openbmc_project.State.Host, /xyz/openbmc_project/state/host0, xyz.openbmc_project.State.Host, CurrentHostState]
           expect:
             - regex: "Running"
-
-  - name: Cleanup
-    steps:
-      - cmd: cmd
-        name: Kill console capture processes
-        transport: *local
-        options:
-          timeout: 5s
-          on-error: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "pkill -f 'ssh -p 2200.*[[attributes.BMC]]' 2>/dev/null || true"
-      - cmd: cmd
-        name: Remove capture files
-        transport: *local
-        options:
-          timeout: 5s
-          on-error: continue
-        parameters:
-          executable: rm
-          args: [-f, /tmp/host-console.log, /tmp/host-console-2.log]

@@ -132,38 +132,23 @@ stages:
         parameters:
           executable: test
           args: ["-d", "/sys/class/udc/80401000.usb"]
-      - cmd: cmd
-        name: UDC driver probed in dmesg
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-error: continue
-        parameters:
-          executable: dmesg
-          args: []
-          expect:
-            - regex: "80401000\\.usb"
-
   - name: HID Gadget Devices
     steps:
-      - cmd: cmd
-        name: /dev/hidg0 keyboard device exists
+      - cmd: shell
+        name: Connect to VNC and verify /dev/hidg0 and /dev/hidg1 exist
         transport: *bmc_ssh
         options:
-          timeout: 5s
+          timeout: 30s
           on-error: continue
         parameters:
-          executable: test
-          args: ["-c", "/dev/hidg0"]
-      - cmd: cmd
-        name: /dev/hidg1 mouse device exists
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-error: continue
-        parameters:
-          executable: test
-          args: ["-c", "/dev/hidg1"]
+          command: |
+            exec 3<>/dev/tcp/127.0.0.1/5900
+            sleep 3
+            RESULT=0
+            test -c /dev/hidg0 && echo "hidg0 OK" || { echo "hidg0 MISSING"; RESULT=1; }
+            test -c /dev/hidg1 && echo "hidg1 OK" || { echo "hidg1 MISSING"; RESULT=1; }
+            exec 3>&-
+            exit $RESULT
 
   - name: USB Gadget ConfigFS
     steps:

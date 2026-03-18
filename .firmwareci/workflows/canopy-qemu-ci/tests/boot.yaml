@@ -1,0 +1,59 @@
+name: "Smoke: Boot"
+description: >-
+  Verify the QEMU OpenBMC instance boots successfully, is accessible
+  via SSH, has no unexpected failed services, and reports dmesg output.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+      port: 2222
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: cmd
+        name: Wait for SSH
+        transport: *bmc_ssh
+        options:
+          timeout: 5m
+        parameters:
+          executable: echo
+          args: ["SSH connected"]
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: Verify Boot
+    steps:
+      - cmd: cmd
+        name: OS release is OpenBMC
+        transport: *bmc_ssh
+        parameters:
+          executable: cat
+          args: ["/etc/os-release"]
+          expect:
+            - regex: "openbmc-phosphor"
+      - cmd: cmd
+        name: No unexpected failed services
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["list-units", "--failed", "--no-pager"]
+          expect:
+            - regex: "0 loaded units listed"
+      - cmd: cmd
+        name: "[Report only] dmesg output"
+        transport: *bmc_ssh
+        options:
+          on-error: continue
+        parameters:
+          executable: dmesg

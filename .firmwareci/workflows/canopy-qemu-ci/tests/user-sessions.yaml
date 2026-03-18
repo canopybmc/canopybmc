@@ -1,0 +1,100 @@
+name: "User: Session Management"
+description: >-
+  Verify Redfish session creation, token-based authentication, and
+  session deletion. Creates a session, uses the token for API calls,
+  deletes the session, and verifies the token is invalidated.
+  BMC-only, no host power required.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+      port: 2222
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: cmd
+        name: Wait for SSH
+        transport: *bmc_ssh
+        options:
+          timeout: 5m
+        parameters:
+          executable: echo
+          args: ["SSH connected"]
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: Session Lifecycle
+    steps:
+      - cmd: shell
+        name: Create session, use token, verify, delete, confirm invalidation
+        transport:
+          proto: local
+        options:
+          timeout: 60s
+        parameters:
+          command: |
+            set -e
+            BMC="[[attributes.BMC]]"
+            PORT="[[attributes.RedfishPort]]"
+            PASS="[[attributes.BMCPassword]]"
+            BASE="https://${BMC}:${PORT}"
+
+            echo "=== Step 1: Create session ==="
+            curl -sk -X POST \
+              -H 'Content-Type: application/json' \
+              -d "{\"UserName\":\"root\",\"Password\":\"${PASS}\"}" \
+              -D /tmp/fwci_sess_headers \
+              -o /tmp/fwci_sess_body \
+              "${BASE}/redfish/v1/SessionService/Sessions"
+
+            TOKEN=$(grep -i 'X-Auth-Token' /tmp/fwci_sess_headers | tr -d '\r' | awk '{print $2}')
+            LOCATION=$(grep -i 'Location' /tmp/fwci_sess_headers | tr -d '\r' | awk '{print $2}')
+            echo "Token=$(echo "$TOKEN" | cut -c1-8)..."
+            echo "Location=$LOCATION"
+            test -n "$TOKEN" || { echo "FAIL: No token received"; exit 1; }
+            test -n "$LOCATION" || { echo "FAIL: No location received"; exit 1; }
+
+            echo "=== Step 2: Use token for GET Systems ==="
+            HTTP=$(curl -sk -H "X-Auth-Token: $TOKEN" -o /dev/null -w '%{http_code}' "${BASE}/redfish/v1/Systems/system")
+            echo "Token auth Systems HTTP=$HTTP"
+            test "$HTTP" = "200" || { echo "FAIL: Token auth Systems failed"; exit 1; }
+
+            echo "=== Step 3: Use token for GET Chassis ==="
+            HTTP=$(curl -sk -H "X-Auth-Token: $TOKEN" -o /dev/null -w '%{http_code}' "${BASE}/redfish/v1/Chassis")
+            echo "Token auth Chassis HTTP=$HTTP"
+            test "$HTTP" = "200" || { echo "FAIL: Token auth Chassis failed"; exit 1; }
+
+            echo "=== Step 4: Use token for GET Managers ==="
+            HTTP=$(curl -sk -H "X-Auth-Token: $TOKEN" -o /dev/null -w '%{http_code}' "${BASE}/redfish/v1/Managers/bmc")
+            echo "Token auth Managers HTTP=$HTTP"
+            test "$HTTP" = "200" || { echo "FAIL: Token auth Managers failed"; exit 1; }
+
+            echo "=== Step 5: Get session details ==="
+            SESS_PATH=$(echo "$LOCATION" | sed 's|.*\(/redfish/v1/SessionService/Sessions/[^ ]*\)|\1|')
+            HTTP=$(curl -sk -u "root:${PASS}" -o /tmp/fwci_sess_detail -w '%{http_code}' "${BASE}${SESS_PATH}")
+            echo "Session detail HTTP=$HTTP"
+            grep -q '"UserName"' /tmp/fwci_sess_detail || { echo "FAIL: No UserName in session detail"; exit 1; }
+
+            echo "=== Step 6: Delete session ==="
+            HTTP=$(curl -sk -u "root:${PASS}" -X DELETE -o /dev/null -w '%{http_code}' "${BASE}${SESS_PATH}")
+            echo "Delete session HTTP=$HTTP"
+            test "$HTTP" = "200" || { echo "FAIL: Delete session failed"; exit 1; }
+
+            echo "=== Step 7: Verify token is invalid ==="
+            HTTP=$(curl -sk -H "X-Auth-Token: $TOKEN" -o /dev/null -w '%{http_code}' "${BASE}/redfish/v1/Systems/system")
+            echo "Revoked token HTTP=$HTTP"
+            test "$HTTP" = "401" || { echo "FAIL: Revoked token still works (HTTP=$HTTP)"; exit 1; }
+
+            echo "All session tests passed"
+            rm -f /tmp/fwci_sess_headers /tmp/fwci_sess_body /tmp/fwci_sess_detail

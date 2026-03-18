@@ -1,0 +1,184 @@
+name: "Logging: Event Lifecycle"
+description: >-
+  Validate OpenBMC event logging: create events via D-Bus at different
+  severity levels, verify retrieval, test individual and bulk deletion,
+  and confirm service survives restart.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+      port: 2222
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: cmd
+        name: Wait for SSH
+        transport: *bmc_ssh
+        options:
+          timeout: 5m
+        parameters:
+          executable: echo
+          args: ["SSH connected"]
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: Logging Service Running
+    steps:
+      - cmd: cmd
+        name: phosphor-log-manager is active
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.Logging"]
+      - cmd: cmd
+        name: Logging on D-Bus
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: ["list", "--no-pager"]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.Logging"
+
+  - name: Create Test Events
+    steps:
+      - cmd: cmd
+        name: Create Critical event
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: ["call", "xyz.openbmc_project.Logging", "/xyz/openbmc_project/logging",
+                 "xyz.openbmc_project.Logging.Create", "Create", "ssa{ss}",
+                 "xyz.openbmc_project.Common.Error.InternalFailure",
+                 "xyz.openbmc_project.Logging.Entry.Level.Critical",
+                 "1", "TEST_EVENT", "fwci_critical"]
+          expect:
+            - regex: "/xyz/openbmc_project/logging/entry/[0-9]+"
+      - cmd: cmd
+        name: Create Warning event
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: ["call", "xyz.openbmc_project.Logging", "/xyz/openbmc_project/logging",
+                 "xyz.openbmc_project.Logging.Create", "Create", "ssa{ss}",
+                 "xyz.openbmc_project.Common.Error.Timeout",
+                 "xyz.openbmc_project.Logging.Entry.Level.Warning",
+                 "1", "TEST_WARNING", "fwci_warning"]
+          expect:
+            - regex: "/xyz/openbmc_project/logging/entry/[0-9]+"
+      - cmd: cmd
+        name: Create Informational event
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: ["call", "xyz.openbmc_project.Logging", "/xyz/openbmc_project/logging",
+                 "xyz.openbmc_project.Logging.Create", "Create", "ssa{ss}",
+                 "xyz.openbmc_project.Common.Error.InvalidArgument",
+                 "xyz.openbmc_project.Logging.Entry.Level.Informational",
+                 "1", "TEST_INFO", "fwci_info"]
+          expect:
+            - regex: "/xyz/openbmc_project/logging/entry/[0-9]+"
+
+  - name: Verify Event Retrieval
+    steps:
+      - cmd: cmd
+        name: Log entry has Message property
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: ["get-property", "xyz.openbmc_project.Logging",
+                 "/xyz/openbmc_project/logging/entry/1",
+                 "xyz.openbmc_project.Logging.Entry", "Message"]
+          expect:
+            - regex: "s \""
+      - cmd: cmd
+        name: Log entry has Severity property
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: ["get-property", "xyz.openbmc_project.Logging",
+                 "/xyz/openbmc_project/logging/entry/1",
+                 "xyz.openbmc_project.Logging.Entry", "Severity"]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.Logging\\.Entry\\.Level\\."
+      - cmd: cmd
+        name: Log entry has Timestamp property
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: ["get-property", "xyz.openbmc_project.Logging",
+                 "/xyz/openbmc_project/logging/entry/1",
+                 "xyz.openbmc_project.Logging.Entry", "Timestamp"]
+          expect:
+            - regex: "t [0-9]+"
+
+  - name: Delete and Bulk Delete
+    steps:
+      - cmd: cmd
+        name: Delete single log entry
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: ["call", "xyz.openbmc_project.Logging",
+                 "/xyz/openbmc_project/logging/entry/1",
+                 "xyz.openbmc_project.Object.Delete", "Delete"]
+      - cmd: cmd
+        name: DeleteAll remaining entries
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: ["call", "xyz.openbmc_project.Logging",
+                 "/xyz/openbmc_project/logging",
+                 "xyz.openbmc_project.Collection.DeleteAll", "DeleteAll"]
+
+  - name: Service Restart
+    steps:
+      - cmd: cmd
+        name: Restart logging service
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["restart", "xyz.openbmc_project.Logging"]
+      - cmd: cmd
+        name: Wait for service to restart
+        transport: *bmc_ssh
+        parameters:
+          executable: sleep
+          args: ["3"]
+      - cmd: cmd
+        name: Logging service active after restart
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.Logging"]
+      - cmd: cmd
+        name: Logging on D-Bus after restart
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: ["list", "--no-pager"]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.Logging"
+
+  - name: Cleanup
+    steps:
+      - cmd: cmd
+        name: Delete all test log entries
+        transport: *bmc_ssh
+        options:
+          on-error: continue
+        parameters:
+          executable: busctl
+          args: ["call", "xyz.openbmc_project.Logging",
+                 "/xyz/openbmc_project/logging",
+                 "xyz.openbmc_project.Collection.DeleteAll", "DeleteAll"]
