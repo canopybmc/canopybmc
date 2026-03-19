@@ -5,6 +5,11 @@
 # All customization files are overlaid into the upstream webui-vue
 # source tree at build time via do_configure:prepend, so the
 # upstream repo stays untouched.
+FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
+
+SRC_URI:append = " \
+    file://0001-Dumps-fix-action-to-delete-all-dumps.patch \
+    "
 
 # Resolve the overlay directory at parse time
 CANOPY_WEBUI_OVERLAYS := "${THISDIR}/${BPN}"
