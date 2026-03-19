@@ -1,0 +1,34 @@
+From 5c4f4611b3da83a6f67e2bbd23c5dcb142981685 Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Wed, 18 Mar 2026 17:14:43 +0100
+Subject: [PATCH] Dumps: fix action to delete all dumps
+
+`dumps` does not exist as computed property, only `allDumps` is
+available which was meant to be used.
+
+Tested: Remove single, multiple and all available dumps and ensured that
+        the actions ran successfully.
+
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/webui-vue/+/88406]
+Change-Id: Id809b1a286d0eb345848481a69f2b796301c0fc9
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ src/views/Logs/Dumps/Dumps.vue | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/views/Logs/Dumps/Dumps.vue b/src/views/Logs/Dumps/Dumps.vue
+index 3055eb5..defa77f 100644
+--- a/src/views/Logs/Dumps/Dumps.vue
++++ b/src/views/Logs/Dumps/Dumps.vue
+@@ -373,7 +373,7 @@ export default {
+           },
+         );
+         if (ok) {
+-          if (this.selectedRows.length === this.dumps.length) {
++          if (this.selectedRows.length === this.allDumps.length) {
+             this.$store
+               .dispatch('dumps/deleteAllDumps')
+               .then((success) => this.successToast(success))
+-- 
+2.53.0
+
