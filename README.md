@@ -53,11 +53,24 @@ for more information.
 To build a flashable image for HPE ProLiant Gen11 systems, you must provide the
 private key of the key pair used during the Transfer of Ownership (ToO) process.
 Set the `HPE_SIGNING_KEY` environment variable to the path of your private key
-before building:
+before building.
+In case this is not provided the image will be signed by the default OSFCI key.
 
+You have several options for this (similar to other variables)
+
+1. Export
 ```bash
 export HPE_SIGNING_KEY=/path/to/your/private_key.pem
 ```
+
+2. Inline
+```bash
+HPE_SIGNING_KEY=/path/to/your/private_key.pem bitbake obmc-phosphor-image
+```
+
+3. `local.conf`
+    - Add `HPE_SIGNING_KEY=/path/to/your/private_key.pem` to you `local.conf` in
+      `<project root>/build/hpe-proliant-g11/conf/`
 
 #### GXP Bootblock Selection
 
