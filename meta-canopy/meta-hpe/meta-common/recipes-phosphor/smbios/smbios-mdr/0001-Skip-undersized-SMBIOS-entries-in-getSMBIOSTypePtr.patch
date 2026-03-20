@@ -1,0 +1,103 @@
+From ad3c12a864b4e95a50e8e3f17020bd6dbea8ece3 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Tue, 24 Mar 2026 13:18:18 +0100
+Subject: [PATCH] Skip undersized SMBIOS entries in getSMBIOSTypePtr
+
+getSMBIOSTypePtr aborts the entire search when a matching entry
+has length < size. Change to skip the entry instead.
+
+Upstream-Status: Pending
+Change-Id: Id4131bd1919602c22d515b98e1fc01330ae94024
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ include/smbios_mdrv2.hpp | 31 +++++++++++++++++--------------
+ src/system.cpp           |  4 ++--
+ 2 files changed, 19 insertions(+), 16 deletions(-)
+
+diff --git a/include/smbios_mdrv2.hpp b/include/smbios_mdrv2.hpp
+index 1bf7733..46b9584 100644
+--- a/include/smbios_mdrv2.hpp
++++ b/include/smbios_mdrv2.hpp
+@@ -17,6 +17,7 @@
+ #pragma once
+ 
+ #include <phosphor-logging/elog-errors.hpp>
++#include <phosphor-logging/lg2.hpp>
+ 
+ #include <array>
+ #include <string>
+@@ -241,32 +242,34 @@ static inline uint8_t* getSMBIOSTypePtr(uint8_t* smbiosDataIn, uint8_t typeId,
+     {
+         return nullptr;
+     }
+-    char* smbiosData = reinterpret_cast<char*>(smbiosDataIn);
++    uint8_t* smbiosData = smbiosDataIn;
+     while ((*smbiosData != '\0') || (*(smbiosData + 1) != '\0'))
+     {
+         uint32_t len = *(smbiosData + 1);
+         if (*smbiosData != typeId)
+         {
+-            smbiosData += len;
+-            while ((*smbiosData != '\0') || (*(smbiosData + 1) != '\0'))
++            smbiosData = smbiosNextPtr(smbiosData);
++            if (smbiosData == nullptr)
+             {
+-                smbiosData++;
+-                len++;
+-                if (len >= mdrSMBIOSSize) // To avoid endless loop
+-                {
+-                    return nullptr;
+-                }
++                return nullptr;
+             }
+-            smbiosData += separateLen;
+             continue;
+         }
+         if (len < size)
+         {
+-            phosphor::logging::log<phosphor::logging::level::ERR>(
+-                "Record size mismatch!");
+-            return nullptr;
++            // Skip undersized entry, same as type-mismatch path above
++            lg2::warning(
++                "SMBIOS type {TYPE} entry too short ({LEN} < {MIN}), skipping",
++                "TYPE", static_cast<uint8_t>(*smbiosData), "LEN", len, "MIN",
++                size);
++            smbiosData = smbiosNextPtr(smbiosData);
++            if (smbiosData == nullptr)
++            {
++                return nullptr;
++            }
++            continue;
+         }
+-        return reinterpret_cast<uint8_t*>(smbiosData);
++        return smbiosData;
+     }
+     return nullptr;
+ }
+diff --git a/src/system.cpp b/src/system.cpp
+index b3e58bd..fa6f1d4 100644
+--- a/src/system.cpp
++++ b/src/system.cpp
+@@ -37,7 +37,7 @@ namespace smbios
+ std::string System::uuid(std::string /* value */)
+ {
+     uint8_t* dataIn = storage;
+-    dataIn = getSMBIOSTypePtr(dataIn, systemType);
++    dataIn = getSMBIOSTypePtr(dataIn, systemType, sizeof(SystemInfo));
+     if (dataIn != nullptr)
+     {
+         auto systemInfo = reinterpret_cast<struct SystemInfo*>(dataIn);
+@@ -124,7 +124,7 @@ std::string System::version(std::string /* value */)
+ {
+     std::string result = "No BIOS Version";
+     uint8_t* dataIn = storage;
+-    dataIn = getSMBIOSTypePtr(dataIn, biosType);
++    dataIn = getSMBIOSTypePtr(dataIn, biosType, sizeof(BIOSInfo));
+     if (dataIn != nullptr)
+     {
+         auto biosInfo = reinterpret_cast<struct BIOSInfo*>(dataIn);
+-- 
+2.53.0
+
