@@ -32,4 +32,11 @@ RDEPENDS:${PN} += "smbios-mdr"
 
 FILES:${PN} += "${nonarch_base_libdir}/udev/rules.d"
 
+# Pre-create the persistent EV storage directory so it exists in the
+# rootfs image before the overlay is mounted. Without this, the CHIF
+# service fails to create it at early boot.
+do_install:append() {
+    install -d ${D}${localstatedir}/lib/chif
+}
+
 EXTRA_OEMESON = "-Dtests=disabled"
