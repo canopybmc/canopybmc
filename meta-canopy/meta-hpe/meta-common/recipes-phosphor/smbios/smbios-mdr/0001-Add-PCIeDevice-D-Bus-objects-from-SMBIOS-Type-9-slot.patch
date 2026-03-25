@@ -1,0 +1,371 @@
+From df128b7b0dce038716aef67d826d5fb6870fcaaa Mon Sep 17 00:00:00 2001
+From: Christian Walter <christian.walter@9elements.com>
+Date: Sun, 1 Mar 2026 00:16:19 +0100
+Subject: [PATCH] smbios-mdr: Add PCIeDevice D-Bus objects from SMBIOS Type 9
+Upstream-Status: Submitted [https://gerrit.openbmc.org/c/openbmc/smbios-mdr/+/87924]
+
+SMBIOS Type 9 (System Slots) records are already parsed to create
+PCIeSlot D-Bus objects. However, bmcweb's PCIeDevice Redfish handler
+queries for xyz.openbmc_project.Inventory.Item.PCIeDevice objects
+which currently are not created, leaving the Redfish PCIeDevices
+collection empty.
+
+Add a PcieDevice class that creates a PCIeDevice D-Bus object for
+each SMBIOS Type 9 slot, alongside the existing PCIeSlot object.
+Each PCIeDevice exposes GenerationInUse, GenerationSupported, and
+MaxLanes derived from the same Type 9 data, and creates a
+contained_by association to its corresponding PCIeSlot object
+so bmcweb can populate the Slot sub-object in the Redfish response.
+
+Introduced pcie-device-dbus meson option which by default, will
+be disabled. When enabled, PCIeDevice objects are exposed on D-Bus.
+
+Tested:
+1) PCIeDevice objects appear on D-Bus after SMBIOS data is loaded
+2) D-Bus properties are populated correctly
+3) Individual PCIeDevice response includes Slot sub-object
+
+Change-Id: I43394340b019745bd2fef32a30eb2ebbc28ff2bc
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ include/mdrv2.hpp        |   7 +++
+ include/pciedevice.hpp   |  75 ++++++++++++++++++++++++++
+ include/smbios_mdrv2.hpp |   3 ++
+ meson.options            |   7 +++
+ src/mdrv2.cpp            |  30 +++++++++++
+ src/meson.build          |  10 ++++
+ src/pciedevice.cpp       | 114 +++++++++++++++++++++++++++++++++++++++
+ 7 files changed, 246 insertions(+)
+ create mode 100644 include/pciedevice.hpp
+ create mode 100644 src/pciedevice.cpp
+
+diff --git a/include/mdrv2.hpp b/include/mdrv2.hpp
+index 9776523..a88bd72 100644
+--- a/include/mdrv2.hpp
++++ b/include/mdrv2.hpp
+@@ -23,6 +23,10 @@
+ #include "system.hpp"
+ #include "tpm.hpp"
+ 
++#ifdef PCIE_DEVICE_DBUS
++#include "pciedevice.hpp"
++#endif
++
+ #include <sys/stat.h>
+ #include <sys/types.h>
+ #include <unistd.h>
+@@ -193,6 +197,9 @@ class MDRV2 :
+     std::vector<std::unique_ptr<Cpu>> cpus;
+     std::vector<std::unique_ptr<Dimm>> dimms;
+     std::vector<std::unique_ptr<Pcie>> pcies;
++#ifdef PCIE_DEVICE_DBUS
++    std::vector<std::unique_ptr<PcieDevice>> pcieDevices;
++#endif
+     std::vector<std::unique_ptr<Tpm>> tpms;
+     std::vector<std::unique_ptr<FirmwareInventory>> firmwareCollection;
+     std::unique_ptr<System> system;
+diff --git a/include/pciedevice.hpp b/include/pciedevice.hpp
+new file mode 100644
+index 0000000..68da5e6
+--- /dev/null
++++ b/include/pciedevice.hpp
+@@ -0,0 +1,75 @@
++/*
++// Copyright (c) 2025 9elements GmbH
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//      http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++*/
++
++#pragma once
++#include "pcieslot.hpp"
++#include "smbios_mdrv2.hpp"
++
++#include <xyz/openbmc_project/Association/Definitions/server.hpp>
++#include <xyz/openbmc_project/Inventory/Item/PCIeDevice/server.hpp>
++#include <xyz/openbmc_project/Inventory/Item/server.hpp>
++
++#include <cstdint>
++
++namespace phosphor
++{
++
++namespace smbios
++{
++
++using PCIeDeviceIface =
++    sdbusplus::server::xyz::openbmc_project::inventory::item::PCIeDevice;
++using PCIeDeviceType = sdbusplus::server::xyz::openbmc_project::inventory::
++    item::PCIeDevice::DeviceTypes;
++using PCIeDeviceItem = sdbusplus::server::xyz::openbmc_project::inventory::Item;
++using PCIeDeviceAssoc =
++    sdbusplus::server::xyz::openbmc_project::association::Definitions;
++
++class PcieDevice :
++    sdbusplus::server::object_t<PCIeDeviceIface, PCIeDeviceItem,
++                                PCIeDeviceAssoc>
++{
++  public:
++    PcieDevice() = delete;
++    PcieDevice(const PcieDevice&) = delete;
++    PcieDevice& operator=(const PcieDevice&) = delete;
++    PcieDevice(PcieDevice&&) = delete;
++    PcieDevice& operator=(PcieDevice&&) = delete;
++    ~PcieDevice() = default;
++
++    PcieDevice(sdbusplus::bus_t& bus, const std::string& objPath,
++               const uint8_t& deviceId, uint8_t* smbiosTableStorage,
++               const std::string& motherboard, const std::string& slotPath) :
++        sdbusplus::server::object_t<PCIeDeviceIface, PCIeDeviceItem,
++                                    PCIeDeviceAssoc>(bus, objPath.c_str()),
++        deviceNum(deviceId)
++    {
++        pcieDeviceInfoUpdate(smbiosTableStorage, motherboard, slotPath);
++    }
++
++    void pcieDeviceInfoUpdate(uint8_t* smbiosTableStorage,
++                              const std::string& motherboard,
++                              const std::string& slotPath);
++
++  private:
++    uint8_t deviceNum;
++    uint8_t* storage = nullptr;
++    std::string motherboardPath;
++};
++
++} // namespace smbios
++
++} // namespace phosphor
+diff --git a/include/smbios_mdrv2.hpp b/include/smbios_mdrv2.hpp
+index 1bf7733..9b3e63e 100644
+--- a/include/smbios_mdrv2.hpp
++++ b/include/smbios_mdrv2.hpp
+@@ -170,6 +170,9 @@ static constexpr const char* dimmSuffix = "/chassis/motherboard/dimm";
+ 
+ static constexpr const char* pcieSuffix = "/chassis/motherboard/pcieslot";
+ 
++static constexpr const char* pcieDeviceSuffix =
++    "/chassis/motherboard/pcieslot_device";
++
+ static constexpr const char* systemSuffix = "/chassis/motherboard/bios";
+ 
+ static constexpr const char* tpmSuffix = "/chassis/motherboard/tpm";
+diff --git a/meson.options b/meson.options
+index fd494e5..6edcd98 100644
+--- a/meson.options
++++ b/meson.options
+@@ -49,6 +49,13 @@ option(
+     description: 'Build IPMI blob library for SMBIOS transfer',
+ )
+ 
++option(
++    'pcie-device-dbus',
++    type: 'feature',
++    value: 'disabled',
++    description: 'Expose PCIeDevice D-Bus objects from SMBIOS Type 9 slots',
++)
++
+ option(
+     'tpm-dbus',
+     type: 'feature',
+diff --git a/src/mdrv2.cpp b/src/mdrv2.cpp
+index 070541c..ab2775a 100644
+--- a/src/mdrv2.cpp
++++ b/src/mdrv2.cpp
+@@ -606,6 +606,36 @@ void MDRV2::systemInfoUpdate()
+         }
+     }
+ 
++#ifdef PCIE_DEVICE_DBUS
++    if (*num < pcieDevices.size())
++    {
++        pcieDevices.resize(*num);
++    }
++
++    for (unsigned int index = 0; index < *num; index++)
++    {
++        std::string devicePath = getObjectPath(
++            smbiosInventoryPath, motherboardPath, pcieDeviceSuffix, index);
++        std::string slotPath = getObjectPath(
++            smbiosInventoryPath, motherboardPath, pcieSuffix, index);
++
++        if (index + 1 > pcieDevices.size())
++        {
++            pcieDevices.emplace_back(
++                std::make_unique<phosphor::smbios::PcieDevice>(
++                    *bus, devicePath, index,
++                    smbiosDir.dir[smbiosDirIndex].dataStorage, motherboardPath,
++                    slotPath));
++        }
++        else
++        {
++            pcieDevices[index]->pcieDeviceInfoUpdate(
++                smbiosDir.dir[smbiosDirIndex].dataStorage, motherboardPath,
++                slotPath);
++        }
++    }
++#endif
++
+ #ifdef TPM_DBUS
+ 
+     num = getTotalSmbiosEntries(tpmDeviceType);
+diff --git a/src/meson.build b/src/meson.build
+index 1094835..d311900 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -31,6 +31,15 @@ if get_option('custom-dbus-path').allowed()
+     cpp_args_smbios += ['-DCUSTOM_DBUS_PATH']
+ endif
+ 
++if get_option('pcie-device-dbus').allowed()
++    cpp_args_smbios += ['-DPCIE_DEVICE_DBUS']
++endif
++
++pcie_device_src = []
++if get_option('pcie-device-dbus').allowed()
++    pcie_device_src = ['pciedevice.cpp']
++endif
++
+ executable(
+     'smbiosmdrv2app',
+     'mdrv2.cpp',
+@@ -41,6 +50,7 @@ executable(
+     'pcieslot.cpp',
+     'tpm.cpp',
+     'firmware_inventory.cpp',
++    pcie_device_src,
+     cpp_args: cpp_args_smbios,
+     dependencies: [
+         boost_dep,
+diff --git a/src/pciedevice.cpp b/src/pciedevice.cpp
+new file mode 100644
+index 0000000..e1f5948
+--- /dev/null
++++ b/src/pciedevice.cpp
+@@ -0,0 +1,114 @@
++/*
++// Copyright (c) 2025 9elements GmbH
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//      http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++*/
++
++#include "pciedevice.hpp"
++
++#include <cstdint>
++#include <limits>
++
++namespace phosphor
++{
++namespace smbios
++{
++
++// Same layout as Pcie::SystemSlotInfo in pcieslot.hpp (SMBIOS Type 9)
++struct SystemSlotInfo
++{
++    uint8_t type;
++    uint8_t length;
++    uint16_t handle;
++    uint8_t slotDesignation;
++    uint8_t slotType;
++    uint8_t slotDataBusWidth;
++    uint8_t currUsage;
++    uint8_t slotLength;
++    uint16_t slotID;
++    uint8_t characteristics1;
++    uint8_t characteristics2;
++    uint16_t segGroupNum;
++    uint8_t busNum;
++    uint8_t deviceNum;
++} __attribute__((packed));
++
++void PcieDevice::pcieDeviceInfoUpdate(uint8_t* smbiosTableStorage,
++                                      const std::string& motherboard,
++                                      const std::string& slotPath)
++{
++    storage = smbiosTableStorage;
++    motherboardPath = motherboard;
++
++    uint8_t* dataIn = getSMBIOSTypePtr(storage, systemSlots);
++
++    if (dataIn == nullptr)
++    {
++        return;
++    }
++
++    for (uint8_t index = 0;
++         index < deviceNum ||
++         pcieSmbiosType.find(*(dataIn + 5)) == pcieSmbiosType.end();)
++    {
++        dataIn = smbiosNextPtr(dataIn);
++        if (dataIn == nullptr)
++        {
++            return;
++        }
++        dataIn = getSMBIOSTypePtr(dataIn, systemSlots);
++        if (dataIn == nullptr)
++        {
++            return;
++        }
++        if (pcieSmbiosType.find(*(dataIn + 5)) != pcieSmbiosType.end())
++        {
++            index++;
++        }
++    }
++
++    auto slotInfo = reinterpret_cast<struct SystemSlotInfo*>(dataIn);
++
++    auto genIt = pcieGenerationTable.find(slotInfo->slotType);
++    PCIeGeneration gen = (genIt != pcieGenerationTable.end())
++                             ? genIt->second
++                             : PCIeGeneration::Unknown;
++    PCIeDeviceIface::generationInUse(gen);
++    PCIeDeviceIface::generationSupported(gen);
++
++    auto lanesIt = pcieLanesTable.find(slotInfo->slotDataBusWidth);
++    size_t lanes = (lanesIt != pcieLanesTable.end()) ? lanesIt->second : 0;
++    PCIeDeviceIface::maxLanes(lanes);
++
++    // Not available from SMBIOS Type 9; max() causes bmcweb to omit the field
++    PCIeDeviceIface::lanesInUse(std::numeric_limits<size_t>::max());
++
++    PCIeDeviceIface::deviceType(PCIeDeviceType::Unknown);
++
++#ifdef SLOT_DRIVE_PRESENCE
++    PCIeDeviceItem::present(
++        slotInfo->currUsage == static_cast<uint8_t>(Availability::InUse));
++#else
++    PCIeDeviceItem::present(true);
++#endif
++
++    if (!slotPath.empty())
++    {
++        std::vector<std::tuple<std::string, std::string, std::string>> assocs;
++        assocs.emplace_back("contained_by", "containing", slotPath);
++        PCIeDeviceAssoc::associations(assocs);
++    }
++}
++
++} // namespace smbios
++} // namespace phosphor
+-- 
+2.53.0
+
