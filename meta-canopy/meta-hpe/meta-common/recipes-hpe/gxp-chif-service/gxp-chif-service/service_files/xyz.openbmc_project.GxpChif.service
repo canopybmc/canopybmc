@@ -10,18 +10,19 @@ Restart=on-failure
 RestartSec=5
 Type=dbus
 BusName=xyz.openbmc_project.GxpChif
-StateDirectory=smbios
+StateDirectory=smbios chif
 
 # Security hardening
 ProtectSystem=strict
 ProtectHome=yes
+DevicePolicy=auto
 DeviceAllow=/dev/chif24 rw
 PrivateTmp=yes
 NoNewPrivileges=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
-RestrictAddressFamilies=AF_UNIX
+RestrictAddressFamilies=AF_UNIX AF_INET
 SystemCallFilter=@system-service
 
 [Install]
