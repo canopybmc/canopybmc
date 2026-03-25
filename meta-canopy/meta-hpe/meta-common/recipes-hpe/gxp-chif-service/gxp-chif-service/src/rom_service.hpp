@@ -24,14 +24,14 @@ inline constexpr uint16_t romCmdBlob = 0x000C;
 // Protocol flow (matching HPE reference behavior):
 //   1. Host sends cmd 0x03 (begin) — we respond with header-only (8B, no
 //      response bit), then clear accumulated records
-//   2. Host sends cmd 0x04 (record) or 0x0C (blob) — we append data and
-//      respond with header-only (8B, no response bit)
+//   2. Host sends cmd 0x04 (record) N times — we append, NO response
 //   3. Host sends cmd 0x05 (end) — we respond with header-only (8B),
 //      then finalize and trigger smbios-mdr
+//   4. Alternatively, cmd 0x0C sends multiple records in one packet (no response)
 //
 // Key differences from standard CHIF responses:
 //   - ROM responses do NOT set the response bit (0x8000) in the command field
-//   - ROM responses are header-only (8 bytes, no ErrorCode payload)
+//   - Record/blob commands get NO response (return -1)
 class RomService : public ServiceHandler
 {
   public:

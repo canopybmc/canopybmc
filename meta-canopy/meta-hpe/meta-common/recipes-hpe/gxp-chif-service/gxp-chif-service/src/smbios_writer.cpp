@@ -31,13 +31,6 @@ void SmbiosWriter::addRecord(std::span<const uint8_t> record)
     uint32_t count = 0;
     std::memcpy(&count, record.data(), sizeof(count));
 
-    if (count > maxRecordsPerBlob)
-    {
-        lg2::warning("Blob record count {CNT} exceeds limit {MAX}, capping",
-                     "CNT", count, "MAX", maxRecordsPerBlob);
-        count = maxRecordsPerBlob;
-    }
-
     size_t offset = sizeof(count);
     for (uint32_t i = 0; i < count && offset + 2 <= record.size(); i++)
     {
@@ -47,15 +40,6 @@ void SmbiosWriter::addRecord(std::span<const uint8_t> record)
 
         if (recSize == 0 || offset + recSize > record.size())
         {
-            break;
-        }
-
-        if (records_.size() + recSize > maxSmbiosDataSize)
-        {
-            lg2::warning(
-                "SMBIOS data limit reached ({MAX} bytes), "
-                "discarding further records",
-                "MAX", maxSmbiosDataSize);
             break;
         }
 

@@ -41,10 +41,6 @@ struct Smbios3EntryPoint
 static_assert(sizeof(Smbios3EntryPoint) == 24,
               "Smbios3EntryPoint must be 24 bytes");
 
-// Safety limits for host-provided data
-inline constexpr size_t maxSmbiosDataSize = 1024 * 1024; // 1 MiB
-inline constexpr uint32_t maxRecordsPerBlob = 1000;
-
 // Accumulates SMBIOS records and writes the final smbios2 file
 // with MDR header + SMBIOS 3.0 Entry Point + raw records.
 class SmbiosWriter

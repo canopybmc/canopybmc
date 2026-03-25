@@ -71,26 +71,6 @@ class SmbiosWriterTest : public ::testing::Test
         rec.push_back(0x00);
         return rec;
     }
-
-    // Wrap raw SMBIOS records in HPE ROM blob format for addRecord().
-    // Format: uint32_t count, then count x (uint16_t size + raw record).
-    static std::vector<uint8_t> wrapInBlob(
-        const std::vector<std::vector<uint8_t>>& records)
-    {
-        std::vector<uint8_t> blob;
-        uint32_t count = static_cast<uint32_t>(records.size());
-        blob.insert(blob.end(), reinterpret_cast<const uint8_t*>(&count),
-                    reinterpret_cast<const uint8_t*>(&count) + sizeof(count));
-        for (const auto& rec : records)
-        {
-            uint16_t size = static_cast<uint16_t>(rec.size());
-            blob.insert(
-                blob.end(), reinterpret_cast<const uint8_t*>(&size),
-                reinterpret_cast<const uint8_t*>(&size) + sizeof(size));
-            blob.insert(blob.end(), rec.begin(), rec.end());
-        }
-        return blob;
-    }
 };
 
 TEST_F(SmbiosWriterTest, EmptyFinalize)
@@ -104,8 +84,7 @@ TEST_F(SmbiosWriterTest, SingleRecord)
 {
     writer_->begin();
     auto rec = makeType1Record();
-    auto blob = wrapInBlob({rec});
-    writer_->addRecord(blob);
+    writer_->addRecord(rec);
     EXPECT_EQ(writer_->dataSize(), rec.size());
 
     ASSERT_TRUE(writer_->finalize());
@@ -119,7 +98,7 @@ TEST_F(SmbiosWriterTest, SingleRecord)
     std::vector<uint8_t> data((std::istreambuf_iterator<char>(in)),
                               std::istreambuf_iterator<char>());
 
-    // File = MDR header (10) + SMBIOS 3.0 EP (24) + record data
+    // File = MDR header (13) + SMBIOS 3.0 EP (24) + record data
     ASSERT_EQ(data.size(), sizeof(MdrHeader) + sizeof(Smbios3EntryPoint) +
                                rec.size());
 }
@@ -128,15 +107,14 @@ TEST_F(SmbiosWriterTest, MdrHeaderFields)
 {
     writer_->begin();
     auto rec = makeType1Record();
-    auto blob = wrapInBlob({rec});
-    writer_->addRecord(blob);
+    writer_->addRecord(rec);
     ASSERT_TRUE(writer_->finalize());
 
     std::ifstream in(writer_->outputPath(), std::ios::binary);
     MdrHeader mdr{};
     in.read(reinterpret_cast<char*>(&mdr), sizeof(mdr));
 
-    EXPECT_EQ(mdr.dirVer, 1u); // first finalize
+    EXPECT_EQ(mdr.directoryVersion, 1u); // first finalize
     EXPECT_EQ(mdr.mdrType, 2u);
     EXPECT_GT(mdr.timestamp, 0u);
     EXPECT_EQ(mdr.dataSize,
@@ -147,8 +125,7 @@ TEST_F(SmbiosWriterTest, Smbios3EntryPointAnchor)
 {
     writer_->begin();
     auto rec = makeType1Record();
-    auto blob = wrapInBlob({rec});
-    writer_->addRecord(blob);
+    writer_->addRecord(rec);
     ASSERT_TRUE(writer_->finalize());
 
     std::ifstream in(writer_->outputPath(), std::ios::binary);
@@ -182,8 +159,7 @@ TEST_F(SmbiosWriterTest, Smbios3EntryPointAnchor)
 TEST_F(SmbiosWriterTest, Smbios3Checksum)
 {
     writer_->begin();
-    auto blob = wrapInBlob({makeType1Record()});
-    writer_->addRecord(blob);
+    writer_->addRecord(makeType1Record());
     ASSERT_TRUE(writer_->finalize());
 
     std::ifstream in(writer_->outputPath(), std::ios::binary);
@@ -207,10 +183,8 @@ TEST_F(SmbiosWriterTest, MultipleRecords)
     writer_->begin();
     auto rec1 = makeType1Record();
     auto rec17 = makeType17Record();
-    auto blob1 = wrapInBlob({rec1});
-    auto blob17 = wrapInBlob({rec17});
-    writer_->addRecord(blob1);
-    writer_->addRecord(blob17);
+    writer_->addRecord(rec1);
+    writer_->addRecord(rec17);
 
     EXPECT_EQ(writer_->dataSize(), rec1.size() + rec17.size());
     ASSERT_TRUE(writer_->finalize());
@@ -228,8 +202,7 @@ TEST_F(SmbiosWriterTest, DirectoryVersionIncrements)
 {
     // First write
     writer_->begin();
-    auto blob1 = wrapInBlob({makeType1Record()});
-    writer_->addRecord(blob1);
+    writer_->addRecord(makeType1Record());
     ASSERT_TRUE(writer_->finalize());
 
     std::ifstream in1(writer_->outputPath(), std::ios::binary);
@@ -239,22 +212,20 @@ TEST_F(SmbiosWriterTest, DirectoryVersionIncrements)
 
     // Second write
     writer_->begin();
-    auto blob2 = wrapInBlob({makeType17Record()});
-    writer_->addRecord(blob2);
+    writer_->addRecord(makeType17Record());
     ASSERT_TRUE(writer_->finalize());
 
     std::ifstream in2(writer_->outputPath(), std::ios::binary);
     MdrHeader mdr2{};
     in2.read(reinterpret_cast<char*>(&mdr2), sizeof(mdr2));
 
-    EXPECT_EQ(mdr2.dirVer, mdr1.dirVer + 1);
+    EXPECT_EQ(mdr2.directoryVersion, mdr1.directoryVersion + 1);
 }
 
 TEST_F(SmbiosWriterTest, AtomicWrite)
 {
     writer_->begin();
-    auto blob = wrapInBlob({makeType1Record()});
-    writer_->addRecord(blob);
+    writer_->addRecord(makeType1Record());
     ASSERT_TRUE(writer_->finalize());
 
     // The temp file should not exist after finalize
@@ -269,8 +240,7 @@ TEST_F(SmbiosWriterTest, RecordDataPreserved)
 {
     writer_->begin();
     auto rec = makeType1Record();
-    auto blob = wrapInBlob({rec});
-    writer_->addRecord(blob);
+    writer_->addRecord(rec);
     ASSERT_TRUE(writer_->finalize());
 
     std::ifstream in(writer_->outputPath(), std::ios::binary);

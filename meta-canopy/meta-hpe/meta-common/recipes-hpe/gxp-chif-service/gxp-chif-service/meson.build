@@ -1,7 +1,7 @@
 project(
     'gxp-chif-svc',
     'cpp',
-    version: '1.0.0',
+    version: '1.1.0',
     license: 'Apache-2.0',
     default_options: [
         'cpp_std=c++23',
@@ -43,6 +43,14 @@ src_files = files(
     'src/rom_service.cpp',
     'src/smbios_writer.cpp',
     'src/mdr_bridge.cpp',
+    'src/ev_storage.cpp',
+    'src/smif_service.cpp',
+    'src/ev_handlers.cpp',
+    'src/i2c_proxy.cpp',
+    'src/platdef_handler.cpp',
+    'src/platform_handlers.cpp',
+    'src/hw_info_handlers.cpp',
+    'src/event_logger.cpp',
 )
 
 executable(
@@ -67,20 +75,30 @@ if get_option('tests').enabled()
         'src/smbios_writer.cpp',
         'src/mdr_bridge.cpp',
         'src/chif_daemon.cpp',
+        'src/ev_storage.cpp',
+        'src/smif_service.cpp',
+        'src/ev_handlers.cpp',
+        'src/i2c_proxy.cpp',
+        'src/platdef_handler.cpp',
+        'src/platform_handlers.cpp',
+        'src/hw_info_handlers.cpp',
+        'src/event_logger.cpp',
     )
+
+    test_deps = [
+        gtest_dep,
+        gtest_main_dep,
+        sdbusplus_dep,
+        phosphor_dbus_dep,
+        phosphor_logging_dep,
+        systemd_dep,
+    ]
 
     test_packet = executable(
         'test_packet',
         'test/test_packet.cpp',
         test_src_common,
-        dependencies: [
-            gtest_dep,
-            gtest_main_dep,
-            sdbusplus_dep,
-            phosphor_dbus_dep,
-            phosphor_logging_dep,
-            systemd_dep,
-        ],
+        dependencies: test_deps,
     )
     test('packet', test_packet)
 
@@ -88,14 +106,7 @@ if get_option('tests').enabled()
         'test_smbios_writer',
         'test/test_smbios_writer.cpp',
         test_src_common,
-        dependencies: [
-            gtest_dep,
-            gtest_main_dep,
-            sdbusplus_dep,
-            phosphor_dbus_dep,
-            phosphor_logging_dep,
-            systemd_dep,
-        ],
+        dependencies: test_deps,
     )
     test('smbios_writer', test_smbios_writer)
 
@@ -103,14 +114,31 @@ if get_option('tests').enabled()
         'test_rom_service',
         'test/test_rom_service.cpp',
         test_src_common,
-        dependencies: [
-            gtest_dep,
-            gtest_main_dep,
-            sdbusplus_dep,
-            phosphor_dbus_dep,
-            phosphor_logging_dep,
-            systemd_dep,
-        ],
+        dependencies: test_deps,
     )
     test('rom_service', test_rom_service)
+
+    test_ev_storage = executable(
+        'test_ev_storage',
+        'test/test_ev_storage.cpp',
+        test_src_common,
+        dependencies: test_deps,
+    )
+    test('ev_storage', test_ev_storage)
+
+    test_smif_service = executable(
+        'test_smif_service',
+        'test/test_smif_service.cpp',
+        test_src_common,
+        dependencies: test_deps,
+    )
+    test('smif_service', test_smif_service)
+
+    test_event_logger = executable(
+        'test_event_logger',
+        'test/test_event_logger.cpp',
+        test_src_common,
+        dependencies: test_deps,
+    )
+    test('event_logger', test_event_logger)
 endif

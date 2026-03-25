@@ -45,16 +45,19 @@ void ChifDaemon::run()
         uint16_t cmd = hdr.command;
         uint16_t seq = hdr.sequence;
 
-        lg2::info(
-            "CHIF RX: svc=0x{SVC:02x} cmd=0x{CMD:04x} seq={SEQ} size={SZ}",
-            "SVC", svcId, "CMD", cmd, "SEQ", seq, "SZ", n);
+        lg2::debug("RX svc={SVC} cmd={CMD} seq={SEQ} sz={SZ}",
+                   "SVC", static_cast<int>(svcId),
+                   "CMD", static_cast<int>(cmd),
+                   "SEQ", static_cast<int>(seq),
+                   "SZ", n);
 
         auto it = handlers_.find(hdr.serviceId);
         if (it == handlers_.end())
         {
             lg2::warning(
-                "CHIF DROP: no handler for svc=0x{SVC:02x} cmd=0x{CMD:04x}",
-                "SVC", svcId, "CMD", cmd);
+                "CHIF DROP: no handler for svc={SVC} cmd={CMD}",
+                "SVC", static_cast<int>(svcId),
+                "CMD", static_cast<int>(cmd));
             continue;
         }
 
@@ -71,7 +74,7 @@ void ChifDaemon::run()
             uint8_t rspSvc = rspHdr.serviceId;
             uint16_t rspCmd = rspHdr.command;
             uint16_t rspSeq = rspHdr.sequence;
-            lg2::info(
+            lg2::debug(
                 "CHIF TX: svc=0x{SVC:02x} cmd=0x{CMD:04x} seq={SEQ} size={SZ}",
                 "SVC", rspSvc, "CMD", rspCmd, "SEQ", rspSeq, "SZ", respSize);
             channel_->write(
@@ -80,8 +83,8 @@ void ChifDaemon::run()
         }
         else
         {
-            lg2::info("CHIF: handler returned no response for cmd=0x{CMD:04x}",
-                      "CMD", cmd);
+            lg2::debug("CHIF: handler returned no response for cmd=0x{CMD:04x}",
+                       "CMD", cmd);
         }
     }
 
