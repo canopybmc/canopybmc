@@ -1,0 +1,144 @@
+name: "Inventory: PCIe Devices"
+description: >-
+  Verify PCIe device inventory via Redfish. Checks that SMBIOS Type 9
+  slot data flows through smbios-mdr to create PCIeDevice D-Bus objects
+  visible at /Systems/system/PCIeDevices. Requires host POST complete
+  for SMBIOS transfer.
+
+defaults:
+  transport: &local
+    proto: local
+
+stages:
+  - name: Wait for BMC and Power On Host
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: shell
+        name: Wait for BMC services
+        transport: *local
+        options:
+          timeout: 2m
+        parameters:
+          command: "sleep 45"
+      - cmd: shell
+        name: Power on host via Redfish
+        transport: *local
+        parameters:
+          command: >-
+            HTTP=$(curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"ResetType":"On"}'
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+            -o /dev/null -w '%{http_code}');
+            echo "Power On HTTP=$HTTP";
+            test "$HTTP" = "200" || test "$HTTP" = "204"
+      - cmd: shell
+        name: Wait 220s for host POST and SMBIOS transfer
+        transport: *local
+        options:
+          timeout: 5m
+        parameters:
+          command: "sleep 220"
+      - cmd: shell
+        name: Verify host PowerState is On
+        transport: *local
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            https://[[attributes.BMC]]/redfish/v1/Systems/system
+          expect:
+            - regex: '"PowerState": *"On"'
+
+  - name: PCIe Devices Collection
+    steps:
+      - cmd: shell
+        name: PCIeDevices collection has >= 1 member
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/PCIeDevices
+          expect:
+            - regex: '"Members@odata.count": *[1-9]'
+      - cmd: shell
+        name: PCIeDevices collection has >= 8 members
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          command: >-
+            COUNT=$(curl -sk -u root:[[attributes.BMCPassword]]
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/PCIeDevices
+            | grep -o '"Members@odata.count": *[0-9]*' | grep -o '[0-9]*$');
+            echo "PCIeDevices count=$COUNT";
+            test "$COUNT" -ge 8
+
+  - name: PCIe Device Attributes
+    steps:
+      - cmd: shell
+        name: First PCIe device has valid PCIeInterface
+        transport: *local
+        options:
+          timeout: 60s
+          on-error: continue
+        parameters:
+          command: >-
+            FIRST=$(curl -sk -u root:[[attributes.BMCPassword]]
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/PCIeDevices
+            | grep -o '"/redfish/v1/Systems/system/PCIeDevices/[^"]*"'
+            | head -1 | tr -d '"');
+            echo "Checking $FIRST";
+            DATA=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]$FIRST);
+            echo "$DATA" | grep -q 'PCIeInterface' || { echo 'FAIL: no PCIeInterface'; exit 1; };
+            PCITYPE=$(echo "$DATA" | grep -o '"MaxPCIeType": *"[^"]*"' | grep -o 'Gen[0-9]');
+            echo "MaxPCIeType=$PCITYPE";
+            test -n "$PCITYPE" || { echo 'FAIL: MaxPCIeType missing'; exit 1; };
+            LANES=$(echo "$DATA" | grep -o '"MaxLanes": *[0-9]*' | grep -o '[0-9]*$');
+            echo "MaxLanes=$LANES";
+            test "$LANES" -gt 0 || { echo 'FAIL: MaxLanes=0'; exit 1; };
+            echo 'PCIeInterface attributes OK'
+      - cmd: shell
+        name: PCIe device has Slot info
+        transport: *local
+        options:
+          timeout: 60s
+          on-error: continue
+        parameters:
+          command: >-
+            FIRST=$(curl -sk -u root:[[attributes.BMCPassword]]
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/PCIeDevices
+            | grep -o '"/redfish/v1/Systems/system/PCIeDevices/[^"]*"'
+            | head -1 | tr -d '"');
+            DATA=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]$FIRST);
+            echo "$DATA" | grep -q '"Slot"' || { echo 'FAIL: no Slot section'; exit 1; };
+            SLOTTYPE=$(echo "$DATA" | grep -o '"SlotType": *"[^"]*"' | grep -o '"[^"]*"$' | tr -d '"');
+            echo "SlotType=$SLOTTYPE";
+            test -n "$SLOTTYPE" || { echo 'FAIL: SlotType missing'; exit 1; };
+            echo 'Slot info OK'
+      - cmd: shell
+        name: PCIe device has valid Status
+        transport: *local
+        options:
+          timeout: 60s
+          on-error: continue
+        parameters:
+          command: >-
+            FIRST=$(curl -sk -u root:[[attributes.BMCPassword]]
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/PCIeDevices
+            | grep -o '"/redfish/v1/Systems/system/PCIeDevices/[^"]*"'
+            | head -1 | tr -d '"');
+            DATA=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]$FIRST);
+            STATE=$(echo "$DATA" | grep -o '"State": *"[^"]*"' | grep -o '"[^"]*"$' | tr -d '"');
+            echo "State=$STATE";
+            test "$STATE" = "Enabled" || test "$STATE" = "Absent"
+            || { echo "FAIL: unexpected State=$STATE"; exit 1; };
+            echo 'Status OK'
