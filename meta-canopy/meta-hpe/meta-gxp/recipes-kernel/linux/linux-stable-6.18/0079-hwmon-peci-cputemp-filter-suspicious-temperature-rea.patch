@@ -1,0 +1,123 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Christian Walter <christian.walter@9elements.com>
+Date: Sat, 29 Mar 2026 00:00:00 +0000
+Subject: [PATCH] hwmon: (peci/cputemp) filter suspicious temperature readings
+
+PECI bus errors and CPU not-ready conditions can produce garbage
+temperature readings that propagate through hwmon to userspace sensors.
+Observed failure modes on the HPE GXP platform include:
+
+ - raw_margin=0x0800: a stuck "not ready" sentinel producing +32C DTS
+   margin, resulting in temperatures above Tjmax
+ - Garbage margins (0xa1a1, 0xeec0): PECI bus corruption producing
+   wildly negative temperatures
+ - Tjmax corruption: TEMP_TARGET register returning incorrect values
+
+Add post-conversion sanity checks that reject readings above Tjmax or
+below -10C by returning -EIO. Also cache Tjmax to detect corruption
+of the TEMP_TARGET register. When a reading is filtered, the hwmon
+sysfs read returns an error so userspace retains the previous good
+value.
+
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ drivers/hwmon/peci/cputemp.c | 42 ++++++++++++++++++++++++++++++++++-
+ 1 file changed, 41 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/hwmon/peci/cputemp.c b/drivers/hwmon/peci/cputemp.c
+index b350c9a76894..a1b2c3d4e5f6 100644
+--- a/drivers/hwmon/peci/cputemp.c
++++ b/drivers/hwmon/peci/cputemp.c
+@@ -63,6 +63,7 @@ struct peci_cputemp {
+ 		struct peci_sensor_data dts;
+ 		struct peci_sensor_data core[CORE_NUMS_MAX];
+ 	} temp;
++	s32 cached_tjmax;
+ 	const char **coretemp_label;
+ 	DECLARE_BITMAP(core_mask, CORE_NUMS_MAX);
+ };
+@@ -112,6 +113,20 @@ static int update_temp_target(struct peci_cputemp *priv)
+ 	return 0;
+ }
+ 
++/*
++ * Tjmax is a fixed CPU characteristic that should never change at runtime.
++ * If the PECI read returns a wildly different value, use the cached one.
++ */
++static s32 get_validated_tjmax(struct peci_cputemp *priv, long tjmax_raw)
++{
++	s32 tjmax = (s32)tjmax_raw;
++
++	if (priv->cached_tjmax && abs(tjmax - priv->cached_tjmax) > 10000)
++		return priv->cached_tjmax;
++	priv->cached_tjmax = tjmax;
++	return tjmax;
++}
++
+ static int get_temp_target(struct peci_cputemp *priv, enum peci_temp_target_type type, long *val)
+ {
+ 	int ret;
+@@ -178,6 +193,7 @@ static s32 dts_eight_dot_eight_to_millidegree(u16 val)
+ static int get_die_temp(struct peci_cputemp *priv, long *val)
+ {
+ 	int ret = 0;
++	s32 validated_tjmax;
+ 	long tjmax;
+ 	u16 temp;
+ 
+@@ -198,7 +214,13 @@ static int get_die_temp(struct peci_cputemp *priv, long *val)
+ 	if (ret)
+ 		goto err_unlock;
+ 
+-	priv->temp.die.value = (s32)tjmax + dts_ten_dot_six_to_millidegree(temp);
++	validated_tjmax = get_validated_tjmax(priv, tjmax);
++	priv->temp.die.value = validated_tjmax + dts_ten_dot_six_to_millidegree(temp);
++
++	if (priv->temp.die.value > validated_tjmax || priv->temp.die.value < -10000) {
++		ret = -EIO;
++		goto err_unlock;
++	}
+ 
+ 	peci_sensor_mark_updated(&priv->temp.die.state);
+ 
+@@ -238,6 +260,12 @@ static int get_dts(struct peci_cputemp *priv, long *val)
+ 	priv->temp.dts.value =
+ 		(s32)tcontrol - priv->gen_info->thermal_margin_to_millidegree(thermal_margin);
+ 
++	if (priv->temp.dts.value > priv->cached_tjmax ||
++	    priv->temp.dts.value < -10000) {
++		ret = -EIO;
++		goto err_unlock;
++	}
++
+ 	peci_sensor_mark_updated(&priv->temp.dts.state);
+ 
+ skip_update:
+@@ -251,6 +279,7 @@ static int get_core_temp(struct peci_cputemp *priv, int core_index, long *val)
+ {
+ 	int ret = 0;
+ 	u16 core_dts_margin;
++	s32 validated_tjmax;
+ 	long tjmax;
+ 	u32 pcs;
+ 
+@@ -272,9 +301,16 @@ static int get_core_temp(struct peci_cputemp *priv, int core_index, long *val)
+ 	if (ret)
+ 		goto err_unlock;
+ 
++	validated_tjmax = get_validated_tjmax(priv, tjmax);
+ 	/* Note that the tjmax should be available before calling it */
+ 	priv->temp.core[core_index].value =
+-		(s32)tjmax + dts_ten_dot_six_to_millidegree(core_dts_margin);
++		validated_tjmax + dts_ten_dot_six_to_millidegree(core_dts_margin);
++
++	if (priv->temp.core[core_index].value > validated_tjmax ||
++	    priv->temp.core[core_index].value < -10000) {
++		ret = -EIO;
++		goto err_unlock;
++	}
+ 
+ 	peci_sensor_mark_updated(&priv->temp.core[core_index].state);
+ 
+-- 
+2.52.0
