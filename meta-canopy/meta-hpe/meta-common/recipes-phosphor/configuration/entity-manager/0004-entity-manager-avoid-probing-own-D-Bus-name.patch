@@ -1,0 +1,120 @@
+From 74e4ee8cfaa5e4c919b92117ea1a075a465a4fa0 Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Mon, 13 Apr 2026 14:12:04 +0200
+Subject: [PATCH] entity-manager: avoid probing own D-Bus name
+
+Decorator objects (with `xyz.openbmc_project.Inventory.Decorator.Asset`
+interface) may be provided by devicetree-vpd-parser (via MachineContext)
+and used for probing, but then also get populated to the same decorator
+interface by EM, causing a circular loop in registration of objects as
+visible in `/var/configuration/system.json`:
+
+```
+{
+    "2147618245": {
+        "Exposes": [
+            // Records...
+        ],
+        "Name": "chassis",
+        "Probe": "xyz.openbmc_project.Inventory.Decorator.Asset({'Model': 'HPE ProLiant DL365 Gen11'})",
+        "Type": "Chassis",
+        "xyz.openbmc_project.Inventory.Decorator.Asset": {
+            "Manufacturer": "Hewlett Packard Enterprise",
+            "Model": "HPE ProLiant DL365 Gen11",
+            "PartNumber": "P81840-425",
+            "SerialNumber": "reddacted"
+        },
+        "xyz.openbmc_project.Inventory.Decorator.AssetTag": {
+            "AssetTag": "HPE-OBMC-001"
+        },
+        "xyz.openbmc_project.Inventory.Item": {
+            "PrettyName": "ProLiant DL365 Gen11"
+        },
+        "xyz.openbmc_project.Inventory.Item.Board.Motherboard": {
+            "ProductId": 581
+        },
+        "xyz.openbmc_project.Inventory.Item.System": {
+            "PartNumber": "P81840-425",
+            "SerialNumber": "redacted"
+        }
+    },
+    "295462187": {
+        "Exposes": [
+            // Same as above...
+        ],
+        "Probe": "xyz.openbmc_project.Inventory.Decorator.Asset({'Model': 'HPE ProLiant DL365 Gen11'})",
+        "Type": "Chassis",
+        "xyz.openbmc_project.Inventory.Decorator.Asset": {
+            "Manufacturer": "Hewlett Packard Enterprise",
+            "Model": "HPE ProLiant DL365 Gen11",
+            "PartNumber": "P81840-425",
+            "SerialNumber": "redacted"
+        },
+        "xyz.openbmc_project.Inventory.Decorator.AssetTag": {
+            "AssetTag": "HPE-OBMC-001"
+        },
+        "xyz.openbmc_project.Inventory.Item": {
+            "PrettyName": "ProLiant DL365 Gen11"
+        },
+        "xyz.openbmc_project.Inventory.Item.Board.Motherboard": {
+            "ProductId": 581
+        },
+        "xyz.openbmc_project.Inventory.Item.System": {
+            "PartNumber": "P81840-425",
+            "SerialNumber": "redacted"
+        }
+    }
+}
+```
+
+And logs like this:
+```
+entity-manager[257]: Unable to initialize dbus interface : sd_bus_add_object_vtable: org.freedesktop.DBus.Error.FileExists: File exists object Path : /xyz/openbmc_project/inventory/system/chassis/chassis interface name : xyz.openbmc_project.AddObject
+entity-manager[257]: Unable to initialize dbus interface : sd_bus_add_object_vtable: org.freedesktop.DBus.Error.FileExists: File exists object Path : /xyz/openbmc_project/inventory/system/chassis/chassis interface name : xyz.openbmc_project.Inventory.Item.Chassis
+entity-manager[257]: Unable to initialize dbus interface : sd_bus_add_object_vtable: org.freedesktop.DBus.Error.FileExists: File exists object Path : /xyz/openbmc_project/inventory/system/chassis/chassis interface name : xyz.openbmc_project.Inventory.Decorator.Asset
+entity-manager[257]: Unable to initialize dbus interface : sd_bus_add_object_vtable: org.freedesktop.DBus.Error.FileExists: File exists object Path : /xyz/openbmc_project/inventory/system/chassis/chassis interface name : xyz.openbmc_project.Inventory.Decorator.AssetTag
+entity-manager[257]: Unable to initialize dbus interface : sd_bus_add_object_vtable: org.freedesktop.DBus.Error.FileExists: File exists object Path : /xyz/openbmc_project/inventory/system/chassis/chassis interface name : xyz.openbmc_project.Inventory.Item
+entity-manager[257]: Unable to initialize dbus interface : sd_bus_add_object_vtable: org.freedesktop.DBus.Error.FileExists: File exists object Path : /xyz/openbmc_project/inventory/system/chassis/chassis interface name : xyz.openbmc_project.Inventory.Item.Board.Motherboard
+```
+
+Skip probing our own bus under `xyz.openbmc_project.EntityManager` to
+prevent circular probe/registration loops.
+
+Tested: Run on a HPE DL365 Gen11 that utilizes devicetree-vpd-parser
+        and ensure that no duplicate registration happen. The mentioned
+        device is not in upstream yet, but uses the same feature as the
+        HPE DL320 Gen12 in upstream. Downstream config in [1].
+
+References:
+[1] https://github.com/canopybmc/canopybmc/blob/469720b37c74783f52806ef01dac67d880bf6e69/meta-canopy/meta-hpe/meta-common/recipes-phosphor/configuration/entity-manager/dl365g11_baseboard.json
+
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/entity-manager/+/88817]
+Change-Id: I63567a5b885a4556377078a184f9283f3b7510e4
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ src/entity_manager/perform_scan.cpp | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/src/entity_manager/perform_scan.cpp b/src/entity_manager/perform_scan.cpp
+index 4442b2f..76bb495 100644
+--- a/src/entity_manager/perform_scan.cpp
++++ b/src/entity_manager/perform_scan.cpp
+@@ -94,6 +94,15 @@ static void processDbusObjects(
+ 
+         for (const auto& [busname, ifaces] : object)
+         {
++            // We should skip ourselves for probing to avoid circular
++            // probes / registrations when a configuration probe uses
++            // an interface that's also being populated by EM itself.
++            if (busname == emDbusName)
++            {
++                lg2::debug("processDbusObjects: skipping scan on own object.");
++                continue;
++            }
++
+             for (const std::string& iface : ifaces)
+             {
+                 // The 3 default org.freedeskstop interfaces (Peer,
+-- 
+2.53.0
+

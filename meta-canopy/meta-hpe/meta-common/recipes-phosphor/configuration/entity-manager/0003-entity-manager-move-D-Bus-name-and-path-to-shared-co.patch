@@ -1,0 +1,69 @@
+From 5e61133f12fe2732e243916993892e4314077f3e Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Mon, 13 Apr 2026 14:06:59 +0200
+Subject: [PATCH] entity-manager: move D-Bus name and path to shared constants
+
+entity-manager's D-Bus name and path may be used across multiple files.
+To prevent accidential typos and to increase the consistency, move those
+strings into shared constants.
+
+Upstream-Status: Pending
+Change-Id: I8e455121efb901dd4b70934cc9889772b605b819
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ src/entity_manager/entity_manager.cpp | 3 +--
+ src/entity_manager/main.cpp           | 3 ++-
+ src/entity_manager/utils.hpp          | 2 ++
+ 3 files changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/src/entity_manager/entity_manager.cpp b/src/entity_manager/entity_manager.cpp
+index bc78ad0..b6af3ca 100644
+--- a/src/entity_manager/entity_manager.cpp
++++ b/src/entity_manager/entity_manager.cpp
+@@ -67,8 +67,7 @@ EntityManager::EntityManager(
+     // https://discord.com/channels/775381525260664832/1018929092009144380
+     objServer.add_manager("/xyz/openbmc_project/inventory");
+ 
+-    entityIface = objServer.add_interface("/xyz/openbmc_project/EntityManager",
+-                                          "xyz.openbmc_project.EntityManager");
++    entityIface = objServer.add_interface(emDbusPath, emDbusName);
+     entityIface->register_method("ReScan", [this]() {
+         propertiesChangedCallback();
+     });
+diff --git a/src/entity_manager/main.cpp b/src/entity_manager/main.cpp
+index df1be8c..461ae68 100644
+--- a/src/entity_manager/main.cpp
++++ b/src/entity_manager/main.cpp
+@@ -2,6 +2,7 @@
+ // SPDX-FileCopyrightText: Copyright 2018 Intel Corporation
+ 
+ #include "entity_manager.hpp"
++#include "utils.hpp"
+ 
+ #include <boost/asio/io_context.hpp>
+ #include <boost/asio/post.hpp>
+@@ -17,7 +18,7 @@ int main()
+ 
+     boost::asio::io_context io;
+     auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
+-    systemBus->request_name("xyz.openbmc_project.EntityManager");
++    systemBus->request_name(emDbusName);
+     EntityManager em(systemBus, io, configurationDirectories, schemaDirectory);
+ 
+     boost::asio::post(io, [&]() { em.propertiesChangedCallback(); });
+diff --git a/src/entity_manager/utils.hpp b/src/entity_manager/utils.hpp
+index 8c9e1ae..75e1d7f 100644
+--- a/src/entity_manager/utils.hpp
++++ b/src/entity_manager/utils.hpp
+@@ -7,6 +7,8 @@
+ #include <sdbusplus/asio/connection.hpp>
+ 
+ constexpr const char* configurationOutDir = "/var/configuration/";
++constexpr const char* emDbusName = "xyz.openbmc_project.EntityManager";
++constexpr const char* emDbusPath = "/xyz/openbmc_project/EntityManager";
+ constexpr const char* versionHashFile = "/var/configuration/version";
+ constexpr const char* versionFile = "/etc/os-release";
+ 
+-- 
+2.53.0
+

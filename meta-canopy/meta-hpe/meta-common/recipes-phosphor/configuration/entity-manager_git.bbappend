@@ -2,6 +2,8 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 
 SRC_URI += "file://0001-devicetree-vpd-add-part-number-parsing.patch"
 SRC_URI += "file://0002-devicetree-vpd-add-manufacturer-parsing.patch"
+SRC_URI += "file://0003-entity-manager-move-D-Bus-name-and-path-to-shared-co.patch"
+SRC_URI += "file://0004-entity-manager-avoid-probing-own-D-Bus-name.patch"
 ERROR_QA:remove = "patch-status"
 
 # Enable devicetree VPD parser for platform identification
