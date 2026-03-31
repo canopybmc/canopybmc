@@ -1,5 +1,6 @@
 name: Canopy-QEMU
 label: canopy-qemu
+reservation-system: virtual
 attributes:
   BMC: "127.0.0.1"
   BMCPassword: "0penBmc"
