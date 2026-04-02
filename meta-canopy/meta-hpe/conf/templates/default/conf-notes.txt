@@ -1,0 +1,8 @@
+Common targets are:
+
+     obmc-phosphor-image: Includes OpenBMC Phosphor userspace and Web UI
+
+!!IMPORTANT!!
+
+You're building an HPE target. Make sure to set the correct signing key
+in `conf/local.conf`. Otherwise, the OSFCI key will be used.
