@@ -13,8 +13,6 @@ BBLAYERS ?= " \
   ##OEROOT##/openbmc/meta \
   ##OEROOT##/openbmc/meta-openembedded/meta-oe \
   ##OEROOT##/openbmc/meta-openembedded/meta-networking \
-  ##OEROOT##/openbmc/meta-openembedded/meta-perl \
   ##OEROOT##/openbmc/meta-openembedded/meta-python \
-  ##OEROOT##/openbmc/meta-openembedded/meta-webserver \
   ##OEROOT##/openbmc/meta-phosphor \
   "
