@@ -1,5 +1,15 @@
 MACHINE ??= "canopy-qemu"
-DISTRO ?= "openbmc-phosphor"
+DISTRO ?= "canopy"
+
+# See meta-canopy/conf/distro/canopy.conf for more information.
+#CANOPY_CONFIG = "dev"
+
+# Optional free-form suffix added at the end of the version.
+#CANOPY_CUSTOM_TAG = "mybranch"
+
+# Pin the version explicitly, bypassing git auto-detection.
+#CANOPY_VERSION = "2026.04"
+
 PACKAGE_CLASSES ?= "package_ipk"
 SANITY_TESTED_DISTROS:append ?= " *"
 EXTRA_IMAGE_FEATURES ?= "allow-root-login"
