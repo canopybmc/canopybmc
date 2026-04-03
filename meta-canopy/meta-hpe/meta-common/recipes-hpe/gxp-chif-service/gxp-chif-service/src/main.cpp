@@ -2,19 +2,22 @@
 // Copyright (C) 2026 9elements GmbH
 
 #include "chif_daemon.hpp"
+#include "health_service.hpp"
 #include "mdr_bridge.hpp"
 #include "rom_service.hpp"
 #include "smif_service.hpp"
 #include "smbios_writer.hpp"
 
-#include <fcntl.h>
-#include <signal.h>
-#include <unistd.h>
-
-#include <memory>
-
 #include <phosphor-logging/lg2.hpp>
 #include <sdbusplus/bus.hpp>
+
+#include <fcntl.h>
+#include <unistd.h>
+
+#include <cerrno>
+#include <csignal>
+#include <cstring>
+#include <memory>
 
 namespace
 {
@@ -70,7 +73,7 @@ int main()
     lg2::info("GXP CHIF service starting, version 1.0.0");
 
     // Open the CHIF device
-    int fd = open(chifDevice, O_RDWR);
+    int fd = open(chifDevice, O_RDWR | O_CLOEXEC);
     if (fd < 0)
     {
         lg2::error("Failed to open {DEV}: {ERR}", "DEV", chifDevice, "ERR",

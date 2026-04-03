@@ -40,8 +40,8 @@ int RomService::handle(std::span<const uint8_t> request,
         case romCmdBlob:
             return handleBlob(hdr, request, response);
         default:
-            lg2::warning("ROM: unknown command 0x{CMD:04x}, dropping",
-                         "CMD", static_cast<uint16_t>(hdr.command));
+            lg2::warning("ROM: unknown command, dropping", "CMD", lg2::hex,
+                         static_cast<uint16_t>(hdr.command));
             return -1;
     }
 }

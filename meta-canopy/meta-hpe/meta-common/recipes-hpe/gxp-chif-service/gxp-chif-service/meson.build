@@ -40,6 +40,8 @@ install_data(
 src_files = files(
     'src/main.cpp',
     'src/chif_daemon.cpp',
+    'src/smif_service.cpp',
+    'src/health_service.cpp',
     'src/rom_service.cpp',
     'src/smbios_writer.cpp',
     'src/mdr_bridge.cpp',
@@ -63,6 +65,8 @@ if get_option('tests').enabled()
     gtest_main_dep = dependency('gtest_main')
 
     test_src_common = files(
+        'src/smif_service.cpp',
+        'src/health_service.cpp',
         'src/rom_service.cpp',
         'src/smbios_writer.cpp',
         'src/mdr_bridge.cpp',
