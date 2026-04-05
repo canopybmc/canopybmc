@@ -264,6 +264,38 @@ int SmifService::handleEvState(const ChifPktHeader& hdr,
     return respSize;
 }
 
+int SmifService::handleGetEvAuthStatus(const ChifPktHeader& hdr,
+                                       std::span<uint8_t> response)
+{
+    // Return "all authenticated" — matches HPE's OpenBMC behavior.
+    // HPE returns hardcoded values without performing real verification.
+    // pkt_812d is 124 bytes of payload.
+    constexpr size_t authPayloadSize = 124;
+    constexpr auto respSize =
+        static_cast<uint16_t>(sizeof(ChifPktHeader) + authPayloadSize);
+
+    if (response.size() < respSize)
+    {
+        return -1;
+    }
+
+    std::fill_n(response.data(), respSize, uint8_t{0});
+    initResponse(response, hdr, respSize);
+
+    auto resp = responsePayload(response);
+    // ErrorCode = 0 (already zeroed)
+    uint32_t version = 1;
+    std::memcpy(resp.data() + 4, &version, sizeof(version)); // AuthVersion
+    resp[8] = 0x01;  // ImageAuthBitField: single side A active
+    resp[9] = 0x01;  // SideA: authenticated
+    resp[10] = 0x01; // SideB: authenticated
+    // RemediationAction at [11] = 0 (none)
+    // ValidatingAgent at [58..59] = 0 (BMC)
+    // All other fields (signatures, GUIDs) left zeroed
+
+    return respSize;
+}
+
 // ---------------------------------------------------------------------------
 // SmifService::handle — main dispatch
 // ---------------------------------------------------------------------------
@@ -300,9 +332,9 @@ int SmifService::handle(std::span<const uint8_t> request,
         case smifCmdEvState:
             return handleEvState(hdr, response);
 
-        // ---- EV auth status (always "not implemented") ----
+        // ---- BIOS image auth status (Secure Start) ----
         case smifCmdGetEvAuthStatus:
-            return buildSimpleResponse(hdr, response, 1);
+            return handleGetEvAuthStatus(hdr, response);
 
         // ---- All other commands: stub with ErrorCode=0 ----
         default:
