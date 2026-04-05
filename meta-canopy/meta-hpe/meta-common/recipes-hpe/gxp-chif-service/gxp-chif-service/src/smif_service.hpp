@@ -97,6 +97,8 @@ class SmifService : public ServiceHandler
                       std::span<uint8_t> response);
     int handleEvState(const ChifPktHeader& hdr,
                       std::span<uint8_t> response);
+    int handleGetEvAuthStatus(const ChifPktHeader& hdr,
+                              std::span<uint8_t> response);
 
     // Response helpers
     static int buildSimpleResponse(const ChifPktHeader& hdr,
