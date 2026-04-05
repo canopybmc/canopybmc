@@ -10,7 +10,7 @@ Restart=on-failure
 RestartSec=5
 Type=dbus
 BusName=xyz.openbmc_project.GxpChif
-StateDirectory=smbios
+StateDirectory=smbios chif
 
 # Security hardening
 ProtectSystem=strict

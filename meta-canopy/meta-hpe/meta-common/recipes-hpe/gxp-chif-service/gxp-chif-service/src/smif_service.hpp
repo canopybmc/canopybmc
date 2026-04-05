@@ -2,6 +2,7 @@
 // Copyright (C) 2026 9elements GmbH
 #pragma once
 
+#include "ev_storage.hpp"
 #include "packet.hpp"
 
 #include <cstdint>
@@ -12,11 +13,6 @@ namespace chif
 
 // ---------------------------------------------------------------------------
 // SMIF command codes (service_id 0x00)
-//
-// Every known command is listed here.  The handler responds to each with
-// a correctly-sized response so that BIOS can proceed through POST
-// without hanging.  Functional implementations will replace the stubs
-// incrementally.
 // ---------------------------------------------------------------------------
 
 // Hardware info
@@ -53,6 +49,11 @@ inline constexpr uint16_t smifCmdGetEvByName = 0x0130;
 inline constexpr uint16_t smifCmdEvStats = 0x0132;
 inline constexpr uint16_t smifCmdEvState = 0x0133;
 
+// EV operation flags (for 0x012C SetDeleteEv)
+inline constexpr uint8_t evFlagSet = 0x01;
+inline constexpr uint8_t evFlagDelete = 0x02;
+inline constexpr uint8_t evFlagDeleteAll = 0x04;
+
 // Event logging
 inline constexpr uint16_t smifCmdQuickEventLog = 0x0146;
 
@@ -67,15 +68,12 @@ inline constexpr uint16_t smifCmdPlatDefV2End = 0x0207;
 
 // ---------------------------------------------------------------------------
 // SmifService — handler for service_id 0x00.
-//
-// Known commands return correctly-sized responses.  Commands that have a
-// real implementation return real data; all others return zero-filled
-// stub payloads with ErrorCode=0 (success) or ErrorCode=1 where the
-// protocol requires "not found".
 // ---------------------------------------------------------------------------
 class SmifService : public ServiceHandler
 {
   public:
+    explicit SmifService(EvStorage* evStorage = nullptr);
+
     int handle(std::span<const uint8_t> request,
                std::span<uint8_t> response) override;
 
@@ -83,6 +81,32 @@ class SmifService : public ServiceHandler
     {
         return smifServiceId;
     }
+
+  private:
+    // EV command handlers
+    int handleGetEvByIndex(const ChifPktHeader& hdr,
+                           std::span<const uint8_t> reqPayload,
+                           std::span<uint8_t> response);
+    int handleSetDeleteEv(const ChifPktHeader& hdr,
+                          std::span<const uint8_t> reqPayload,
+                          std::span<uint8_t> response);
+    int handleGetEvByName(const ChifPktHeader& hdr,
+                          std::span<const uint8_t> reqPayload,
+                          std::span<uint8_t> response);
+    int handleEvStats(const ChifPktHeader& hdr,
+                      std::span<uint8_t> response);
+    int handleEvState(const ChifPktHeader& hdr,
+                      std::span<uint8_t> response);
+
+    // Response helpers
+    static int buildSimpleResponse(const ChifPktHeader& hdr,
+                                   std::span<uint8_t> response,
+                                   uint32_t errorCode);
+    static int buildEvDataResponse(const ChifPktHeader& hdr,
+                                   std::span<uint8_t> response,
+                                   const EvEntry& ev);
+
+    EvStorage* evStorage_;
 };
 
 } // namespace chif

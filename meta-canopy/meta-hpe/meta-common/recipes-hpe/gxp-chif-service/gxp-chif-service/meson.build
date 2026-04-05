@@ -42,6 +42,7 @@ src_files = files(
     'src/chif_daemon.cpp',
     'src/smif_service.cpp',
     'src/health_service.cpp',
+    'src/ev_storage.cpp',
     'src/rom_service.cpp',
     'src/smbios_writer.cpp',
     'src/mdr_bridge.cpp',
@@ -67,6 +68,7 @@ if get_option('tests').enabled()
     test_src_common = files(
         'src/smif_service.cpp',
         'src/health_service.cpp',
+        'src/ev_storage.cpp',
         'src/rom_service.cpp',
         'src/smbios_writer.cpp',
         'src/mdr_bridge.cpp',
