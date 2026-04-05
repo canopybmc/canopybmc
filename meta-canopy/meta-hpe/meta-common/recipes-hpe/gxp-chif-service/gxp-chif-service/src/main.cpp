@@ -2,6 +2,7 @@
 // Copyright (C) 2026 9elements GmbH
 
 #include "chif_daemon.hpp"
+#include "ev_storage.hpp"
 #include "health_service.hpp"
 #include "mdr_bridge.hpp"
 #include "rom_service.hpp"
@@ -90,12 +91,17 @@ int main()
     // Create service components
     chif::SmbiosWriter smbiosWriter;
     chif::MdrBridge mdrBridge(bus);
+    chif::EvStorage evStorage;
+    if (evStorage.load() < 0)
+    {
+        lg2::warning("EV storage failed to load, starting with empty store");
+    }
 
     // Build daemon and register handlers
     chif::ChifDaemon daemon(std::move(channel));
     daemon.registerHandler(
         std::make_unique<chif::RomService>(smbiosWriter, &mdrBridge));
-    daemon.registerHandler(std::make_unique<chif::SmifService>());
+    daemon.registerHandler(std::make_unique<chif::SmifService>(&evStorage));
     daemon.registerHandler(std::make_unique<chif::HealthService>());
 
     // Install signal handlers for graceful shutdown
