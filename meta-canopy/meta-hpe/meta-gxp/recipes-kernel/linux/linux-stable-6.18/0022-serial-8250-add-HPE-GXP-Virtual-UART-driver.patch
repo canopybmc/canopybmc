@@ -13,10 +13,10 @@ Co-developed-by: John Chung <john.chung@hpe.com>
 Signed-off-by: John Chung <john.chung@hpe.com>
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
- drivers/tty/serial/8250/8250_gxp_vuart.c | 418 +++++++++++++++++++++++
+ drivers/tty/serial/8250/8250_gxp_vuart.c | 447 +++++++++++++++++++++++
  drivers/tty/serial/8250/Kconfig          |  12 +
  drivers/tty/serial/8250/Makefile         |   1 +
- 3 files changed, 431 insertions(+)
+ 3 files changed, 460 insertions(+)
  create mode 100644 drivers/tty/serial/8250/8250_gxp_vuart.c
 
 diff --git a/drivers/tty/serial/8250/8250_gxp_vuart.c b/drivers/tty/serial/8250/8250_gxp_vuart.c
@@ -24,7 +24,7 @@ new file mode 100644
 index 000000000000..ee3a584fd319
 --- /dev/null
 +++ b/drivers/tty/serial/8250/8250_gxp_vuart.c
-@@ -0,0 +1,418 @@
+@@ -0,0 +1,447 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Serial Port driver for HPE GXP Virtual UART device
@@ -303,6 +303,34 @@ index 000000000000..ee3a584fd319
 +	writeb(1, p->membase - GXP_VUART_16550A_BASE + GXP_VUART_CMD);
 +}
 +
++static int gxp_vuart_startup(struct uart_port *port)
++{
++	struct uart_8250_port *up = up_to_u8250p(port);
++	int ret;
++
++	ret = serial8250_do_startup(port);
++	if (ret)
++		return ret;
++
++	/*
++	 * The GXP VUART uses VSR-based interrupt routing rather than the
++	 * standard 16550A IIR path. serial8250_iir_txen_test() reads IIR
++	 * after enabling THRI: the 16550A register emulation correctly
++	 * reflects the pending TX condition so iir_noint is false and
++	 * UART_BUG_TXEN is not set -- but no actual CPU interrupt fires
++	 * because interrupt routing goes through VSR, not IIR. Line 2230
++	 * in 8250_port.c then actively clears UART_BUG_TXEN on this path.
++	 *
++	 * Override the incorrect auto-detection result so __start_tx()
++	 * manually kicks the TX pump via serial8250_tx_chars() when
++	 * enabling THRI, using the established workaround for hardware
++	 * with non-functional THRE interrupts.
++	 */
++	up->bugs |= UART_BUG_TXEN;
++
++	return 0;
++}
++
 +static void gxp_vuart_set_termios(struct uart_port *port,
 +				  struct ktermios *termios,
 +				  const struct ktermios *old)
@@ -362,6 +390,7 @@ index 000000000000..ee3a584fd319
 +	port.port.mapsize = resource_size(res);
 +	port.port.serial_in = gxp_vuart_serial_in;
 +	port.port.serial_out = gxp_vuart_serial_out;
++	port.port.startup = gxp_vuart_startup;
 +	port.port.set_termios = gxp_vuart_set_termios;
 +	port.port.set_divisor = gxp_vuart_set_divisor;
 +	port.port.dev = dev;

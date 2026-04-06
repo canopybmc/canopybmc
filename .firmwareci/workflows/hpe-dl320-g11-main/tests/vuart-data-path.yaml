@@ -1,0 +1,139 @@
+name: "Console: VUART Data Path"
+description: >-
+  Verify the GXP VUART kernel driver TX data path. Tests direct writes
+  to ttyVUART0 and writes through the obmc-console-server socket bridge,
+  validating that data reaches the hardware via /proc/tty/driver/serial
+  TX counters. Requires host power-on for POST output verification.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: cmd
+        name: Wait for BMC services
+        transport: &local
+          proto: local
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: VUART Kernel Driver
+    steps:
+      - cmd: cmd
+        name: ttyS3 registered as 16550A at VUART MMIO
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+        parameters:
+          executable: cat
+          args: ["/proc/tty/driver/serial"]
+          expect:
+            - regex: "^3:.*16550A.*0x80FD0218"
+      - cmd: cmd
+        name: VUART enabled in sysfs
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+        parameters:
+          executable: cat
+          args: ["/sys/devices/platform/ahb@80000000/80fd0200.serial/vuart_enable"]
+          expect:
+            - regex: "^1$"
+      - cmd: cmd
+        name: LPC address is a standard COM port
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+        parameters:
+          executable: cat
+          args: ["/sys/devices/platform/ahb@80000000/80fd0200.serial/lpc_address"]
+          expect:
+            - regex: "^0x[23]f8$"
+      - cmd: cmd
+        name: VUART IRQ is firing
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+        parameters:
+          executable: cat
+          args: ["/proc/interrupts"]
+          expect:
+            - regex: "ttyS3"
+
+  - name: Power On Host
+    steps:
+      - cmd: shell
+        name: Send Power On via Redfish
+        transport: *local
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"ResetType":"On"}'
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+          expect:
+            - regex: "^(200|204)$"
+      - cmd: cmd
+        name: Wait for host POST
+        transport: *local
+        options:
+          timeout: 4m
+        parameters:
+          executable: sleep
+          args: ["180"]
+
+  - name: TX Path — Direct TTY Write
+    steps:
+      - cmd: shell
+        name: Write test string to /dev/ttyVUART0
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: "echo -n 'FWCI_VUART_TX_TEST' > /dev/ttyVUART0"
+      - cmd: cmd
+        name: TX counter increased after direct write
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+        parameters:
+          executable: cat
+          args: ["/proc/tty/driver/serial"]
+          expect:
+            - regex: "^3:.*tx:[1-9][0-9]*"
+
+  - name: TX Path — Console Server Bridge
+    steps:
+      - cmd: shell
+        name: Write via obmc-console-client
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: "echo -n 'FWCI_CONSOLE_BRIDGE' | obmc-console-client -i default"
+      - cmd: cmd
+        name: TX counter increased via console bridge
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+        parameters:
+          executable: cat
+          args: ["/proc/tty/driver/serial"]
+          expect:
+            - regex: "^3:.*tx:[1-9][0-9]*"
