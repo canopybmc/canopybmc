@@ -58,19 +58,27 @@ In case this is not provided the image will be signed by the default OSFCI key.
 
 You have several options for this (similar to other variables)
 
-1. Export
+1. `local.conf`
+    - Add `HPE_SIGNING_KEY = "/path/to/your/private_key.pem"` to your `local.conf` in
+      `<project root>/build/hpe-proliant-g11/conf/`
+
+2. Export
 ```bash
 export HPE_SIGNING_KEY=/path/to/your/private_key.pem
 ```
 
-2. Inline
+3. Inline
 ```bash
 HPE_SIGNING_KEY=/path/to/your/private_key.pem bitbake obmc-phosphor-image
 ```
 
-3. `local.conf`
-    - Add `HPE_SIGNING_KEY=/path/to/your/private_key.pem` to you `local.conf` in
-      `<project root>/build/hpe-proliant-g11/conf/`
+> [!NOTE]
+> Options 2 and 3 require `HPE_SIGNING_KEY` to be in `BB_ENV_PASSTHROUGH_ADDITIONS`
+> so that BitBake picks it up from the environment. Add this to your `.envrc` or
+> shell profile:
+> ```bash
+> export BB_ENV_PASSTHROUGH_ADDITIONS="$BB_ENV_PASSTHROUGH_ADDITIONS HPE_SIGNING_KEY"
+> ```
 
 #### GXP Bootblock Selection
 
