@@ -35,13 +35,13 @@ stages:
   - name: Verify Boot
     steps:
       - cmd: cmd
-        name: OS release is OpenBMC
+        name: OS release is Canopy
         transport: *bmc_ssh
         parameters:
           executable: cat
           args: ["/etc/os-release"]
           expect:
-            - regex: "openbmc-phosphor"
+            - regex: "canopy"
       - cmd: cmd
         name: No unexpected failed services
         transport: *bmc_ssh
