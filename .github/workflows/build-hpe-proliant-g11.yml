@@ -28,6 +28,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           submodules: recursive
+          fetch-depth: 0
 
       - name: Build
         uses: ./.github/actions/build
@@ -65,8 +66,8 @@ jobs:
           repository: canopybmc/hpe-gxp-bootblock
           token: ${{ steps.app-token.outputs.token }}
           path: hpe-gxp-bootblock
-       
-      - name: Copy GXP bootblock   
+
+      - name: Copy GXP bootblock
         run: | 
           cp hpe-gxp-bootblock/9elements/test-keys/9e-gxp-dl360.rom .
 
