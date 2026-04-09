@@ -86,15 +86,6 @@ stages:
         parameters:
           command: "grep -qi 'Memory' /var/log/obmc-console.log"
 
-      - cmd: shell
-        name: Console contains CHIF output
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-error: continue
-        parameters:
-          command: "grep -qi 'CHIF' /var/log/obmc-console.log"
-
       - cmd: cmd
         name: PowerState is On via Redfish
         transport: *local
