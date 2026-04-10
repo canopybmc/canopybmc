@@ -1,0 +1,69 @@
+From eed0f49f9bc9912cf11c5904032f3ce62bc973ad Mon Sep 17 00:00:00 2001
+From: Christian Walter <christian.walter@9elements.com>
+Date: Fri, 10 Apr 2026 09:56:09 +0200
+Subject: [PATCH] spi: gxp: support addressed reads with dummy cycles
+
+gxp_spi_read_reg() hardcodes the address size and dummy cycle count to
+zero in SPIMCFG, and always writes zero to SPIADDR. This prevents
+operations that require address and dummy bytes from working correctly
+in manual mode, such as SFDP reads (opcode 0x5A + 3 address bytes +
+8 dummy clocks).
+
+Flash chips that rely on SFDP for parameter discovery (e.g. Macronix
+MX66L51235F) fail to probe on the second chip select:
+
+  spi-nor spi1.1: BFPT parsing failed.
+  spi-nor spi1.1: probe with driver spi-nor failed with error -22
+
+Fix by configuring address size and dummy cycle count from the spi_mem_op
+fields, and setting SPIADDR from op->addr.val. For existing callers
+without address or dummy bytes these fields are zero, so there is no
+change in behavior. Route operations with dummy cycles in gxp_spi_read()
+to the register-based path since the memory-mapped window does not
+support non-standard SPI commands.
+
+Fixes: d1fe233a1e8d ("spi: spi-gxp: Add support for HPE GXP SoCs")
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ drivers/spi/spi-gxp.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/spi/spi-gxp.c b/drivers/spi/spi-gxp.c
+index 5e3fbf91ca0c..c8a8df55bcfd 100644
+--- a/drivers/spi/spi-gxp.c
++++ b/drivers/spi/spi-gxp.c
+@@ -77,9 +77,11 @@ static int gxp_spi_read_reg(struct gxp_spi_chip *chip, const struct spi_mem_op *
+ 	value |= (chip->cs << 24);
+ 	value &= ~(0x07 << 16);
+ 	value &= ~(0x1f << 19);
++	value |= (op->addr.nbytes << 16);
++	value |= ((op->dummy.nbytes * 8) << 19);
+ 	writel(value, reg_base + OFFSET_SPIMCFG);
+ 
+-	writel(0, reg_base + OFFSET_SPIADDR);
++	writel(op->addr.val, reg_base + OFFSET_SPIADDR);
+ 
+ 	writeb(op->cmd.opcode, reg_base + OFFSET_SPICMD);
+ 
+@@ -117,7 +119,7 @@ static int gxp_spi_write_reg(struct gxp_spi_chip *chip, const struct spi_mem_op
+ 	value &= ~(0x1f << 19);
+ 	writel(value, reg_base + OFFSET_SPIMCFG);
+ 
+-	writel(0, reg_base + OFFSET_SPIADDR);
++	writel(op->addr.val, reg_base + OFFSET_SPIADDR);
+ 
+ 	writeb(op->cmd.opcode, reg_base + OFFSET_SPICMD);
+ 
+@@ -145,6 +147,9 @@ static ssize_t gxp_spi_read(struct gxp_spi_chip *chip, const struct spi_mem_op *
+ 	struct gxp_spi *spifi = chip->spifi;
+ 	u32 offset = op->addr.val;
+ 
++	if (op->dummy.nbytes)
++		return gxp_spi_read_reg(chip, op);
++
+ 	if (chip->cs == 0)
+ 		offset += 0x4000000;
+ 
+-- 
+2.48.1
+
