@@ -5,6 +5,7 @@
 #include "ev_storage.hpp"
 #include "health_service.hpp"
 #include "mdr_bridge.hpp"
+#include "platdef_extract.hpp"
 #include "rom_service.hpp"
 #include "smif_service.hpp"
 #include "smbios_writer.hpp"
@@ -95,6 +96,13 @@ int main()
     if (evStorage.load() < 0)
     {
         lg2::warning("EV storage failed to load, starting with empty store");
+    }
+
+    // Extract PlatDef blob from host BIOS SPI flash
+    auto platDefBlob = chif::extractPlatDef();
+    if (platDefBlob.empty())
+    {
+        lg2::info("PlatDef blob not available");
     }
 
     // Build daemon and register handlers
