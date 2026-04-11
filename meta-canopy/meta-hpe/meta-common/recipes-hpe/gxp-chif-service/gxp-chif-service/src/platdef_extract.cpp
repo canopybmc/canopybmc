@@ -117,6 +117,52 @@ struct PlatDefTableData
 
 static constexpr uint16_t tableDataFlagZLib = 0x0010;
 
+// I2C mux control — CPLD variant (muxType == 1)
+struct PlatDefI2CMuxCpld
+{
+    uint8_t muxType;
+    uint8_t byte;        // CPLD register offset
+    uint8_t initMask;
+    uint8_t selectMask;
+};
+
+// I2C mux control union (16 bytes, only CPLD variant used here)
+union PlatDefI2CMux
+{
+    uint8_t rawBytes[16];
+    uint8_t muxType;
+    PlatDefI2CMuxCpld cpld;
+};
+
+struct PlatDefI2CSegment
+{
+    uint32_t flags;
+    uint8_t speed;
+    uint8_t id;          // BIOS segment byte
+    uint8_t parentId;
+    uint8_t gpuRiserNumber;
+    uint8_t reserved[8];
+    PlatDefI2CMux muxControl;
+};
+
+// PlatDefPrimitive is a 16-byte union in HPE's platdef.h
+struct PlatDefPrimitive
+{
+    uint8_t rawBytes[16];
+};
+
+// I2CEngine fixed fields between the record header and the segments array
+struct PlatDefI2CEngineFixed
+{
+    PlatDefPrimitive reset;
+    PlatDefPrimitive alert;
+    uint32_t flags;
+    uint8_t speed;
+    uint8_t id;
+    uint8_t count;
+    uint8_t reserved[9];
+};
+
 #pragma pack(pop)
 
 static_assert(sizeof(PlatDefBundleHeader) == 32,
@@ -125,6 +171,12 @@ static_assert(sizeof(PlatDefRecordHeader) == 32,
               "PlatDefRecordHeader must be 32 bytes (Gen11 layout)");
 static_assert(sizeof(PlatDefTableData) == 112,
               "PlatDefTableData must be 112 bytes");
+static_assert(sizeof(PlatDefI2CSegment) == 32,
+              "PlatDefI2CSegment must be 32 bytes");
+static_assert(sizeof(PlatDefI2CMux) == 16,
+              "PlatDefI2CMux must be 16 bytes");
+static_assert(sizeof(PlatDefI2CEngineFixed) == 48,
+              "PlatDefI2CEngineFixed must be 48 bytes");
 
 static constexpr uint32_t efiFvhSignature = 0x4856465F; // '_FVH'
 static constexpr uint8_t efiFvFileTypeFreeform = 0x02;
@@ -477,6 +529,115 @@ std::vector<uint8_t> extractPlatDef()
 
     lg2::info("PlatDef: APML firmware volume not found in ROM");
     return {};
+}
+
+// ---------------------------------------------------------------------------
+// PlatDef record parser — extract I2C segment→CPLD mappings
+//
+// Records are walked using hdr.size * 16 as the stride (each record's
+// size field is in units of 16 bytes). We only parse RecordType_I2CEngine
+// (type 14) records; all others are skipped.
+// ---------------------------------------------------------------------------
+
+static constexpr uint8_t recordTypeI2CEngine = 14;
+static constexpr uint8_t recordTypeEndOfTable = 255;
+static constexpr uint8_t i2cMuxTypeCpld = 1;
+
+std::unordered_map<uint8_t, I2cSegmentMapping>
+    parseI2cSegments(const std::vector<uint8_t>& platDef)
+{
+    std::unordered_map<uint8_t, I2cSegmentMapping> result;
+
+    if (platDef.size() < sizeof(PlatDefRecordHeader))
+    {
+        return result;
+    }
+
+    // Validate Gen11 record layout: the first record is the table data
+    // header whose stride should match sizeof(PlatDefTableData).
+    PlatDefRecordHeader firstHdr{};
+    std::memcpy(&firstHdr, platDef.data(), sizeof(firstHdr));
+    if (static_cast<size_t>(firstHdr.size) * 16 != sizeof(PlatDefTableData))
+    {
+        lg2::error("PlatDef: unexpected table record size {SZ} "
+                   "(expected {EXP}), layout may not be Gen11",
+                   "SZ", static_cast<size_t>(firstHdr.size) * 16,
+                   "EXP", sizeof(PlatDefTableData));
+        return result;
+    }
+
+    size_t pos = 0;
+
+    while (pos + sizeof(PlatDefRecordHeader) <= platDef.size())
+    {
+        PlatDefRecordHeader hdr{};
+        std::memcpy(&hdr, platDef.data() + pos, sizeof(hdr));
+
+        if (hdr.type == recordTypeEndOfTable || hdr.size == 0)
+        {
+            break;
+        }
+
+        size_t recordBytes = static_cast<size_t>(hdr.size) * 16;
+
+        if (pos + recordBytes > platDef.size())
+        {
+            lg2::warning("PlatDef: record at 0x{OFF} claims {SZ} bytes, "
+                         "only {REM} remain",
+                         "OFF", lg2::hex, pos, "SZ", recordBytes,
+                         "REM", platDef.size() - pos);
+            break;
+        }
+
+        if (hdr.type == recordTypeI2CEngine)
+        {
+            size_t fixedEnd = pos + sizeof(PlatDefRecordHeader) +
+                              sizeof(PlatDefI2CEngineFixed);
+            if (fixedEnd > platDef.size())
+            {
+                break;
+            }
+
+            PlatDefI2CEngineFixed eng{};
+            std::memcpy(&eng, platDef.data() + pos +
+                                  sizeof(PlatDefRecordHeader),
+                        sizeof(eng));
+
+            size_t recordEnd = pos + recordBytes;
+            size_t segStart = fixedEnd;
+
+            for (uint8_t i = 0; i < eng.count; i++)
+            {
+                size_t segOff = segStart + i * sizeof(PlatDefI2CSegment);
+                if (segOff + sizeof(PlatDefI2CSegment) > platDef.size() ||
+                    segOff + sizeof(PlatDefI2CSegment) > recordEnd)
+                {
+                    break;
+                }
+
+                PlatDefI2CSegment seg{};
+                std::memcpy(&seg, platDef.data() + segOff, sizeof(seg));
+
+                if (seg.muxControl.muxType == i2cMuxTypeCpld)
+                {
+                    result[seg.id] = {seg.muxControl.cpld.byte,
+                                      seg.muxControl.cpld.selectMask};
+
+                    lg2::debug("PlatDef I2C: engine={ENG} seg=0x{SEG} "
+                               "cpld=0x{CPLD} chan={CH}",
+                               "ENG", eng.id, "SEG", lg2::hex, seg.id,
+                               "CPLD", lg2::hex, seg.muxControl.cpld.byte,
+                               "CH", seg.muxControl.cpld.selectMask);
+                }
+            }
+        }
+
+        pos += recordBytes;
+    }
+
+    lg2::info("PlatDef: parsed {CNT} I2C segment mappings",
+              "CNT", result.size());
+    return result;
 }
 
 } // namespace chif
