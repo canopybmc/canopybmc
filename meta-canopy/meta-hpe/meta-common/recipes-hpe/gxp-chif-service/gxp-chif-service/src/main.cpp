@@ -98,10 +98,9 @@ int main()
         lg2::warning("EV storage failed to load, starting with empty store");
     }
 
-    // Extract PlatDef from host BIOS SPI flash and build I2C segment→bus map.
-    // TODO: pass segmentBusMap to SmifService for I2C proxy routing.
+    // Extract PlatDef from host BIOS SPI flash and build I2C segment→bus map
     auto platDefBlob = chif::extractPlatDef();
-    [[maybe_unused]] auto segmentBusMap =
+    auto segmentBusMap =
         platDefBlob.empty()
             ? std::unordered_map<uint8_t, int>{}
             : chif::buildSegmentBusMap(chif::parseI2cSegments(platDefBlob));
@@ -110,7 +109,8 @@ int main()
     chif::ChifDaemon daemon(std::move(channel));
     daemon.registerHandler(
         std::make_unique<chif::RomService>(smbiosWriter, &mdrBridge));
-    daemon.registerHandler(std::make_unique<chif::SmifService>(&evStorage));
+    daemon.registerHandler(std::make_unique<chif::SmifService>(
+        &evStorage, std::move(segmentBusMap)));
     daemon.registerHandler(std::make_unique<chif::HealthService>());
 
     // Install signal handlers for graceful shutdown

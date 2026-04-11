@@ -4,13 +4,24 @@
 
 #include <phosphor-logging/lg2.hpp>
 
+#include <fcntl.h>
+#include <linux/i2c-dev.h>
+#include <linux/i2c.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+
 #include <algorithm>
+#include <cstddef>
 #include <cstring>
+#include <format>
 
 namespace chif
 {
 
-SmifService::SmifService(EvStorage* evStorage) : evStorage_(evStorage) {}
+SmifService::SmifService(EvStorage* evStorage,
+                         std::unordered_map<uint8_t, int> segmentBusMap) :
+    evStorage_(evStorage), segmentToBus_(std::move(segmentBusMap))
+{}
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -297,6 +308,185 @@ int SmifService::handleGetEvAuthStatus(const ChifPktHeader& hdr,
 }
 
 // ---------------------------------------------------------------------------
+// I2C proxy handler (0x0072)
+// ---------------------------------------------------------------------------
+
+// pkt_0072 payload offsets
+static constexpr size_t i2cOffAddress = 12;
+static constexpr size_t i2cOffSegment = 14;
+static constexpr size_t i2cOffWriteLen = 15;
+static constexpr size_t i2cOffReadLen = 16;
+static constexpr size_t i2cOffData = 17;
+static constexpr size_t i2cMinPayload = 17;
+
+// pkt_8072 response layout (matches HPE's packed struct)
+struct I2cResponse
+{
+    uint32_t errcode;
+    uint8_t reserved1[8];
+    uint16_t address;
+    uint8_t engine;
+    uint8_t reserved2;
+    uint8_t readLen;
+    uint8_t data[32];
+} __attribute__((packed));
+
+static_assert(sizeof(I2cResponse) == 49, "I2cResponse must be 49 bytes");
+
+static constexpr auto i2cRespSize =
+    static_cast<uint16_t>(sizeof(ChifPktHeader) + sizeof(I2cResponse));
+static constexpr size_t i2cRespOffError = offsetof(I2cResponse, errcode);
+static constexpr size_t i2cRespOffAddress = offsetof(I2cResponse, address);
+static constexpr size_t i2cRespOffSegment = offsetof(I2cResponse, engine);
+static constexpr size_t i2cRespOffReadLen = offsetof(I2cResponse, readLen);
+static constexpr size_t i2cRespOffData = offsetof(I2cResponse, data);
+
+// I2C error codes (100-series, from HPE i2c_return_codes.hpp)
+static constexpr uint32_t i2cGeneralError = 101;
+static constexpr uint32_t i2cBusTimeout = 105;
+static constexpr uint32_t i2cSegmentNotFound = 108;
+static constexpr uint32_t i2cAddressNack = 116;
+
+static uint32_t i2cErrorFromErrno(int err)
+{
+    switch (err)
+    {
+        case ENXIO:
+            return i2cAddressNack;
+        case ETIMEDOUT:
+            return i2cBusTimeout;
+        default:
+            return i2cGeneralError;
+    }
+}
+
+int SmifService::handleI2cProxy(const ChifPktHeader& hdr,
+                                std::span<const uint8_t> reqPayload,
+                                std::span<uint8_t> response)
+{
+    if (response.size() < i2cRespSize)
+    {
+        return -1;
+    }
+
+    std::fill_n(response.data(), i2cRespSize, uint8_t{0});
+    initResponse(response, hdr, i2cRespSize);
+    auto resp = responsePayload(response);
+
+    if (reqPayload.size() < i2cMinPayload)
+    {
+        uint32_t err = i2cGeneralError;
+        std::memcpy(resp.data() + i2cRespOffError, &err, sizeof(err));
+        return i2cRespSize;
+    }
+
+    uint16_t address = 0;
+    std::memcpy(&address, reqPayload.data() + i2cOffAddress, sizeof(address));
+    uint8_t segment = reqPayload[i2cOffSegment];
+    uint8_t writeLen = reqPayload[i2cOffWriteLen];
+    uint8_t readLen = reqPayload[i2cOffReadLen];
+
+    // Echo address and segment in response
+    std::memcpy(resp.data() + i2cRespOffAddress, &address, sizeof(address));
+    resp[i2cRespOffSegment] = segment;
+
+    if (writeLen == 0 && readLen == 0)
+    {
+        return i2cRespSize;
+    }
+
+    if (writeLen > 32 || readLen > 32)
+    {
+        uint32_t err = i2cGeneralError;
+        std::memcpy(resp.data() + i2cRespOffError, &err, sizeof(err));
+        return i2cRespSize;
+    }
+
+    auto it = segmentToBus_.find(segment);
+    if (it == segmentToBus_.end())
+    {
+        uint32_t err = i2cSegmentNotFound;
+        std::memcpy(resp.data() + i2cRespOffError, &err, sizeof(err));
+        return i2cRespSize;
+    }
+
+    int busNum = it->second;
+    uint8_t i2cAddr = static_cast<uint8_t>(address >> 1);
+
+    auto devPath = std::format("/dev/i2c-{}", busNum);
+
+    int fd = open(devPath.c_str(), O_RDWR);
+    if (fd < 0)
+    {
+        lg2::warning("I2C proxy: failed to open {DEV}: {ERR}",
+                     "DEV", devPath, "ERR", strerror(errno));
+        uint32_t err = i2cGeneralError;
+        std::memcpy(resp.data() + i2cRespOffError, &err, sizeof(err));
+        return i2cRespSize;
+    }
+
+    struct i2c_msg msgs[2];
+    int numMsgs = 0;
+    uint8_t writeBuf[32] = {};
+    uint8_t readBuf[32] = {};
+
+    if (writeLen > 0)
+    {
+        size_t available = reqPayload.size() - i2cOffData;
+        if (static_cast<size_t>(writeLen) > available)
+        {
+            uint32_t err = i2cGeneralError;
+            std::memcpy(resp.data() + i2cRespOffError, &err, sizeof(err));
+            close(fd);
+            return i2cRespSize;
+        }
+        std::memcpy(writeBuf, reqPayload.data() + i2cOffData, writeLen);
+
+        msgs[numMsgs].addr = i2cAddr;
+        msgs[numMsgs].flags = 0;
+        msgs[numMsgs].len = writeLen;
+        msgs[numMsgs].buf = writeBuf;
+        numMsgs++;
+    }
+
+    if (readLen > 0)
+    {
+        msgs[numMsgs].addr = i2cAddr;
+        msgs[numMsgs].flags = I2C_M_RD;
+        msgs[numMsgs].len = readLen;
+        msgs[numMsgs].buf = readBuf;
+        numMsgs++;
+    }
+
+    struct i2c_rdwr_ioctl_data transfer{};
+    transfer.msgs = msgs;
+    transfer.nmsgs = static_cast<uint32_t>(numMsgs);
+
+    int rc = ioctl(fd, I2C_RDWR, &transfer);
+    close(fd);
+
+    if (rc < 0)
+    {
+        int savedErrno = errno;
+        lg2::warning("I2C proxy: ioctl failed seg=0x{SEG} addr=0x{ADDR} "
+                     "bus={BUS}: {ERR}",
+                     "SEG", lg2::hex, segment, "ADDR", lg2::hex, i2cAddr,
+                     "BUS", busNum, "ERR", strerror(savedErrno));
+        uint32_t err = i2cErrorFromErrno(savedErrno);
+        std::memcpy(resp.data() + i2cRespOffError, &err, sizeof(err));
+        return i2cRespSize;
+    }
+
+    resp[i2cRespOffReadLen] = readLen;
+    if (readLen > 0)
+    {
+        std::memcpy(resp.data() + i2cRespOffData, readBuf, readLen);
+    }
+
+    return i2cRespSize;
+}
+
+// ---------------------------------------------------------------------------
 // SmifService::handle — main dispatch
 // ---------------------------------------------------------------------------
 int SmifService::handle(std::span<const uint8_t> request,
@@ -335,6 +525,10 @@ int SmifService::handle(std::span<const uint8_t> request,
         // ---- BIOS image auth status (Secure Start) ----
         case smifCmdGetEvAuthStatus:
             return handleGetEvAuthStatus(hdr, response);
+
+        // ---- I2C proxy ----
+        case smifCmdI2cTransaction:
+            return handleI2cProxy(hdr, reqPayload, response);
 
         // ---- All other commands: stub with ErrorCode=0 ----
         default:

@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <span>
+#include <unordered_map>
 
 namespace chif
 {
@@ -72,7 +73,8 @@ inline constexpr uint16_t smifCmdPlatDefV2End = 0x0207;
 class SmifService : public ServiceHandler
 {
   public:
-    explicit SmifService(EvStorage* evStorage = nullptr);
+    explicit SmifService(EvStorage* evStorage = nullptr,
+                        std::unordered_map<uint8_t, int> segmentBusMap = {});
 
     int handle(std::span<const uint8_t> request,
                std::span<uint8_t> response) override;
@@ -100,6 +102,11 @@ class SmifService : public ServiceHandler
     int handleGetEvAuthStatus(const ChifPktHeader& hdr,
                               std::span<uint8_t> response);
 
+    // I2C proxy handler
+    int handleI2cProxy(const ChifPktHeader& hdr,
+                       std::span<const uint8_t> reqPayload,
+                       std::span<uint8_t> response);
+
     // Response helpers
     static int buildSimpleResponse(const ChifPktHeader& hdr,
                                    std::span<uint8_t> response,
@@ -109,6 +116,7 @@ class SmifService : public ServiceHandler
                                    const EvEntry& ev);
 
     EvStorage* evStorage_;
+    std::unordered_map<uint8_t, int> segmentToBus_;
 };
 
 } // namespace chif
