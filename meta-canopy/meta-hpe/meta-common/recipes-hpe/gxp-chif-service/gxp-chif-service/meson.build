@@ -44,6 +44,7 @@ src_files = files(
     'src/smif_service.cpp',
     'src/health_service.cpp',
     'src/ev_storage.cpp',
+    'src/uefi_fv.cpp',
     'src/platdef_extract.cpp',
     'src/rom_service.cpp',
     'src/smbios_writer.cpp',
