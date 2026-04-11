@@ -640,4 +640,163 @@ std::unordered_map<uint8_t, I2cSegmentMapping>
     return result;
 }
 
+// ---------------------------------------------------------------------------
+// Combine PlatDef segment data with sysfs i2cmux topology to build the
+// final segment→kernel bus mapping.
+//
+// PlatDef gives us: segment → (cpldRegister, channelValue)
+// sysfs gives us:   (muxIndex, channelNumber) → kernelBus
+// Correlation:      muxIndex = cpldRegister - cpldRegisterBase
+// ---------------------------------------------------------------------------
+
+// GXP AHB bus path where i2cmux devices appear in sysfs
+static constexpr auto ahbSysfsPath = "/sys/devices/platform/ahb@80000000";
+
+// CPLD register base address for mux index 0. Mux N maps to register
+// base + N. Derived from the device tree mux-reg-masks property.
+static constexpr uint8_t cpldRegisterBase = 0x84;
+
+// Scan sysfs for i2cmux channel→bus mappings.
+// Key: (muxIndex << 8) | channelNumber — valid for channelNumber < 256.
+static std::unordered_map<uint16_t, int> scanMuxTopology()
+{
+    std::unordered_map<uint16_t, int> result;
+    const std::filesystem::path ahbPath = ahbSysfsPath;
+
+    if (!std::filesystem::exists(ahbPath))
+    {
+        return result;
+    }
+
+    try
+    {
+        for (const auto& entry :
+             std::filesystem::directory_iterator(ahbPath))
+        {
+            std::string name = entry.path().filename().string();
+            if (!name.starts_with("ahb@") ||
+                name.find("i2cmux@") == std::string::npos)
+            {
+                continue;
+            }
+
+            auto muxPos = name.find("i2cmux@");
+            unsigned long muxVal = 0;
+            try
+            {
+                muxVal = std::stoul(name.substr(muxPos + 7));
+            }
+            catch (const std::exception&)
+            {
+                continue;
+            }
+            if (muxVal > std::numeric_limits<uint8_t>::max())
+            {
+                continue;
+            }
+            auto muxId = static_cast<uint8_t>(muxVal);
+
+            for (const auto& chanEntry :
+                 std::filesystem::directory_iterator(entry.path()))
+            {
+                std::string chanName =
+                    chanEntry.path().filename().string();
+                if (!chanName.starts_with("channel-"))
+                {
+                    continue;
+                }
+
+                unsigned long chanVal = 0;
+                try
+                {
+                    chanVal = std::stoul(chanName.substr(8));
+                }
+                catch (const std::exception&)
+                {
+                    continue;
+                }
+                if (chanVal > std::numeric_limits<uint8_t>::max())
+                {
+                    continue;
+                }
+                auto chanIdx = static_cast<uint8_t>(chanVal);
+
+                std::error_code ec;
+                auto target =
+                    std::filesystem::read_symlink(chanEntry.path(), ec);
+                if (ec)
+                {
+                    continue;
+                }
+
+                std::string targetName = target.filename().string();
+                if (!targetName.starts_with("i2c-"))
+                {
+                    continue;
+                }
+
+                int busNum = 0;
+                try
+                {
+                    busNum = std::stoi(targetName.substr(4));
+                }
+                catch (const std::exception&)
+                {
+                    continue;
+                }
+
+                uint16_t key =
+                    (static_cast<uint16_t>(muxId) << 8) | chanIdx;
+                result[key] = busNum;
+            }
+        }
+    }
+    catch (const std::filesystem::filesystem_error& e)
+    {
+        lg2::warning("I2C mux scan failed: {ERR}", "ERR", e.what());
+    }
+
+    return result;
+}
+
+std::unordered_map<uint8_t, int> buildSegmentBusMap(
+    const std::unordered_map<uint8_t, I2cSegmentMapping>& segments)
+{
+    auto muxTopology = scanMuxTopology();
+    std::unordered_map<uint8_t, int> result;
+
+    for (const auto& [segId, mapping] : segments)
+    {
+        if (mapping.cpldRegister < cpldRegisterBase)
+        {
+            continue;
+        }
+
+        uint8_t muxIndex = mapping.cpldRegister - cpldRegisterBase;
+        uint16_t key = (static_cast<uint16_t>(muxIndex) << 8) |
+                       mapping.channelValue;
+
+        auto it = muxTopology.find(key);
+        if (it != muxTopology.end())
+        {
+            result[segId] = it->second;
+            lg2::debug("I2C map: seg=0x{SEG} -> mux={MUX} chan={CH} "
+                       "-> i2c-{BUS}",
+                       "SEG", lg2::hex, segId, "MUX", muxIndex,
+                       "CH", mapping.channelValue, "BUS", it->second);
+        }
+        else
+        {
+            lg2::debug("I2C map: seg=0x{SEG} unresolved "
+                       "(mux={MUX} chan={CH})",
+                       "SEG", lg2::hex, segId, "MUX", muxIndex,
+                       "CH", mapping.channelValue);
+        }
+    }
+
+    lg2::info("I2C map: resolved {CNT} of {TOTAL} segments to kernel buses",
+              "CNT", result.size(), "TOTAL", segments.size());
+    return result;
+}
+
 } // namespace chif
