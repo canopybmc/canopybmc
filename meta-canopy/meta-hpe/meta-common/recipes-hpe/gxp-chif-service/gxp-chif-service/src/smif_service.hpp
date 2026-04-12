@@ -107,6 +107,11 @@ class SmifService : public ServiceHandler
                        std::span<const uint8_t> reqPayload,
                        std::span<uint8_t> response);
 
+    // PlatDef v1 download handler
+    int handlePlatDefDownload(const ChifPktHeader& hdr,
+                              std::span<const uint8_t> reqPayload,
+                              std::span<uint8_t> response);
+
     // Response helpers
     static int buildSimpleResponse(const ChifPktHeader& hdr,
                                    std::span<uint8_t> response,

@@ -487,6 +487,36 @@ int SmifService::handleI2cProxy(const ChifPktHeader& hdr,
 }
 
 // ---------------------------------------------------------------------------
+// PlatDef v1 download handler (0x0200)
+// ---------------------------------------------------------------------------
+
+static constexpr uint32_t platDefNoMoreRecords = 6;
+
+// PlatDef v1 download response payload: 4024 bytes per HPE CHIF protocol.
+// Layout: [errorCode u32][recordCount u32][recordData 4016].
+static constexpr size_t platDefPayloadSize = 4024;
+static constexpr auto platDefRespSize =
+    static_cast<uint16_t>(sizeof(ChifPktHeader) + platDefPayloadSize);
+
+int SmifService::handlePlatDefDownload(const ChifPktHeader& hdr,
+                                       std::span<const uint8_t> /*reqPayload*/,
+                                       std::span<uint8_t> response)
+{
+    if (response.size() < platDefRespSize)
+    {
+        return buildSimpleResponse(hdr, response, 1);
+    }
+
+    std::fill_n(response.data(), platDefRespSize, uint8_t{0});
+    initResponse(response, hdr, platDefRespSize);
+
+    auto resp = responsePayload(response);
+    std::memcpy(resp.data(), &platDefNoMoreRecords,
+                sizeof(platDefNoMoreRecords));
+    return platDefRespSize;
+}
+
+// ---------------------------------------------------------------------------
 // SmifService::handle — main dispatch
 // ---------------------------------------------------------------------------
 int SmifService::handle(std::span<const uint8_t> request,
@@ -529,6 +559,10 @@ int SmifService::handle(std::span<const uint8_t> request,
         // ---- I2C proxy ----
         case smifCmdI2cTransaction:
             return handleI2cProxy(hdr, reqPayload, response);
+
+        // ---- PlatDef v1 download ----
+        case smifCmdPlatDefUpload:
+            return handlePlatDefDownload(hdr, reqPayload, response);
 
         // ---- All other commands: stub with ErrorCode=0 ----
         default:
