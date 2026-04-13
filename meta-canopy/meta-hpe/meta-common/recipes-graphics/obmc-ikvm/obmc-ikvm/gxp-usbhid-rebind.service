@@ -1,0 +1,13 @@
+[Unit]
+Description=GXP USB HID rebind on host state transition
+After=obmc-ikvm.service
+ConditionPathIsMountPoint=/sys/kernel/config
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/gxp-usbhid-rebind.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
