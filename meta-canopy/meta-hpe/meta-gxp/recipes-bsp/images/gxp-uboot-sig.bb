@@ -14,8 +14,7 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/gxp-section:"
 SRC_URI = "${HPE_SIGNING_KEY_URI}"
 SRC_URI += "file://${HPE_SIGNING_HEADER}"
 
-S = "${WORKDIR}/build"
-UNPACKDIR = "${S}"
+S = "${UNPACKDIR}"
 
 DEPENDS = "virtual/bootloader"
 
