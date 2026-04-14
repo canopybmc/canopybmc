@@ -15,7 +15,7 @@ SRC_URI = "file://src;subdir=${BP} \
            file://meson.options;subdir=${BP} \
            "
 
-S = "${WORKDIR}/${BP}"
+S = "${UNPACKDIR}/${BP}"
 
 inherit meson pkgconfig systemd
 
