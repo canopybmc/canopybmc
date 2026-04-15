@@ -1,0 +1,68 @@
+From 17e6f8d6377e4cab84567fe72df00560ad8027a4 Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Wed, 15 Apr 2026 01:46:26 +0200
+Subject: [PATCH] soc: hpe: gxp-power-ctrl: re-arm boot gate after PGOOD
+ de-assertion
+
+When PGOOD de-asserts, the driver correctly held the boot gate and
+cycled soc_release, but it never re-armed the gate. This prevented
+the CPLD from bringing PGOOD back after a UEFI-initiated power cycle
+(triggered by HpPowerCycleDxe), or a graceful restart initiated by the
+user, so the IRQ never fired and the userspace applications managing
+the power state could never transition back to the "On" state.
+
+Call gxp_power_ctrl_rearm_boot_gate(), which releases the SoC and
+clears the boot gate, immediately after gxp_power_ctrl_shutdown_ack()
+in the PGOOD IRQ handler, matching the behavior of the original HPE
+userspace-based script implementation which unconditionally locks the
+gate and then re-arms it before waiting for PGOOD to return.
+
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ drivers/soc/hpe/gxp-power-ctrl.c | 22 +++++++++++++++++++++-
+ 1 file changed, 21 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/soc/hpe/gxp-power-ctrl.c b/drivers/soc/hpe/gxp-power-ctrl.c
+index 91e07803f8d4..fabe671e1f57 100644
+--- a/drivers/soc/hpe/gxp-power-ctrl.c
++++ b/drivers/soc/hpe/gxp-power-ctrl.c
+@@ -144,6 +144,24 @@ static void gxp_power_ctrl_shutdown_ack(struct gxp_power_ctrl *pctrl)
+ 	writeb(val, pctrl->xreg_base + XREG_SOC_RELEASE);
+ }
+ 
++/*
++ * Cycle soc_release and re-arm the boot gate after a shutdown to
++ * allow the system to boot again.
++ */
++static void gxp_power_ctrl_rearm_boot_gate(struct gxp_power_ctrl *pctrl)
++{
++	u8 val;
++
++	/* SoC release: set bit 3 to release the host SoC */
++	val = readb(pctrl->xreg_base + XREG_SOC_RELEASE);
++	val |= XREG_SOC_RELEASE_BIT;
++	writeb(val, pctrl->xreg_base + XREG_SOC_RELEASE);
++
++	/* Release the boot gate */
++	writeb(XREG_BOOT_CONTROL_RELEASE,
++		pctrl->xreg_base + XREG_BOOT_CONTROL);
++}
++
+ /*
+  * Initial platform configuration on BMC boot.
+  * Only runs if the host is not already powered on.
+@@ -316,8 +334,10 @@ static irqreturn_t gxp_power_ctrl_pgood_irq(int irq, void *data)
+ 	if (pgood <= 0) {
+ 		/* PGOOD fell: host powered off, hold boot gate */
+ 		gxp_power_ctrl_shutdown_ack(pctrl);
++		/* Re-arm boot gate */
++		gxp_power_ctrl_rearm_boot_gate(pctrl);
+ 		dev_dbg(pctrl->gc.parent,
+-			"PGOOD deasserted, boot gate held\n");
++			"PGOOD deasserted, boot gate re-armed\n");
+ 	}
+ 
+ 	/* Forward event to power-ctrl-good virtual GPIO consumers */
+-- 
+2.53.0
+
