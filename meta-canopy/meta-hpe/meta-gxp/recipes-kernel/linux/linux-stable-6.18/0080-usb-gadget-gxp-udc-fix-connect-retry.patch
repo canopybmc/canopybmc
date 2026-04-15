@@ -1,0 +1,144 @@
+From 451bdd750dea984d7d27283c6722edca7a395f5e Mon Sep 17 00:00:00 2001
+From: Christian Walter <christian.walter@9elements.com>
+Date: Tue, 14 Apr 2026 17:17:23 +0200
+Subject: [PATCH] usb: gadget: gxp-udc: fix connect-retry with full state
+ reset
+
+The connect-retry mechanism only toggled the EVDCS_CONNECT bit with a
+100ms disconnect, without resetting any device state. This caused
+enumeration failures after BIOS-to-OS handoff because:
+
+1. EVDADDR retained the BIOS-assigned address, preventing the device
+   from responding to address 0 during re-enumeration
+2. gadget.speed stayed at USB_SPEED_HIGH, masking the disconnected state
+3. EP0 was left in a stale/disarmed state from the previous session
+4. The 100ms disconnect was too short for the host EHCI controller to
+   reliably detect the port change
+
+Replace the bare CONNECT toggle with a full gxp_udc_disconnect() +
+gxp_udc_connect() cycle that properly tears down and rebuilds all
+device state: FEMAP, interrupts, EP0, device address, and speed.
+Increase the disconnect hold time to 500ms.
+
+Also fix state management in the related functions:
+- gxp_udc_disconnect(): reset speed, address, and defer_set_address
+- gxp_udc_connect(): clear address, speed, and defer_set_address
+- gxp_udc_stop(): cancel pending connect-retry work before NULLing
+  the driver pointer to prevent a use-after-free race
+- PORTRST handler: clear defer_set_address and re-init EP0 under the
+  spinlock after nuking endpoints
+
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ drivers/usb/gadget/udc/gxp_udc.c | 38 +++++++++++++++++++++++++++-----------
+ 1 file changed, 26 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/usb/gadget/udc/gxp_udc.c b/drivers/usb/gadget/udc/gxp_udc.c
+index 32e648a2039c..4b3c1e7f8a01 100644
+--- a/drivers/usb/gadget/udc/gxp_udc.c
++++ b/drivers/usb/gadget/udc/gxp_udc.c
+@@ -136,6 +136,7 @@ static DEFINE_MUTEX(udcg_init_mutex);
+ 
+ static void gxp_udc_out_0byte_status(struct gxp_udc_ep *ep);
+ static void gxp_udc_in_0byte_status(struct gxp_udc_ep *ep);
++static int gxp_udc_ep_nuke(struct gxp_udc_ep *ep);
+ 
+ static unsigned char gxp_udc_femap_read(struct gxp_udc_drvdata *drvdata,
+ 					int fep)
+@@ -524,6 +526,10 @@ static int gxp_udc_connect(struct gxp_udc_drvdata *drvdata)
+ 	unsigned char femap;
+ 	int i, j;
+ 
++	writel(0, drvdata->base + EVDADDR);
++	drvdata->gadget.speed = USB_SPEED_UNKNOWN;
++	drvdata->defer_set_address = false;
++
+ 	val = readl(drvdata->base + EVDISTAT);
+ 	val |= EVDISTAT_MASK;
+ 	writel(val, drvdata->base + EVDISTAT);
+@@ -569,6 +575,10 @@ static int gxp_udc_disconnect(struct gxp_udc_drvdata *drvdata)
+ 	unsigned char femap;
+ 	int i;
+ 
++	drvdata->gadget.speed = USB_SPEED_UNKNOWN;
++	writel(0, drvdata->base + EVDADDR);
++	drvdata->defer_set_address = false;
++
+ 	val = readl(drvdata->base + EVDIEN);
+ 	val &= ~EVDIEN_MASK;
+ 	writel(val, drvdata->base + EVDIEN);
+@@ -636,6 +646,7 @@ static void gxp_udc_connect_retry_work(struct work_struct *work)
+ 		container_of(work, struct gxp_udc_drvdata, connect_work.work);
+ 	unsigned long flags;
+ 	u32 evdcs;
++	u32 i;
+ 
+ 	spin_lock_irqsave(&drvdata->lock, flags);
+ 
+@@ -665,16 +676,21 @@ static void gxp_udc_connect_retry_work(struct work_struct *work)
+ 	drvdata->connect_retries++;
+ 	dev_dbg(&drvdata->pdev->dev,
+ 		"vdev%d: connect retry %d/%d\n",
+-		drvdata->vdevnum, drvdata->connect_retries,
+-		GXP_UDC_CONNECT_MAX_RETRIES);
+-
+-	/* Toggle connect bit: disconnect */
+-	evdcs &= ~EVDCS_CONNECT;
+-	writel(evdcs, drvdata->base + EVDCS);
++		drvdata->vdevnum, drvdata->connect_retries,
++		GXP_UDC_CONNECT_MAX_RETRIES);
++
++	gxp_udc_disconnect(drvdata);
++
++	spin_unlock_irqrestore(&drvdata->lock, flags);
++	synchronize_irq(drvdata->irq);
++	spin_lock_irqsave(&drvdata->lock, flags);
++
++	for (i = 0; i < drvdata->fepnum + 1; i++)
++		gxp_udc_ep_nuke(&drvdata->ep[i]);
+ 	spin_unlock_irqrestore(&drvdata->lock, flags);
+ 
+-	/* Brief disconnect period for host to notice */
+-	msleep(100);
++	usb_gadget_udc_reset(&drvdata->gadget, drvdata->driver);
++	msleep(500);
+ 
+ 	spin_lock_irqsave(&drvdata->lock, flags);
+ 	if (!drvdata->driver) {
+@@ -682,10 +699,8 @@ static void gxp_udc_connect_retry_work(struct work_struct *work)
+ 		return;
+ 	}
+ 
+-	/* Reconnect */
+-	evdcs = readl(drvdata->base + EVDCS);
+-	evdcs |= EVDCS_CONNECT;
+-	writel(evdcs, drvdata->base + EVDCS);
++	/* Full reconnect -- EP0 init, FEMAP, interrupts */
++	gxp_udc_connect(drvdata);
+ 	spin_unlock_irqrestore(&drvdata->lock, flags);
+ 
+ 	/* Schedule another check */
+@@ -625,2 +642,5 @@ static int gxp_udc_stop(struct usb_gadget *gadget)
+ 	drvdata = container_of(gadget, struct gxp_udc_drvdata, gadget);
++
++	cancel_delayed_work_sync(&drvdata->connect_work);
++
+ 	spin_lock_irqsave(&drvdata->lock, flags);
+@@ -987,12 +1007,15 @@ static irqreturn_t gxp_udc_irq(int irq, void *_drvdata)
+ 
+ 		if (evdistat & EVDISTAT_PORTRST) {
+ 			writel(0, drvdata->base + EVDADDR);
++			drvdata->defer_set_address = false;
+ 			spin_lock(&drvdata->lock);
+ 			for (i = 0; i < drvdata->fepnum + 1; i++)
+ 				gxp_udc_ep_nuke(&drvdata->ep[i]);
++			gxp_udc_ep_init(&drvdata->ep[0],
++					USB_ENDPOINT_XFER_CONTROL, 1, 64);
+ 			spin_unlock(&drvdata->lock);
+ 			usb_gadget_udc_reset(&drvdata->gadget,
+ 					     drvdata->driver);
+ 			writel(EVDISTAT_PORTRST, drvdata->base + EVDISTAT);
+ 		}
+ 
+-- 
+2.48.1

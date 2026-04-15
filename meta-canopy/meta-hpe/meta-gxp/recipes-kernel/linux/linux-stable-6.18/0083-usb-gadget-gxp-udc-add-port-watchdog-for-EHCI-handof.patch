@@ -1,0 +1,71 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Christian Walter <christian.walter@9elements.com>
+Date: Tue, 15 Apr 2026 15:30:00 +0200
+Subject: [PATCH] usb: gadget: gxp-udc: add port watchdog for EHCI handoff
+
+The GXP SoC's Virtual USB Hub Controller (VUHC) does not generate a
+PORTEN_CHANGE interrupt to the UDC when the host EHCI controller
+changes ownership from BIOS to OS. The port silently transitions
+from enabled to disabled without any notification to the UDC driver.
+
+After the initial enumeration by BIOS, the connect-retry worker
+sees PORTENABLESTS=1 and exits permanently. When the OS takes over
+EHCI and the port goes disabled, the UDC is left with a stale
+device address and no mechanism to re-present itself.
+
+Fix this by converting the connect-retry worker from one-shot to a
+watchdog: after successful enumeration, instead of exiting, continue
+polling EVDCS at a reduced rate (GXP_UDC_WATCHDOG_MS, default 10s).
+If the watchdog detects the port went disabled while CONNECT is
+still asserted, it resets connect_retries to 0 and falls through to
+the existing full disconnect/connect retry cycle.
+
+This matches the intent of HPE's userspace udc-reconnect.sh (which
+polls the VUHC port_owner GPIO at 100ms and does a soft_connect
+toggle), but is handled entirely in the kernel driver at a sensible
+polling rate.
+
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ drivers/usb/gadget/udc/gxp_udc.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/usb/gadget/udc/gxp_udc.c b/drivers/usb/gadget/udc/gxp_udc.c
+index 4b3c1e7f8a01..e9f2d3a1b5c0 100644
+--- a/drivers/usb/gadget/udc/gxp_udc.c
++++ b/drivers/usb/gadget/udc/gxp_udc.c
+@@ -134,6 +134,7 @@ static bool udcg_init_done;
+ #define GXP_UDC_CONNECT_RETRY_MS	5000
+ #define GXP_UDC_CONNECT_MAX_RETRIES	24
+ #define GXP_UDC_IRQ_MAX_ITERATIONS	100
++#define GXP_UDC_WATCHDOG_MS		10000
+ 
+ static DEFINE_MUTEX(udcg_init_mutex);
+ static bool udcg_init_done;
+@@ -654,7 +655,13 @@ static void gxp_udc_connect_retry_work(struct work_struct *work)
+ 	evdcs = readl(drvdata->base + EVDCS);
+ 	if (evdcs & EVDCS_PORTENABLESTS) {
+-		/* Port is enabled, host enumerated us — done */
++		/* Port is enabled -- stay alive as watchdog to
++		 * detect EHCI handoff (VUHC does not generate
++		 * PORTEN_CHANGE on port ownership changes).
++		 */
++		drvdata->connect_retries = 0;
+ 		spin_unlock_irqrestore(&drvdata->lock, flags);
++		schedule_delayed_work(&drvdata->connect_work,
++				      msecs_to_jiffies(GXP_UDC_WATCHDOG_MS));
+ 		return;
+ 	}
+ 
+@@ -672,6 +679,9 @@ static void gxp_udc_connect_retry_work(struct work_struct *work)
+ 		return;
+ 	}
+ 
++	if (drvdata->connect_retries == 0)
++		dev_info(&drvdata->pdev->dev,
++			 "port disabled, restarting enumeration\n");
+ 	drvdata->connect_retries++;
+ 	dev_dbg(&drvdata->pdev->dev,
+ 		"vdev%d: connect retry %d/%d\n",
+-- 
+2.48.1
