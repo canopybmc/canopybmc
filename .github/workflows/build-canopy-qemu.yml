@@ -4,8 +4,7 @@ name: canopy-qemu Build
 on:
   push:
     branches:
-      - hpe/main
-      - hpe/feat/qemu
+      - main
     paths:
       - 'openbmc/**'
       - 'meta-canopy/**'
@@ -13,7 +12,7 @@ on:
       - '.firmwareci/**'
   pull_request:
     branches:
-      - hpe/main
+      - main
     paths:
       - 'openbmc/**'
       - 'meta-canopy/**'

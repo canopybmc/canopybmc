@@ -4,7 +4,7 @@ name: hpe-proliant-g11 Build
 on:
   push:
     branches:
-      - hpe/main
+      - main
     paths:
       - 'openbmc/**'
       - 'meta-canopy/**'
@@ -12,7 +12,7 @@ on:
       - '.firmwareci/**'
   pull_request:
     branches:
-      - hpe/main
+      - main
     paths:
       - 'openbmc/**'
       - 'meta-canopy/**'
