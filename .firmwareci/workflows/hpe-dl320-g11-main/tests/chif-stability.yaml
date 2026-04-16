@@ -1,0 +1,214 @@
+name: "CHIF: Reboot Stability"
+description: >-
+  Verify CHIF I2C proxy and PlatDef download handlers remain stable
+  across 3 consecutive host reboot cycles. Rebooting is triggered
+  from the host via SSH (`sudo reboot`) rather than via Redfish, as
+  Redfish GracefulRestart has been observed to power the host off
+  without bringing it back. After each reboot, checks the BMC journal
+  for consistent CHIF behavior and the host console log for absence
+  of response-format errors.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+
+  - name: Reboot Cycle 1
+    steps:
+      - cmd: shell
+        name: Power on host
+        transport:
+          proto: local
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"ResetType":"On"}'
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+          expect:
+            - regex: "^(200|204)$"
+
+      - cmd: cmd
+        name: Wait for POST (5 min)
+        transport:
+          proto: local
+        options:
+          timeout: 6m
+        parameters:
+          executable: sleep
+          args: ["300"]
+
+      - cmd: shell
+        name: Host state is Running
+        transport: *bmc_ssh
+        options:
+          timeout: 30s
+        parameters:
+          command: "busctl get-property xyz.openbmc_project.State.Host /xyz/openbmc_project/state/host0 xyz.openbmc_project.State.Host CurrentHostState"
+          expect:
+            - regex: "Running"
+
+      - cmd: shell
+        name: SMBIOS received in this cycle
+        transport: *bmc_ssh
+        parameters:
+          command: "journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep -c 'MDR AgentSynchronizeData called'"
+          expect:
+            - regex: "^[1-9]"
+
+      - cmd: shell
+        name: No CHIF response-format errors
+        transport: *bmc_ssh
+        parameters:
+          command: "grep -c 'CHIF response invalid.*Size' /var/log/obmc-console.log 2>/dev/null || echo 0"
+          expect:
+            - regex: "^0$"
+
+      - cmd: shell
+        name: Reboot host via SSH
+        transport:
+          proto: ssh
+          options:
+            host: "[[attributes.Host]]"
+            user: "[[attributes.HostUser]]"
+            password: "[[attributes.HostPassword]]"
+        options:
+          on-error: continue
+        parameters:
+          command: "echo [[attributes.HostPassword]] | sudo -S reboot"
+
+  - name: Reboot Cycle 2
+    steps:
+      - cmd: cmd
+        name: Wait for POST (5 min)
+        transport:
+          proto: local
+        options:
+          timeout: 6m
+        parameters:
+          executable: sleep
+          args: ["300"]
+
+      - cmd: shell
+        name: Host state is Running
+        transport: *bmc_ssh
+        options:
+          timeout: 30s
+        parameters:
+          command: "busctl get-property xyz.openbmc_project.State.Host /xyz/openbmc_project/state/host0 xyz.openbmc_project.State.Host CurrentHostState"
+          expect:
+            - regex: "Running"
+
+      - cmd: shell
+        name: No CHIF response-format errors
+        transport: *bmc_ssh
+        parameters:
+          command: "grep -c 'CHIF response invalid.*Size' /var/log/obmc-console.log 2>/dev/null || echo 0"
+          expect:
+            - regex: "^0$"
+
+      - cmd: shell
+        name: No PlatDef download errors
+        transport: *bmc_ssh
+        parameters:
+          command: "grep -c 'DownloadDemandedTypePlatDef: CHIF response invalid' /var/log/obmc-console.log 2>/dev/null || echo 0"
+          expect:
+            - regex: "^0$"
+
+      - cmd: shell
+        name: Reboot host via SSH
+        transport:
+          proto: ssh
+          options:
+            host: "[[attributes.Host]]"
+            user: "[[attributes.HostUser]]"
+            password: "[[attributes.HostPassword]]"
+        options:
+          on-error: continue
+        parameters:
+          command: "echo [[attributes.HostPassword]] | sudo -S reboot"
+
+  - name: Reboot Cycle 3
+    steps:
+      - cmd: cmd
+        name: Wait for POST (5 min)
+        transport:
+          proto: local
+        options:
+          timeout: 6m
+        parameters:
+          executable: sleep
+          args: ["300"]
+
+      - cmd: shell
+        name: Host state is Running
+        transport: *bmc_ssh
+        options:
+          timeout: 30s
+        parameters:
+          command: "busctl get-property xyz.openbmc_project.State.Host /xyz/openbmc_project/state/host0 xyz.openbmc_project.State.Host CurrentHostState"
+          expect:
+            - regex: "Running"
+
+      - cmd: shell
+        name: No CHIF response-format errors after 3 cycles
+        transport: *bmc_ssh
+        parameters:
+          command: "grep -c 'CHIF response invalid.*Size' /var/log/obmc-console.log 2>/dev/null || echo 0"
+          expect:
+            - regex: "^0$"
+
+      - cmd: shell
+        name: No PlatDef download errors after 3 cycles
+        transport: *bmc_ssh
+        parameters:
+          command: "grep -c 'DownloadDemandedTypePlatDef: CHIF response invalid' /var/log/obmc-console.log 2>/dev/null || echo 0"
+          expect:
+            - regex: "^0$"
+
+  - name: Final Validation
+    steps:
+      - cmd: cmd
+        name: CHIF service still running
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.GxpChif.service"]
+
+      - cmd: shell
+        name: CHIF service did not restart (PID unchanged)
+        transport: *bmc_ssh
+        parameters:
+          command: "systemctl show -p NRestarts xyz.openbmc_project.GxpChif.service"
+          expect:
+            - regex: "NRestarts=0"
+
+      - cmd: shell
+        name: "[Report] Total SMBIOS receptions across cycles"
+        transport: *bmc_ssh
+        options:
+          on-error: continue
+        parameters:
+          command: "journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep -c 'MDR AgentSynchronizeData called'"
+
+      - cmd: shell
+        name: "[Report] Kernel go-bit drops"
+        transport: *bmc_ssh
+        options:
+          on-error: continue
+        parameters:
+          command: "dmesg | grep -c 'go bit of rq_ctrl not set' || echo 0"

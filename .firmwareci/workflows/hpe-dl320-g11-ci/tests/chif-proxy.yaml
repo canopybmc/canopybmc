@@ -1,0 +1,126 @@
+name: "CHIF: I2C Proxy and PlatDef Download"
+description: >-
+  Verify the CHIF I2C proxy (0x0072) and PlatDef v1 download (0x0200)
+  handlers produce correctly-formatted responses. Checks the BMC journal
+  for PlatDef extraction and segment mapping at startup, and the host
+  console log for absence of CHIF response-format errors after POST.
+  Requires the host to have completed at least one POST cycle.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+
+  - name: CHIF Service Startup
+    steps:
+      - cmd: cmd
+        name: CHIF service is running
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.GxpChif.service"]
+
+      - cmd: shell
+        name: PlatDef extracted from host SPI flash
+        transport: *bmc_ssh
+        parameters:
+          command: "journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep 'UEFI FV: extracted'"
+          expect:
+            - regex: "extracted \\d+ bytes"
+
+      - cmd: shell
+        name: PlatDef decompressed with records
+        transport: *bmc_ssh
+        parameters:
+          command: "journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep 'PlatDef: decompressed'"
+          expect:
+            - regex: "decompressed \\d+ bytes"
+
+      - cmd: shell
+        name: I2C segment mappings parsed
+        transport: *bmc_ssh
+        parameters:
+          command: "journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep 'parsed.*I2C segment'"
+          expect:
+            - regex: "parsed \\d+ I2C segment mappings"
+
+      - cmd: shell
+        name: I2C segments resolved to kernel buses
+        transport: *bmc_ssh
+        parameters:
+          command: "journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep 'I2C map: resolved'"
+          expect:
+            - regex: "resolved \\d+ of \\d+ segments"
+
+  - name: I2C Proxy Response Format
+    steps:
+      - cmd: shell
+        name: No I2C proxy size-mismatch errors
+        transport: *bmc_ssh
+        parameters:
+          command: "grep -c 'HpIicWriteRead: CHIF response invalid.*Size' /var/log/obmc-console.log /var/log/obmc-console.log.1 2>/dev/null || echo 0"
+          expect:
+            - regex: "^0$"
+
+      - cmd: shell
+        name: No HpIicChifWriteRead size-mismatch errors
+        transport: *bmc_ssh
+        parameters:
+          command: "grep -c 'HpIicChifWriteRead: CHIF response invalid.*Size' /var/log/obmc-console.log /var/log/obmc-console.log.1 2>/dev/null || echo 0"
+          expect:
+            - regex: "^0$"
+
+  - name: I2C Proxy Error Codes
+    on-error: continue
+    steps:
+      - cmd: shell
+        name: "[Report] I2C segment-not-found errors"
+        transport: *bmc_ssh
+        parameters:
+          command: "grep -c 'i2c Error 0000006C' /var/log/obmc-console.log 2>/dev/null || echo 0"
+
+      - cmd: shell
+        name: "[Report] I2C general errors (absent devices)"
+        transport: *bmc_ssh
+        parameters:
+          command: "grep -c 'i2c Error 00000007' /var/log/obmc-console.log 2>/dev/null || echo 0"
+
+  - name: PlatDef Download Response Format
+    steps:
+      - cmd: shell
+        name: No DownloadDemandedTypePlatDef errors
+        transport: *bmc_ssh
+        parameters:
+          command: "grep -c 'DownloadDemandedTypePlatDef: CHIF response invalid' /var/log/obmc-console.log /var/log/obmc-console.log.1 2>/dev/null || echo 0"
+          expect:
+            - regex: "^0$"
+
+      - cmd: shell
+        name: No GetPowerSupplyI2CInfo PlatDef failures
+        transport: *bmc_ssh
+        parameters:
+          command: "grep -c 'GetPowerSupplyI2CInfo: DownloadDemandedTypePlatDef failed' /var/log/obmc-console.log /var/log/obmc-console.log.1 2>/dev/null || echo 0"
+          expect:
+            - regex: "^0$"
+
+  - name: CHIF Kernel Health
+    on-error: continue
+    steps:
+      - cmd: shell
+        name: "[Report] Kernel go-bit drops"
+        transport: *bmc_ssh
+        parameters:
+          command: "dmesg | grep -c 'go bit of rq_ctrl not set' || echo 0"
