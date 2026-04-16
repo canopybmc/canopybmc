@@ -47,7 +47,7 @@ machine() {
                   meta-*/meta-*/conf/machine/*.conf meta-*/conf/machine/*.conf)
     fi
     # Add qemu machines.
-    configs="$configs $(ls -1 openbmc/poky/meta/conf/machine/qemu*.conf)"
+    configs="$configs $(ls -1 openbmc/upstream-layers/openembedded-core/meta/conf/machine/qemu*.conf)"
 
     for cfg in $configs; do
         name=${cfg##*/}
@@ -57,7 +57,7 @@ machine() {
         vendor=${vendor##meta-}
         vendor=${vendor%%-openbmc}
 
-        if [ "$tmpl" = "openbmc/poky/meta/conf" ]; then
+        if [ "$tmpl" = "openbmc/upstream-layers/openembedded-core/meta/conf" ]; then
             # This is a QEMU machine, use phosphor defaults.
             tmpl="openbmc/meta-phosphor/conf"
         else
