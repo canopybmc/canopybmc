@@ -1,0 +1,38 @@
+---
+version: '3'
+
+tasks:
+  obmc-bump:
+    prompt: This will bump the srcrev for OpenBMC. Do you really want to continue?
+    set: [pipefail]
+    vars:
+      BRANCH_NAME: 'rebase/openbmc'
+      OLD_COMMIT:
+        sh: git submodule status --cached openbmc | grep -oP '[a-z\d]+' | head -1
+      ORIGINAL_BRANCH:
+        sh: git rev-parse --abbrev-ref HEAD
+    cmds:
+      - git fetch origin
+      - |
+        git branch -D {{.BRANCH_NAME}} 2>/dev/null || true
+        git switch -c {{.BRANCH_NAME}} origin/main
+      - defer: git switch {{.ORIGINAL_BRANCH}} && git branch -D {{.BRANCH_NAME}}
+
+      - git -C openbmc fetch origin main
+      - git -C openbmc checkout origin/main
+
+      - |
+        OLD_COMMIT={{.OLD_COMMIT}}
+        NEW_COMMIT=$(git -C openbmc rev-parse HEAD)
+        if [ "$NEW_COMMIT" = "{{.OLD_COMMIT}}" ]; then
+          echo "OpenBMC is already up to date."
+          exit 0
+        fi
+
+        git add openbmc
+
+        SHORTLOG=$(git -C openbmc shortlog --no-merges ${OLD_COMMIT}..${NEW_COMMIT} || echo "No shortlog available")
+        COMMIT_MSG="openbmc: srcrev bump ${OLD_COMMIT:0:10}..${NEW_COMMIT:0:10}"
+
+        echo -e "$COMMIT_MSG\n\n$SHORTLOG" | git commit -F -
+        git push -u origin --force {{.BRANCH_NAME}}
