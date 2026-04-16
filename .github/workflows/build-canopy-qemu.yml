@@ -42,7 +42,7 @@ jobs:
       - name: Download firmware image
         uses: actions/download-artifact@v8
         with:
-          name: obmc-phosphor-image-canopy-qemu.static.mtd
+          name: obmc-phosphor-image-canopy-qemu
 
       - name: Upload to FirmwareCI
         uses: docker://firmwareci/action:v5.2
