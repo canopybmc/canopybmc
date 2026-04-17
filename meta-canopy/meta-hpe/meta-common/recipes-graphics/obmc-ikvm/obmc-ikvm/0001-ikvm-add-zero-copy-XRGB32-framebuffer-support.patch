@@ -1,5 +1,6 @@
+From 2996440399cf46e6303692fd86eac5e9a6e88d0b Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
-Date: Sun, 16 Mar 2026 00:00:00 +0000
+Date: Mon, 16 Mar 2026 00:00:00 +0000
 Subject: [PATCH] ikvm: add zero-copy XRGB32 framebuffer support
 
 Add support for V4L2_PIX_FMT_XRGB32 pixel format and eliminate the
@@ -38,14 +39,14 @@ Upstream-Status: Pending
 Signed-off-by: Christian Walter <christian.walter@9elements.com>
 ---
  ikvm_server.cpp | 12 ++++++++++++
- ikvm_video.cpp  |  3 ++-
- 2 files changed, 14 insertions(+), 1 deletion(-)
+ ikvm_video.cpp  |  1 +
+ 2 files changed, 13 insertions(+)
 
 diff --git a/ikvm_server.cpp b/ikvm_server.cpp
-index 9274a9b..5306d04 100644
+index 18eb507..61c49c1 100644
 --- a/ikvm_server.cpp
 +++ b/ikvm_server.cpp
-@@ -159,6 +159,18 @@ void Server::sendFrame()
+@@ -179,6 +179,18 @@ void Server::sendFrame()
  
          switch (video.getPixelformat())
          {
@@ -62,19 +63,20 @@ index 9274a9b..5306d04 100644
 +                                      video.getHeight());
 +                break;
              case V4L2_PIX_FMT_RGB24:
+             case V4L2_PIX_FMT_RGB565:
                  framebuffer.assign(data, data + video.getFrameSize());
-                 rfbMarkRectAsModified(server, 0, 0, video.getWidth(),
 diff --git a/ikvm_video.cpp b/ikvm_video.cpp
-index 3445715..2f637d6 100644
+index 02c2dc9..a97873b 100644
 --- a/ikvm_video.cpp
 +++ b/ikvm_video.cpp
-@@ -459,7 +459,8 @@ void Video::start()
-     width = fmt.fmt.pix.width;
+@@ -72,6 +72,7 @@ void Video::probePixelFormat()
      pixelformat = fmt.fmt.pix.pixelformat;
  
--    if (pixelformat != V4L2_PIX_FMT_RGB24 && pixelformat != V4L2_PIX_FMT_JPEG)
-+    if (pixelformat != V4L2_PIX_FMT_RGB24 && pixelformat != V4L2_PIX_FMT_JPEG
-+        && pixelformat != V4L2_PIX_FMT_XRGB32)
+     if (pixelformat != V4L2_PIX_FMT_RGB24 && pixelformat != V4L2_PIX_FMT_JPEG &&
++        pixelformat != V4L2_PIX_FMT_XRGB32 &&
+         pixelformat != V4L2_PIX_FMT_RGB565 &&
+         pixelformat != V4L2_PIX_FMT_HEXTILE)
      {
-         log<level::ERR>("Pixel Format not supported",
-                         entry("PIXELFORMAT=%d", pixelformat));
+-- 
+2.53.0
+
