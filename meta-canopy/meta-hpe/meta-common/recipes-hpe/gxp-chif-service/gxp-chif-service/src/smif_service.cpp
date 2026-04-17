@@ -90,24 +90,29 @@ int SmifService::buildEvDataResponse(const ChifPktHeader& hdr,
 // EV command handlers
 // ---------------------------------------------------------------------------
 
+constexpr uint32_t ev(EvError e)
+{
+    return static_cast<uint32_t>(e);
+}
+
 int SmifService::handleGetEvByIndex(const ChifPktHeader& hdr,
                                     std::span<const uint8_t> reqPayload,
                                     std::span<uint8_t> response)
 {
     if (!evStorage_ || reqPayload.size() < sizeof(uint32_t))
     {
-        return buildSimpleResponse(hdr, response, 1);
+        return buildSimpleResponse(hdr, response, ev(EvError::deviceError));
     }
 
     uint32_t index = 0;
     std::memcpy(&index, reqPayload.data(), sizeof(index));
 
-    auto ev = evStorage_->getByIndex(index);
-    if (!ev)
+    auto entry = evStorage_->getByIndex(index);
+    if (!entry)
     {
-        return buildSimpleResponse(hdr, response, 1);
+        return buildSimpleResponse(hdr, response, ev(EvError::noSuchEv));
     }
-    return buildEvDataResponse(hdr, response, *ev);
+    return buildEvDataResponse(hdr, response, *entry);
 }
 
 int SmifService::handleSetDeleteEv(const ChifPktHeader& hdr,
@@ -116,23 +121,23 @@ int SmifService::handleSetDeleteEv(const ChifPktHeader& hdr,
 {
     if (!evStorage_ || reqPayload.size() < sizeof(uint32_t))
     {
-        return buildSimpleResponse(hdr, response, 2);
+        return buildSimpleResponse(hdr, response, ev(EvError::noSuchEv));
     }
 
     uint8_t flags = reqPayload[0];
 
-    // Priority: deleteAll > delete > set
     if (flags & evFlagDeleteAll)
     {
         bool ok = evStorage_->deleteAll();
-        return buildSimpleResponse(hdr, response, ok ? 0 : 3);
+        return buildSimpleResponse(
+            hdr, response, ok ? ev(EvError::success) : ev(EvError::nameTooLong));
     }
 
     if (flags & evFlagDelete)
     {
         if (reqPayload.size() < sizeof(uint32_t) + maxEvNameLen)
         {
-            return buildSimpleResponse(hdr, response, 2);
+            return buildSimpleResponse(hdr, response, ev(EvError::noSuchEv));
         }
         std::string_view nameRegion(
             reinterpret_cast<const char*>(reqPayload.data()) +
@@ -140,10 +145,11 @@ int SmifService::handleSetDeleteEv(const ChifPktHeader& hdr,
             maxEvNameLen);
         if (nameRegion.back() != '\0')
         {
-            return buildSimpleResponse(hdr, response, 3);
+            return buildSimpleResponse(hdr, response, ev(EvError::nameTooLong));
         }
         bool ok = evStorage_->del(std::string(nameRegion.data()));
-        return buildSimpleResponse(hdr, response, ok ? 0 : 1);
+        return buildSimpleResponse(
+            hdr, response, ok ? ev(EvError::success) : ev(EvError::deviceError));
     }
 
     if (flags & evFlagSet)
@@ -152,7 +158,7 @@ int SmifService::handleSetDeleteEv(const ChifPktHeader& hdr,
             sizeof(uint32_t) + maxEvNameLen + sizeof(uint16_t);
         if (reqPayload.size() < minSetPayload)
         {
-            return buildSimpleResponse(hdr, response, 2);
+            return buildSimpleResponse(hdr, response, ev(EvError::noSuchEv));
         }
 
         char nameBuf[maxEvNameLen] = {};
@@ -166,27 +172,28 @@ int SmifService::handleSetDeleteEv(const ChifPktHeader& hdr,
 
         if (dataLen > maxEvDataSize)
         {
-            return buildSimpleResponse(hdr, response, 3);
+            return buildSimpleResponse(hdr, response, ev(EvError::dataTooLarge));
         }
 
-        // HPE behavior: set with sz_ev=0 is treated as delete
+        // Set with sz_ev=0 is treated as delete
         if (dataLen == 0)
         {
             evStorage_->del(nameBuf);
-            return buildSimpleResponse(hdr, response, 0);
+            return buildSimpleResponse(hdr, response, ev(EvError::success));
         }
 
         if (reqPayload.size() < minSetPayload + dataLen)
         {
-            return buildSimpleResponse(hdr, response, 2);
+            return buildSimpleResponse(hdr, response, ev(EvError::noSuchEv));
         }
 
         auto data = reqPayload.subspan(minSetPayload, dataLen);
         bool ok = evStorage_->set(nameBuf, data);
-        return buildSimpleResponse(hdr, response, ok ? 0 : 3);
+        return buildSimpleResponse(
+            hdr, response, ok ? ev(EvError::success) : ev(EvError::nameTooLong));
     }
 
-    return buildSimpleResponse(hdr, response, 2);
+    return buildSimpleResponse(hdr, response, ev(EvError::unsupported));
 }
 
 int SmifService::handleGetEvByName(const ChifPktHeader& hdr,
@@ -195,26 +202,26 @@ int SmifService::handleGetEvByName(const ChifPktHeader& hdr,
 {
     if (reqPayload.size() < maxEvNameLen)
     {
-        return buildSimpleResponse(hdr, response, 2);
+        return buildSimpleResponse(hdr, response, ev(EvError::noSuchEv));
     }
     if (!evStorage_)
     {
-        return buildSimpleResponse(hdr, response, 1);
+        return buildSimpleResponse(hdr, response, ev(EvError::deviceError));
     }
     if (reqPayload[maxEvNameLen - 1] != 0x00)
     {
-        return buildSimpleResponse(hdr, response, 3);
+        return buildSimpleResponse(hdr, response, ev(EvError::nameTooLong));
     }
 
     char nameBuf[maxEvNameLen] = {};
     std::memcpy(nameBuf, reqPayload.data(), maxEvNameLen - 1);
 
-    auto ev = evStorage_->getByName(nameBuf);
-    if (!ev)
+    auto entry = evStorage_->getByName(nameBuf);
+    if (!entry)
     {
-        return buildSimpleResponse(hdr, response, 1);
+        return buildSimpleResponse(hdr, response, ev(EvError::noSuchEv));
     }
-    return buildEvDataResponse(hdr, response, *ev);
+    return buildEvDataResponse(hdr, response, *entry);
 }
 
 int SmifService::handleEvStats(const ChifPktHeader& hdr,
