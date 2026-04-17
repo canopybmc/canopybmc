@@ -55,6 +55,17 @@ inline constexpr uint8_t evFlagSet = 0x01;
 inline constexpr uint8_t evFlagDelete = 0x02;
 inline constexpr uint8_t evFlagDeleteAll = 0x04;
 
+// EV response error codes
+enum class EvError : uint32_t
+{
+    success = 0,
+    deviceError = 1,
+    noSuchEv = 2,
+    nameTooLong = 3,
+    dataTooLarge = 4,
+    unsupported = 5,
+};
+
 // Event logging
 inline constexpr uint16_t smifCmdQuickEventLog = 0x0146;
 
