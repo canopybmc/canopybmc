@@ -1,12 +1,11 @@
 name: "CHIF: Reboot Stability"
 description: >-
   Verify CHIF I2C proxy and PlatDef download handlers remain stable
-  across 3 consecutive host reboot cycles. Rebooting is triggered
-  from the host via SSH (`sudo reboot`) rather than via Redfish, as
-  Redfish GracefulRestart has been observed to power the host off
-  without bringing it back. After each reboot, checks the BMC journal
-  for consistent CHIF behavior and the host console log for absence
-  of response-format errors.
+  across 3 consecutive host reboot cycles. Reboots are triggered via
+  Redfish ForceRestart; host availability is detected by pinging the
+  host OS. After each reboot, checks the BMC journal for consistent
+  CHIF behavior and the host console log for absence of
+  response-format errors.
 
 defaults:
   transport: &bmc_ssh
@@ -42,15 +41,12 @@ stages:
           expect:
             - regex: "^(200|204)$"
 
-      - cmd: cmd
-        name: Wait for POST (5 min)
-        transport:
-          proto: local
+      - cmd: ping
+        name: Wait for host OS
         options:
-          timeout: 6m
+          timeout: 10m
         parameters:
-          executable: sleep
-          args: ["300"]
+          host: "[[attributes.Host]]"
 
       - cmd: shell
         name: Host state is Running
@@ -79,29 +75,27 @@ stages:
             - regex: "^0$"
 
       - cmd: shell
-        name: Reboot host via SSH
+        name: Reboot host via Redfish
         transport:
-          proto: ssh
-          options:
-            host: "[[attributes.Host]]"
-            user: "[[attributes.HostUser]]"
-            password: "[[attributes.HostPassword]]"
-        options:
-          on-error: continue
+          proto: local
         parameters:
-          command: "echo [[attributes.HostPassword]] | sudo -S reboot"
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"ResetType":"ForceRestart"}'
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+          expect:
+            - regex: "^(200|204)$"
 
   - name: Reboot Cycle 2
     steps:
-      - cmd: cmd
-        name: Wait for POST (5 min)
-        transport:
-          proto: local
+      - cmd: ping
+        name: Wait for host OS
         options:
-          timeout: 6m
+          timeout: 10m
         parameters:
-          executable: sleep
-          args: ["300"]
+          host: "[[attributes.Host]]"
 
       - cmd: shell
         name: Host state is Running
@@ -130,29 +124,27 @@ stages:
             - regex: "^0$"
 
       - cmd: shell
-        name: Reboot host via SSH
+        name: Reboot host via Redfish
         transport:
-          proto: ssh
-          options:
-            host: "[[attributes.Host]]"
-            user: "[[attributes.HostUser]]"
-            password: "[[attributes.HostPassword]]"
-        options:
-          on-error: continue
+          proto: local
         parameters:
-          command: "echo [[attributes.HostPassword]] | sudo -S reboot"
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"ResetType":"ForceRestart"}'
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+          expect:
+            - regex: "^(200|204)$"
 
   - name: Reboot Cycle 3
     steps:
-      - cmd: cmd
-        name: Wait for POST (5 min)
-        transport:
-          proto: local
+      - cmd: ping
+        name: Wait for host OS
         options:
-          timeout: 6m
+          timeout: 10m
         parameters:
-          executable: sleep
-          args: ["300"]
+          host: "[[attributes.Host]]"
 
       - cmd: shell
         name: Host state is Running

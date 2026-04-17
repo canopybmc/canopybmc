@@ -5,4 +5,5 @@ attributes:
   BMCPassword: 0penBmc
   DutAgent: worker102.lab.9e.network:1024
   Device: dl320
-  Board: dl320
+  Host: dl320g11-1.lab.9e.network
+  HostUser: oscar
