@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <span>
+#include <string>
 #include <unordered_map>
 
 namespace chif
@@ -66,6 +67,22 @@ enum class EvError : uint32_t
     unsupported = 5,
 };
 
+// Field access operation codes (0x0153)
+enum class FieldOp : uint32_t
+{
+    readSN = 1,
+    writeSN = 2,
+    readProdId = 3,
+    writeProdId = 4,
+    readPcaNum = 5,
+    writePcaNum = 6,
+    readPcaPart = 7,
+    writePcaPart = 8,
+    readCrBrand = 9,
+    readCrProdId = 10,
+    writeCrProdId = 11,
+};
+
 // Event logging
 inline constexpr uint16_t smifCmdQuickEventLog = 0x0146;
 
@@ -113,15 +130,19 @@ class SmifService : public ServiceHandler
     int handleGetEvAuthStatus(const ChifPktHeader& hdr,
                               std::span<uint8_t> response);
 
-    // I2C proxy handler
     int handleI2cProxy(const ChifPktHeader& hdr,
                        std::span<const uint8_t> reqPayload,
                        std::span<uint8_t> response);
-
-    // PlatDef v1 download handler
     int handlePlatDefDownload(const ChifPktHeader& hdr,
                               std::span<const uint8_t> reqPayload,
                               std::span<uint8_t> response);
+    int handleFieldAccess(const ChifPktHeader& hdr,
+                          std::span<const uint8_t> reqPayload,
+                          std::span<uint8_t> response);
+
+    static std::string readDtString(const char* path);
+    // "HPE ProLiant DL365 Gen11" -> "DL365G11"
+    static std::string deriveShortProductId(const std::string& model);
 
     // Response helpers
     static int buildSimpleResponse(const ChifPktHeader& hdr,
@@ -133,6 +154,8 @@ class SmifService : public ServiceHandler
 
     EvStorage* evStorage_;
     std::unordered_map<uint8_t, int> segmentToBus_;
+    std::string boardSerial_;
+    std::string productId_;
 };
 
 } // namespace chif
