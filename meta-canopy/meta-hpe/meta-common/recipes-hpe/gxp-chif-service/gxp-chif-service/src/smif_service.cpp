@@ -537,7 +537,7 @@ int SmifService::handleI2cProxy(const ChifPktHeader& hdr,
     if (rc < 0)
     {
         int savedErrno = errno;
-        lg2::warning("I2C proxy: ioctl failed seg=0x{SEG} addr=0x{ADDR} "
+        lg2::warning("I2C proxy: ioctl failed seg={SEG} addr={ADDR} "
                      "bus={BUS}: {ERR}",
                      "SEG", lg2::hex, segment, "ADDR", lg2::hex, i2cAddr,
                      "BUS", busNum, "ERR", strerror(savedErrno));
