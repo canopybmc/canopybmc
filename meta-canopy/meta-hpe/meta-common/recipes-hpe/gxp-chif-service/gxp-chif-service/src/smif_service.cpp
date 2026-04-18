@@ -14,14 +14,76 @@
 #include <cstddef>
 #include <cstring>
 #include <format>
+#include <fstream>
+#include <string_view>
 
 namespace chif
 {
 
+// ---------------------------------------------------------------------------
+// Platform identity helpers
+// ---------------------------------------------------------------------------
+
+std::string SmifService::readDtString(const char* path)
+{
+    std::ifstream f(path, std::ios::binary);
+    if (!f)
+    {
+        return {};
+    }
+    std::string s;
+    std::getline(f, s, '\0');
+    while (!s.empty() && (s.back() == '\0' || s.back() == ' ' ||
+                          s.back() == '\n'))
+    {
+        s.pop_back();
+    }
+    return s;
+}
+
+std::string SmifService::deriveShortProductId(const std::string& model)
+{
+    std::string s = model;
+
+    constexpr std::string_view prefix = "HPE ProLiant ";
+    if (s.starts_with(prefix))
+    {
+        s.erase(0, prefix.size());
+    }
+
+    // " Gen11" -> "G11", " Gen12" -> "G12"
+    auto genPos = s.find(" Gen");
+    if (genPos != std::string::npos)
+    {
+        s.replace(genPos, 4, "G");
+    }
+
+    std::erase(s, ' ');
+    return s;
+}
+
 SmifService::SmifService(EvStorage* evStorage,
                          std::unordered_map<uint8_t, int> segmentBusMap) :
     evStorage_(evStorage), segmentToBus_(std::move(segmentBusMap))
-{}
+{
+    boardSerial_ = readDtString("/proc/device-tree/serial-number");
+    if (boardSerial_.empty())
+    {
+        boardSerial_ = "UNKNOWN";
+        lg2::warning("No serial number in device-tree, using fallback");
+    }
+
+    productId_ = deriveShortProductId(
+        readDtString("/proc/device-tree/model"));
+    if (productId_.empty())
+    {
+        productId_ = "UNKNOWN";
+        lg2::warning("No model in device-tree, using fallback");
+    }
+
+    lg2::info("Platform serial: {SN}, product ID: {PID}", "SN",
+              boardSerial_, "PID", productId_);
+}
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -524,6 +586,76 @@ int SmifService::handlePlatDefDownload(const ChifPktHeader& hdr,
 }
 
 // ---------------------------------------------------------------------------
+// Field access handler (0x0153)
+// ---------------------------------------------------------------------------
+
+// Payload layout (shared by request and response):
+//   [rcode u32][op u32][sz u32][reserved u32][buf 256] = 272 bytes
+static constexpr size_t fieldBufSize = 256;
+static constexpr size_t fieldPayloadSize =
+    4 * sizeof(uint32_t) + fieldBufSize;
+static constexpr auto fieldRespSize =
+    static_cast<uint16_t>(sizeof(ChifPktHeader) + fieldPayloadSize);
+
+constexpr uint32_t fop(FieldOp o)
+{
+    return static_cast<uint32_t>(o);
+}
+
+int SmifService::handleFieldAccess(const ChifPktHeader& hdr,
+                                   std::span<const uint8_t> reqPayload,
+                                   std::span<uint8_t> response)
+{
+    if (response.size() < fieldRespSize)
+    {
+        return -1;
+    }
+
+    std::fill_n(response.data(), fieldRespSize, uint8_t{0});
+    initResponse(response, hdr, fieldRespSize);
+    auto resp = responsePayload(response);
+
+    // op is at offset 4 (offset 0 is rcode, always 0 on send)
+    uint32_t op = 0;
+    if (reqPayload.size() >= 2 * sizeof(uint32_t))
+    {
+        std::memcpy(&op, reqPayload.data() + 4, sizeof(op));
+    }
+
+    uint32_t rcode = 0;
+    uint32_t sz = 0;
+
+    switch (op)
+    {
+        case fop(FieldOp::readSN):
+        {
+            sz = static_cast<uint32_t>(
+                std::min(boardSerial_.size(), fieldBufSize));
+            std::memcpy(resp.data() + 16, boardSerial_.data(), sz);
+            lg2::info("SMIF 0x0153: read S/N = '{SN}'", "SN", boardSerial_);
+            break;
+        }
+        case fop(FieldOp::readProdId):
+        {
+            sz = static_cast<uint32_t>(
+                std::min(productId_.size(), fieldBufSize));
+            std::memcpy(resp.data() + 16, productId_.data(), sz);
+            lg2::info("SMIF 0x0153: read ProdID = '{PID}'", "PID",
+                      productId_);
+            break;
+        }
+        default:
+            break;
+    }
+
+    std::memcpy(resp.data(), &rcode, sizeof(rcode));
+    std::memcpy(resp.data() + 4, &op, sizeof(op));
+    std::memcpy(resp.data() + 8, &sz, sizeof(sz));
+
+    return fieldRespSize;
+}
+
+// ---------------------------------------------------------------------------
 // SmifService::handle — main dispatch
 // ---------------------------------------------------------------------------
 int SmifService::handle(std::span<const uint8_t> request,
@@ -571,7 +703,10 @@ int SmifService::handle(std::span<const uint8_t> request,
         case smifCmdPlatDefUpload:
             return handlePlatDefDownload(hdr, reqPayload, response);
 
-        // ---- All other commands: stub with ErrorCode=0 ----
+        // ---- Field access (serial number, product ID) ----
+        case smifCmdFieldAccess:
+            return handleFieldAccess(hdr, reqPayload, response);
+
         default:
             return buildSimpleResponse(hdr, response, 0);
     }
