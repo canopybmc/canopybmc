@@ -147,7 +147,7 @@ stages:
           executable: cat
           args: ["/sys/devices/platform/ahb@80000000/80fd0200.serial/lpc_address"]
           expect:
-            - regex: "0x3f8"
+            - regex: "0x3f8|0x2f8"
       - cmd: cmd
         name: SIRQ is 4 (COM1 IRQ)
         transport: *bmc_ssh

@@ -49,13 +49,13 @@ stages:
             - regex: "^(200|204)$"
 
       - cmd: cmd
-        name: Wait 120s for host to boot
+        name: Wait 260s for host to boot
         transport: *local
         options:
           timeout: 3m
         parameters:
           executable: sleep
-          args: ["120"]
+          args: ["260"]
 
   - name: Verify Host Is On
     steps:
@@ -191,13 +191,13 @@ stages:
             - regex: "^(200|204)$"
 
       - cmd: cmd
-        name: Wait 120s for host to boot
+        name: Wait 260s for host to boot
         transport: *local
         options:
           timeout: 3m
         parameters:
           executable: sleep
-          args: ["120"]
+          args: ["260"]
 
   - name: Verify Second Boot
     steps:

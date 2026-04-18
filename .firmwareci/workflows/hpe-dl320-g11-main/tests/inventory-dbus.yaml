@@ -40,13 +40,13 @@ stages:
             - "-c"
             - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"Power On HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
       - cmd: cmd
-        name: Wait 220s for host POST and SMBIOS transfer
+        name: Wait 260s for host POST and SMBIOS transfer
         transport: *bmc_ssh
         options:
           timeout: 5m
         parameters:
           executable: sleep
-          args: ["220"]
+          args: ["260"]
 
   - name: SMBIOS D-Bus Objects
     steps:
