@@ -1,0 +1,91 @@
+From 1676cde05b38dee169461f516d84032ac6677733 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Mon, 20 Apr 2026 14:00:46 +0200
+Subject: [PATCH] peci: controller: gxp: prevent overlapping transfers
+
+gxp_peci_xfer() waits for completion with
+wait_for_completion_interruptible_timeout(). If a signal interrupts
+that wait, the function returns -ERESTARTSYS even though the
+controller may still be processing the request. A later request can
+then write a new command before the previous transfer reports DONE.
+
+Use wait_for_completion_timeout() so signals do not abort the wait
+early. Also reject a new command until the previous one has reported
+DONE. When the cached IRQ status is still clear, fold in any DONE bit
+still latched in the controller before declaring it busy, and
+initialize the cached status to DONE in probe so the first transfer can
+start before any completion has been reported.
+
+Fixes: a71f071eb32d ("peci: controller: add HPE GXP PECI controller driver")
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ drivers/peci/controller/peci-gxp.c | 34 ++++++++++++++++++++++++------
+ 1 file changed, 27 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/peci/controller/peci-gxp.c b/drivers/peci/controller/peci-gxp.c
+index bbfba8a5bb09..d59008102e24 100644
+--- a/drivers/peci/controller/peci-gxp.c
++++ b/drivers/peci/controller/peci-gxp.c
+@@ -56,8 +56,9 @@ static int gxp_peci_xfer(struct peci_controller *controller, u8 addr,
+ {
+ 	struct gxp_peci *priv = dev_get_drvdata(controller->dev.parent);
+ 	unsigned long timeout = msecs_to_jiffies(GXP_PECI_CMD_TIMEOUT_MS);
++	unsigned long rem;
+ 	u32 cmd;
+-	int i, ret;
++	int i;
+ 
+ 	if (priv->peci_supply && !regulator_is_enabled(priv->peci_supply)) {
+ 		dev_dbg(priv->dev, "xfer blocked, host power off\n");
+@@ -65,6 +66,24 @@ static int gxp_peci_xfer(struct peci_controller *controller, u8 addr,
+ 	}
+ 
+ 	spin_lock_irq(&priv->lock);
++
++	/*
++	 * Reject a new command until the previous transfer has reported
++	 * DONE. Fold in any completion status still latched in hardware
++	 * before deciding that the controller is still busy.
++	 */
++	if (!(priv->status & GXP_PECI_STAT_DONE)) {
++		priv->status = readl(priv->base + GXP_PECI_STAT);
++		if (priv->status & GXP_PECI_STAT_DONE)
++			writel(priv->status, priv->base + GXP_PECI_STAT);
++	}
++
++	if (!(priv->status & GXP_PECI_STAT_DONE)) {
++		spin_unlock_irq(&priv->lock);
++		dev_dbg(priv->dev, "controller busy, status: %#010x\n",
++			priv->status);
++		return -EBUSY;
++	}
+ 	reinit_completion(&priv->xfer_complete);
+ 
+ 	for (i = 0; i < req->tx.len; i++)
+@@ -79,12 +98,12 @@ static int gxp_peci_xfer(struct peci_controller *controller, u8 addr,
+ 	writel(cmd, priv->base + GXP_PECI_CMD);
+ 	spin_unlock_irq(&priv->lock);
+ 
+-	ret = wait_for_completion_interruptible_timeout(&priv->xfer_complete,
+-							timeout);
+-	if (ret < 0)
+-		return ret;
+-
+-	if (ret == 0) {
++	/*
++	 * In-flight PECI transfers cannot be cancelled. Keep waiting
++	 * until the controller reports completion or the timeout expires.
++	 */
++	rem = wait_for_completion_timeout(&priv->xfer_complete, timeout);
++	if (rem == 0) {
+ 		dev_dbg(priv->dev, "timeout waiting for a response\n");
+ 		return -ETIMEDOUT;
+ 	}
+@@ -202,6 +221,7 @@ static int gxp_peci_probe(struct platform_device *pdev)
+ 
+ 	init_completion(&priv->xfer_complete);
+ 	spin_lock_init(&priv->lock);
++	priv->status = GXP_PECI_STAT_DONE;
+ 
+ 	controller = devm_peci_controller_add(priv->dev, &gxp_peci_ops);
+ 	if (IS_ERR(controller))
