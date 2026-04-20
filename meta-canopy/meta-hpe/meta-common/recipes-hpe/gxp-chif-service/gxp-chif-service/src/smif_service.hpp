@@ -83,6 +83,18 @@ enum class FieldOp : uint32_t
     writeCrProdId = 11,
 };
 
+// Security state values (from HPE pkt_8139 comment / event descriptors)
+enum class SecurityState : uint8_t
+{
+    error = 0,
+    factory = 1,
+    wipe = 2,
+    production = 3,
+    highSecurity = 4,
+    fips = 5,
+    suiteB = 6, // aka CNSA
+};
+
 // Event logging
 inline constexpr uint16_t smifCmdQuickEventLog = 0x0146;
 
@@ -130,6 +142,14 @@ class SmifService : public ServiceHandler
     int handleGetEvAuthStatus(const ChifPktHeader& hdr,
                               std::span<uint8_t> response);
 
+    // Security state handlers
+    int handleSecurityStateGet(const ChifPktHeader& hdr,
+                               std::span<uint8_t> response);
+    int handleSecurityStateSet(const ChifPktHeader& hdr,
+                               std::span<const uint8_t> reqPayload,
+                               std::span<uint8_t> response);
+
+    // I2C proxy handler
     int handleI2cProxy(const ChifPktHeader& hdr,
                        std::span<const uint8_t> reqPayload,
                        std::span<uint8_t> response);

@@ -586,6 +586,50 @@ int SmifService::handlePlatDefDownload(const ChifPktHeader& hdr,
 }
 
 // ---------------------------------------------------------------------------
+// Security state handlers (0x0139 get, 0x0158 set)
+// ---------------------------------------------------------------------------
+
+int SmifService::handleSecurityStateGet(const ChifPktHeader& hdr,
+                                        std::span<uint8_t> response)
+{
+    // pkt_8139: rcode(4) + security_state(1) + reserved(3) = 8 bytes payload
+    constexpr size_t payloadSize = 8;
+    constexpr auto respSize =
+        static_cast<uint16_t>(sizeof(ChifPktHeader) + payloadSize);
+
+    if (response.size() < respSize)
+    {
+        return -1;
+    }
+
+    std::fill_n(response.data(), respSize, uint8_t{0});
+    initResponse(response, hdr, respSize);
+
+    auto resp = responsePayload(response);
+    // ErrorCode = 0 (already zeroed)
+    resp[sizeof(uint32_t)] =
+        static_cast<uint8_t>(SecurityState::production);
+
+    return respSize;
+}
+
+int SmifService::handleSecurityStateSet(const ChifPktHeader& hdr,
+                                        std::span<const uint8_t> reqPayload,
+                                        std::span<uint8_t> response)
+{
+    // BIOS sends its security state value -- accept and log it.
+    uint32_t secState = 0;
+    if (reqPayload.size() >= sizeof(secState))
+    {
+        std::memcpy(&secState, reqPayload.data(), sizeof(secState));
+    }
+    lg2::info("SMIF 0x0158: BIOS set security state = {STATE}", "STATE",
+              secState);
+
+    return buildSimpleResponse(hdr, response, 0);
+}
+
+// ---------------------------------------------------------------------------
 // Field access handler (0x0153)
 // ---------------------------------------------------------------------------
 
@@ -694,6 +738,12 @@ int SmifService::handle(std::span<const uint8_t> request,
         // ---- BIOS image auth status (Secure Start) ----
         case smifCmdGetEvAuthStatus:
             return handleGetEvAuthStatus(hdr, response);
+
+        // ---- Security state ----
+        case smifCmdSecurityStateGet:
+            return handleSecurityStateGet(hdr, response);
+        case smifCmdSecurityStateSet:
+            return handleSecurityStateSet(hdr, reqPayload, response);
 
         // ---- I2C proxy ----
         case smifCmdI2cTransaction:
