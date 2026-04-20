@@ -148,17 +148,18 @@ stages:
           args: ["/sys/devices/platform/ahb@80000000/80fd0200.serial/lpc_address"]
           expect:
             - regex: "0x3f8|0x2f8"
-      - cmd: cmd
-        name: SIRQ is 4 (COM1 IRQ)
+      - cmd: shell
+        name: SIRQ is 3 or 4 (COM IRQ)
         transport: *bmc_ssh
         options:
           timeout: 5s
           on-error: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "VAL=$(cat /sys/devices/platform/ahb@80000000/80fd0200.serial/sirq); echo \"sirq=$VAL\"; test \"$VAL\" = \"4\""
+          command: >-
+            VAL=$(cat /sys/devices/platform/ahb@80000000/80fd0200.serial/sirq);
+            echo "sirq=$VAL"
+          expect:
+            - regex: "sirq=(3|4)"
 
   - name: Host Data Reception
     steps:

@@ -37,22 +37,24 @@ stages:
             https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
           expect:
             - regex: "^(200|204)$"
-      - cmd: cmd
-        name: Wait 220s for host POST and SMBIOS transfer
-        transport: *local
+      - cmd: shell
+        name: Wait for SMBIOS transfer
+        transport:
+          proto: ssh
+          options:
+            host: "[[attributes.BMC]]"
+            user: "root"
+            password: "[[attributes.BMCPassword]]"
         options:
-          timeout: 5m
+          timeout: 8m
         parameters:
-          executable: sleep
-          args: ["220"]
-      - cmd: cmd
-        name: Verify host PowerState is On
-        transport: *local
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
+          command: >-
+            while [ ! -f /var/lib/smbios/smbios2 ] ||
+                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
+            do sleep 1; done;
+            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
           expect:
-            - regex: '"PowerState": *"On"'
+            - regex: "SMBIOS ready"
 
   - name: Processors Collection
     on-error: continue
