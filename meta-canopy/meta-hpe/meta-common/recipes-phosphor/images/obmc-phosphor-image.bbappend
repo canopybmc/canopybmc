@@ -1,5 +1,3 @@
-# KVM enabled: obmc-ikvm provides VNC-based KVM over IP
-
 # Remove the cracklib package to save space.
 PACKAGE_INSTALL:remove = "cracklib"
 PACKAGE_EXCLUDE:append = "cracklib"
@@ -11,6 +9,50 @@ do_generate_static:append() {
                   int(d.getVar('FLASH_SIZE', True)))
 }
 do_generate_static[depends] += "gxp-uboot-sig:do_deploy"
+
+make_image_links:append() {
+    ln -sf ${DEPLOY_DIR_IMAGE}/gxp-uboot-sig image-uboot-sig
+}
+
+do_mk_static_symlinks:append() {
+    ln -sf gxp-uboot-sig image-uboot-sig
+}
+
+make_tar_of_images() {
+    type=$1
+    shift
+    extra_files="$@"
+
+    # Create the tar archive
+    tar -h -cvf ${IMGDEPLOYDIR}/${IMAGE_NAME}.$type.tar \
+        image-u-boot image-kernel image-rofs image-rwfs image-uboot-sig $extra_files
+
+    cd ${IMGDEPLOYDIR}
+    ln -sf ${IMAGE_NAME}.$type.tar ${IMGDEPLOYDIR}/${IMAGE_LINK_NAME}.$type.tar
+
+    # We can not override the full function but have to
+    # prepend it instead and return early.
+    return
+}
+
+do_generate_static_tar:prepend() {
+    ln -sf ${S}/MANIFEST MANIFEST
+    ln -sf ${S}/publickey publickey
+    make_image_links ${OVERLAY_BASETYPE} ${IMAGE_BASETYPE}
+
+    # Required for GXP to get it through SROT validation.
+    ln -sf "${DEPLOY_DIR_IMAGE}/gxp-uboot-sig" image-uboot-sig
+    make_signatures image-u-boot image-kernel image-rofs image-rwfs image-uboot-sig MANIFEST publickey
+    make_tar_of_images static.mtd MANIFEST publickey image-uboot-sig ${signature_files}
+
+    # Maintain non-standard legacy link.
+    cd ${IMGDEPLOYDIR}
+    ln -sf ${IMAGE_NAME}.static.mtd.tar ${IMGDEPLOYDIR}/${MACHINE}-${DATETIME}.tar
+
+    # We can not override the full function but have to
+    # prepend it instead and return early.
+    return
+}
 
 # Generate provisioning images (BMC + GXP bootblock) and model symlinks
 python do_generate_provisioning_images() {
