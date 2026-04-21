@@ -1,4 +1,27 @@
-FILESEXTRAPATHS:prepend := "${THISDIR}/linux-stable:"
+FILESEXTRAPATHS:prepend := "${THISDIR}/linux-stable:${THISDIR}/../../recipes-bsp/images/gxp-section:"
+
+# FIT image signing — same key override pattern as gxp-uboot-sig.bb.
+# Override HPE_SIGNING_KEY in local.conf for production builds.
+HPE_OSFCI_SIGNING_KEY = "hpe_osfci_private_key.pem"
+HPE_SIGNING_KEY ?= "${HPE_OSFCI_SIGNING_KEY}"
+
+SRC_URI += "file://${HPE_SIGNING_KEY}"
+
+# mkimage needs <keyname>.key + <keyname>.crt in a single directory.
+# The cert is self-signed and generated at build time from the private key;
+# U-Boot only uses it to extract the public key for embedding in its DTB.
+FIT_KERNEL_SIGN_KEYDIR  = "${B}/hpe-fit-keys"
+FIT_KERNEL_SIGN_KEYNAME = "hpe_fit"
+
+do_prepare_fit_keys() {
+    install -d "${B}/hpe-fit-keys"
+    install -m 0600 "${UNPACKDIR}/${HPE_SIGNING_KEY}" "${B}/hpe-fit-keys/hpe_fit.key"
+    openssl req -new -x509 -days 36500 -subj "/" \
+        -key "${B}/hpe-fit-keys/hpe_fit.key" \
+        -out "${B}/hpe-fit-keys/hpe_fit.crt"
+}
+addtask do_prepare_fit_keys after do_unpack before do_compile
+do_prepare_fit_keys[depends] += "openssl-native:do_populate_sysroot"
 
 # Mirror the overlay list from linux-gxp-multi-dtb.inc so this recipe knows
 # which .dtso files to compile.
