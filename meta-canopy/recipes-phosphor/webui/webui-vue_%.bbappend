@@ -1,4 +1,12 @@
 # Canopy WebUI customization
+# Installs canopy settings as .env.production so vite can pick it up.
+# With the migration from vue-cli to vite, the "NODE_ENV" variable got
+# deprecated in vite and should not be used anymore. Now, the "mode"
+# that's being used for evaluation is not the node env, but the environment
+# (e.g. IBM, Intel), which breaks gzip compression.
+# Therefore, we must copy the dotenv file to .env.production to get a working
+# theme.
+
 # Activates --mode canopy which loads .env.canopy and _canopy.scss
 # for Canopy branding (purple theme, Canopy logos, Inter font).
 #
@@ -10,11 +18,9 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 # Resolve the overlay directory at parse time
 CANOPY_WEBUI_OVERLAYS := "${THISDIR}/${BPN}"
 
-EXTRA_OENPM = "-- --mode canopy"
-
 do_configure:prepend() {
     # Overlay Canopy customization files into the source tree
-    install -m 0644 ${CANOPY_WEBUI_OVERLAYS}/dot-env.canopy ${S}/.env.canopy
+    install -m 0644 ${CANOPY_WEBUI_OVERLAYS}/dot-env.canopy ${S}/.env.production
 
     install -d ${S}/src/env/assets/styles
     install -m 0644 ${CANOPY_WEBUI_OVERLAYS}/_canopy.scss ${S}/src/env/assets/styles/_canopy.scss
