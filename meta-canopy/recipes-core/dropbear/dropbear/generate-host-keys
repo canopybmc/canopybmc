@@ -1,0 +1,39 @@
+#!/bin/sh
+# Generate dropbear SSH host keys for key files referenced by -r flags
+# in DROPBEAR_EXTRA_ARGS. This keeps key generation in sync with which
+# keys the daemon actually loads at runtime.
+
+
+set -eu
+
+KEYDIR="${DROPBEAR_RSAKEY_DIR:-/etc/dropbear}"
+
+# Parse -r <keyfile> pairs from DROPBEAR_EXTRA_ARGS
+prev=""
+# shellcheck disable=SC2086
+set -- ${DROPBEAR_EXTRA_ARGS:-}
+for arg; do
+    if [ "$prev" = "-r" ]; then
+        keypath="$arg"
+
+        if [ ! -f "$keypath" ]; then
+            mkdir -p "${keypath%/*}"
+
+            case "$keypath" in
+                *ecdsa*)
+                    dropbearkey -t ecdsa -f "$keypath" -s 384
+                    ;;
+                *ed25519*)
+                    dropbearkey -t ed25519 -f "$keypath"
+                    ;;
+                *rsa*)
+                    dropbearkey -t rsa -f "$keypath"
+                    ;;
+                *)
+                    echo "generate-host-keys: unknown key type for $keypath, skipping" >&2
+                    ;;
+            esac
+        fi
+    fi
+    prev="$arg"
+done

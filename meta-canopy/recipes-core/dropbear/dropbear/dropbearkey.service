@@ -1,0 +1,15 @@
+[Unit]
+Description=SSH Key Generation
+
+[Service]
+# Generate host keys for key files referenced by -r flags in
+# DROPBEAR_EXTRA_ARGS (see /etc/default/dropbear). Only keys that
+# the daemon will actually load at runtime are generated.
+Environment="DROPBEAR_RSAKEY_DIR=/etc/dropbear"
+EnvironmentFile=-/etc/default/dropbear
+Type=oneshot
+ExecStart=@LIBEXECDIR@/dropbear/generate-host-keys
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
