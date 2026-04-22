@@ -36,7 +36,6 @@ bitbake obmc-phosphor-image
 - Ubuntu 24.04
 - Fedora 42
 - Fedora 43
-- Arch Linux
 
 ### Known Issues
 
