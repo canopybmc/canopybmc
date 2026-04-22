@@ -1,0 +1,80 @@
+From 023fbbbca0fbc4e253c002cfbd5feb52eb3e26c0 Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Wed, 22 Apr 2026 20:42:53 +0200
+Subject: [PATCH] user-mgr: prevent deletion of user with uid 0
+
+Deleting the user with uid 0 (often known as "root") would render the
+system unmanageable, regardless of their username.
+
+Add throwForUidZero() which looks up the user's passwd entry and
+throws NotAllowed if the UID is 0. This will be called before actually
+deleting the user.
+
+Upstream-Status: Pending
+Change-Id: I62d61c05cfad1b703ef7b4b56badc80f8d396da4
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ user_mgr.cpp | 13 +++++++++++++
+ user_mgr.hpp |  8 ++++++++
+ 2 files changed, 21 insertions(+)
+
+diff --git a/user_mgr.cpp b/user_mgr.cpp
+index 80ddc26..7acaf2a 100644
+--- a/user_mgr.cpp
++++ b/user_mgr.cpp
+@@ -101,6 +101,8 @@ using UserNameGroupFail =
+     sdbusplus::xyz::openbmc_project::User::Common::Error::UserNameGroupFail;
+ using NoResource =
+     sdbusplus::xyz::openbmc_project::User::Common::Error::NoResource;
++using NotAllowed = sdbusplus::xyz::openbmc_project::Common::Error::NotAllowed;
++using NotAllowedArgument = xyz::openbmc_project::Common::NotAllowed;
+ using Argument = xyz::openbmc_project::Common::InvalidArgument;
+ using GroupNameExists =
+     sdbusplus::xyz::openbmc_project::User::Common::Error::GroupNameExists;
+@@ -347,6 +349,16 @@ void UserMgr::throwForUserNameConstraints(
+     }
+ }
+ 
++void UserMgr::throwForUidZero(const std::string& userName)
++{
++    auto systemUser = getSystemUser(userName);
++    if (systemUser && systemUser->pwd.pw_uid == 0)
++    {
++        lg2::error("User '{USERNAME}' is UID 0", "USERNAME", userName);
++        elog<NotAllowed>(NotAllowedArgument::REASON("User is UID 0"));
++    }
++}
++
+ void UserMgr::throwForMaxGrpUserCount(
+     const std::vector<std::string>& groupNames)
+ {
+@@ -540,6 +552,7 @@ void UserMgr::deleteUserImpl(const std::string& userName)
+ void UserMgr::deleteUser(std::string userName)
+ {
+     throwForUserDoesNotExist(userName);
++    throwForUidZero(userName);
+     deleteUserImpl(userName);
+     lg2::info("User '{USERNAME}' deleted successfully", "USERNAME", userName);
+ }
+diff --git a/user_mgr.hpp b/user_mgr.hpp
+index 8c1ece5..db93a29 100644
+--- a/user_mgr.hpp
++++ b/user_mgr.hpp
+@@ -481,6 +481,14 @@ class UserMgr : public Ifaces
+ 
+     size_t getNonIpmiUsersCount();
+ 
++    /** @brief check user has UID 0
++     *  method to check whether user is not UID 0 (i.e. root),
++     *  and throw if it is.
++     *
++     *  @param[in] userName - name of the user
++     */
++    void throwForUidZero(const std::string& userName);
++
+     /** @brief check user exists
+      *  method to check whether user exist, and throw if not.
+      *
+-- 
+2.53.0
+
