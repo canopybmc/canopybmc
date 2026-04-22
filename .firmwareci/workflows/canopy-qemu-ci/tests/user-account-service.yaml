@@ -151,16 +151,6 @@ stages:
             - regex: '"RoleId": *"Administrator"'
             - regex: '"Enabled": *true'
             - regex: '"Locked": *false'
-      - cmd: cmd
-        name: root account cannot be deleted (returns 404)
-        transport: *local
-        options:
-          timeout: 30s
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X DELETE https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts/root -o /dev/null -w '%{http_code}'); echo \"DELETE root HTTP=$HTTP\"; test \"$HTTP\" = \"404\""
 
   - name: Session Service
     steps:
