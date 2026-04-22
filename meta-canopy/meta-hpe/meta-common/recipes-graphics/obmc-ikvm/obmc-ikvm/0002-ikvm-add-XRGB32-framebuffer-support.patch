@@ -1,0 +1,50 @@
+From: Christian Walter <christian.walter@9elements.com>
+Date: Sun, 16 Mar 2026 00:00:00 +0000
+Subject: [PATCH] ikvm: add XRGB32 framebuffer support
+
+Add support for V4L2_PIX_FMT_XRGB32 pixel format. Video capture
+devices that output raw 32-bit XRGB pixels (such as the HPE GXP
+thumbnail video engine) are not handled by upstream obmc-ikvm,
+which only supports JPEG and RGB24. Without this, the XRGB32
+format falls through to the default case and no frames are sent.
+
+Handle XRGB32 the same way as RGB24: copy the frame data into the
+VNC framebuffer vector and mark the full screen as modified.
+
+Upstream-Status: Pending
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ ikvm_server.cpp | 5 +++++
+ ikvm_video.cpp  | 3 ++-
+ 2 files changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/ikvm_server.cpp b/ikvm_server.cpp
+index 9274a9b..a1b2c3d 100644
+--- a/ikvm_server.cpp
++++ b/ikvm_server.cpp
+@@ -159,6 +159,11 @@ void Server::sendFrame()
+
+         switch (video.getPixelformat())
+         {
++            case V4L2_PIX_FMT_XRGB32:
++                framebuffer.assign(data, data + video.getFrameSize());
++                rfbMarkRectAsModified(server, 0, 0, video.getWidth(),
++                                      video.getHeight());
++                break;
+             case V4L2_PIX_FMT_RGB24:
+                 framebuffer.assign(data, data + video.getFrameSize());
+                 rfbMarkRectAsModified(server, 0, 0, video.getWidth(),
+diff --git a/ikvm_video.cpp b/ikvm_video.cpp
+index 3445715..2f637d6 100644
+--- a/ikvm_video.cpp
++++ b/ikvm_video.cpp
+@@ -459,7 +459,8 @@ void Video::start()
+     width = fmt.fmt.pix.width;
+     pixelformat = fmt.fmt.pix.pixelformat;
+
+-    if (pixelformat != V4L2_PIX_FMT_RGB24 && pixelformat != V4L2_PIX_FMT_JPEG)
++    if (pixelformat != V4L2_PIX_FMT_RGB24 && pixelformat != V4L2_PIX_FMT_JPEG
++        && pixelformat != V4L2_PIX_FMT_XRGB32)
+     {
+         log<level::ERR>("Pixel Format not supported",
+                         entry("PIXELFORMAT=%d", pixelformat));

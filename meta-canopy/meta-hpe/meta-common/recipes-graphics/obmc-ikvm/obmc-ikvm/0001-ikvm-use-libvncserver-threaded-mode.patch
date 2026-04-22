@@ -1,0 +1,303 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Christian Walter <christian.walter@9elements.com>
+Date: Mon, 13 Apr 2026 00:00:00 +0000
+Subject: [PATCH] ikvm: use libvncserver threaded mode for client I/O
+Upstream-Status: Pending
+
+The previous architecture ran a custom server thread that called
+rfbProcessEvents() once per video frame, synchronised with the video
+capture thread via a pair of condition variables (waitServer /
+waitVideo / setServerDone / setVideoDone). On platforms where
+video.getFrame() blocks for the hardware frame interval (e.g. 500ms
+at 2 FPS on devices without hardware JPEG), the server thread is
+parked in waitVideo() for the entire capture duration. This means
+VNC client input events (key press / release, pointer) are only
+dispatched once per video frame, long enough for the host OS
+key-repeat to fire and produce duplicate characters.
+
+Switch to libvncserver's built-in threaded mode via rfbRunEventLoop
+with runInBackground=TRUE. This spawns a listener thread and, for
+each client connection, a pair of input/output threads that handle
+RFB protocol I/O with proper internal synchronization (per-client
+updateMutex / sendMutex, plus a screen-level cursorMutex). Client
+input is dispatched as soon as the socket has data, independent of
+the video capture loop.
+
+This eliminates the need for the custom lockstep machinery:
+
+  - Remove Manager::serverThread and its thread creation
+  - Remove waitServer / waitVideo / setServerDone / setVideoDone
+  - Remove the serverDone / videoDone flags and sync / lock members
+  - Remove Server::run() (was the per-frame rfbProcessEvents call)
+  - Remove the processTime member (no longer metering rfbProcessEvents)
+
+And replaces it with:
+
+  - Server::start()  - one-shot rfbRunEventLoop(server, -1, TRUE)
+  - Server::stop()   - rfbShutdownServer(server, TRUE) on exit
+  - Server::tick()   - per-frame frameCounter++ and pendingResize
+                       application (the bookkeeping that used to live
+                       in Server::run() after rfbProcessEvents)
+
+Reduce deferUpdateTime to 5ms (from libvncserver's 40ms default) so
+the per-client output threads flush framebuffer updates promptly
+after input echo rather than batching for a full frame window.
+
+Framebuffer resize via rfbNewFramebuffer() remains safe because
+libvncserver internally locks all per-client sendMutex and
+cursorMutex during the swap, so no in-flight encoding or cursor
+rendering can race against the pointer swap.
+
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ ikvm_manager.cpp | 74 ++++----------------------
+ ikvm_manager.hpp | 34 +------------
+ ikvm_server.cpp  | 42 ++++++++++------
+ ikvm_server.hpp  | 15 +++++--
+ 4 files changed, 49 insertions(+), 116 deletions(-)
+
+--- a/ikvm_manager.hpp
++++ b/ikvm_manager.hpp
+@@ -5,15 +5,12 @@
+ #include "ikvm_server.hpp"
+ #include "ikvm_video.hpp"
+ 
+-#include <condition_variable>
+-#include <mutex>
+-
+ namespace ikvm
+ {
+ /*
+  * @class Manager
+- * @brief Manages the VNC server by executing threaded loops of RFB operations
+- *        and video device operations.
++ * @brief Manages the VNC server by running the video capture loop while
++ *        libvncserver's background threads handle client I/O independently.
+  */
+ class Manager
+ {
+@@ -35,40 +32,16 @@
+ 
+   private:
+     /*
+-     * @brief Thread function to loop the RFB update operations
+-     *
+-     * @param[in] manager - Pointer to the Manager object
+-     */
+-    static void serverThread(Manager* manager);
+-
+-    /* @brief Notifies thread waiters that RFB operations are complete */
+-    void setServerDone();
+-    /* @brief Notifies thread waiters that video operations are complete */
+-    void setVideoDone();
+-    /* @brief Blocks until RFB operations complete */
+-    void waitServer();
+-    /* @brief Blocks until video operations are complete */
+-    void waitVideo();
+-
+-    /*
+      * @brief Boolean to indicate whether the application should continue
+      *        running
+      */
+     bool continueExecuting;
+-    /* @brief Boolean to indicate that RFB operations are complete */
+-    bool serverDone;
+-    /* @brief Boolean to indicate that video operations are complete */
+-    bool videoDone;
+     /* @brief Input object */
+     Input input;
+     /* @brief Video object */
+     Video video;
+     /* @brief RFB server object */
+     Server server;
+-    /* @brief Condition variable to enable waiting for thread completion */
+-    std::condition_variable sync;
+-    /* @brief Mutex for waiting on condition variable safely */
+-    std::mutex lock;
+ };
+ 
+ } // namespace ikvm
+--- a/ikvm_manager.cpp
++++ b/ikvm_manager.cpp
+@@ -1,11 +1,9 @@
+ #include "ikvm_manager.hpp"
+ 
+-#include <thread>
+-
+ namespace ikvm
+ {
+ Manager::Manager(const Args& args) :
+-    continueExecuting(true), serverDone(false), videoDone(true),
++    continueExecuting(true),
+     input(args.getKeyboardPath(), args.getPointerPath(), args.getUdcName()),
+     video(args.getVideoPath(), input, args.getFrameRate(),
+           args.getSubsampling()),
+@@ -14,7 +12,11 @@
+ 
+ void Manager::run()
+ {
+-    std::thread run(serverThread, this);
++    /* Start libvncserver's background thread model. This spawns a listener
++     * thread and, for each client connection, a pair of input/output
++     * threads. Input events are dispatched as soon as clients send them,
++     * independent of the video capture loop. Returns immediately. */
++    server.start();
+ 
+     while (continueExecuting)
+     {
+@@ -31,70 +33,14 @@
+ 
+         if (video.needsResize())
+         {
+-            waitServer();
+-            videoDone = false;
+             video.resize();
+             server.resize();
+-            setVideoDone();
+-        }
+-        else
+-        {
+-            setVideoDone();
+-            waitServer();
+         }
+-    }
+-
+-    run.join();
+-}
+-
+-void Manager::serverThread(Manager* manager)
+-{
+-    while (manager->continueExecuting)
+-    {
+-        manager->server.run();
+-        manager->setServerDone();
+-        manager->waitVideo();
+-    }
+-}
+-
+-void Manager::setServerDone()
+-{
+-    std::unique_lock<std::mutex> ulock(lock);
+-
+-    serverDone = true;
+-    sync.notify_all();
+-}
+-
+-void Manager::setVideoDone()
+-{
+-    std::unique_lock<std::mutex> ulock(lock);
+-
+-    videoDone = true;
+-    sync.notify_all();
+-}
+-
+-void Manager::waitServer()
+-{
+-    std::unique_lock<std::mutex> ulock(lock);
+ 
+-    while (!serverDone)
+-    {
+-        sync.wait(ulock);
+-    }
+-
+-    serverDone = false;
+-}
+-
+-void Manager::waitVideo()
+-{
+-    std::unique_lock<std::mutex> ulock(lock);
+-
+-    while (!videoDone)
+-    {
+-        sync.wait(ulock);
++        server.tick();
+     }
+ 
+-    // don't reset videoDone
++    server.stop();
+ }
+ 
+ } // namespace ikvm
+--- a/ikvm_server.hpp
++++ b/ikvm_server.hpp
+@@ -59,10 +59,17 @@
+     Server(Server&&) = default;
+     Server& operator=(Server&&) = default;
+ 
++    /* @brief Starts libvncserver's background event loop (listener +
++     *        per-client input/output threads) */
++    void start();
++    /* @brief Shuts down libvncserver's background event loop and joins
++     *        all threads */
++    void stop();
+     /* @brief Resizes the RFB framebuffer */
+     void resize();
+-    /* @brief Executes any pending RFB updates and client input */
+-    void run();
++    /* @brief Per-frame bookkeeping. Applies a pending resize once the
++     *        client has had enough frames to settle after connecting. */
++    void tick();
+     /* @brief Sends pending video frame to clients */
+     void sendFrame();
+ 
+@@ -116,8 +123,6 @@
+     int frameCounter;
+     /* @brief Number of connected clients */
+     unsigned int numClients;
+-    /* @brief Microseconds to process RFB events every frame */
+-    long int processTime;
+     /* @brief Handle to the RFB server object */
+     rfbScreenInfoPtr server;
+     /* @brief Reference to the Input object */
+--- a/ikvm_server.cpp
++++ b/ikvm_server.cpp
+@@ -55,11 +55,31 @@
+     server->kbdAddEvent = Input::keyEvent;
+     server->ptrAddEvent = Input::pointerEvent;
+ 
+-    processTime = (1000000 / video.getFrameRate()) - 100;
++    /* deferUpdateTime controls how long libvncserver batches framebuffer
++     * updates in each per-client output thread before sending. The default
++     * (40ms) adds latency to input echo. Reduce it to ~5ms so typed
++     * characters appear responsively. */
++    server->deferUpdateTime = 5;
+ 
+     calcFrameCRC = args.getCalcFrameCRC();
+ }
+ 
++void Server::start()
++{
++    /* Spawn libvncserver's background listener thread. On each client
++     * connection, libvncserver will spawn a pair of per-client threads
++     * (input + output) that handle RFB protocol I/O with proper internal
++     * synchronization. Returns immediately. */
++    rfbRunEventLoop(server, -1, TRUE);
++}
++
++void Server::stop()
++{
++    /* Close all client sockets, wait for per-client threads to exit,
++     * then wait for the listener thread to exit. */
++    rfbShutdownServer(server, TRUE);
++}
++
+ Server::~Server()
+ {
+     rfbScreenCleanup(server);
+@@ -77,10 +97,11 @@
+     }
+ }
+ 
+-void Server::run()
++void Server::tick()
+ {
+-    rfbProcessEvents(server, processTime);
+-
++    /* libvncserver's background threads handle client I/O on their own,
++     * but we still need to count frames sent to apply a deferred resize
++     * once the client has had time to settle after connecting. */
+     if (server->clientHead)
+     {
+         frameCounter++;
+-- 
+2.53.0
