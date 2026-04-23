@@ -1,0 +1,74 @@
+From f1ee4e2668ac59564c1d92dbd2898c35057d9f8e Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Wed, 22 Apr 2026 22:12:29 +0200
+Subject: [PATCH 2/2] account-service: return proper error on deletion
+
+phosphor-user-manager may return an error on deletion if userdel fails
+for arbitrary reasons (e.g. the user is still logged in and running
+processes). Previously, any D-Bus error was unconditionally mapped to
+404 Not Found, which was misleading for users that existed but could
+not be removed.
+
+Inspect the D-Bus error name and return the most appropriate Redfish
+response: ResourceNotFound for unknown objects, InsufficientPrivilege
+for NotAllowed (e.g. removing the root user), and InternalError for
+anything else.
+
+Tested: Verified correct error responses when deleting a non-existent
+        user, when attempting to delete root (prohibited by
+        phosphor-user-manager), and on unknown errors. Ran
+        openbmc-test-automation against AccountService with no
+        unexpected regressions.
+
+Upstream-Status: Pending
+Change-Id: I559a4081d992b424319ae243c176baae91b1c322
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ redfish-core/lib/account_service.hpp | 29 +++++++++++++++++++++++++---
+ 1 file changed, 26 insertions(+), 3 deletions(-)
+
+diff --git a/redfish-core/lib/account_service.hpp b/redfish-core/lib/account_service.hpp
+index f8226fb5..0ca2ee7e 100644
+--- a/redfish-core/lib/account_service.hpp
++++ b/redfish-core/lib/account_service.hpp
+@@ -2186,11 +2186,34 @@ inline void handleAccountDelete(
+ 
+     dbus::utility::async_method_call(
+         asyncResp,
+-        [asyncResp, username](const boost::system::error_code& ec) {
++        [asyncResp, username](const boost::system::error_code& ec,
++                              sdbusplus::message_t& m) {
+             if (ec)
+             {
+-                messages::resourceNotFound(asyncResp->res, "ManagerAccount",
+-                                           username);
++                const sd_bus_error* e = m.get_error();
++
++                if (e == nullptr)
++                {
++                    messages::internalError(asyncResp->res);
++                    return;
++                }
++
++                const std::string_view em = e->name;
++                if (em == "org.freedesktop.DBus.Error.UnknownObject")
++                {
++                    messages::resourceNotFound(asyncResp->res, "ManagerAccount",
++                                               username);
++                }
++                else if (em == "xyz.openbmc_project.Common.Error.NotAllowed")
++                {
++                    messages::insufficientPrivilege(asyncResp->res);
++                }
++                else
++                {
++                    BMCWEB_LOG_ERROR("DBUS response error {}", em);
++                    messages::internalError(asyncResp->res);
++                }
++
+                 return;
+             }
+ 
+-- 
+2.53.0
+
