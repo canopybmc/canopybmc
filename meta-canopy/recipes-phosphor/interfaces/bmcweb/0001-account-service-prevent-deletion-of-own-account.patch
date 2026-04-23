@@ -1,0 +1,44 @@
+From 43374d7bfa8c79536b83ff24f5f1b94b3e3369ac Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Wed, 22 Apr 2026 18:20:04 +0200
+Subject: [PATCH 1/2] account-service: prevent deletion of own account
+
+Deleting the own account via the Redfish AccountService could leave the
+system in an inconsistent or unmanageable state.
+
+Reject such requests with an InsufficientPrivilege response before any
+D-Bus interaction takes place.
+
+Tested: Deleting own user fails with InsufficientPrivileges
+        successfully.
+
+Upstream-Status: Pending
+Change-Id: I9a519593a43ce14b7c136d16c264dc753a7204eb
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+[Tan: modified patch because the "shorter type aliases" commit is missing]
+---
+ redfish-core/lib/account_service.hpp | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/redfish-core/lib/account_service.hpp b/redfish-core/lib/account_service.hpp
+index a91d707f..f8226fb5 100644
+--- a/redfish-core/lib/account_service.hpp
++++ b/redfish-core/lib/account_service.hpp
+@@ -2172,6 +2172,14 @@ inline void handleAccountDelete(
+         messages::resourceNotFound(asyncResp->res, "ManagerAccount", username);
+         return;
+     }
++
++    // Do not allow the removal of the own user
++    if (username == req.session->username)
++    {
++        messages::insufficientPrivilege(asyncResp->res);
++        return;
++    }
++
+     sdbusplus::message::object_path tempObjPath(rootUserDbusPath);
+     tempObjPath /= username;
+     const std::string userPath(tempObjPath);
+-- 
+2.53.0
+
