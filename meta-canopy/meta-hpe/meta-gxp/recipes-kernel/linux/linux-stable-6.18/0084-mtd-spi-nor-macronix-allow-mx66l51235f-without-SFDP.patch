@@ -1,0 +1,48 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Christian Walter <christian.walter@9elements.com>
+Date: Thu, 24 Apr 2026 12:00:00 +0200
+Subject: [PATCH] mtd: spi-nor: macronix: allow MX66L51235F probe without SFDP
+
+The Macronix MX66L51235F flash entry relies entirely on SFDP for
+parameter discovery (size, erase types, read modes). On SPI
+controllers that cannot issue SFDP reads correctly — such as the HPE
+GXP SPIFI controller which lacks hardware support for dummy cycles in
+manual mode — the BFPT parsing fails and the flash probe fails with
+-EINVAL.
+
+Add a static size and SPI_NOR_SKIP_SFDP flag so the flash can be
+probed using JEDEC ID matching alone, without requiring SFDP. The
+size (64 MiB), sector size (64 KiB), and 4K erase capability are
+taken from the MX66L51235F datasheet. The existing fixup_flags for
+4-byte opcodes and the qpp4b fixups are preserved.
+
+On controllers that do support SFDP, this entry is never reached
+because the JEDEC ID match will still find the flash, but
+spi_nor_needs_sfdp() now returns false due to the non-zero size,
+causing the driver to use spi_nor_no_sfdp_init_params() instead.
+This provides basic read/write/erase without quad-SPI — which is
+sufficient for BMC access to the host BIOS flash where only single-
+lane reads are used.
+
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ drivers/mtd/spi-nor/macronix.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/mtd/spi-nor/macronix.c b/drivers/mtd/spi-nor/macronix.c
+index 29edfe47c29f..a4b5c6d7e0f1 100644
+--- a/drivers/mtd/spi-nor/macronix.c
++++ b/drivers/mtd/spi-nor/macronix.c
+@@ -142,6 +142,10 @@ static const struct flash_info macronix_nor_parts[] = {
+ 	}, {
+ 		/* MX66L51235F */
+ 		.id = SNOR_ID(0xc2, 0x20, 0x1a),
++		.size = SZ_64M,
++		.sector_size = SZ_64K,
++		.no_sfdp_flags = SPI_NOR_SKIP_SFDP | SECT_4K |
++				 SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
+ 		.fixup_flags = SPI_NOR_4B_OPCODES,
+ 		.fixups = &macronix_qpp4b_fixups,
+ 	}, {
+-- 
+2.48.1
