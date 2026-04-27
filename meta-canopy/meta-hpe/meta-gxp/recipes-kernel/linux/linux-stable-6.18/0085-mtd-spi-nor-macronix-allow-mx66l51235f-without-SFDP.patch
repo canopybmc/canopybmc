@@ -12,9 +12,10 @@ manual mode — the BFPT parsing fails and the flash probe fails with
 
 Add a static size and SPI_NOR_SKIP_SFDP flag so the flash can be
 probed using JEDEC ID matching alone, without requiring SFDP. The
-size (64 MiB), sector size (64 KiB), and 4K erase capability are
-taken from the MX66L51235F datasheet. The existing fixup_flags for
-4-byte opcodes and the qpp4b fixups are preserved.
+size (64 MiB) and 4K erase capability are taken from the
+MX66L51235F datasheet; sector size defaults to 64 KiB.
+The existing fixup_flags for 4-byte opcodes and the qpp4b
+fixups are preserved.
 
 On controllers that do support SFDP, this entry is never reached
 because the JEDEC ID match will still find the flash, but
@@ -26,19 +27,18 @@ lane reads are used.
 
 Signed-off-by: Christian Walter <christian.walter@9elements.com>
 ---
- drivers/mtd/spi-nor/macronix.c | 4 ++++
- 1 file changed, 4 insertions(+)
+ drivers/mtd/spi-nor/macronix.c | 3 +++
+ 1 file changed, 3 insertions(+)
 
 diff --git a/drivers/mtd/spi-nor/macronix.c b/drivers/mtd/spi-nor/macronix.c
 index 29edfe47c29f..a4b5c6d7e0f1 100644
 --- a/drivers/mtd/spi-nor/macronix.c
 +++ b/drivers/mtd/spi-nor/macronix.c
-@@ -142,6 +142,10 @@ static const struct flash_info macronix_nor_parts[] = {
+@@ -142,6 +142,9 @@ static const struct flash_info macronix_nor_parts[] = {
  	}, {
  		/* MX66L51235F */
  		.id = SNOR_ID(0xc2, 0x20, 0x1a),
 +		.size = SZ_64M,
-+		.sector_size = SZ_64K,
 +		.no_sfdp_flags = SPI_NOR_SKIP_SFDP | SECT_4K |
 +				 SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.fixup_flags = SPI_NOR_4B_OPCODES,
