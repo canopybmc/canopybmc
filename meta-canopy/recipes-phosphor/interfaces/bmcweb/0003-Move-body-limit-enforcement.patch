@@ -1,0 +1,55 @@
+From 0b2049b0ae1a717c3e73b70d6a064854b3208199 Mon Sep 17 00:00:00 2001
+From: Gunnar Mills <gmills@us.ibm.com>
+Date: Mon, 23 Feb 2026 21:08:49 -0600
+Subject: [PATCH] Move body limit enforcement
+
+Make sure the body limit enforcement happens before the Expect:
+100-continue check.
+
+Tested: Verified the body limit check happens first, even when Expect:
+        100-continue is used. Now rejects with 413 Payload Too Large.
+        Normal operations such as the Redfish Validator still work.
+
+Upstream-Status: Backport [from commit 0b2049b0]
+Change-Id: I185dab82c75b3c44d89102750fd03666659a57a6
+Signed-off-by: Gunnar Mills <gmills@us.ibm.com>
+---
+ http/http_connection.hpp | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/http/http_connection.hpp b/http/http_connection.hpp
+index 70f7b82c..eb7a6e6c 100644
+--- a/http/http_connection.hpp
++++ b/http/http_connection.hpp
+@@ -646,21 +646,21 @@ class Connection :
+                 ip, res, method, value.base(), mtlsSession);
+         }
+ 
+-        std::string_view expect = value[boost::beast::http::field::expect];
+-        if (bmcweb::asciiIEquals(expect, "100-continue"))
++        if (!handleContentLengthError())
+         {
+-            res.result(boost::beast::http::status::continue_);
+-            doWrite();
+             return;
+         }
+ 
+-        if (!handleContentLengthError())
++        parse.body_limit(getContentLengthLimit());
++
++        std::string_view expect = value[boost::beast::http::field::expect];
++        if (bmcweb::asciiIEquals(expect, "100-continue"))
+         {
++            res.result(boost::beast::http::status::continue_);
++            doWrite();
+             return;
+         }
+ 
+-        parse.body_limit(getContentLengthLimit());
+-
+         if (parse.is_done())
+         {
+             handle();
+-- 
+2.53.0
+
