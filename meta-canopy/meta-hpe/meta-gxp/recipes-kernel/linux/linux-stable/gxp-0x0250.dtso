@@ -22,12 +22,9 @@
                 reg = <0x57>;
             };
             ubm1: ubm@40 {
-                compatible = "hpe,ubm4";
-                eeprom_phandle = <&piceeprom1>;
+                compatible = "ubm4";
+                vcc-supply = <&host_power>;
                 reg = <0x40>;
-                #gpio-cells = <2>;
-                gpio-line-names = "1_DRV1_PRESENCE", "1_DRV1_UUID", "1_DRV1_ACT",
-                "1_DRV2_PRESENCE", "1_DRV2_UUID", "1_DRV2_ACT";
             };
             switch@72 {
                 compatible = "nxp,pca9546";
@@ -76,12 +73,9 @@
                 reg = <0x57>;
             };
             ubm2: ubm@40 {
-                compatible = "hpe,ubm4";
-                eeprom_phandle = <&piceeprom2>;
+                compatible = "ubm4";
+                vcc-supply = <&host_power>;
                 reg = <0x40>;
-                #gpio-cells = <2>;
-                gpio-line-names = "2_DRV3_PRESENCE", "2_DRV3_UUID", "2_DRV3_ACT",
-                "2_DRV4_PRESENCE", "2_DRV4_UUID", "2_DRV4_ACT";
             };
             switch@72 {
                 compatible = "nxp,pca9546";
@@ -131,11 +125,8 @@
             };
             ubm3: ubm@40 {
                 compatible = "ubm4";
-                eeprom_phandle = <&piceeprom3>;
+                vcc-supply = <&host_power>;
                 reg = <0x40>;
-                #gpio-cells = <2>;
-                gpio-line-names = "3_DRV5_PRESENCE", "3_DRV5_UUID", "3_DRV5_ACT",
-                "3_DRV6_PRESENCE", "3_DRV6_UUID", "3_DRV6_ACT";
             };
             switch@72 {
                 compatible = "nxp,pca9546";
@@ -184,12 +175,9 @@
                 reg = <0x57>;
             };
             ubm4: ubm@40 {
-                compatible = "hpe,ubm4";
-                eeprom_phandle = <&piceeprom4>;
+                compatible = "ubm4";
+                vcc-supply = <&host_power>;
                 reg = <0x40>;
-                #gpio-cells = <2>;
-                gpio-line-names = "4_DRV7_PRESENCE", "4_DRV7_UUID", "4_DRV7_ACT",
-                "4_DRV8_PRESENCE", "4_DRV8_UUID", "4_DRV8_ACT";
             };
             switch@72 {
                 compatible = "nxp,pca9546";
@@ -245,12 +233,9 @@
                 reg = <0x57>;
             };
             ubm5: ubm@40 {
-                compatible = "hpe,ubm4";
-                eeprom_phandle = <&piceeprom5>;
+                compatible = "ubm4";
+                vcc-supply = <&host_power>;
                 reg = <0x40>;
-                #gpio-cells = <2>;
-                gpio-line-names = "5_DRV9_PRESENCE", "5_DRV9_UUID", "5_DRV9_ACT",
-                "5_DRV10_PRESENCE", "5_DRV10_UUID", "5_DRV10_ACT";
             };
             switch@72 {
                 compatible = "nxp,pca9546";

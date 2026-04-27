@@ -1,0 +1,228 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Christian Walter <christian.walter@9elements.com>
+Date: Thu, 24 Apr 2026 16:00:00 +0200
+Subject: [PATCH] misc: ubm: add minimal UBM backplane init driver
+
+Universal Backplane Management (UBM, SFF-TA-1005) controllers require
+an initialization command over I2C before the drives behind them become
+visible to the host BIOS.  Without this init, NVMe drives are not
+enumerated on a cold boot -- only after a warm reboot (where the
+controllers retain state from the previous cycle).
+
+Add a minimal I2C client driver that sends the UBM Two-Wire init
+command {0x34, 0xBF, 0x00, <checksum>} to the controller at probe
+time.  This is sufficient to bring UBM controllers into an operational
+state so the BIOS can discover drives during POST.
+
+The driver supports an optional vcc-supply regulator to defer probing
+until the host is powered on (UBM backplanes are powered from host
+power rails and are not accessible when the host is off).
+
+The driver matches the "ubm4" compatible string used in the HPE ProLiant
+Gen11 device tree overlays.
+
+Tested: Cold boot on HPE ProLiant DL380 Gen11 -- NVMe drives visible in
+BIOS after applying the init command during early POST.
+
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+---
+ drivers/misc/Kconfig    |  11 ++++
+ drivers/misc/Makefile   |   1 +
+ drivers/misc/ubm-init.c | 158 +++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 170 insertions(+)
+ create mode 100644 drivers/misc/ubm-init.c
+
+diff --git a/drivers/misc/Kconfig b/drivers/misc/Kconfig
+index b9c11f67315f..16ba5cea12b4 100644
+--- a/drivers/misc/Kconfig
++++ b/drivers/misc/Kconfig
+@@ -658,4 +658,15 @@ source "drivers/misc/mchp_pci1xxxx/Kconfig"
++
++config UBM_INIT
++	tristate "UBM backplane controller init driver"
++	depends on I2C
++	depends on REGULATOR
++	help
++	  Minimal driver for Universal Backplane Management (UBM,
++	  SFF-TA-1005) controllers.  Sends the two-wire init command
++	  at probe time so that drives behind the backplane become
++	  visible to the host during POST.
++
+ source "drivers/misc/keba/Kconfig"
+ source "drivers/misc/amd-sbi/Kconfig"
+ source "drivers/misc/rp1/Kconfig"
+ endmenu
+diff --git a/drivers/misc/Makefile b/drivers/misc/Makefile
+index b32a2597d246..646a9d06ffe8 100644
+--- a/drivers/misc/Makefile
++++ b/drivers/misc/Makefile
+@@ -75,3 +75,4 @@ obj-$(CONFIG_MCHP_LAN966X_PCI)	+= lan966x-pci.o
+ obj-y				+= keba/
+ obj-y				+= amd-sbi/
+ obj-$(CONFIG_MISC_RP1)		+= rp1/
++obj-$(CONFIG_UBM_INIT)		+= ubm-init.o
+diff --git a/drivers/misc/ubm-init.c b/drivers/misc/ubm-init.c
+new file mode 100644
+index 000000000000..76c97615601f
+--- /dev/null
++++ b/drivers/misc/ubm-init.c
+@@ -0,0 +1,158 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * UBM backplane controller init driver
++ *
++ * Sends the UBM Two-Wire Interface init command to a backplane controller
++ * so that drives behind it become visible to the host BIOS during POST.
++ *
++ * The UBM (Universal Backplane Management) protocol is defined by
++ * SFF-TA-1005.  Each controller sits at I2C address 0x40 behind a
++ * software-controlled mux channel.  The init command activates the
++ * controller's Drive Facing Connectors (DFCs).
++ *
++ * Copyright (c) 2026 9elements GmbH
++ */
++
++#include <linux/i2c.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/property.h>
++#include <linux/regulator/consumer.h>
++
++#define UBM_CHECKSUM_SEED		0xa5
++
++/* UBM Features Command (SFF-TA-1005, Section 7.2.12, command 0x34) */
++#define UBM_CMD_FEATURES		0x34
++#define UBM_FEAT_PERST_AUTO_RELEASE	(2 << 6)
++#define UBM_FEAT_OPSTATE_CC_MASK	BIT(5)
++#define UBM_FEAT_DRVTYPE_CC_MASK	BIT(4)
++#define UBM_FEAT_PCIE_RST_CC_MASK	BIT(3)
++#define UBM_FEAT_CPRSNT_LEGACY		BIT(2)
++#define UBM_FEAT_WRITE_CHECKSUM		BIT(1)
++#define UBM_FEAT_READ_CHECKSUM		BIT(0)
++
++/**
++ * ubm_checksum() - Compute UBM Two-Wire Interface checksum
++ * @addr_8bit: 8-bit (shifted) I2C address
++ * @buf: command payload
++ * @len: payload length
++ *
++ * The checksum is defined as:
++ *   0x100 - (seed + addr_8bit + sum(buf[0..len-1])) & 0xFF
++ *
++ * Return: checksum byte
++ */
++static u8 ubm_checksum(u8 addr_8bit, const u8 *buf, unsigned int len)
++{
++	unsigned int sum = UBM_CHECKSUM_SEED + addr_8bit;
++	unsigned int i;
++
++	for (i = 0; i < len; i++)
++		sum += buf[i];
++
++	return (u8)(0x100 - (sum & 0xff));
++}
++
++/**
++ * ubm_send_init() - Send the UBM Features Command to a controller
++ * @client: I2C client at address 0x40
++ * @cprsnt_legacy: if true, set CPRSNT# Legacy Mode (bit 2)
++ *
++ * Writes the UBM Features Command (SFF-TA-1005, Section 7.2.12) to
++ * configure the controller and activate all DFCs on the backplane.
++ *
++ * Return: 0 on success, negative errno on failure
++ */
++static int ubm_send_init(struct i2c_client *client, bool cprsnt_legacy)
++{
++	u8 addr_8bit = (u8)(client->addr << 1);
++	u8 features;
++	u8 buf[4];
++	int ret;
++
++	features = UBM_FEAT_PERST_AUTO_RELEASE |
++		   UBM_FEAT_OPSTATE_CC_MASK |
++		   UBM_FEAT_DRVTYPE_CC_MASK |
++		   UBM_FEAT_PCIE_RST_CC_MASK |
++		   UBM_FEAT_WRITE_CHECKSUM |
++		   UBM_FEAT_READ_CHECKSUM;
++	if (cprsnt_legacy)
++		features |= UBM_FEAT_CPRSNT_LEGACY;
++
++	buf[0] = UBM_CMD_FEATURES;
++	buf[1] = features;
++	buf[2] = 0x00;
++	buf[3] = ubm_checksum(addr_8bit, buf, 3);
++
++	ret = i2c_master_send(client, buf, sizeof(buf));
++	if (ret < 0)
++		return ret;
++	if (ret != sizeof(buf))
++		return -EIO;
++
++	return 0;
++}
++
++static int ubm_init_probe(struct i2c_client *client)
++{
++	struct regulator *reg = NULL;
++	bool cprsnt_legacy;
++	int ret;
++
++	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C))
++		return dev_err_probe(&client->dev, -EOPNOTSUPP,
++				     "adapter lacks I2C_FUNC_I2C\n");
++
++	cprsnt_legacy = !device_property_read_bool(&client->dev,
++						   "cprsnt-interrupt-mode");
++
++	reg = devm_regulator_get_optional(&client->dev, "vcc");
++	if (IS_ERR(reg)) {
++		ret = PTR_ERR(reg);
++		if (ret == -EPROBE_DEFER)
++			return ret;
++		reg = NULL;
++	} else {
++		/* Take reference; defer if host power is not yet up */
++		ret = regulator_enable(reg);
++		if (ret)
++			return -EPROBE_DEFER;
++		if (!regulator_is_enabled(reg)) {
++			ret = -EPROBE_DEFER;
++			goto out_disable;
++		}
++	}
++
++	ret = ubm_send_init(client, cprsnt_legacy);
++	if (ret) {
++		dev_err_probe(&client->dev, ret,
++			      "UBM init command failed\n");
++		goto out_disable;
++	}
++
++	dev_dbg(&client->dev, "UBM controller initialized\n");
++	return 0;
++
++out_disable:
++	if (reg)
++		regulator_disable(reg);
++	return ret;
++}
++
++static const struct of_device_id ubm_init_of_match[] = {
++	{ .compatible = "ubm4" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, ubm_init_of_match);
++
++static struct i2c_driver ubm_init_driver = {
++	.driver = {
++		.name = "ubm-init",
++		.of_match_table = ubm_init_of_match,
++	},
++	.probe = ubm_init_probe,
++};
++module_i2c_driver(ubm_init_driver);
++
++MODULE_AUTHOR("Christian Walter <christian.walter@9elements.com>");
++MODULE_DESCRIPTION("UBM backplane controller init driver");
++MODULE_LICENSE("GPL");
