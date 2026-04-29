@@ -1,6 +1,18 @@
 {
     "leds": [
         {
+            "group": "bmc_booted",
+            "members": [
+                {
+                    "Name": "heartbeat_platform",
+                    "Action" : "Blink",
+                    "Priority" : "Blink",
+                    "DutyOn" : 50,
+                    "Period" : 1000
+                }
+            ]
+        },
+        {
             "group": "enclosure_identify",
             "members": [
                 {
