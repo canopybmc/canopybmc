@@ -5,9 +5,11 @@ LIC_FILES_CHKSUM = ""
 
 HPE_OSFCI_SIGNING_KEY = "hpe_osfci_private_key.pem"
 HPE_SIGNING_KEY ?= "${HPE_OSFCI_SIGNING_KEY}"
-HPE_SIGNING_KEY_URI = "file://${HPE_SIGNING_KEY}"
 HPE_SIGNING_HASH_ALG ?= "sha384"
 HPE_SIGNING_HEADER ?= "hpe-uboot-header.sig"
+
+# In PKCS#11 mode HPE_SIGNING_KEY is a token URI (pkcs11:...), not a file.
+HPE_SIGNING_KEY_URI = "${@'' if (d.getVar('HPE_SIGNING_KEY') or '').startswith('pkcs11:') else 'file://${HPE_SIGNING_KEY}'}"
 
 FILESEXTRAPATHS:prepend := "${THISDIR}/gxp-section:"
 
@@ -37,10 +39,23 @@ python do_warn_osfci_key() {
 addtask warn_osfci_key after do_fetch before do_deploy
 
 do_build_uboot_sig() {
-    # Sign u-boot
-    openssl ${HPE_SIGNING_HASH_ALG} -sign ${UNPACKDIR}/${HPE_SIGNING_KEY} \
-        -out ${S}/u-boot.sig \
-        ${DEPLOY_DIR_IMAGE}/u-boot.bin
+    # Sign u-boot.
+    case "${HPE_SIGNING_KEY}" in
+        pkcs11:*)
+            openssl dgst -${HPE_SIGNING_HASH_ALG} \
+                -engine pkcs11 -keyform engine \
+                -sign "${HPE_SIGNING_KEY}" \
+                -out ${S}/u-boot.sig \
+                ${DEPLOY_DIR_IMAGE}/u-boot.bin
+            ;;
+        *)
+            # PEM mode (usually the default).
+            openssl dgst -${HPE_SIGNING_HASH_ALG} \
+                -sign ${UNPACKDIR}/${HPE_SIGNING_KEY} \
+                -out ${S}/u-boot.sig \
+                ${DEPLOY_DIR_IMAGE}/u-boot.bin
+            ;;
+    esac
 
     # Create signature file (header + signature)
     cat ${UNPACKDIR}/${HPE_SIGNING_HEADER} ${S}/u-boot.sig \
@@ -57,7 +72,7 @@ do_build_uboot_sig[depends] += " \
     virtual/bootloader:do_deploy \
     "
 do_build_uboot_sig[vardeps] += "HPE_SIGNING_KEY"
-do_build_uboot_sig[file-checksums] += "${@bb.fetch2.localpath(d.getVar('HPE_SIGNING_KEY_URI', True), d)}:True"
+do_build_uboot_sig[file-checksums] += "${@bb.fetch2.localpath(d.getVar('HPE_SIGNING_KEY_URI', True), d) + ':True' if d.getVar('HPE_SIGNING_KEY_URI', True) else ''}"
 addtask build_uboot_sig after do_unpack before do_deploy
 
 do_deploy() {

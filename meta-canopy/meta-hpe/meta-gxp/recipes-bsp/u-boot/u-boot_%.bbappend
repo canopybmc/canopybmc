@@ -6,7 +6,8 @@ UTAG = "v2026.01"
 SRC_URI = "git://source.denx.de/u-boot/u-boot.git;protocol=https;branch=master;tag=${UTAG}"
 SRCREV = "168e3fe6d65a99b4b93c3803f74889adacd908e9"
 
-SRC_URI += "file://${HPE_SIGNING_KEY}"
+# In PKCS#11 mode HPE_SIGNING_KEY is a token URI (pkcs11:...), not a file.
+SRC_URI += "${@'' if (d.getVar('HPE_SIGNING_KEY') or '').startswith('pkcs11:') else 'file://${HPE_SIGNING_KEY}'}"
 SRC_URI += "file://gxp.cfg"
 SRC_URI += "file://0001-arm-dts-hpe-gxp-Describe-SPI-NOR-flash-on-HPE-GXP.patch"
 SRC_URI += "file://0002-misc-add-HPE-GXP-EEPROM-driver.patch"
@@ -27,12 +28,26 @@ UBOOT_SIGN_KEYDIR = "${B}/hpe-fit-keys"
 do_uboot_assemble_fitimage() {
     cd "${B}"
     install -d "${B}/hpe-fit-keys"
-    install -m 0600 "${UNPACKDIR}/${HPE_SIGNING_KEY}" "${B}/hpe-fit-keys/hpe_fit.key"
 
-    openssl req -new -x509 -days 36500 -subj "/" \
-        -key  "${B}/hpe-fit-keys/hpe_fit.key" \
-        -out  "${B}/hpe-fit-keys/hpe_fit.crt"
+    case "${HPE_SIGNING_KEY}" in
+        pkcs11:*)
+            openssl req -new -x509 -days 36500 -subj "/" \
+                -engine pkcs11 -keyform engine \
+                -key  "${HPE_SIGNING_KEY}" \
+                -out  "${B}/hpe-fit-keys/hpe_fit.crt"
+            _hpe_key_args="-N pkcs11 -G ${HPE_SIGNING_KEY}"
+            ;;
+        *)
+            # PEM mode (usually the default).
+            install -m 0600 "${UNPACKDIR}/${HPE_SIGNING_KEY}" "${B}/hpe-fit-keys/hpe_fit.key"
+            openssl req -new -x509 -days 36500 -subj "/" \
+                -key  "${B}/hpe-fit-keys/hpe_fit.key" \
+                -out  "${B}/hpe-fit-keys/hpe_fit.crt"
+            _hpe_key_args=""
+            ;;
+    esac
 
+    # shellcheck disable=SC2086  # _hpe_key_args is intentionally word-split
     ${UBOOT_MKIMAGE_SIGN} \
         -f auto-conf \
         -k "${UBOOT_SIGN_KEYDIR}" \
@@ -41,6 +56,7 @@ do_uboot_assemble_fitimage() {
         -K "${UBOOT_DTB_BINARY}" \
         -d /dev/null \
         -r "${B}/unused.itb" \
+        ${_hpe_key_args} \
         ${UBOOT_MKIMAGE_SIGN_ARGS}
 
     fdtget "${UBOOT_DTB_BINARY}" "/signature/key-${UBOOT_SIGN_KEYNAME}" "rsa,num-bits" \

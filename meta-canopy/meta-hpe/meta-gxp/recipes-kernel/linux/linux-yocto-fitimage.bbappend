@@ -5,7 +5,8 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/linux-stable:${THISDIR}/../../recipes-bsp
 HPE_OSFCI_SIGNING_KEY = "hpe_osfci_private_key.pem"
 HPE_SIGNING_KEY ?= "${HPE_OSFCI_SIGNING_KEY}"
 
-SRC_URI += "file://${HPE_SIGNING_KEY}"
+# In PKCS#11 mode HPE_SIGNING_KEY is a token URI (pkcs11:...), not a file.
+SRC_URI += "${@'' if (d.getVar('HPE_SIGNING_KEY') or '').startswith('pkcs11:') else 'file://${HPE_SIGNING_KEY}'}"
 
 # mkimage needs <keyname>.key + <keyname>.crt in a single directory.
 # The cert is self-signed and generated at build time from the private key;
@@ -15,10 +16,22 @@ FIT_KERNEL_SIGN_KEYNAME = "hpe_fit"
 
 do_prepare_fit_keys() {
     install -d "${B}/hpe-fit-keys"
-    install -m 0600 "${UNPACKDIR}/${HPE_SIGNING_KEY}" "${B}/hpe-fit-keys/hpe_fit.key"
-    openssl req -new -x509 -days 36500 -subj "/" \
-        -key "${B}/hpe-fit-keys/hpe_fit.key" \
-        -out "${B}/hpe-fit-keys/hpe_fit.crt"
+
+    case "${HPE_SIGNING_KEY}" in
+        pkcs11:*)
+            openssl req -new -x509 -days 36500 -subj "/" \
+                -engine pkcs11 -keyform engine \
+                -key  "${HPE_SIGNING_KEY}" \
+                -out  "${B}/hpe-fit-keys/hpe_fit.crt"
+            ;;
+        *)
+            # PEM mode (usually the default).
+            install -m 0600 "${UNPACKDIR}/${HPE_SIGNING_KEY}" "${B}/hpe-fit-keys/hpe_fit.key"
+            openssl req -new -x509 -days 36500 -subj "/" \
+                -key "${B}/hpe-fit-keys/hpe_fit.key" \
+                -out "${B}/hpe-fit-keys/hpe_fit.crt"
+            ;;
+    esac
 }
 addtask do_prepare_fit_keys after do_unpack before do_compile
 do_prepare_fit_keys[depends] += "openssl-native:do_populate_sysroot"
@@ -93,6 +106,8 @@ python do_compile:append() {
         sign_enable     = (d.getVar('FIT_KERNEL_SIGN_ENABLE') or '0') == '1'
         sign_keydir     = d.getVar('FIT_KERNEL_SIGN_KEYDIR') or ''
         sign_keyname    = d.getVar('FIT_KERNEL_SIGN_KEYNAME') or ''
+        hpe_signing_key = d.getVar('HPE_SIGNING_KEY') or ''
+        pkcs11_mode     = hpe_signing_key.startswith('pkcs11:')
 
         its_file    = os.path.join(b, 'fit-image.its')
         fitimg_path = os.path.join(b, 'fitImage')
@@ -204,10 +219,14 @@ python do_compile:append() {
 
         if sign_enable:
             sign_key_path = os.path.join(sign_keydir, sign_keyname)
-            if not os.path.exists(sign_key_path + '.key') or not os.path.exists(sign_key_path + '.crt'):
-                bb.fatal(f"GXP DTB append: sign key {sign_key_path}.key/.crt not found")
+            if not pkcs11_mode and not os.path.exists(sign_key_path + '.key'):
+                bb.fatal(f"GXP DTB append: sign key {sign_key_path}.key not found")
+            if not os.path.exists(sign_key_path + '.crt'):
+                bb.fatal(f"GXP DTB append: sign cert {sign_key_path}.crt not found")
 
             sign_cmd = [uboot_mkimage_sign, '-F', '-k', sign_keydir, '-r', fitimg_path]
+            if pkcs11_mode:
+                sign_cmd += ['-N', 'pkcs11', '-G', hpe_signing_key]
             if uboot_mkimage_dtcopts:
                 sign_cmd += ['-D', uboot_mkimage_dtcopts]
             if uboot_mkimage_sign_args:
