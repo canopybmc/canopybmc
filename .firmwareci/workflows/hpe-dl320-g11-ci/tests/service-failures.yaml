@@ -38,7 +38,7 @@ stages:
           executable: sh
           args:
             - "-c"
-            - "FAILED=$(systemctl list-units --state=failed --no-pager --no-legend | grep -v 'clear-once\\|bmc_booted\\|trace-enable'); if [ -n \"$FAILED\" ]; then echo \"$FAILED\"; exit 1; fi; echo '0 unexpected failures'"
+            - "FAILED=$(systemctl list-units --state=failed --no-pager --no-legend | grep -v 'clear-once\\|trace-enable'); if [ -n \"$FAILED\" ]; then echo \"$FAILED\"; exit 1; fi; echo '0 unexpected failures'"
 
   - name: No Crash Loops
     steps:
