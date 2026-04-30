@@ -243,6 +243,18 @@
             "Type": "XeonCPU"
         },
         {
+            "Name": "PSU1Detect",
+            "PresencePinNames": ["INST_PSU1"],
+            "PresencePinValues": [1],
+            "Type": "GPIODeviceDetect"
+        },
+        {
+            "Name": "PSU2Detect",
+            "PresencePinNames": ["INST_PSU2"],
+            "PresencePinValues": [1],
+            "Type": "GPIODeviceDetect"
+        },
+        {
             "Name": "GenericPowerPort",
             "PortType": "powered_by",
             "Type": "Port"
