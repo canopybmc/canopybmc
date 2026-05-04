@@ -26,6 +26,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "0_DRV1_PRESENCE", "0_DRV1_UUID", "0_DRV1_ACT",
+						  "0_DRV2_PRESENCE", "0_DRV2_UUID", "0_DRV2_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -77,6 +80,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "1_DRV1_PRESENCE", "1_DRV1_UUID", "1_DRV1_ACT",
+						  "1_DRV2_PRESENCE", "1_DRV2_UUID", "1_DRV2_ACT";
 			};
 		};
 		i2c3_9: i2c3@9 {
@@ -92,6 +98,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "2_DRV1_PRESENCE", "2_DRV1_UUID", "2_DRV1_ACT",
+						  "2_DRV2_PRESENCE", "2_DRV2_UUID", "2_DRV2_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -143,6 +152,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "3_DRV1_PRESENCE", "3_DRV1_UUID", "3_DRV1_ACT",
+						  "3_DRV2_PRESENCE", "3_DRV2_UUID", "3_DRV2_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
