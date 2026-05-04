@@ -48,3 +48,9 @@ runs:
         name: obmc-phosphor-image-${{ inputs.board }}
         path: build/${{ inputs.board }}/tmp/deploy/images/${{ inputs.board }}/obmc-phosphor-image-${{ inputs.board }}.*static.mtd
 
+    - name: Upload SBOM
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom-${{ inputs.board }}
+        path: build/${{ inputs.board }}/tmp/deploy/images/${{ inputs.board }}/obmc-phosphor-image-${{ inputs.board }}.spdx.json
+
