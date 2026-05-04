@@ -40,6 +40,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "1_DRV1_PRESENCE", "1_DRV1_UUID", "1_DRV1_ACT",
+				"1_DRV2_PRESENCE", "1_DRV2_UUID", "1_DRV2_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -91,6 +94,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "2_DRV3_PRESENCE", "2_DRV3_UUID", "2_DRV3_ACT",
+				"2_DRV4_PRESENCE", "2_DRV4_UUID", "2_DRV4_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -142,6 +148,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "3_DRV5_PRESENCE", "3_DRV5_UUID", "3_DRV5_ACT",
+				"3_DRV6_PRESENCE", "3_DRV6_UUID", "3_DRV6_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -193,6 +202,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "4_DRV7_PRESENCE", "4_DRV7_UUID", "4_DRV7_ACT",
+				"4_DRV8_PRESENCE", "4_DRV8_UUID", "4_DRV8_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -244,6 +256,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "5_DRV9_PRESENCE", "5_DRV9_UUID", "5_DRV9_ACT",
+				"5_DRV10_PRESENCE", "5_DRV10_UUID", "5_DRV10_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -295,6 +310,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "6_DRV11_PRESENCE", "6_DRV11_UUID", "6_DRV11_ACT",
+				"6_DRV12_PRESENCE", "6_DRV12_UUID", "6_DRV12_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -346,6 +364,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "7_DRV13_PRESENCE", "7_DRV13_UUID", "7_DRV13_ACT",
+				"7_DRV14_PRESENCE", "7_DRV14_UUID", "7_DRV14_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -397,6 +418,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "8_DRV15_PRESENCE", "8_DRV15_UUID", "8_DRV15_ACT",
+				"8_DRV16_PRESENCE", "8_DRV16_UUID", "8_DRV16_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -448,6 +472,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "9_DRV17_PRESENCE", "9_DRV17_UUID", "9_DRV17_ACT",
+				"9_DRV18_PRESENCE", "9_DRV18_UUID", "9_DRV18_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -499,6 +526,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "10_DRV19_PRESENCE", "10_DRV19_UUID", "10_DRV19_ACT",
+				"10_DRV20_PRESENCE", "10_DRV20_UUID", "10_DRV20_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -550,6 +580,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "11_DRV21_PRESENCE", "11_DRV21_UUID", "11_DRV21_ACT",
+				"11_DRV22_PRESENCE", "11_DRV22_UUID", "11_DRV22_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -601,6 +634,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "12_DRV23_PRESENCE", "12_DRV23_UUID", "12_DRV23_ACT",
+				"12_DRV24_PRESENCE", "12_DRV24_UUID", "12_DRV24_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -652,6 +688,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "13_DRV25_PRESENCE", "13_DRV25_UUID", "13_DRV25_ACT",
+				"13_DRV26_PRESENCE", "13_DRV26_UUID", "13_DRV26_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -703,6 +742,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "14_DRV27_PRESENCE", "14_DRV27_UUID", "14_DRV27_ACT",
+				"14_DRV28_PRESENCE", "14_DRV28_UUID", "14_DRV28_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -754,6 +796,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "15_DRV29_PRESENCE", "15_DRV29_UUID", "15_DRV29_ACT",
+				"15_DRV30_PRESENCE", "15_DRV30_UUID", "15_DRV30_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -805,6 +850,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "16_DRV31_PRESENCE", "16_DRV31_UUID", "16_DRV31_ACT",
+				"16_DRV32_PRESENCE", "16_DRV32_UUID", "16_DRV32_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -863,6 +911,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "17_DRV33_PRESENCE", "17_DRV33_UUID", "17_DRV33_ACT",
+				"17_DRV34_PRESENCE", "17_DRV34_UUID", "17_DRV34_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -914,6 +965,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "18_DRV35_PRESENCE", "18_DRV35_UUID", "18_DRV35_ACT",
+				"18_DRV36_PRESENCE", "18_DRV36_UUID", "18_DRV36_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -972,6 +1026,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "19_DRV37_PRESENCE", "19_DRV37_UUID", "19_DRV37_ACT",
+				"19_DRV38_PRESENCE", "19_DRV38_UUID", "19_DRV38_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -1023,6 +1080,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "20_DRV39_PRESENCE", "20_DRV39_UUID", "20_DRV39_ACT",
+				"20_DRV40_PRESENCE", "20_DRV40_UUID", "20_DRV40_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -1074,6 +1134,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "21_DRV41_PRESENCE", "21_DRV41_UUID", "21_DRV41_ACT",
+				"21_DRV42_PRESENCE", "21_DRV42_UUID", "21_DRV42_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
@@ -1125,6 +1188,9 @@
 				compatible = "ubm4";
 				vcc-supply = <&host_power>;
 				reg = <0x40>;
+				#gpio-cells = <2>;
+				gpio-line-names = "22_DRV43_PRESENCE", "22_DRV43_UUID", "22_DRV43_ACT",
+				"22_DRV44_PRESENCE", "22_DRV44_UUID", "22_DRV44_ACT";
 			};
 			switch@72 {
 				compatible = "nxp,pca9546";
