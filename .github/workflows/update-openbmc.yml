@@ -1,0 +1,56 @@
+name: Update OpenBMC reference
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 8 * * 1'
+
+jobs:
+  update-openbmc:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install go-task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+
+      - name: Set up branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git branch -D update_openbmc_action 2>/dev/null || true
+          git fetch origin
+          git branch update_openbmc_action
+          git checkout update_openbmc_action
+
+      - name: Run obmc-bump
+        run: go-task -y obmc-bump
+
+      - name: Push branch
+        run: git push origin update_openbmc_action --force
+
+      - name: Create or update PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BODY_FILE=$(mktemp)
+          cat > "$BODY_FILE" <<'BODYEOF'
+          Automated changes by the update-openbmc GitHub Action.
+
+          ```
+          BODYEOF
+
+          git log -1 --pretty=%B >> "$BODY_FILE"
+          echo "```" >> "$BODY_FILE"
+
+          gh pr create \
+            --head update_openbmc_action \
+            --title "openbmc: update ref" \
+            --body-file "$BODY_FILE" \
+          || gh pr edit update_openbmc_action \
+            --title "openbmc: update ref" \
+            --body-file "$BODY_FILE"
