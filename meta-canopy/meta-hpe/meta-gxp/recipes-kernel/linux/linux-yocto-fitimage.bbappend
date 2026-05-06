@@ -1,4 +1,4 @@
-FILESEXTRAPATHS:prepend := "${THISDIR}/linux-stable:${THISDIR}/../../recipes-bsp/images/gxp-section:"
+FILESEXTRAPATHS:prepend := "${THISDIR}/linux-hpe:${THISDIR}/../../recipes-bsp/images/gxp-section:"
 
 # FIT image signing — same key override pattern as gxp-uboot-sig.bb.
 # Override HPE_SIGNING_KEY in local.conf for production builds.

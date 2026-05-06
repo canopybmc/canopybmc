@@ -1,4 +1,4 @@
-FILESEXTRAPATHS:prepend := "${THISDIR}/linux-stable:"
+FILESEXTRAPATHS:prepend := "${THISDIR}/linux-hpe:"
 FILESEXTRAPATHS:prepend := "${THISDIR}/linux-stable-6.18:"
 
 require linux-gxp-flash-layout.inc
