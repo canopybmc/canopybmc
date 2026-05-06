@@ -1,4 +1,4 @@
-PREFERRED_PROVIDER_virtual/kernel ?= "linux-stable"
+PREFERRED_PROVIDER_virtual/kernel ?= "linux-hpe"
 
 # FIT images are now built by the linux-yocto-fitimage recipe
 # The kernel itself builds a standard image type (zImage for ARM)

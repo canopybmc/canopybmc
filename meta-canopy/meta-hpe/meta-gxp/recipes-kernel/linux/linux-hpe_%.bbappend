@@ -1,4 +1,4 @@
-FILESEXTRAPATHS:prepend := "${THISDIR}/linux-stable:"
+FILESEXTRAPATHS:prepend := "${THISDIR}/linux-hpe:"
 FILESEXTRAPATHS:prepend := "${THISDIR}/linux-stable-6.18:"
 
 require linux-gxp-flash-layout.inc
@@ -9,6 +9,7 @@ KCONFIG_MODE = "--alldefconfig"
 ERROR_QA:remove = "patch-status"
 
 SRC_URI += "file://defconfig"
+SRC_URI += "file://openbmc-common.cfg"
 SRC_URI += "file://debug.cfg"
 SRC_URI += "file://kvm.cfg"
 SRC_URI += "file://pca954x.cfg"
