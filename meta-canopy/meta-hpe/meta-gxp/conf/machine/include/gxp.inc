@@ -13,8 +13,15 @@ SOC_FAMILY = "gxp-b1"
 include conf/machine/include/soc-family.inc
 MACHINEOVERRIDES .= ":gxp"
 
-DEFAULTTUNE ?= "armv6-novfp"
-require conf/machine/include/arm/arch-armv6.inc
+require conf/machine/include/arm/armv7a/tune-cortexa9.inc
+
+AVAILTUNES += "cortexa9t-novfp"
+TUNE_FEATURES:tune-cortexa9t-novfp = "arm thumb cortexa9"
+TUNE_CCARGS .= "${@bb.utils.contains('TUNE_FEATURES', 'cortexa9', ' -mcpu=cortex-a9', '', d)}"
+ARMPKGARCH:tune-cortexa9t-novfp = "cortexa9"
+PACKAGE_EXTRA_ARCHS:tune-cortexa9t-novfp = "${PACKAGE_EXTRA_ARCHS:tune-armv7at} cortexa9-vfp cortexa9t2 cortexa9t2-vfp"
+
+DEFAULTTUNE = "cortexa9t-novfp"
 
 UBOOT_MACHINE ?= "gxp_defconfig"
 UBOOT_ENTRYPOINT ?= "0x40100000"
