@@ -1,0 +1,3 @@
+Common targets are:
+
+     obmc-phosphor-image: Includes OpenBMC Phosphor userspace and Web UI
