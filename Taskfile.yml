@@ -18,8 +18,8 @@ tasks:
         git switch -c {{.BRANCH_NAME}} origin/main
       - defer: git switch {{.ORIGINAL_BRANCH}} && git branch -D {{.BRANCH_NAME}}
 
-      - git -C openbmc fetch origin main
-      - git -C openbmc checkout origin/main
+      - git -C openbmc fetch origin master
+      - git -C openbmc checkout origin/master
 
       - |
         OLD_COMMIT={{.OLD_COMMIT}}
