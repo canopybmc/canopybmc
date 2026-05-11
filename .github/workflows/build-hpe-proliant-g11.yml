@@ -6,7 +6,7 @@ on:
     branches:
       - main
     paths:
-      - 'openbmc/**'
+      - 'openbmc'
       - 'meta-canopy/**'
       - '.github/**'
       - '.firmwareci/**'
@@ -14,7 +14,7 @@ on:
     branches:
       - main
     paths:
-      - 'openbmc/**'
+      - 'openbmc'
       - 'meta-canopy/**'
       - '.github/**'
       - '.firmwareci/**'
