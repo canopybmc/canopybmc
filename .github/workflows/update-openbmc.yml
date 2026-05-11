@@ -23,16 +23,13 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git branch -D update_openbmc_action 2>/dev/null || true
+          git branch -D rebase/openbmc 2>/dev/null || true
           git fetch origin
-          git branch update_openbmc_action
-          git checkout update_openbmc_action
+          git branch rebase/openbmc
+          git checkout rebase/openbmc
 
       - name: Run obmc-bump
         run: task -y obmc-bump
-
-      - name: Push branch
-        run: git push origin update_openbmc_action --force
 
       - name: Create or update PR
         env:
@@ -49,9 +46,9 @@ jobs:
           echo "```" >> "$BODY_FILE"
 
           gh pr create \
-            --head update_openbmc_action \
+            --head rebase/openbmc \
             --title "openbmc: update ref" \
             --body-file "$BODY_FILE" \
-          || gh pr edit update_openbmc_action \
+          || gh pr edit rebase/openbmc \
             --title "openbmc: update ref" \
             --body-file "$BODY_FILE"
