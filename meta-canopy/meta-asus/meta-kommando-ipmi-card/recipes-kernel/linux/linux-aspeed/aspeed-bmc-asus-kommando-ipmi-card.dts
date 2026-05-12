@@ -137,3 +137,8 @@
 	status = "okay";
 	memory-region = <&video_engine_memory>;
 };
+
+&lpc_snoop{
+	status = "okay";
+	snoop-ports = <0x80>;
+};
