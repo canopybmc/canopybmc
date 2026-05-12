@@ -108,6 +108,12 @@
 	/*18E0 32*/ "","","","","","","","";
 };
 
+&lpc_snoop {
+	snoop-ports = <0x80>;
+
+	status = "okay";
+};
+
 &mac2 {
 	phy-handle = <&ethphy2>;
 	phy-mode = "rgmii";
