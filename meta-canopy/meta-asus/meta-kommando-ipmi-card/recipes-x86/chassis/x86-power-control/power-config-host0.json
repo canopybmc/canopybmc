@@ -1,0 +1,34 @@
+{
+    "gpio_configs": [
+        {
+            "Name": "PowerOk",
+            "LineName": "MB_S0_DETECT",
+            "Type": "GPIO",
+            "Polarity": "ActiveHigh"
+        },
+        {
+            "Name": "PowerOut",
+            "LineName": "BMC_PWRBTN",
+            "Type": "GPIO",
+            "Polarity": "ActiveHigh"
+        },
+        {
+            "Name": "ResetOut",
+            "LineName": "BMC_RSTBTN",
+            "Type": "GPIO",
+            "Polarity": "ActiveLow"
+        }
+    ],
+    "timing_configs": {
+        "PowerPulseMs": 200,
+        "ForceOffPulseMs": 15000,
+        "ResetPulseMs": 500,
+        "PowerCycleMs": 5000,
+        "SioPowerGoodWatchdogMs": 1000,
+        "PowerOKWatchdogMs": 8000,
+        "GracefulPowerOffS": 300,
+        "WarmResetCheckMs": 500,
+        "PowerOffSaveMs": 7000,
+        "DbusGetPropertyRetry": 1000
+    }
+}
