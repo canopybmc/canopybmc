@@ -1,0 +1,54 @@
+From 0b97a66762efc05c9073c14112cc489624871947 Mon Sep 17 00:00:00 2001
+Message-ID: <0b97a66762efc05c9073c14112cc489624871947.1784732161.git.gregoire.layet@9elements.com>
+In-Reply-To: <cover.1784732161.git.gregoire.layet@9elements.com>
+References: <cover.1784732161.git.gregoire.layet@9elements.com>
+From: =?UTF-8?q?Gr=C3=A9goire=20Layet?= <gregoire.layet@9elements.com>
+Date: Wed, 22 Jul 2026 13:57:56 +0200
+Subject: [PATCH v2 2/2] ARM: dts: aspeed-g6: add pcie-kcs4
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add pcie_kcs4 node to the LPC bus in the ast2600 g6 common dtsi.
+
+The ASPEED AST2600 has a PCIe to LPC controller. It includes a KCS
+interface on channel 4. This is a fully KCS-compatible interface
+that is exposed over PCIe.
+
+This can be used by the host for IPMI when the PCIe BMC Device is
+activated.
+
+While the datasheet provides interrupt numbers for KCS channels 1, 2,
+3 and 4 over PCI, not all 4 are described in the "PCIe to LPC Controller"
+section. Since only the KCS channel 4 is described, only this channel is
+added.
+
+The pcie_kcs4 uses existing "aspeed,ast2600-kcs-bmc" compatible as it's a
+standard KCS interface.
+
+Upstream-Status: Submitted [Lore, https://lore.kernel.org/linux-aspeed/TYZPR06MB65685CF6F0969A3F400AEA2BF1C02@TYZPR06MB6568.apcprd06.prod.outlook.com/]
+Signed-off-by: Grégoire Layet <gregoire.layet@9elements.com>
+---
+ arch/arm/boot/dts/aspeed/aspeed-g6.dtsi | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/arch/arm/boot/dts/aspeed/aspeed-g6.dtsi b/arch/arm/boot/dts/aspeed/aspeed-g6.dtsi
+index 56bb3b0444f7..a93fa4cf5d8f 100644
+--- a/arch/arm/boot/dts/aspeed/aspeed-g6.dtsi
++++ b/arch/arm/boot/dts/aspeed/aspeed-g6.dtsi
+@@ -617,6 +617,13 @@ kcs4: kcs@114 {
+ 					status = "disabled";
+ 				};
+
++				pcie_kcs4: kcs@914 {
++					compatible = "aspeed,ast2600-kcs-bmc";
++					reg = <0x914 0x1>, <0x918 0x1>, <0x91c 0x1>;
++					interrupts = <GIC_SPI 177 IRQ_TYPE_LEVEL_HIGH>;
++					status = "disabled";
++				};
++
+ 				lpc_ctrl: lpc-ctrl@80 {
+ 					compatible = "aspeed,ast2600-lpc-ctrl";
+ 					reg = <0x80 0x80>;
+--
+2.54.0

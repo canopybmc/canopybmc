@@ -176,6 +176,12 @@
 	};
 };
 
+&pcie_kcs4 {
+	aspeed,lpc-io-reg = <0x3a2 0x3a3>;
+
+	status = "okay";
+};
+
 &pwm_tach {
 	pinctrl-0 = <&pinctrl_pwm0_default &pinctrl_pwm1_default
 		    &pinctrl_pwm2_default  &pinctrl_pwm3_default
