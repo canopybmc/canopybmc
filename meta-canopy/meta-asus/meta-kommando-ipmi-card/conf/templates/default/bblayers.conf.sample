@@ -8,7 +8,7 @@ BBFILES ?= ""
 BBLAYERS ?= " \
   ##OEROOT##/meta-canopy \
   ##OEROOT##/meta-canopy/meta-asus \
-  ##OEROOT##/meta-canopy/meta-asus/meta-kommando \
+  ##OEROOT##/meta-canopy/meta-asus/meta-kommando-ipmi-card \
   ##OEROOT##/openbmc/meta \
   ##OEROOT##/openbmc/meta-openembedded/meta-oe \
   ##OEROOT##/openbmc/meta-openembedded/meta-networking \
