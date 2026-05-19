@@ -12,10 +12,9 @@ D-Bus interaction takes place.
 Tested: Deleting own user fails with InsufficientPrivileges
         successfully.
 
-Upstream-Status: Pending
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/bmcweb/+/90332]
 Change-Id: I9a519593a43ce14b7c136d16c264dc753a7204eb
 Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
-[Tan: modified patch because the "shorter type aliases" commit is missing]
 ---
  redfish-core/lib/account_service.hpp | 8 ++++++++
  1 file changed, 8 insertions(+)
@@ -36,7 +35,7 @@ index a91d707f..f8226fb5 100644
 +        return;
 +    }
 +
-     sdbusplus::message::object_path tempObjPath(rootUserDbusPath);
+     sdbusplus::object_path tempObjPath(rootUserDbusPath);
      tempObjPath /= username;
      const std::string userPath(tempObjPath);
 -- 

@@ -20,7 +20,7 @@ Tested: Verified correct error responses when deleting a non-existent
         openbmc-test-automation against AccountService with no
         unexpected regressions.
 
-Upstream-Status: Pending
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/bmcweb/+/90333]
 Change-Id: I559a4081d992b424319ae243c176baae91b1c322
 Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
 ---
