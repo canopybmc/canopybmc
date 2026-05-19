@@ -7,6 +7,7 @@
 #include "aspeed-g6.dtsi"
 #include "aspeed-g6-pinctrl.dtsi"
 #include <dt-bindings/gpio/aspeed-gpio.h>
+#include <dt-bindings/clock/ast2600-clock.h>
 
 / {
 	compatible = "asus,ast2600-kommando-ipmi-card", "aspeed,ast2600";
@@ -35,6 +36,46 @@
 			label = "heartbeat_green";
 			linux,default-trigger = "timer";
 		};
+	};
+
+	pwm-fan0 {
+		compatible = "pwm-fan";
+		pwms = <&pwm_tach 0 10000 0>;
+	};
+
+	pwm-fan1 {
+		compatible = "pwm-fan";
+		pwms = <&pwm_tach 1 10000 0>;
+	};
+
+	pwm-fan2 {
+		compatible = "pwm-fan";
+		pwms = <&pwm_tach 2 10000 0>;
+	};
+
+	pwm-fan3 {
+		compatible = "pwm-fan";
+		pwms = <&pwm_tach 3 10000 0>;
+	};
+
+	pwm-fan4 {
+		compatible = "pwm-fan";
+		pwms = <&pwm_tach 4 10000 0>;
+	};
+
+	pwm-fan5 {
+		compatible = "pwm-fan";
+		pwms = <&pwm_tach 5 10000 0>;
+	};
+
+	pwm-fan6 {
+		compatible = "pwm-fan";
+		pwms = <&pwm_tach 6 10000 0>;
+	};
+
+	pwm-fan7 {
+		compatible = "pwm-fan";
+		pwms = <&pwm_tach 7 10000 0>;
 	};
 
 	reserved-memory {
@@ -132,6 +173,60 @@
 	ethphy2: ethernet-phy@0 {
 		compatible = "ethernet-phy-ieee802.3-c22";
 		reg = <0>;
+	};
+};
+
+&pwm_tach {
+	pinctrl-0 = <&pinctrl_pwm0_default &pinctrl_pwm1_default
+		    &pinctrl_pwm2_default  &pinctrl_pwm3_default
+		    &pinctrl_pwm4_default  &pinctrl_pwm5_default
+		    &pinctrl_pwm6_default  &pinctrl_pwm7_default
+		    &pinctrl_tach0_default &pinctrl_tach1_default
+		    &pinctrl_tach2_default &pinctrl_tach3_default
+		    &pinctrl_tach4_default &pinctrl_tach5_default
+		    &pinctrl_tach6_default &pinctrl_tach7_default>;
+	pinctrl-names = "default";
+
+	status = "okay";
+
+	fan-0 {
+		pwms = <&pwm_tach 0 40000 0>;
+		tach-ch = /bits/ 8 <0x00>;
+	};
+
+	fan-1 {
+		pwms = <&pwm_tach 1 40000 0>;
+		tach-ch = /bits/ 8 <0x01>;
+	};
+
+	fan-2 {
+		pwms = <&pwm_tach 2 40000 0>;
+		tach-ch = /bits/ 8 <0x02>;
+	};
+
+	fan-3 {
+		pwms = <&pwm_tach 3 40000 0>;
+		tach-ch = /bits/ 8 <0x03>;
+	};
+
+	fan-4 {
+		pwms = <&pwm_tach 4 40000 0>;
+		tach-ch = /bits/ 8 <0x04>;
+	};
+
+	fan-5 {
+		pwms = <&pwm_tach 5 40000 0>;
+		tach-ch = /bits/ 8 <0x05>;
+	};
+
+	fan-6 {
+		pwms = <&pwm_tach 6 40000 0>;
+		tach-ch = /bits/ 8 <0x06>;
+	};
+
+	fan-7 {
+		pwms = <&pwm_tach 7 40000 0>;
+		tach-ch = /bits/ 8 <0x07>;
 	};
 };
 
