@@ -4,9 +4,13 @@ Date: Tue, 24 Mar 2026 13:18:18 +0100
 Subject: [PATCH] Skip undersized SMBIOS entries in getSMBIOSTypePtr
 
 getSMBIOSTypePtr aborts the entire search when a matching entry
-has length < size. Change to skip the entry instead.
+has length < size. This was noticed on a HPE DL365 Gen11 that
+incorrectly sends two Type 0 tables, causing the BIOS information to be
+empty.
 
-Upstream-Status: Pending
+Change to skip the entry instead, matching the kernel behavior.
+
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/smbios-mdr/+/90368]
 Change-Id: Id4131bd1919602c22d515b98e1fc01330ae94024
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
