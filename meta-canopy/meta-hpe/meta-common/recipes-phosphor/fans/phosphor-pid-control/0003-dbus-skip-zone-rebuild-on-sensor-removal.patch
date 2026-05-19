@@ -1,4 +1,4 @@
-From 47f4b50d6e89a0bdeadb73581d14a191c7c15ba9 Mon Sep 17 00:00:00 2001
+From 4823042a9b1914fc38d752327c0faec1f6f5337b Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 15 Feb 2026 13:18:18 +0100
 Subject: [PATCH] dbus: skip zone rebuild on sensor removal
@@ -16,10 +16,10 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 12 insertions(+), 1 deletion(-)
 
 diff --git a/dbus/dbusconfiguration.cpp b/dbus/dbusconfiguration.cpp
-index da8d316..47b3c1b 100644
+index af9907a..e28e79a 100644
 --- a/dbus/dbusconfiguration.cpp
 +++ b/dbus/dbusconfiguration.cpp
-@@ -189,7 +189,18 @@ int eventHandler(sd_bus_message* m, void* context, sd_bus_error*)
+@@ -190,7 +190,18 @@ int eventHandler(sd_bus_message* m, void* context, sd_bus_error*)
              interface};
  
      sdbusplus::message_t message(m);
@@ -37,8 +37,5 @@ index da8d316..47b3c1b 100644
 +
 +    if (member == "InterfacesAdded")
      {
-         sdbusplus::message::object_path path;
+         sdbusplus::object_path path;
          std::unordered_map<
--- 
-2.52.0
-

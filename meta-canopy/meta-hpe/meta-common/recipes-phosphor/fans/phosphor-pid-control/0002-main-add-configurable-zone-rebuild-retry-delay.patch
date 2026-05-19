@@ -1,4 +1,4 @@
-From dd213049a02329abe20dc0a3f2a401b480c97ba3 Mon Sep 17 00:00:00 2001
+From d8740a2b630f9141b4fce5bece393e26f11887f9 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 15 Feb 2026 13:18:00 +0100
 Subject: [PATCH] main: add configurable zone rebuild retry delay
@@ -43,6 +43,3 @@ index c924123..cdd5b09 100644
  
      CLI11_PARSE(app, argc, argv);
  
--- 
-2.52.0
-

@@ -1,4 +1,4 @@
-From 486d84907b0d597a9f437d18122a7a1ea737062d Mon Sep 17 00:00:00 2001
+From 66b8d6f71db0bc2afc3400e39269706d1f16109f Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 16:32:13 +0100
 Subject: [PATCH] dbus: support PWM-only fan sensors in PID configuration
@@ -23,10 +23,10 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  2 files changed, 28 insertions(+), 12 deletions(-)
 
 diff --git a/dbus/dbusconfiguration.cpp b/dbus/dbusconfiguration.cpp
-index 9640f9a..da8d316 100644
+index 3b34a9f..af9907a 100644
 --- a/dbus/dbusconfiguration.cpp
 +++ b/dbus/dbusconfiguration.cpp
-@@ -513,12 +513,6 @@ bool init(sdbusplus::bus_t& bus, boost::asio::steady_timer& timer,
+@@ -514,12 +514,6 @@ bool init(sdbusplus::bus_t& bus, boost::asio::steady_timer& timer,
                  if (interface == SensorValue::interface ||
                      interface == ControlFanPwm::interface)
                  {
@@ -39,7 +39,7 @@ index 9640f9a..da8d316 100644
                      sensors[objectPair.first] = interface;
                  }
              }
-@@ -826,6 +820,20 @@ bool init(sdbusplus::bus_t& bus, boost::asio::steady_timer& timer,
+@@ -833,6 +827,20 @@ bool init(sdbusplus::bus_t& bus, boost::asio::steady_timer& timer,
                                  missingAcceptableSensorInterfaces);
                  }
  
@@ -60,7 +60,7 @@ index 9640f9a..da8d316 100644
                  for (const SensorInterfaceType& inputSensorInterface :
                       inputSensorInterfaces)
                  {
-@@ -958,7 +966,10 @@ bool init(sdbusplus::bus_t& bus, boost::asio::steady_timer& timer,
+@@ -967,7 +975,10 @@ bool init(sdbusplus::bus_t& bus, boost::asio::steady_timer& timer,
                              inputSensorInterfaces.at(idx).first;
                          fanSensorName = getSensorNameFromPath(fanPath);
                          pwmSensorName = getSensorNameFromPath(pwmPath);
@@ -73,7 +73,7 @@ index 9640f9a..da8d316 100644
                          auto& fanConfig = sensorConfig[fanPwmIndex];
                          fanConfig.type = pidClass;
 diff --git a/dbus/dbushelper.cpp b/dbus/dbushelper.cpp
-index 1d03967..961fd11 100644
+index 53f19bb..5a223c3 100644
 --- a/dbus/dbushelper.cpp
 +++ b/dbus/dbushelper.cpp
 @@ -132,13 +132,18 @@ void DbusHelper::getProperties(const std::string& service,
@@ -100,6 +100,3 @@ index 1d03967..961fd11 100644
      }
      prop->available = available;
  
--- 
-2.52.0
-
