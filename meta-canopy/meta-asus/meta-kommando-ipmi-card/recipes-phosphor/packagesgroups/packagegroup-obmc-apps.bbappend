@@ -1,0 +1,1 @@
+RDEPENDS:${PN}-inventory:append:kommando-ipmi-card = " phosphor-inventory-manager"

@@ -7,6 +7,7 @@
 #include "aspeed-g6.dtsi"
 #include "aspeed-g6-pinctrl.dtsi"
 #include <dt-bindings/gpio/aspeed-gpio.h>
+#include <dt-bindings/clock/ast2600-clock.h>
 
 / {
 	model = "Asus Kommando IPMI Expansion Card";
@@ -75,6 +76,86 @@
 			status = "okay";
 		};
 	};
+
+	pwm_tach: pwm-tach-controller@1e610000 {
+		compatible = "aspeed,ast2600-pwm-tach";
+		reg = <0x1e610000 0x100>;
+		clocks = <&syscon ASPEED_CLK_AHB>;
+		resets = <&syscon ASPEED_RESET_PWM>;
+		#pwm-cells = <3>;
+	};
+
+	fan0: pwm-fan0 {
+        compatible = "pwm-fan";
+        pwms = <&pwm_tach 0 40000 0>;
+        #cooling-cells = <2>;
+        cooling-levels = <124 152 180 204 228 252>;
+    };
+    fan1: pwm-fan1 {
+        compatible = "pwm-fan";
+        pwms = <&pwm_tach 1 40000 0>;
+        #cooling-cells = <2>;
+        cooling-levels = <124 152 180 204 228 252>;
+    };
+    fan2: pwm-fan2 {
+        compatible = "pwm-fan";
+        pwms = <&pwm_tach 2 40000 0>;
+        #cooling-cells = <2>;
+        cooling-levels = <124 152 180 204 228 252>;
+    };
+    fan3: pwm-fan3 {
+        compatible = "pwm-fan";
+        pwms = <&pwm_tach 3 40000 0>;
+        #cooling-cells = <2>;
+        cooling-levels = <124 152 180 204 228 252>;
+    };
+    fan4: pwm-fan4 {
+        compatible = "pwm-fan";
+        pwms = <&pwm_tach 4 40000 0>;
+        #cooling-cells = <2>;
+        cooling-levels = <124 152 180 204 228 252>;
+    };
+    fan5: pwm-fan5 {
+        compatible = "pwm-fan";
+        pwms = <&pwm_tach 5 40000 0>;
+        #cooling-cells = <2>;
+        cooling-levels = <124 152 180 204 228 252>;
+    };
+    fan6: pwm-fan6 {
+        compatible = "pwm-fan";
+        pwms = <&pwm_tach 6 40000 0>;
+        #cooling-cells = <2>;
+		cooling-levels = <124 152 180 204 228 252>;
+    };
+    fan7: pwm-fan7 {
+        compatible = "pwm-fan";
+        pwms = <&pwm_tach 7 40000 0>;
+        #cooling-cells = <2>;
+		cooling-levels = <124 152 180 204 228 252>;
+    };
+};
+
+&pwm_tach {
+    status = "okay";
+
+    pinctrl-names = "default";
+    pinctrl-0 = <&pinctrl_pwm0_default  &pinctrl_pwm1_default
+                 &pinctrl_pwm2_default  &pinctrl_pwm3_default
+                 &pinctrl_pwm4_default  &pinctrl_pwm5_default
+                 &pinctrl_pwm6_default  &pinctrl_pwm7_default
+                 &pinctrl_tach0_default &pinctrl_tach1_default
+                 &pinctrl_tach2_default &pinctrl_tach3_default
+                 &pinctrl_tach4_default &pinctrl_tach5_default
+                 &pinctrl_tach6_default &pinctrl_tach7_default>;
+
+    fan-0 { tach-ch = /bits/ 8 <0x00>; };
+    fan-1 { tach-ch = /bits/ 8 <0x01>; };
+    fan-2 { tach-ch = /bits/ 8 <0x02>; };
+    fan-3 { tach-ch = /bits/ 8 <0x03>; };
+    fan-4 { tach-ch = /bits/ 8 <0x04>; };
+    fan-5 { tach-ch = /bits/ 8 <0x05>; };
+    fan-6 { tach-ch = /bits/ 8 <0x06>; };
+    fan-7 { tach-ch = /bits/ 8 <0x07>; };
 };
 
 &mdio2 {

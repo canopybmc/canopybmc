@@ -1,0 +1,186 @@
+[
+    {
+        "path": "system/chassis/ASUS_Kommando_IPMI_Card/Fan_0",
+        "endpoints": [
+            {
+                "types": {
+                    "rType": "inventory",
+                    "fType": "sensors"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/sensors/fan_pwm/Pwm_0"
+                ]
+            },
+            {
+                "types": {
+                    "rType": "cooled_by",
+                    "fType": "cooling"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/inventory/system/chassis/ASUS_Kommando_IPMI_Card"
+                ]
+            }
+        ]
+    },
+    {
+        "path": "system/chassis/ASUS_Kommando_IPMI_Card/Fan_1",
+        "endpoints": [
+            {
+                "types": {
+                    "rType": "inventory",
+                    "fType": "sensors"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/sensors/fan_pwm/Pwm_1"
+                ]
+            },
+            {
+                "types": {
+                    "rType": "cooled_by",
+                    "fType": "cooling"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/inventory/system/chassis/ASUS_Kommando_IPMI_Card"
+                ]
+            }
+        ]
+    },
+    {
+        "path": "system/chassis/ASUS_Kommando_IPMI_Card/Fan_2",
+        "endpoints": [
+            {
+                "types": {
+                    "rType": "inventory",
+                    "fType": "sensors"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/sensors/fan_pwm/Pwm_2"
+                ]
+            },
+            {
+                "types": {
+                    "rType": "cooled_by",
+                    "fType": "cooling"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/inventory/system/chassis/ASUS_Kommando_IPMI_Card"
+                ]
+            }
+        ]
+    },
+    {
+        "path": "system/chassis/ASUS_Kommando_IPMI_Card/Fan_3",
+        "endpoints": [
+            {
+                "types": {
+                    "rType": "inventory",
+                    "fType": "sensors"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/sensors/fan_pwm/Pwm_3"
+                ]
+            },
+            {
+                "types": {
+                    "rType": "cooled_by",
+                    "fType": "cooling"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/inventory/system/chassis/ASUS_Kommando_IPMI_Card"
+                ]
+            }
+        ]
+    },
+    {
+        "path": "system/chassis/ASUS_Kommando_IPMI_Card/Fan_4",
+        "endpoints": [
+            {
+                "types": {
+                    "rType": "inventory",
+                    "fType": "sensors"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/sensors/fan_pwm/Pwm_4"
+                ]
+            },
+            {
+                "types": {
+                    "rType": "cooled_by",
+                    "fType": "cooling"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/inventory/system/chassis/ASUS_Kommando_IPMI_Card"
+                ]
+            }
+        ]
+    },
+    {
+        "path": "system/chassis/ASUS_Kommando_IPMI_Card/Fan_5",
+        "endpoints": [
+            {
+                "types": {
+                    "rType": "inventory",
+                    "fType": "sensors"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/sensors/fan_pwm/Pwm_5"
+                ]
+            },
+            {
+                "types": {
+                    "rType": "cooled_by",
+                    "fType": "cooling"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/inventory/system/chassis/ASUS_Kommando_IPMI_Card"
+                ]
+            }
+        ]
+    },
+    {
+        "path": "system/chassis/ASUS_Kommando_IPMI_Card/Fan_6",
+        "endpoints": [
+            {
+                "types": {
+                    "rType": "inventory",
+                    "fType": "sensors"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/sensors/fan_pwm/Pwm_6"
+                ]
+            },
+            {
+                "types": {
+                    "rType": "cooled_by",
+                    "fType": "cooling"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/inventory/system/chassis/ASUS_Kommando_IPMI_Card"
+                ]
+            }
+        ]
+    },
+    {
+        "path": "system/chassis/ASUS_Kommando_IPMI_Card/Fan_7",
+        "endpoints": [
+            {
+                "types": {
+                    "rType": "inventory",
+                    "fType": "sensors"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/sensors/fan_pwm/Pwm_7"
+                ]
+            },
+            {
+                "types": {
+                    "rType": "cooled_by",
+                    "fType": "cooling"
+                },
+                "paths": [
+                    "/xyz/openbmc_project/inventory/system/chassis/ASUS_Kommando_IPMI_Card"
+                ]
+            }
+        ]
+    }
+]
