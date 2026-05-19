@@ -1,6 +1,7 @@
 FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 
 SRC_URI:append:kommando-ipmi-card = " \
+     file://kommando-ipmi-card.cfg \
      file://aspeed-bmc-asus-kommando-ipmi-card.dts \
     "
 

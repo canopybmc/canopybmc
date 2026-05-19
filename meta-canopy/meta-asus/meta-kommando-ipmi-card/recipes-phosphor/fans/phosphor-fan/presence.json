@@ -1,0 +1,122 @@
+[
+    {
+        "name": "fan0",
+        "path": "/system/chassis/ASUS_Kommando_IPMI_Card/Fan_0",
+        "methods": [
+            {
+                "type": "tach",
+                "sensors": [
+                    "Fan_0"
+                ]
+            }
+        ],
+        "rpolicy": {
+            "type": "anyof"
+        }
+    },
+    {
+        "name": "fan1",
+        "path": "/system/chassis/ASUS_Kommando_IPMI_Card/Fan_1",
+        "methods": [
+            {
+                "type": "tach",
+                "sensors": [
+                    "Fan_1"
+                ]
+            }
+        ],
+        "rpolicy": {
+            "type": "anyof"
+        }
+    },
+    {
+        "name": "fan2",
+        "path": "/system/chassis/ASUS_Kommando_IPMI_Card/Fan_2",
+        "methods": [
+            {
+                "type": "tach",
+                "sensors": [
+                    "Fan_2"
+                ]
+            }
+        ],
+        "rpolicy": {
+            "type": "anyof"
+        }
+    },
+    {
+        "name": "fan3",
+        "path": "/system/chassis/ASUS_Kommando_IPMI_Card/Fan_3",
+        "methods": [
+            {
+                "type": "tach",
+                "sensors": [
+                    "Fan_3"
+                ]
+            }
+        ],
+        "rpolicy": {
+            "type": "anyof"
+        }
+    },
+    {
+        "name": "fan4",
+        "path": "/system/chassis/ASUS_Kommando_IPMI_Card/Fan_4",
+        "methods": [
+            {
+                "type": "tach",
+                "sensors": [
+                    "Fan_4"
+                ]
+            }
+        ],
+        "rpolicy": {
+            "type": "anyof"
+        }
+    },
+    {
+        "name": "fan5",
+        "path": "/system/chassis/ASUS_Kommando_IPMI_Card/Fan_5",
+        "methods": [
+            {
+                "type": "tach",
+                "sensors": [
+                    "Fan_5"
+                ]
+            }
+        ],
+        "rpolicy": {
+            "type": "anyof"
+        }
+    },
+    {
+        "name": "fan6",
+        "path": "/system/chassis/ASUS_Kommando_IPMI_Card/Fan_6",
+        "methods": [
+            {
+                "type": "tach",
+                "sensors": [
+                    "Fan_6"
+                ]
+            }
+        ],
+        "rpolicy": {
+            "type": "anyof"
+        }
+    },
+    {
+        "name": "fan7",
+        "path": "/system/chassis/ASUS_Kommando_IPMI_Card/Fan_7",
+        "methods": [
+            {
+                "type": "tach",
+                "sensors": [
+                    "Fan_7"
+                ]
+            }
+        ],
+        "rpolicy": {
+            "type": "anyof"
+        }
+    }
+]
