@@ -10,7 +10,7 @@ Add throwForUidZero() which looks up the user's passwd entry and
 throws NotAllowed if the UID is 0. This will be called before actually
 deleting the user.
 
-Upstream-Status: Pending
+Upstream-Status: Backport [https://github.com/openbmc/phosphor-user-manager/commit/88c45a93b0d74522e6657870e6a56e6735d8f9b7]
 Change-Id: I62d61c05cfad1b703ef7b4b56badc80f8d396da4
 Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
 ---
