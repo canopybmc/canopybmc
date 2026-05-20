@@ -2,7 +2,7 @@
 
 ## Testing (OSFCI)
 
-HPE offers a puplic infrastructure on which the Canopy (or general OpenBMC) images
+HPE offers a public infrastructure on which the Canopy images (or OpenBMC in general)
 can be run.
 
 See [HPE OSFCI](vendor-hpe.md#osfci) for more information.
