@@ -1,0 +1,85 @@
+From c73476610058cb533af0f2ec637f9eaba3d4f5c6 Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Thu, 21 May 2026 10:53:48 +0200
+Subject: [PATCH] http: zstd: do not attempt compressing already opened files
+
+Commit 2d7dc991 changed the body storage from being saved in a separate
+field to a std::variant. Calling str() calls emplace<std::string>(),
+which destroys the active FileBody in-place on file-backed bodies (e.g.
+the Web UI) and closes the FD.
+Any subsequent action now tries to access a non-existing FD (dummy
+handle returning -1 as FD.)
+
+Fix by returning early from `attemptZstdCompression` when the body is
+file-backed, as file-backed bodies are already handled by the streaming
+zstdCompressor in the writer.
+
+Tested: cURL with "Accept-Encoding: zstd" to favicon.ico, ensuring that
+        it returns data again.
+
+Fixes: 2d7dc991 ("Optimize bmcweb memory usage for multipart fw
+                  update")
+Change-Id: Ia54712f89d8c5f7dc9ce7c5d040aed06e8f6fded
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/bmcweb/+/90446]
+---
+ http/complete_response_fields.hpp |  8 ++++++++
+ test/http/http_response_test.cpp  | 17 +++++++++++++++++
+ 2 files changed, 25 insertions(+)
+
+diff --git a/http/complete_response_fields.hpp b/http/complete_response_fields.hpp
+index 4a0d624e..5b88b88d 100644
+--- a/http/complete_response_fields.hpp
++++ b/http/complete_response_fields.hpp
+@@ -28,6 +28,14 @@ inline bool attemptZstdCompression(Response& res)
+     using http_helpers::Encoding;
+     using enum http_helpers::Encoding;
+ 
++    // No need to compress it again as zstdCompressor in the writer is already
++    // doing it on the fly. The strBody check also triggers
++    // emplace<std::string>(), closing the FD.
++    if (res.response.body().file().is_open())
++    {
++        return true;
++    }
++
+     std::string& strBody = res.response.body().str();
+     if (strBody.empty())
+     {
+diff --git a/test/http/http_response_test.cpp b/test/http/http_response_test.cpp
+index 69eb6371..7d110107 100644
+--- a/test/http/http_response_test.cpp
++++ b/test/http/http_response_test.cpp
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: Apache-2.0
+ // SPDX-FileCopyrightText: Copyright OpenBMC Authors
+ #include "duplicatable_file_handle.hpp"
++#include "http/complete_response_fields.hpp"
+ #include "http/http_body.hpp"
+ #include "http/http_response.hpp"
+ #include "utility.hpp"
+@@ -187,5 +188,21 @@ TEST(HttpResponse, HttpBodyWriterLarge)
+     res.openFd(file.native_handle());
+     EXPECT_EQ(getData(res.response), data);
+ }
++
++TEST(HttpResponse, ZstdHandleEncodingDoesNotCloseFileFd)
++{
++    Response res;
++    std::string data = "sample text";
++    DuplicatableFileHandle temporaryFile(data);
++    res.openFile(temporaryFile.filePath);
++
++    ASSERT_TRUE(res.response.body().file().is_open());
++
++    handleEncoding("zstd", res);
++
++    EXPECT_TRUE(res.response.body().file().is_open());
++    EXPECT_EQ(getData(res.response), data);
++}
++
+ } // namespace
+ } // namespace crow
+-- 
+2.53.0
+
