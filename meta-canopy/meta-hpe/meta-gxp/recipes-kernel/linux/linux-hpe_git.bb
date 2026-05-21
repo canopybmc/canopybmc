@@ -14,6 +14,7 @@ ERROR_QA:remove = "patch-status"
 
 SRC_URI:append = " \
     file://common/defconfig \
+    file://common/openbmc-common.cfg \
     file://common/kvm.cfg \
     file://common/pca954x.cfg \
     file://common/ubm.cfg \
