@@ -1,0 +1,43 @@
+From b3d54af3310d6394bdd70454c6a1f3d8cd4e1aae Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Thu, 21 May 2026 14:31:27 +0200
+Subject: [PATCH] ARM: dts: hpe: gxp: enable ramoops
+
+Allocate 1 MiB of memory for pstore/ramoops to have logs in case of a
+kernel panic.
+
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index 21ccbf5de019..dfbcc02e5462 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -32,6 +32,22 @@ memory@40000000 {
+ 		reg = <0x40000000 0x20000000>;
+ 	};
+ 
++	reserved-memory {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		ranges;
++
++		ramoops@5fe00000 {
++			compatible = "ramoops";
++			reg = <0x5fe00000 0x100000>; /* 8 * (4 * 0x8000) */
++			record-size = <0x8000>;
++			console-size = <0x8000>;
++			ftrace-size = <0x8000>;
++			pmsg-size = <0x8000>;
++			max-reason = <3>; /* KMSG_DUMP_EMERG */
++		};
++	};
++
+ 	cpus {
+ 		#address-cells = <1>;
+ 		#size-cells = <0>;
+-- 
+2.54.0
+
