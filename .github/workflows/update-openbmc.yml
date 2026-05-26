@@ -1,4 +1,5 @@
 name: Update OpenBMC reference
+
 on:
   workflow_dispatch:
   schedule:
@@ -6,14 +7,19 @@ on:
 
 jobs:
   update-openbmc:
-    permissions:
-      contents: write
-      pull-requests: write
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@v3
+        id: app-token
         with:
+          client-id: ${{ secrets.CANOPYBMC_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.CANOPYBMC_BOT_APP_PRIVATE_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
           submodules: recursive
           fetch-depth: 0
 
@@ -21,12 +27,12 @@ jobs:
         uses: arduino/setup-task@v2
         with:
           version: 3.x
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          repo-token: ${{ steps.app-token.outputs.token }}
 
-      - name: Set up branch
+      - name: Set up git identity
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "canopybmc-bot[bot]"
+          git config user.email "canopybmc-bot[bot]@users.noreply.github.com"
           git fetch origin
           git branch -D rebase/openbmc 2>/dev/null || true
 
@@ -35,7 +41,7 @@ jobs:
 
       - name: Create or update PR
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           BODY_FILE=$(mktemp)
           cat > "$BODY_FILE" <<'BODYEOF'
