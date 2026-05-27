@@ -58,20 +58,18 @@
 	};
 
 	pcie_lpc: pcie-lpc@1e789800 {
-		compatible = "aspeed,ast2600-pcie-lpc","aspeed,ast2600-lpc-v2", "simple-mfd", "syscon";
-		// add "aspeed,ast2600-lpc-v2" so that the driver probe it 
-		// make this compatible on OpenBMC linux fork
+		compatible = "aspeed,ast2600-lpc-v2","simple-mfd", "syscon";
 		reg = <0x1e789800 0x800>;
 
 		#address-cells = <1>;
 		#size-cells = <1>;
 		ranges = <0x0 0x1e789800 0x800>;
 
-		pcie_kcs3: pcie-kcs@2c {
+		pcie_kcs4: pcie-kcs@114 {
 			compatible = "aspeed,ast2600-kcs-bmc";
-			reg = <0x2c 0x1>, <0x38 0x1>, <0x44 0x1>;
-			interrupts = <GIC_SPI 176 IRQ_TYPE_LEVEL_HIGH>;
-			aspeed,lpc-io-reg = <0x3a2>;
+			reg = <0x114 0x1>, <0x118 0x1>, <0x11c 0x1>;
+			interrupts = <GIC_SPI 177 IRQ_TYPE_LEVEL_HIGH>;
+			aspeed,lpc-io-reg = <0x3a2 0x3a3>;
 
 			status = "okay";
 		};
