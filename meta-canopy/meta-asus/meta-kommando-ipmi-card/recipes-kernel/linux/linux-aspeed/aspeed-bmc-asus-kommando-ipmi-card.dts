@@ -8,6 +8,7 @@
 #include "aspeed-g6-pinctrl.dtsi"
 #include <dt-bindings/gpio/aspeed-gpio.h>
 #include <dt-bindings/clock/ast2600-clock.h>
+#include <dt-bindings/interrupt-controller/aspeed-scu-ic.h>
 
 / {
 	model = "Asus Kommando IPMI Expansion Card";
@@ -55,6 +56,22 @@
 			compatible = "shared-dma-pool";
 			reusable;
 		};
+		pcie_bmc_dev_mem: pcie_bmc_dev_memory@9ef00000{
+			reg = <0x9ef00000 0x100000>;
+			compatible = "shared-dma-pool";
+			no-map;
+		};
+	};
+
+	bmc_dev@1e7e0000 {
+		status = "okay";
+		compatible = "aspeed,ast2600-bmc-device";
+		reg = <0x1e7e0000 0xb000>;
+		interrupts-extended = <&gic GIC_SPI 99 IRQ_TYPE_LEVEL_HIGH>,
+						      <&scu_ic0 ASPEED_AST2600_SCU_IC0_PCIE_PERST_LO_TO_HI>;
+		aspeed,scu = <&syscon>;
+		memory-region = <&pcie_bmc_dev_mem>;
+		pcie2lpc;
 	};
 
 	pcie_lpc: pcie-lpc@1e789800 {
@@ -130,7 +147,7 @@
         pwms = <&pwm_tach 7 40000 0>;
         #cooling-cells = <2>;
 		cooling-levels = <124 152 180 204 228 252>;
-    };
+    };	
 };
 
 &pwm_tach {
@@ -240,4 +257,10 @@
 &lpc_snoop{
 	status = "okay";
 	snoop-ports = <0x80>;
+};
+
+&vuart3{
+	status = "okay";
+	aspeed,lpc-io-reg = <0x3f8>;
+	aspeed,lpc-interrupts = <0 IRQ_TYPE_LEVEL_LOW>;
 };
