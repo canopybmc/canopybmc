@@ -8,6 +8,7 @@
 #include "aspeed-g6-pinctrl.dtsi"
 #include <dt-bindings/gpio/aspeed-gpio.h>
 #include <dt-bindings/clock/ast2600-clock.h>
+#include <dt-bindings/interrupt-controller/aspeed-scu-ic.h>
 
 / {
 	compatible = "asus,ast2600-kommando-ipmi-card", "aspeed,ast2600";
@@ -89,6 +90,11 @@
 			reusable;
 			size = <0x04000000>;
 		};
+		// pcie_bmc_dev_mem: pcie_bmc_dev_memory@9ef00000{
+		// 	reg = <0x9ef00000 0x100000>;
+		// 	compatible = "shared-dma-pool";
+		// 	no-map;
+		// };
 	};
 
 	memory@80000000 {
@@ -242,6 +248,20 @@
 
 &video {
 	memory-region = <&video_engine_memory>;
+
+	status = "okay";
+};
+
+&vuart3 {
+	aspeed,lpc-interrupts = <0 IRQ_TYPE_LEVEL_LOW>;
+	aspeed,lpc-io-reg = <0x3f8>;
+
+	status = "okay";
+};
+
+&vuart4 {
+	aspeed,lpc-interrupts = <1 IRQ_TYPE_LEVEL_LOW>;
+	aspeed,lpc-io-reg = <0x2f8>;
 
 	status = "okay";
 };
