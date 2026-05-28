@@ -37,6 +37,15 @@ python do_gxp_generate_flash_layout() {
     rofs_sz       = rwfs_off - rofs_off
     rwfs_sz       = sig_off - rwfs_off
 
+    env_end = env_off + env_sz
+    if env_end > kernel_off:
+        bb.fatal(
+            "u-boot-env partition (offset=%d KB, size=%d KB, end=%d KB) overlaps "
+            "kernel partition (offset=%d KB) by %d KB. "
+            "FLASH_UBOOT_ENV_OFFSET must satisfy: "
+            "FLASH_UBOOT_ENV_OFFSET + FLASH_UBOOT_ENV_SIZE <= FLASH_KERNEL_OFFSET."
+            % (env_off, env_sz, env_end, kernel_off, env_end - kernel_off))
+
     # Validate tunable partition ordering (fixed SoC partitions may
     # intentionally overlap and are not checked)
     if not (kernel_off < rofs_off < rwfs_off < sig_off):
