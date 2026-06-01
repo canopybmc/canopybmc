@@ -1,10 +1,16 @@
+require recipes-bsp/u-boot/u-boot-common.inc
+require recipes-bsp/u-boot/u-boot.inc
+
+PROVIDES += "u-boot"
+
 inherit uboot-sign
+
+DEPENDS += "bc-native dtc-native gnutls-native python3-pyelftools-native"
 
 FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:${THISDIR}/../images/gxp-section:"
 
-UTAG = "v2026.01"
-SRC_URI = "git://source.denx.de/u-boot/u-boot.git;protocol=https;branch=master;tag=${UTAG}"
 SRCREV = "168e3fe6d65a99b4b93c3803f74889adacd908e9"
+SRC_URI = "git://source.denx.de/u-boot/u-boot.git;protocol=https;branch=master;tag=v${PV}"
 
 SRC_URI += "file://${HPE_SIGNING_KEY}"
 SRC_URI += "file://gxp.cfg"
@@ -19,7 +25,6 @@ SRC_URI += "file://0008-board-hpe-gxp-configure-PCIe-device-ID-in-board_init.pat
 SRC_URI += "file://0009-board-hpe-gxp-add-baseboard-PCA-VPD-to-sysinfo-and-.patch"
 ERROR_QA:remove = "patch-status"
 
-# Override HPE_SIGNING_KEY in local.conf for production builds.
 HPE_OSFCI_SIGNING_KEY = "hpe_osfci_private_key.pem"
 HPE_SIGNING_KEY ?= "${HPE_OSFCI_SIGNING_KEY}"
 UBOOT_SIGN_KEYDIR = "${B}/${UBOOT_SIGN_KEYNAME}-keys"
@@ -65,7 +70,6 @@ do_uboot_assemble_fitimage() {
 do_uboot_assemble_fitimage[depends] += "openssl-native:do_populate_sysroot"
 do_uboot_assemble_fitimage[vardeps] += "HPE_SIGNING_KEY FIT_HASH_ALG FIT_SIGN_ALG UBOOT_SIGN_KEYNAME"
 
-# GXP bootloader requires u-boot to be exactly 384 KB for signature verification
 UBOOT_SIZE = "393216"
 
 do_deploy:append() {

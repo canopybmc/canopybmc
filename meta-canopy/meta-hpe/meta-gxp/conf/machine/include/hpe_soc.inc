@@ -1,3 +1,6 @@
+PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot-gxp"
+PREFERRED_PROVIDER_u-boot ?= "u-boot-gxp"
+
 PREFERRED_PROVIDER_virtual/kernel ?= "linux-hpe"
 
 # FIT images are now built by the linux-yocto-fitimage recipe
