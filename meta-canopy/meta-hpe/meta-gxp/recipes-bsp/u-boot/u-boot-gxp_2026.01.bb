@@ -25,6 +25,8 @@ SRC_URI += "file://0008-board-hpe-gxp-configure-PCIe-device-ID-in-board_init.pat
 SRC_URI += "file://0009-board-hpe-gxp-add-baseboard-PCA-VPD-to-sysinfo-and-.patch"
 ERROR_QA:remove = "patch-status"
 
+UBOOT_INITIAL_ENV = "u-boot-initial-env"
+
 HPE_OSFCI_SIGNING_KEY = "hpe_osfci_private_key.pem"
 HPE_SIGNING_KEY ?= "${HPE_OSFCI_SIGNING_KEY}"
 UBOOT_SIGN_KEYDIR = "${B}/${UBOOT_SIGN_KEYNAME}-keys"
