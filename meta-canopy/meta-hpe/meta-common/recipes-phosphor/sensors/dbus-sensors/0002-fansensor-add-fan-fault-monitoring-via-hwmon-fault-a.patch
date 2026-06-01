@@ -1,4 +1,4 @@
-From a8dbfca41277fc2d91f1ae860bea091c676b8a66 Mon Sep 17 00:00:00 2001
+From 92384c8e01fbc9deddff2c08df59dc4a9d7e62a6 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 15 Feb 2026 13:17:26 +0100
 Subject: [PATCH] fansensor: add fan fault monitoring via hwmon fault attribute
@@ -216,7 +216,7 @@ index 0000000..bfcf629
 +    static constexpr unsigned int pollIntervalMs = 5000;
 +};
 diff --git a/src/fan/FanMain.cpp b/src/fan/FanMain.cpp
-index fde89f6..0615b83 100644
+index 5f9782f..3eb050d 100644
 --- a/src/fan/FanMain.cpp
 +++ b/src/fan/FanMain.cpp
 @@ -14,6 +14,7 @@
@@ -235,7 +235,7 @@ index fde89f6..0615b83 100644
  #include <array>
  #include <chrono>
  #include <cstddef>
-@@ -280,6 +282,7 @@ void createSensors(
+@@ -281,6 +283,7 @@ void createSensors(
          pwmSensors,
      boost::container::flat_map<std::string, std::weak_ptr<PresenceGpio>>&
          presenceGpios,
@@ -243,7 +243,7 @@ index fde89f6..0615b83 100644
      std::shared_ptr<sdbusplus::asio::connection>& dbusConnection,
      const std::shared_ptr<boost::container::flat_set<std::string>>&
          sensorsChanged,
-@@ -289,11 +292,13 @@ void createSensors(
+@@ -290,11 +293,13 @@ void createSensors(
          GetSensorConfiguration>(dbusConnection, [&io, &objectServer,
                                                   &tachSensors, &pwmSensors,
                                                   &presenceGpios,
@@ -257,7 +257,7 @@ index fde89f6..0615b83 100644
          std::vector<std::filesystem::path> paths;
          if (!findFiles(std::filesystem::path("/sys/class/hwmon"),
                         R"(fan\d+_input)", paths))
-@@ -660,6 +665,20 @@ void createSensors(
+@@ -661,6 +666,20 @@ void createSensors(
                      pwmName, pwmPath, dbusConnection, objectServer,
                      *interfacePath, "Fan", isValueMutable);
              }
@@ -278,7 +278,7 @@ index fde89f6..0615b83 100644
          }
  
          createRedundancySensor(tachSensors, dbusConnection, objectServer);
-@@ -685,12 +704,13 @@ int main()
+@@ -684,12 +703,13 @@ int main()
          pwmSensors;
      boost::container::flat_map<std::string, std::weak_ptr<PresenceGpio>>
          presenceGpios;
@@ -293,7 +293,7 @@ index fde89f6..0615b83 100644
      });
  
      boost::asio::steady_timer filterTimer(io);
-@@ -712,7 +732,8 @@ int main()
+@@ -711,7 +731,8 @@ int main()
                      return;
                  }
                  createSensors(io, objectServer, tachSensors, pwmSensors,
@@ -315,6 +315,3 @@ index 1de6634..146a9f9 100644
      'FanMain.cpp',
      'PresenceGpio.cpp',
      'TachSensor.cpp',
--- 
-2.52.0
-

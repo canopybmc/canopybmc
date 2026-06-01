@@ -1,4 +1,4 @@
-From b9e9dac7f5975e44e3afe20b8096be9712d01e24 Mon Sep 17 00:00:00 2001
+From ef886ecf312ee2da58fd247dd020924d98e81834 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 16:33:04 +0100
 Subject: [PATCH] hwmontempsensor: add platform device support
@@ -17,7 +17,7 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 111 insertions(+), 20 deletions(-)
 
 diff --git a/src/hwmon-temp/HwmonTempMain.cpp b/src/hwmon-temp/HwmonTempMain.cpp
-index dc4dc54..0e055c6 100644
+index 616d0f8..33848e0 100644
 --- a/src/hwmon-temp/HwmonTempMain.cpp
 +++ b/src/hwmon-temp/HwmonTempMain.cpp
 @@ -102,6 +102,7 @@ static constexpr auto sensorTypes =
@@ -209,6 +209,3 @@ index dc4dc54..0e055c6 100644
                  }
              }
          });
--- 
-2.53.0
-
