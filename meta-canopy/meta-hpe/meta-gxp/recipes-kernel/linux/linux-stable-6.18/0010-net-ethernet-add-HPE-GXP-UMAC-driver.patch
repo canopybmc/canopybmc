@@ -14,8 +14,8 @@ Gen10/Gen11 servers. The UMAC controller provides:
 The GXP includes two UMAC instances - one for dedicated BMC management
 connected to an external PHY, and one for NCSI communication.
 
-Co-developed-by: Jean-Marie Verdun <jean-marie.verdun@hpe.com>
-Signed-off-by: Jean-Marie Verdun <jean-marie.verdun@hpe.com>
+Co-developed-by: Jean-Marie Verdun <verdun@hpe.com>
+Signed-off-by: Jean-Marie Verdun <verdun@hpe.com>
 Co-developed-by: Michal Gorlas <michal.gorlas@9elements.com>
 Signed-off-by: Michal Gorlas <michal.gorlas@9elements.com>
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
