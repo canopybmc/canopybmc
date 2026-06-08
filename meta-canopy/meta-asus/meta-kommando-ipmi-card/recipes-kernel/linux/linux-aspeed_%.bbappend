@@ -4,7 +4,7 @@ SRC_URI:append:kommando-ipmi-card = " \
      file://pwm.cfg \
      file://bmc-dev.cfg \
      file://aspeed-bmc-asus-kommando-ipmi-card.dts \
-     file://v1-0001-soc-aspeed-add-BMC-side-PCIe-BMC-device-driver.patch \
+     file://v2-0001-soc-aspeed-add-BMC-side-PCIe-BMC-device-driver.patch \
     "
 
 do_configure:prepend:kommando-ipmi-card() {

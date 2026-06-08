@@ -56,11 +56,11 @@
 			compatible = "shared-dma-pool";
 			reusable;
 		};
-		pcie_bmc_dev_mem: pcie_bmc_dev_memory@9ef00000{
-			reg = <0x9ef00000 0x100000>;
-			compatible = "shared-dma-pool";
-			no-map;
-		};
+		// pcie_bmc_dev_mem: pcie_bmc_dev_memory@9ef00000{
+		// 	reg = <0x9ef00000 0x100000>;
+		// 	compatible = "shared-dma-pool";
+		// 	no-map;
+		// };
 	};
 
 	bmc_dev@1e7e0000 {
@@ -70,7 +70,7 @@
 		interrupts-extended = <&gic GIC_SPI 99 IRQ_TYPE_LEVEL_HIGH>,
 						      <&scu_ic0 ASPEED_AST2600_SCU_IC0_PCIE_PERST_LO_TO_HI>;
 		aspeed,scu = <&syscon>;
-		memory-region = <&pcie_bmc_dev_mem>;
+		// memory-region = <&pcie_bmc_dev_mem>;
 		pcie2lpc;
 	};
 
