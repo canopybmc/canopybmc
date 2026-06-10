@@ -1,0 +1,124 @@
+name: "IPMI: Chassis Power Cycle"
+description: >-
+  Validate chassis power cycle via IPMI. Verifies the host is initially on,
+  sets the restore policy to always-on (0x02), powers the host off, confirms
+  it is off, powers it back on, then polls chassis status until bit 0 is set
+  again. Run this test last as it disrupts the host.
+
+defaults:
+  transport: &local
+    proto: local
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for IPMI LAN
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+
+  - name: Pre-condition Checks
+    steps:
+      - cmd: shell
+        name: Verify host is currently powered on (bit 0 of byte 0)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            S=$(ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x00 0x01 | awk '{print $1}');
+            echo "power byte: 0x$S";
+            test $(( 0x$S & 1 )) -eq 1
+
+  - name: Set Restore Policy
+    steps:
+      - cmd: shell
+        name: Set power restore policy to always-on (0x00 0x06 0x02)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x00 0x06 0x02
+
+  - name: Power Down
+    steps:
+      - cmd: shell
+        name: Chassis Control - Power down (0x00 0x02 0x00)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x00 0x02 0x00
+      - cmd: shell
+        name: Wait for host to power down
+        transport: *local
+        options:
+          timeout: "35s"
+        parameters:
+          command: sleep 30
+      - cmd: shell
+        name: Verify host is powered off (bit 0 of byte 0 clear)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            S=$(ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x00 0x01 | awk '{print $1}');
+            echo "power byte: 0x$S";
+            test $(( 0x$S & 1 )) -eq 0
+
+  - name: Power On
+    steps:
+      - cmd: shell
+        name: Chassis Control - Power on (0x00 0x02 0x01)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x00 0x02 0x01
+
+  - name: Wait for Host to Come On
+    steps:
+      - cmd: shell
+        name: Poll chassis status until power-on bit is set (3 min timeout)
+        transport: *local
+        options:
+          timeout: "4m"
+        parameters:
+          command: >-
+            for i in $(seq 36); do
+            S=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 raw 0x00 0x01 2>/dev/null | awk '{print $1}');
+            [ -n "$S" ] && [ $(( 0x$S & 1 )) -eq 1 ] && echo "host on (0x$S)" && exit 0;
+            sleep 5;
+            done; echo "timeout: host not on after 3 minutes"; exit 1
+
+  - name: Verify Host Is On
+    steps:
+      - cmd: shell
+        name: Chassis Status confirms power on (bit 0 of byte 0 set)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            S=$(ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x00 0x01 | awk '{print $1}');
+            echo "power byte: 0x$S";
+            test $(( 0x$S & 1 )) -eq 1

@@ -1,0 +1,94 @@
+name: "IPMI: LAN Configuration Commands (NetFn 0x0c)"
+description: >-
+  Verify Get LAN Configuration Parameter (0x0c 0x02) for key network
+  parameters on channel 1: IP address (param3), subnet mask (param6), MAC
+  address (param5), VLAN ID (param20), and cipher suite list (param17).
+  Cipher suite list carries on-error: continue as it may not be implemented
+  on all firmware builds.
+
+defaults:
+  transport: &local
+    proto: local
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for IPMI LAN
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+
+  - name: LAN Configuration - IP and Network
+    steps:
+      - cmd: shell
+        name: Get LAN Config IP Address (0x0c 0x02) - ch1 param3
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x0c 0x02 0x01 0x03 0x00 0x00
+      - cmd: shell
+        name: Get LAN Config Subnet Mask (0x0c 0x02) - ch1 param6
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x0c 0x02 0x01 0x06 0x00 0x00
+      - cmd: shell
+        name: Get LAN Config MAC Address (0x0c 0x02) - ch1 param5
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x0c 0x02 0x01 0x05 0x00 0x00
+
+  - name: LAN Configuration - VLAN and Cipher
+    steps:
+      - cmd: shell
+        name: Get LAN Config VLAN ID (0x0c 0x02) - ch1 param20
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x0c 0x02 0x01 0x14 0x00 0x00
+      - cmd: shell
+        name: Get LAN Config Cipher Suite List (0x0c 0x02) - ch1 param17
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x0c 0x02 0x01 0x11 0x00 0x00
+
+  - name: LAN Configuration via ipmitool Alias
+    steps:
+      - cmd: shell
+        name: lan print 1 (alias - full channel 1 LAN config)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            lan print 1
+          expect:
+            - regex: 'IP Address Source\s*:'
+            - regex: 'MAC Address\s*:'

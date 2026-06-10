@@ -1,0 +1,168 @@
+name: "IPMI: App - IPM Device Global Commands (NetFn 0x06)"
+description: >-
+  Verify IPM Device Global commands (Table G-1, §20): Get Device ID (01h),
+  Get Self Test Results (04h), Get/Set ACPI Power State (07h/06h), and
+  Get Device GUID (08h, the BMC device GUID).
+
+  Get/Set ACPI Power State (07h/06h) are currently unsupported on HPE ProLiant
+  Gen11.
+
+  Note: ipmitool 'mc guid' alias issues Get System GUID (37h), not Get Device
+  GUID (08h).
+
+defaults:
+  transport: &local
+    proto: local
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for IPMI LAN
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+
+  - name: Get Device ID
+    steps:
+      - cmd: shell
+        name: Get Device ID (0x06 0x01)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x01
+
+  - name: Get Self Test Results
+    steps:
+      - cmd: shell
+        name: Get Self Test Results (0x06 0x04)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x04
+
+  - name: ACPI Power State (unsupported on this platform)
+    steps:
+      - cmd: shell
+        name: Get ACPI Power State (0x06 0x07) rejected with 0xFF
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x07 2>&1 || true
+          expect:
+            - regex: 'rsp=0xff|Unspecified error'
+      - cmd: shell
+        name: Set ACPI Power State (0x06 0x06) - S0/G0 working, D0
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x06 0x00 0x00
+
+  - name: Get Device GUID
+    steps:
+      - cmd: shell
+        name: Get Device GUID (0x06 0x08)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x08
+
+  - name: Wait for SMBIOS System GUID source
+    steps:
+      - cmd: shell
+        name: Power host on so BIOS pushes SMBIOS (no-op if already on)
+        transport: *local
+        options:
+          timeout: "1m"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            chassis power on
+      - cmd: shell
+        name: Wait until smbios-mdr publishes a non-zero System UUID
+        transport: &bmc_ssh
+          proto: ssh
+          options:
+            host: "[[attributes.BMC]]"
+            user: "root"
+            password: "[[attributes.BMCPassword]]"
+        options:
+          timeout: "8m"
+        parameters:
+          command: >-
+            until busctl get-property xyz.openbmc_project.Smbios.MDR_V2
+            /xyz/openbmc_project/inventory/system/chassis/motherboard/bios
+            xyz.openbmc_project.Common.UUID UUID 2>/dev/null
+            | grep -qiE '[1-9a-f]'; do sleep 10; done;
+            echo "System GUID source ready:";
+            busctl get-property xyz.openbmc_project.Smbios.MDR_V2
+            /xyz/openbmc_project/inventory/system/chassis/motherboard/bios
+            xyz.openbmc_project.Common.UUID UUID
+          expect:
+            - regex: 'System GUID source ready'
+            - regex: 's "[0-9a-fA-F]'
+
+  - name: IPM Global via ipmitool Aliases
+    steps:
+      - cmd: shell
+        name: mc info (alias)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            mc info
+          expect:
+            - regex: 'Device ID\s*:'
+            - regex: 'IPMI Version\s*:'
+      - cmd: shell
+        name: mc guid (alias, Get System GUID 0x37 from SMBIOS)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            mc guid
+          expect:
+            - regex: 'System GUID'
+      - cmd: shell
+        name: mc selftest is not implemented
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            mc selftest || exit 0
+          expect:
+            - regex: '^Selftest: not implemented$'

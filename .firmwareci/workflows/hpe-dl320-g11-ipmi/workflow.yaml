@@ -1,0 +1,3 @@
+name: hpe-dl320-g11-ipmi
+description: OpenBMC IPMI CI tests for HPE ProLiant DL320 Gen11 BMC
+runs-on: hpe-dl320

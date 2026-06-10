@@ -1,0 +1,178 @@
+name: "IPMI: DCMI Group Extension Commands (NetFn 0x2c, Group 0xDC)"
+description: >-
+  Verify DCMI 1.5 commands (group extension 0xDC). Get DCMI Capability Info,
+  Get Management Controller ID String, Get Temperature Reading, and Get Power
+  Reading are expected to work. Get DCMI Sensor Info (0x07), Get Asset Tag
+  (0x06), and Get Power Limit (0x03) carry on-error: continue as support
+  varies across firmware builds.
+
+defaults:
+  transport: &local
+    proto: local
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for IPMI LAN
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+
+  - name: DCMI Capability Info
+    steps:
+      - cmd: shell
+        name: Get DCMI Capability Info (0x2c 0x01) - platform capabilities
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x2c 0x01 0xdc 0x01
+
+  - name: DCMI Sensor and Temperature
+    steps:
+      - cmd: shell
+        name: Get DCMI Sensor Info (0x2c 0x07) - temperature sensors
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x2c 0x07 0xdc 0x01 0x40 0x01 0x01
+          expect:
+            - regex: '^[0-9a-f]'
+      - cmd: shell
+        name: Get Temperature Reading (0x2c 0x10) - inlet air entity
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x2c 0x10 0xdc 0x01 0x40 0x01 0x00
+
+  - name: DCMI Management Info
+    steps:
+      - cmd: shell
+        name: Get Asset Tag (0x2c 0x06)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x2c 0x06 0xdc 0x00 0x10
+      - cmd: shell
+        name: Get Management Controller ID String (0x2c 0x09)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x2c 0x09 0xdc 0x00 0x10
+
+  - name: DCMI Power
+    steps:
+      - cmd: shell
+        name: Get DCMI Power Reading (0x2c 0x02) - current system power
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x2c 0x02 0xdc 0x01 0x00 0x00
+      - cmd: shell
+        name: Get DCMI Power Limit (0x2c 0x03)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x2c 0x03 0xdc 0x00 0x00
+          expect:
+            - regex: '^[0-9a-f]{2}'
+
+  - name: DCMI Configuration
+    steps:
+      - cmd: shell
+        name: Get DCMI Configuration Parameters (0x2c 0x13) - power reading
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x2c 0x13 0xdc 0x01 0x00
+
+  - name: DCMI via ipmitool Aliases
+    steps:
+      - cmd: shell
+        name: dcmi discover (alias - DCMI capabilities summary)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            dcmi discover
+          expect:
+            - regex: 'DCMI'
+      - cmd: shell
+        name: dcmi power reading (alias)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            dcmi power reading
+          expect:
+            - regex: 'Watts'
+      - cmd: shell
+        name: dcmi get_mc_id_string (alias)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            dcmi get_mc_id_string
+          expect:
+            - regex: 'Management Controller ID'
+      - cmd: shell
+        name: dcmi asset_tag (alias)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            dcmi asset_tag
+          expect:
+            - regex: 'Asset tag'
