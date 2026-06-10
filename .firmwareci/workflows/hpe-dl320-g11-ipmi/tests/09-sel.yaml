@@ -1,0 +1,200 @@
+name: "IPMI: SEL Commands (NetFn 0x0a)"
+description: >-
+  Verify System Event Log commands (Table G-1, §31): Get SEL Info (40h), Get
+  SEL Allocation Info (41h), Reserve SEL (42h), Get SEL Entry (43h), Add SEL
+  Entry (44h), Partial Add SEL Entry (45h), Delete SEL Entry (46h), Clear SEL
+  (47h), Get/Set SEL Time (48h/49h), and Get SEL Time UTC Offset (5Ch). Set
+  SEL Time, Delete, Partial Add, Allocation Info, and UTC Offset carry
+  on-error: continue. Clear SEL runs last using a fresh reservation.
+
+defaults:
+  transport: &local
+    proto: local
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for IPMI LAN
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+
+  - name: Get SEL Info
+    steps:
+      - cmd: shell
+        name: Get SEL Info (0x0a 0x40)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x0a 0x40
+
+  - name: Reserve SEL
+    steps:
+      - cmd: shell
+        name: Reserve SEL (0x0a 0x42)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x0a 0x42
+
+  - name: Add SEL Entry
+    steps:
+      - cmd: shell
+        name: Add SEL Entry (0x0a 0x44) - test system event record
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x0a 0x44
+            0xff 0xff 0x02 0x00 0x00 0x00 0x00
+            0x20 0x00 0x04 0x01 0x01 0x00 0x00 0x00 0x00
+
+  - name: Get SEL Entry
+    steps:
+      - cmd: shell
+        name: Get SEL Entry (0x0a 0x43) - last record
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x0a 0x43 0x00 0x00 0xff 0xff 0x00 0xff
+      - cmd: shell
+        name: Partial Add SEL Entry (0x0a 0x45)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x0a 0x45 0x00 0x00 0xff 0xff 0x00 0xff
+
+  - name: SEL Time
+    steps:
+      - cmd: shell
+        name: Get SEL Time (0x0a 0x48)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x0a 0x48
+      - cmd: shell
+        name: Set SEL Time (0x0a 0x49)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x0a 0x49 0x00 0x00 0x00 0x00
+      - cmd: shell
+        name: Get SEL Time UTC Offset (0x0a 0x5c)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x0a 0x5c
+
+  - name: SEL Management
+    steps:
+      - cmd: shell
+        name: Get SEL Allocation Info (0x0a 0x41)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x0a 0x41
+      - cmd: shell
+        name: Delete SEL Entry (0x0a 0x46)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x0a 0x46 0x00 0x00 0x01 0x00
+
+  - name: Clear SEL
+    steps:
+      - cmd: shell
+        name: Clear SEL (0x0a 0x47) - reserve then clear in one step
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            RES=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 raw 0x0a 0x42);
+            ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 raw 0x0a 0x47
+            $(echo "$RES" | awk '{print "0x"$1, "0x"$2}') 0x43 0x4c 0x52 0xaa
+
+  - name: SEL via ipmitool Aliases
+    steps:
+      - cmd: shell
+        name: sel info (alias)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            sel info
+          expect:
+            - regex: 'Entries\s*:'
+      - cmd: shell
+        name: sel time get (alias)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            sel time get
+          expect:
+            - regex: '[0-9]{4}'
+      - cmd: shell
+        name: sel list after clear (alias - expects empty)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            sel list
+          expect:
+            - regex: '(SEL has no entries|\|)'

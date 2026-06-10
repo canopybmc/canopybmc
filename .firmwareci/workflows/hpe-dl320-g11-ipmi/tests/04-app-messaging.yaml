@@ -1,0 +1,264 @@
+name: "IPMI: App - BMC Device and Messaging Commands (NetFn 0x06)"
+description: >-
+  Verify BMC Device and Messaging commands (Table G-1, §22): Get BMC Global
+  Enables (2Fh), BT Interface Capabilities (36h), Get System GUID (37h),
+  Get Channel Auth Capabilities (38h), Get Session Info (3Dh), Get Channel
+  Access (41h), Get Channel Info (42h), Get User Access (44h), Get User Name
+  (46h), Get Channel Cipher Suites (54h), Get System Interface Capabilities
+  (57h), and Get System Info Parameters (59h). Commands that may not be
+  supported on all builds carry on-error: continue.
+
+defaults:
+  transport: &local
+    proto: local
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for IPMI LAN
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+
+  - name: BMC Global Enables
+    steps:
+      - cmd: shell
+        name: Get BMC Global Enables (0x06 0x2f)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x2f
+
+  - name: Interface Capabilities
+    steps:
+      - cmd: shell
+        name: Get BT Interface Capabilities (0x06 0x36)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x36
+      - cmd: shell
+        name: Get System Interface Capabilities (0x06 0x57)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x57 0x00
+
+  - name: System Identity and Authentication
+    steps:
+      - cmd: shell
+        name: Get System GUID (0x06 0x37)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x37
+          expect:
+            - regex: '^[0-9a-f]{2}( [0-9a-f]{2}){15}$'
+      - cmd: shell
+        name: Get Channel Auth Capabilities (0x06 0x38) - ch14 admin
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x38 0x0e 0x04
+
+  - name: Session Info
+    steps:
+      - cmd: shell
+        name: Get Session Info (0x06 0x3d) - current session
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x3d 0x00
+
+  - name: Channel and User Information
+    steps:
+      - cmd: shell
+        name: Get Channel Access (0x06 0x41) - ch1
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x41 0x01 0x00
+      - cmd: shell
+        name: Get Channel Info (0x06 0x42) - ch1
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x42 0x01
+      - cmd: shell
+        name: Get User Access (0x06 0x44) - ch1 user1
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x44 0x01 0x01
+      - cmd: shell
+        name: Get User Name (0x06 0x46) - user1
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x46 0x01
+      - cmd: shell
+        name: Get Channel Cipher Suites (0x06 0x54) - ch14 list index 0
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x54 0x0e 0x00 0x00
+
+  - name: System Info Parameters
+    steps:
+      - cmd: shell
+        name: Get System Info Parameters (0x06 0x59) - param0 set in progress
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x59 0x00 0x00 0x00
+
+  - name: Messaging via ipmitool Aliases
+    steps:
+      - cmd: shell
+        name: mc getenables (alias)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            mc getenables
+          expect:
+            - regex: 'System Event Logging'
+      - cmd: shell
+        name: user list 1 (alias)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            user list 1
+          expect:
+            - regex: 'Name'
+      - cmd: shell
+        name: user summary 1 (alias)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            user summary 1
+          expect:
+            - regex: 'Maximum IDs'
+      - cmd: shell
+        name: channel info 1 (alias)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            channel info 1
+          expect:
+            - regex: 'Channel 0x1 info'
+      - cmd: shell
+        name: channel info 15 (alias)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            channel info 15
+          expect:
+            - regex: 'Channel 0xf info'
+            - regex: 'Channel Protocol Type\s*:\s*KCS'
+      - cmd: shell
+        name: channel authcap 1 4 (alias)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            channel authcap 1 4
+          expect:
+            - regex: 'User level authentication'
+      - cmd: shell
+        name: channel getciphers ipmi 1 (alias)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            channel getciphers ipmi 1
+          expect:
+            - regex: 'Integrity Alg'

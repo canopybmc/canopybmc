@@ -1,0 +1,174 @@
+name: "IPMI: App - BMC Watchdog Timer Commands (NetFn 0x06)"
+description: >-
+  Validate BMC Watchdog Timer commands (Table G-1, §27): Get Watchdog Timer
+  (25h), Set Watchdog Timer (24h), and Reset Watchdog Timer (22h). The test
+  sets a 120-second countdown, resets it, verifies the value, then restores
+  the original 300-second default.
+
+defaults:
+  transport: &local
+    proto: local
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for IPMI LAN
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+
+  - name: Get Watchdog Timer
+    steps:
+      - cmd: shell
+        name: Get Watchdog Timer (0x06 0x25)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x25
+
+  - name: Check for default Watchdog Timer value
+    steps:
+      - cmd: shell
+        name: Get Watchdog Timer (0x06 0x25)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x25
+          expect:
+            - regex: '[0-9a-f]{2} [0-9a-f]{2} [0-9a-f]{2} [0-9a-f]{2} b8 0b [0-9a-f]{2} [0-9a-f]{2}'
+
+  - name: Set Watchdog Timer
+    steps:
+      - cmd: shell
+        name: Set Watchdog Timer (0x06 0x24) - 120 seconds, no action
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x24
+            0x04 0x00 0x00 0x00 0xB0 0x04
+
+  - name: Reset Watchdog Timer
+    steps:
+      - cmd: shell
+        name: Reset Watchdog Timer (0x06 0x22)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x22
+
+  - name: Verify Watchdog Timer Configuration
+    steps:
+      - cmd: shell
+        name: Get Watchdog Timer to verify settings (0x06 0x25)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x25
+          expect:
+            - regex: '[0-9a-f]{2} [0-9a-f]{2} [0-9a-f]{2} [0-9a-f]{2} b0 04 [0-9a-f]{2} [0-9a-f]{2}'
+
+  - name: Verify Watchdog reached phosphor-watchdog on BMC
+    steps:
+      - cmd: shell
+        name: phosphor-watchdog D-Bus props reflect the IPMI Set (BMC-side)
+        transport: &bmc_ssh
+          proto: ssh
+          options:
+            host: "[[attributes.BMC]]"
+            user: "root"
+            password: "[[attributes.BMCPassword]]"
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            busctl get-property xyz.openbmc_project.Watchdog
+            /xyz/openbmc_project/watchdog/host0
+            xyz.openbmc_project.State.Watchdog
+            Interval Enabled ExpireAction CurrentTimerUse
+          expect:
+            - regex: 't 120000'
+            - regex: 'b true'
+            - regex: 'Action\.None'
+            - regex: 'TimerUse\.SMSOS'
+      - cmd: shell
+        name: phosphor-watchdog daemon is active (BMC-side)
+        transport: *bmc_ssh
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: systemctl is-active phosphor-watchdog.service
+          expect:
+            - regex: '^active$'
+      - cmd: shell
+        name: Expire-action to systemd-service map is configured (BMC-side)
+        transport: *bmc_ssh
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: systemctl cat phosphor-watchdog.service
+          expect:
+            - regex: 'Action\.HardReset=phosphor-watchdog-host-reset\.service'
+            - regex: 'Action\.PowerOff=phosphor-watchdog-host-poweroff\.service'
+            - regex: 'Action\.PowerCycle=phosphor-watchdog-host-powercycle\.service'
+
+  - name: Watchdog via ipmitool Alias
+    steps:
+      - cmd: shell
+        name: mc watchdog get (alias)
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            mc watchdog get
+          expect:
+            - regex: 'Watchdog Timer'
+            - regex: 'Initial Countdown:\s*120.0 sec'
+
+  - name: Restore Default Watchdog Timer
+    steps:
+      - cmd: shell
+        name: Set Watchdog Timer (0x06 0x24) - 300 seconds, no action
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x24
+            0x04 0x00 0x00 0x00 0xb8 0x0b

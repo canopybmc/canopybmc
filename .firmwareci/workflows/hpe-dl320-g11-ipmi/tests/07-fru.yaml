@@ -1,0 +1,160 @@
+name: "IPMI: FRU Inventory"
+description: >-
+  Verify FRU inventory commands (Table G-1, §34): Get FRU Inventory Area Info
+  (10h) and Read FRU Data (11h). HPE ProLiant Gen11 has no physical FRU EEPROMs;
+  fru-synthesizer builds FRU images from device-tree VPD (baseboard) and host
+  SMBIOS (CPU/DIMM), fru-device publishes them via xyz.openbmc_project.FruDevice,
+  and phosphor-ipmi-host's dbus-sdr handlers serve them over IPMI.
+  FRU device 0 is the baseboard (Rack Mount chassis); it is available without the
+  host. CPU/DIMM FRUs come from SMBIOS, so this test powers the host on and waits
+  for the synthetic FRU files to appear before asserting on them.
+
+defaults:
+  transport: &local
+    proto: local
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for IPMI LAN
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+
+  - name: FRU Inventory Area Info
+    steps:
+      - cmd: shell
+        name: Get FRU Inventory Area Info (0x0a 0x10) - FRU device 0
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x0a 0x10 0x00
+
+  - name: Read FRU Data
+    steps:
+      - cmd: shell
+        name: Read FRU Data (0x0a 0x11) - FRU 0 offset 0 8 bytes
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x0a 0x11 0x00 0x00 0x00 0x08
+
+  - name: Baseboard FRU Values (device 0)
+    steps:
+      - cmd: shell
+        name: fru print 0 - baseboard from device-tree VPD
+        transport: *local
+        options:
+          timeout: "1m"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            fru print 0
+          expect:
+            # Rack Mount chassis area is what makes the baseboard FRU device 0.
+            - regex: 'Chassis Type\s*:\s*Rack Mount Chassis'
+            - regex: 'Board Mfg\s*:\s*\S'
+            - regex: 'Board Product\s*:\s*\S'
+            - regex: 'Board Serial\s*:\s*\S'
+
+  - name: Power on host for SMBIOS-sourced FRU
+    steps:
+      - cmd: shell
+        name: Chassis power on (no-op if already on)
+        transport: *local
+        options:
+          timeout: "1m"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            chassis power on
+
+  - name: Wait for CPU and DIMM synthetic FRUs
+    steps:
+      - cmd: shell
+        name: Wait until fru-synthesizer has written a CPU and a DIMM FRU
+        transport: &bmc_ssh
+          proto: ssh
+          options:
+            host: "[[attributes.BMC]]"
+            user: "root"
+            password: "[[attributes.BMCPassword]]"
+        options:
+          timeout: "8m"
+        parameters:
+          command: >-
+            until ls /etc/fru/254-*.fru.bin >/dev/null 2>&1 &&
+            ls /etc/fru/255-*.fru.bin >/dev/null 2>&1; do sleep 5; done
+
+  - name: fru-synthesizer Service
+    steps:
+      - cmd: shell
+        name: fru-synthesizer is active
+        transport: *bmc_ssh
+        options:
+          timeout: "30s"
+        parameters:
+          command: systemctl is-active fru-synthesizer.service
+
+  - name: CPU FRU present
+    steps:
+      - cmd: shell
+        name: At least one CPU FRU (bus 254) generated from SMBIOS
+        transport: *bmc_ssh
+        options:
+          timeout: "30s"
+        parameters:
+          command: ls -1 /etc/fru/254-*.fru.bin
+          expect:
+            - regex: '254-[0-9]+\.fru\.bin'
+
+  - name: DIMM FRU present
+    steps:
+      - cmd: shell
+        name: At least one DIMM FRU (bus 255) generated from SMBIOS
+        transport: *bmc_ssh
+        options:
+          timeout: "30s"
+        parameters:
+          command: ls -1 /etc/fru/255-*.fru.bin
+          expect:
+            - regex: '255-[0-9]+\.fru\.bin'
+
+  - name: IPMI serves baseboard, CPU and DIMM
+    steps:
+      - cmd: shell
+        name: At least 3 FRU devices enumerated (baseboard + CPU + DIMM)
+        transport: *local
+        options:
+          timeout: "1m"
+        parameters:
+          command: >-
+            test "$(ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            fru print | grep -c 'FRU Device Description')" -ge 3
+      - cmd: shell
+        name: Product-area FRU fields present over IPMI
+        transport: *local
+        options:
+          timeout: "1m"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            fru print
+          expect:
+            - regex: 'Product Manufacturer\s*:\s*\S'
+            - regex: 'Product Name\s*:\s*\S'
