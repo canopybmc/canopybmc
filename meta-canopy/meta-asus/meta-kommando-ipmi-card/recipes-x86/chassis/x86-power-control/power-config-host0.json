@@ -10,7 +10,7 @@
             "Name": "PowerOut",
             "LineName": "BMC_PWRBTN",
             "Type": "GPIO",
-            "Polarity": "ActiveHigh"
+            "Polarity": "ActiveLow"
         },
         {
             "Name": "ResetOut",
