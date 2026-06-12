@@ -1,4 +1,4 @@
-From 3d4d64f70bf21f249b04907907dcb76d26963c94 Mon Sep 17 00:00:00 2001
+From bdc1c9fa64f4f07435ff94b7688d64450ff0d0ec Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 10 Feb 2026 12:38:28 +0100
 Subject: [PATCH] dt-bindings: serial: add HPE GXP Virtual UART binding
@@ -93,6 +93,3 @@ index 000000000000..d86aa4b7b8d1
 +        serial-line = <3>;
 +        vuart-cfg = <&vuart_cfg>;
 +    };
--- 
-2.54.0
-

@@ -1,4 +1,4 @@
-From add3f3b4518b8ae4ff3f16301f624bad3a3c48d8 Mon Sep 17 00:00:00 2001
+From f2ea9b45508c9562cf317146004e97a2d009752f Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Tue, 14 Apr 2026 13:33:33 +0200
 Subject: [PATCH] usb: gadget: gxp-udc: reset data toggle on endpoint init
@@ -32,6 +32,3 @@ index 097055a1da8e..7eb54845529f 100644
  	writel(val, ep->base + EVDEPCC);
  
  	val = readl(ep->base + EVDEPSTS);
--- 
-2.54.0
-

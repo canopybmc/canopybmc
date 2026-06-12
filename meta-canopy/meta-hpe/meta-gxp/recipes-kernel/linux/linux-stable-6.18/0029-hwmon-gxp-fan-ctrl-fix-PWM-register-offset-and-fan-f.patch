@@ -1,4 +1,4 @@
-From 72586b1076dc191f5387307216490a3f3c256b3e Mon Sep 17 00:00:00 2001
+From 7759913c68be57fe1b2711ceac471520f6554066 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Wed, 11 Feb 2026 17:41:34 +0100
 Subject: [PATCH] hwmon: gxp-fan-ctrl: fix PWM register offset and fan fault
@@ -66,6 +66,3 @@ index 0ec8818784d2..33decc881b92 100644
  	else
  		*val = 0;
  
--- 
-2.54.0
-

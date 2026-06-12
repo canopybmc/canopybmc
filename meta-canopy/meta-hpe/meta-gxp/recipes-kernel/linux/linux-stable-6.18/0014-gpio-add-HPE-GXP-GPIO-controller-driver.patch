@@ -1,4 +1,4 @@
-From c9e8ac9353c98901fa32f0d507af7c7356df7715 Mon Sep 17 00:00:00 2001
+From e1e8a4771ef79b7466413820703d571c81acf154 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 8 Feb 2026 22:20:24 +0100
 Subject: [PATCH] gpio: add HPE GXP GPIO controller driver
@@ -413,6 +413,3 @@ index 000000000000..7dfbfb4998be
 +MODULE_AUTHOR("Marcello Sylvester Bauer <marcello.bauer@9elements.com>");
 +MODULE_DESCRIPTION("HPE GXP GPIO driver");
 +MODULE_LICENSE("GPL");
--- 
-2.54.0
-

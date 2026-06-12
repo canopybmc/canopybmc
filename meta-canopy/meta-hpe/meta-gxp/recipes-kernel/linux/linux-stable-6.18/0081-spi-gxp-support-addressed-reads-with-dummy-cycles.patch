@@ -1,4 +1,4 @@
-From b98dd9148e1207a8cb8fe0bd869bc728db803c60 Mon Sep 17 00:00:00 2001
+From 67513a9febf14314bfc40bf03eb3bbdc8e862bbb Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Fri, 10 Apr 2026 09:56:09 +0200
 Subject: [PATCH] spi: gxp: support addressed reads with dummy cycles
@@ -64,6 +64,3 @@ index 5e3fbf91ca0c..c8a8df55bcfd 100644
  	if (chip->cs == 0)
  		offset += 0x4000000;
  
--- 
-2.54.0
-

@@ -1,4 +1,4 @@
-From 46d6d7bacb9ae394ca7cdae353f3249ad5fe384a Mon Sep 17 00:00:00 2001
+From a2cd87003c66fa054a8eabb5ab5eadee025e20df Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 5 Feb 2026 11:05:29 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add UMAC ethernet and MDIO nodes
@@ -92,6 +92,3 @@ index ad23b8d08bc3..14b333d8297d 100644
  		fanctrl: fan-controller@c1000c00 {
  			compatible = "hpe,gxp-fan-ctrl";
  			reg = <0xc1000c00 0x200>,
--- 
-2.54.0
-

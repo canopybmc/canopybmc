@@ -1,4 +1,4 @@
-From a02df7032e31695202abc1bec3343de5529da7dc Mon Sep 17 00:00:00 2001
+From de31996ee238d899cc24a0a7ace1859aff1b1a25 Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
 Date: Mon, 2 Mar 2026 19:36:34 -0300
 Subject: [PATCH] misc: sbrmi: add regulator supply support
@@ -56,6 +56,3 @@ index f891f5af4bc6..205ef7b6d3be 100644
  
  	mutex_init(&data->lock);
  
--- 
-2.54.0
-

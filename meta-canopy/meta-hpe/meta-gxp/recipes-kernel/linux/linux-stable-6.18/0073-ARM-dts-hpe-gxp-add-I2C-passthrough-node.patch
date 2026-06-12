@@ -1,4 +1,4 @@
-From 56c24f2c8240f92c22fcc9c9ab1cc6566571ddf2 Mon Sep 17 00:00:00 2001
+From 0086cb5df9dd43f68f10689d29c251fce6722bb3 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Sun, 8 Mar 2026 00:00:00 +0000
 Subject: [PATCH] ARM: dts: hpe-gxp: add I2C passthrough node
@@ -34,6 +34,3 @@ index 4ef72e6ac5bb..031d0ab2f4cf 100644
  		spifi1: spi@c0000280 {
  			compatible = "hpe,gxp-spifi";
  			reg = <0xc0000280 0x80>, <0xc000e000 0x100>, <0xf0000000 0x4000000>;
--- 
-2.54.0
-

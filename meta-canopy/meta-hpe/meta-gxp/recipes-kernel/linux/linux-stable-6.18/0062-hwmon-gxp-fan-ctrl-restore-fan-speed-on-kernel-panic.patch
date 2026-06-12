@@ -1,4 +1,4 @@
-From b6264d9e28b992b6d1a5c1d5f0d67295d61480d6 Mon Sep 17 00:00:00 2001
+From 150b2254ab8050b8c41e589d7ebac15ceec0f71f Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 13:29:20 +0100
 Subject: [PATCH] hwmon: gxp-fan-ctrl: restore fan speed on kernel panic
@@ -79,6 +79,3 @@ index 545c4fffe904..3c546037f2a0 100644
  	hwmon_dev = devm_hwmon_device_register_with_info(dev,
  							 "hpe_gxp_fan_ctrl",
  							 drvdata,
--- 
-2.54.0
-

@@ -1,4 +1,4 @@
-From 908f45830e1b6f43210a0e84e42905c10f247ad4 Mon Sep 17 00:00:00 2001
+From df366b58b696a308c81b3875ffe0be2d69c903c1 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 3 Feb 2026 00:46:22 +0100
 Subject: [PATCH] dt-bindings: soc: hpe: add GXP CHIF binding
@@ -89,6 +89,3 @@ index 35970054199d..f7c79fa25681 100644
  required:
    - compatible
    - reg
--- 
-2.54.0
-

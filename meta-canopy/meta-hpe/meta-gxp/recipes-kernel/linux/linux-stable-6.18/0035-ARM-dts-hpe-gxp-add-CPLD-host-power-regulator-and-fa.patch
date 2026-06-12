@@ -1,4 +1,4 @@
-From 524266aa647997ce62be74ceecaeea8941de23c5 Mon Sep 17 00:00:00 2001
+From 9e741520c59f63cf50e18ac6e15b91923267387c Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 09:31:22 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add CPLD host power regulator and
@@ -39,6 +39,3 @@ index f6f2e2d4bc7b..a3b56c366287 100644
  		};
  
  		spifi1: spi@c0000280 {
--- 
-2.54.0
-
