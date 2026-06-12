@@ -2,19 +2,19 @@
     "gpio_configs": [
         {
             "Name": "PowerOk",
-            "LineName": "MB_S0_DETECT",
+            "LineName": "host0-ready-n",
             "Type": "GPIO",
             "Polarity": "ActiveHigh"
         },
         {
             "Name": "PowerOut",
-            "LineName": "BMC_PWRBTN",
+            "LineName": "power-chassis-control-n",
             "Type": "GPIO",
             "Polarity": "ActiveLow"
         },
         {
             "Name": "ResetOut",
-            "LineName": "BMC_RSTBTN",
+            "LineName": "reset-chassis-control-n",
             "Type": "GPIO",
             "Polarity": "ActiveLow"
         }
