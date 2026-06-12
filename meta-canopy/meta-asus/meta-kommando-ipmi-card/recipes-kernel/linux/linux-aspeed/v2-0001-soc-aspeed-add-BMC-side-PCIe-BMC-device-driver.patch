@@ -14,7 +14,7 @@ Taken from ASPEED 6.18 Kernel SDK
 Add support for VUART over PCIe between BMC and host.
 This add BMC side driver.
 
-Upstream-Status: Pending
+Upstream-Status: Submitted [lore, https://lore.kernel.org/all/cover.1780409151.git.gregoire.layet@9elements.com/]
 Signed-off-by: Jacky Chou <jacky_chou@aspeedtech.com>
 Signed-off-by: aspeedyh <yh_chung@aspeedtech.com>
 Signed-off-by: Grégoire Layet <gregoire.layet@9elements.com>
