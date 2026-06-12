@@ -1,4 +1,4 @@
-From 86955068627922b476a4da5f46cc9ac57bbb5067 Mon Sep 17 00:00:00 2001
+From 73525940ce5c85f95a08b5122d6f29e097494971 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Tue, 17 Feb 2026 22:05:28 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: rename PSU GPIO lines
@@ -59,6 +59,3 @@ index 0d178150aaf0..4ef72e6ac5bb 100644
  
  			i2c_mux_ctrl: mux-controller {
  				compatible = "mmio-mux";
--- 
-2.54.0
-

@@ -1,4 +1,4 @@
-From a4a29b016d99a3626cdfc885ed003d56a5f75c87 Mon Sep 17 00:00:00 2001
+From 38080c23e27c76dacef5b62446264dda12a2434c Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Tue, 17 Feb 2026 00:00:00 +0000
 Subject: [PATCH] ARM: dts: hpe-gxp: add mmio-mux for i2c bus mux select
@@ -59,6 +59,3 @@ index 9b396a9c2348..0d178150aaf0 100644
  		};
  
  		fn2: fn2@80200000 {
--- 
-2.54.0
-

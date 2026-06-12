@@ -1,4 +1,4 @@
-From a2e2f5ed6d5dd71a0b4c88f33cea378679223aea Mon Sep 17 00:00:00 2001
+From 958d1e5222b13ee3f217175698df503617cd9dd8 Mon Sep 17 00:00:00 2001
 From: Nick Hawkins <nick.hawkins@hpe.com>
 Date: Sun, 8 Mar 2026 00:00:00 +0000
 Subject: [PATCH] media: add GXP thumbnail video capture driver
@@ -920,6 +920,3 @@ index 000000000000..6ca3e24ac325
 +
 +MODULE_DESCRIPTION("HPE GXP Thumbnail Video Engine driver");
 +MODULE_LICENSE("GPL");
--- 
-2.54.0
-

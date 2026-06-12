@@ -1,4 +1,4 @@
-From c7e99fdbd75da58efc343e1c85ecaf05a22d2293 Mon Sep 17 00:00:00 2001
+From 983a222be753186b5b4b1fe430093fc37ed6f276 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Mon, 2 Feb 2026 11:12:39 +0100
 Subject: [PATCH] nvmem: add HPE GXP virtual EEPROM driver
@@ -171,6 +171,3 @@ index 000000000000..e0cc9d1b395e
 +MODULE_AUTHOR("Marcello Sylvester Bauer <marcello.bauer@9elements.com>");
 +MODULE_DESCRIPTION("HPE GXP Virtual EEPROM NVMEM Driver");
 +MODULE_LICENSE("GPL");
--- 
-2.54.0
-

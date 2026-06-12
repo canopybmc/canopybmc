@@ -1,4 +1,4 @@
-From 107d54bebbc0752aa1064b9005d2c921b6d54bed Mon Sep 17 00:00:00 2001
+From 96db408f4b3cc4e3125e8b02a8499b7ba4c733e6 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 8 Feb 2026 22:21:26 +0100
 Subject: [PATCH] soc: hpe: add GXP host power controller driver
@@ -549,6 +549,3 @@ index 000000000000..9a8c0cbc50f5
 +MODULE_AUTHOR("Marcello Sylvester Bauer <marcello.bauer@9elements.com>");
 +MODULE_DESCRIPTION("HPE GXP host power controller driver");
 +MODULE_LICENSE("GPL");
--- 
-2.54.0
-

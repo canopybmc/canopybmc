@@ -1,4 +1,4 @@
-From fb5dd567069ed861705092ad038be6f087c0cfd5 Mon Sep 17 00:00:00 2001
+From 47c22b31acc218f42fc31b8984b925c9ec96efe1 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 10 Feb 2026 12:38:34 +0100
 Subject: [PATCH] serial: 8250: add HPE GXP Virtual UART driver
@@ -507,6 +507,3 @@ index 9ec4d5fe64de..262b29479e79 100644
  obj-$(CONFIG_SERIAL_8250_BCM2835AUX)	+= 8250_bcm2835aux.o
  obj-$(CONFIG_SERIAL_8250_BCM7271)	+= 8250_bcm7271.o
  obj-$(CONFIG_SERIAL_8250_BOCA)		+= 8250_boca.o
--- 
-2.54.0
-

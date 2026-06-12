@@ -1,4 +1,4 @@
-From c7d1882c8f738b4dd35cd3ff95b36a2eddb93ec6 Mon Sep 17 00:00:00 2001
+From 7fe72e5d334e3aac5433f19f182c2cd46417b3c7 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 3 Feb 2026 16:10:37 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add CHIF node
@@ -28,6 +28,3 @@ index 210b6900512d..f6f2e2d4bc7b 100644
  		};
  
  		espi: espi@80fe0000 {
--- 
-2.54.0
-

@@ -1,4 +1,4 @@
-From eb58819434e2e38e51ba17eab4fc975489b36b91 Mon Sep 17 00:00:00 2001
+From 2be5991e02d146ab5c35a96cc14763fdbce2eebc Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 09:25:34 +0100
 Subject: [PATCH] hwmon: gxp-fan-ctrl: use fan-supply regulator and fix sysfs
@@ -324,6 +324,3 @@ index 33decc881b92..328291cacfbd 100644
  							 "hpe_gxp_fan_ctrl",
  							 drvdata,
  							 &gxp_fan_ctrl_chip_info,
--- 
-2.54.0
-

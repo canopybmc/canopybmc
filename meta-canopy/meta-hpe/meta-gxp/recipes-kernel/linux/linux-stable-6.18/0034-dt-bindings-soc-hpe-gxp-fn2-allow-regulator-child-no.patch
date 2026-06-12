@@ -1,4 +1,4 @@
-From e95b28cd6eda4a97b49da8fcee8581b923cab553 Mon Sep 17 00:00:00 2001
+From 412eab2550591e8c947877c8ff9f7c5470f29771 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 09:31:17 +0100
 Subject: [PATCH] dt-bindings: soc: hpe: gxp-fn2: allow regulator child nodes
@@ -39,6 +39,3 @@ index f7c79fa25681..d4ede3795ede 100644
 +            regulator-name = "host-power";
 +        };
      };
--- 
-2.54.0
-

@@ -1,4 +1,4 @@
-From 49ad5d799e7c1c3c1e7a94f84d761231d5fd136e Mon Sep 17 00:00:00 2001
+From 195a7fb9761f818b548cc8038fa37d846ed193b6 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 8 Feb 2026 22:19:53 +0100
 Subject: [PATCH] soc: hpe: add GXP SoC infrastructure drivers
@@ -1723,6 +1723,3 @@ index 000000000000..61ac3adc2605
 +#define GXP_ESPI_OOB_RESET	0x00060001	/* Reset eSPI OOB controller */
 +
 +#endif /* __LINUX_SOC_HPE_GXP_REGS_H */
--- 
-2.54.0
-

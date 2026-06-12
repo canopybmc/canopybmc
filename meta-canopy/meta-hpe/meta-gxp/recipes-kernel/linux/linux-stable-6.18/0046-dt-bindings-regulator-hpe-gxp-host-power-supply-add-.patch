@@ -1,4 +1,4 @@
-From ccb358407f03efc979e36399e54dd9c8458173ea Mon Sep 17 00:00:00 2001
+From 9de3bd25abed70a6c28a2fa430c073391a4df5b2 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 11:17:40 +0100
 Subject: [PATCH] dt-bindings: regulator: hpe,gxp-host-power-supply: add
@@ -49,6 +49,3 @@ index 685e54ffb3cc..fe3ab92b6454 100644
 +        interrupts = <1 IRQ_TYPE_EDGE_BOTH>;
        };
      };
--- 
-2.54.0
-

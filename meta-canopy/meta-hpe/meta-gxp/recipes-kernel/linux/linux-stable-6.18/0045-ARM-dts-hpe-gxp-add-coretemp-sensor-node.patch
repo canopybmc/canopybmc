@@ -1,4 +1,4 @@
-From 797bc0e5c3186c000d8cbc941d9353252dd42fef Mon Sep 17 00:00:00 2001
+From cf150102bb49e2682ed1c9fea098997f827117b3 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 21:59:42 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add coretemp sensor node
@@ -26,6 +26,3 @@ index 2b7531b599ba..acfeb84f9456 100644
  		fan-keys {
  		compatible = "gpio-keys-polled";
  		poll-interval = <1000>;
--- 
-2.54.0
-

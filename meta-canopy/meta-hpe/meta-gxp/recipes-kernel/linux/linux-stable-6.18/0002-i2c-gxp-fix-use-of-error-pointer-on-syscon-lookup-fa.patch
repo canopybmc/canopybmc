@@ -1,4 +1,4 @@
-From b0fa8efa3eb8c8206fae4dbf6cd263ea0bc36381 Mon Sep 17 00:00:00 2001
+From 5d0b20d41746d184ccd51a953b969910c459a979 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Wed, 28 Jan 2026 13:42:36 +0100
 Subject: [PATCH] i2c: gxp: fix use of error pointer on syscon lookup failure
@@ -38,6 +38,3 @@ index 2d117e7e3cb6..bbb16459c74b 100644
  					     "failed to map i2cg_handle\n");
  		}
  
--- 
-2.54.0
-

@@ -1,4 +1,4 @@
-From 5c8c5563b6afeb9c322819083e75c32986938024 Mon Sep 17 00:00:00 2001
+From 98f8f324544d4efde579b57db464dfa1872ff761 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 8 Feb 2026 22:20:50 +0100
 Subject: [PATCH] hwmon: gxp-fan-ctrl: use syscon phandles for XREG and FN2
@@ -155,6 +155,3 @@ index 00e057050437..0ec8818784d2 100644
  
  	hwmon_dev = devm_hwmon_device_register_with_info(&pdev->dev,
  							 "hpe_gxp_fan_ctrl",
--- 
-2.54.0
-
