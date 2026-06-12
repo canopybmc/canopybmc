@@ -150,50 +150,6 @@
     };	
 };
 
-&pwm_tach {
-    status = "okay";
-
-    pinctrl-names = "default";
-    pinctrl-0 = <&pinctrl_pwm0_default  &pinctrl_pwm1_default
-                 &pinctrl_pwm2_default  &pinctrl_pwm3_default
-                 &pinctrl_pwm4_default  &pinctrl_pwm5_default
-                 &pinctrl_pwm6_default  &pinctrl_pwm7_default
-                 &pinctrl_tach0_default &pinctrl_tach1_default
-                 &pinctrl_tach2_default &pinctrl_tach3_default
-                 &pinctrl_tach4_default &pinctrl_tach5_default
-                 &pinctrl_tach6_default &pinctrl_tach7_default>;
-
-    fan-0 { tach-ch = /bits/ 8 <0x00>; };
-    fan-1 { tach-ch = /bits/ 8 <0x01>; };
-    fan-2 { tach-ch = /bits/ 8 <0x02>; };
-    fan-3 { tach-ch = /bits/ 8 <0x03>; };
-    fan-4 { tach-ch = /bits/ 8 <0x04>; };
-    fan-5 { tach-ch = /bits/ 8 <0x05>; };
-    fan-6 { tach-ch = /bits/ 8 <0x06>; };
-    fan-7 { tach-ch = /bits/ 8 <0x07>; };
-};
-
-&mdio2 {
-    status = "okay";
-	pinctrl-names = "default";
-    pinctrl-0 = <&pinctrl_mdio3_default>;
-
-    ethphy2: ethernet-phy@0 {
-        compatible = "ethernet-phy-ieee802.3-c22";
-        reg = <0>;
-    };
-};
-
-&mac2{
-    status = "okay";
-    phy-mode = "rgmii";
-    phy-handle = <&ethphy2>;
-    pinctrl-names = "default";
-    pinctrl-0 = <&pinctrl_rgmii3_default>;
-};
-
-
-
 &fmc {
 	status = "okay";
 
@@ -245,6 +201,54 @@
 	/*18E0 32*/ "","","","","","","","";
 };
 
+&lpc_snoop {
+	status = "okay";
+	snoop-ports = <0x80>;
+};
+
+&mac2 {
+    status = "okay";
+    phy-mode = "rgmii";
+    phy-handle = <&ethphy2>;
+    pinctrl-names = "default";
+    pinctrl-0 = <&pinctrl_rgmii3_default>;
+};
+
+&mdio2 {
+    status = "okay";
+	pinctrl-names = "default";
+    pinctrl-0 = <&pinctrl_mdio3_default>;
+
+    ethphy2: ethernet-phy@0 {
+        compatible = "ethernet-phy-ieee802.3-c22";
+        reg = <0>;
+    };
+};
+
+&pwm_tach {
+    status = "okay";
+
+    pinctrl-names = "default";
+    pinctrl-0 = <&pinctrl_pwm0_default  &pinctrl_pwm1_default
+                 &pinctrl_pwm2_default  &pinctrl_pwm3_default
+                 &pinctrl_pwm4_default  &pinctrl_pwm5_default
+                 &pinctrl_pwm6_default  &pinctrl_pwm7_default
+                 &pinctrl_tach0_default &pinctrl_tach1_default
+                 &pinctrl_tach2_default &pinctrl_tach3_default
+                 &pinctrl_tach4_default &pinctrl_tach5_default
+                 &pinctrl_tach6_default &pinctrl_tach7_default>;
+
+    fan-0 { tach-ch = /bits/ 8 <0x00>; };
+    fan-1 { tach-ch = /bits/ 8 <0x01>; };
+    fan-2 { tach-ch = /bits/ 8 <0x02>; };
+    fan-3 { tach-ch = /bits/ 8 <0x03>; };
+    fan-4 { tach-ch = /bits/ 8 <0x04>; };
+    fan-5 { tach-ch = /bits/ 8 <0x05>; };
+    fan-6 { tach-ch = /bits/ 8 <0x06>; };
+    fan-7 { tach-ch = /bits/ 8 <0x07>; };
+};
+
+
 &vhub {
 	status = "okay";
 };
@@ -254,12 +258,7 @@
 	memory-region = <&video_engine_memory>;
 };
 
-&lpc_snoop{
-	status = "okay";
-	snoop-ports = <0x80>;
-};
-
-&vuart3{
+&vuart3 {
 	status = "okay";
 	aspeed,lpc-io-reg = <0x3f8>;
 	aspeed,lpc-interrupts = <0 IRQ_TYPE_LEVEL_LOW>;
