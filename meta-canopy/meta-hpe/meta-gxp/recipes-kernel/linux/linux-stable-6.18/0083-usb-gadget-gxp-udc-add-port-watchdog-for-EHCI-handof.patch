@@ -68,6 +68,3 @@ index 271b152cb3f9..cf37c9ab525a 100644
  	drvdata->connect_retries++;
  	dev_dbg(&drvdata->pdev->dev,
  		"vdev%d: connect retry %d/%d\n",
--- 
-2.54.0
-

@@ -1,8 +1,7 @@
 From 811fe5fc96d79302d35c4b53c7b8b86a91eaf9e5 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Tue, 14 Apr 2026 17:17:23 +0200
-Subject: [PATCH] usb: gadget: gxp-udc: fix connect-retry with full state
- reset
+Subject: [PATCH] usb: gadget: gxp-udc: fix connect-retry with full state reset
 
 The connect-retry mechanism only toggled the EVDCS_CONNECT bit with a
 100ms disconnect, without resetting any device state. This caused
@@ -135,6 +134,3 @@ index 7eb54845529f..271b152cb3f9 100644
  			spin_unlock(&drvdata->lock);
  			usb_gadget_udc_reset(&drvdata->gadget,
  					     drvdata->driver);
--- 
-2.54.0
-

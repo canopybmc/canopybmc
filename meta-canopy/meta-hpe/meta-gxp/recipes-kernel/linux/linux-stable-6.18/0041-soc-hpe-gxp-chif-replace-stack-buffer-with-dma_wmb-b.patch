@@ -37,6 +37,3 @@ index 8cc303256639..640eae54142d 100644
  
  	if (p_ccb->doorbell_base)
  		regmap_write(drvdata->fn2_map, REG_OUTDOOR, 1 << channel);
--- 
-2.54.0
-

@@ -785,6 +785,3 @@ index 205ef7b6d3be..8d3bd824b7ba 100644
  };
  MODULE_DEVICE_TABLE(of, sbrmi_of_match);
  
--- 
-2.54.0
-

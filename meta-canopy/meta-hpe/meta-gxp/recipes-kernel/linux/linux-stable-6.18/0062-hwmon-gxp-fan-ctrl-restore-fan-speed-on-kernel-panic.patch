@@ -79,6 +79,3 @@ index 545c4fffe904..3c546037f2a0 100644
  	hwmon_dev = devm_hwmon_device_register_with_info(dev,
  							 "hpe_gxp_fan_ctrl",
  							 drvdata,
--- 
-2.54.0
-

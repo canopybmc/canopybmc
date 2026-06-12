@@ -102,6 +102,3 @@ index 2bbf9555f871..e557dc36c85f 100644
  		ret = devm_request_threaded_irq(&pdev->dev, irq, NULL,
  						gxp_cpld_reg_pgood_irq,
  						IRQF_ONESHOT | IRQF_SHARED,
--- 
-2.54.0
-

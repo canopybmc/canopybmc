@@ -1723,6 +1723,3 @@ index 000000000000..61ac3adc2605
 +#define GXP_ESPI_OOB_RESET	0x00060001	/* Reset eSPI OOB controller */
 +
 +#endif /* __LINUX_SOC_HPE_GXP_REGS_H */
--- 
-2.54.0
-

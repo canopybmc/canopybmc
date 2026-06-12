@@ -66,6 +66,3 @@ index 3aff5a166c94..5e3fbf91ca0c 100644
  
  	ctlr->mode_bits = data->mode_bits;
  	ctlr->bus_num = pdev->id;
--- 
-2.54.0
-

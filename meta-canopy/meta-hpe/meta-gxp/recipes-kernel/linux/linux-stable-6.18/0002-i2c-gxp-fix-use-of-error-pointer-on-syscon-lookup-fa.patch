@@ -38,6 +38,3 @@ index 2d117e7e3cb6..bbb16459c74b 100644
  					     "failed to map i2cg_handle\n");
  		}
  
--- 
-2.54.0
-

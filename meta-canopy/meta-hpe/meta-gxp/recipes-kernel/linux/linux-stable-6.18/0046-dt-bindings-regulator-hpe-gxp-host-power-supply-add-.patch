@@ -49,6 +49,3 @@ index 685e54ffb3cc..fe3ab92b6454 100644
 +        interrupts = <1 IRQ_TYPE_EDGE_BOTH>;
        };
      };
--- 
-2.54.0
-

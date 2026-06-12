@@ -64,6 +64,3 @@ index 5e3fbf91ca0c..c8a8df55bcfd 100644
  	if (chip->cs == 0)
  		offset += 0x4000000;
  
--- 
-2.54.0
-

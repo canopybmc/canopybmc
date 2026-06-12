@@ -56,6 +56,3 @@ index f891f5af4bc6..205ef7b6d3be 100644
  
  	mutex_init(&data->lock);
  
--- 
-2.54.0
-

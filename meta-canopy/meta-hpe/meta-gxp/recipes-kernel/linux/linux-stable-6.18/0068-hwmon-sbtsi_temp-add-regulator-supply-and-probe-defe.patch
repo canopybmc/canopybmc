@@ -109,6 +109,3 @@ index a6c439e376ff..e77b8cd2045d 100644
  	err = i2c_smbus_read_byte_data(data->client, SBTSI_REG_CONFIG);
  	if (err < 0)
  		return err;
--- 
-2.54.0
-

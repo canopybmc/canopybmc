@@ -61,6 +61,3 @@ index eda3e01cfea2..ad23b8d08bc3 100644
  		fanctrl: fan-controller@c1000c00 {
  			compatible = "hpe,gxp-fan-ctrl";
  			reg = <0xc1000c00 0x200>,
--- 
-2.54.0
-

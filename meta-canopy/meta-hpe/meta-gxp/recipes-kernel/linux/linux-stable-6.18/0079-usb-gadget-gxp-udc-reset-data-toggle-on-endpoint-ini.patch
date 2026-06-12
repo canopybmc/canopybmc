@@ -32,6 +32,3 @@ index 097055a1da8e..7eb54845529f 100644
  	writel(val, ep->base + EVDEPCC);
  
  	val = readl(ep->base + EVDEPSTS);
--- 
-2.54.0
-

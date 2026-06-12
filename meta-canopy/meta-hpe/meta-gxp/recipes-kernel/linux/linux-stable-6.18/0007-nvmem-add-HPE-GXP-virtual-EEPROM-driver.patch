@@ -171,6 +171,3 @@ index 000000000000..e0cc9d1b395e
 +MODULE_AUTHOR("Marcello Sylvester Bauer <marcello.bauer@9elements.com>");
 +MODULE_DESCRIPTION("HPE GXP Virtual EEPROM NVMEM Driver");
 +MODULE_LICENSE("GPL");
--- 
-2.54.0
-

@@ -118,6 +118,3 @@ index ad2c977d1805..2bbf9555f871 100644
  }
  
  static const struct of_device_id gxp_cpld_reg_of_match[] = {
--- 
-2.54.0
-

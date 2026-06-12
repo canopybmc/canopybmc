@@ -324,6 +324,3 @@ index 33decc881b92..328291cacfbd 100644
  							 "hpe_gxp_fan_ctrl",
  							 drvdata,
  							 &gxp_fan_ctrl_chip_info,
--- 
-2.54.0
-

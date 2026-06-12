@@ -205,6 +205,3 @@ index 9a8c0cbc50f5..9c490e9daaab 100644
  	/* Setup GPIO controller with IRQ chip for event forwarding */
  	pctrl->gc.label = "gxp-power-ctrl";
  	pctrl->gc.parent = dev;
--- 
-2.54.0
-

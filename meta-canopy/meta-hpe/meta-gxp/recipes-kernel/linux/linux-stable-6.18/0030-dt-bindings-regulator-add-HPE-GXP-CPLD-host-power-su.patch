@@ -64,6 +64,3 @@ index 000000000000..685e54ffb3cc
 +        regulator-name = "host-power";
 +      };
 +    };
--- 
-2.54.0
-

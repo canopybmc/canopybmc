@@ -63,6 +63,3 @@ index 91e07803f8d4..fabe671e1f57 100644
  	}
  
  	/* Forward event to power-ctrl-good virtual GPIO consumers */
--- 
-2.54.0
-

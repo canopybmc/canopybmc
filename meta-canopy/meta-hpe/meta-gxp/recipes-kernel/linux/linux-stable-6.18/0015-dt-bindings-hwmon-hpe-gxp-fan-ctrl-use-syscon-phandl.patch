@@ -60,6 +60,3 @@ index 4a52aac6be72..bc29a684a8f4 100644
 +      hpe,xreg = <&xreg>;
 +      hpe,fn2 = <&fn2>;
      };
--- 
-2.54.0
-

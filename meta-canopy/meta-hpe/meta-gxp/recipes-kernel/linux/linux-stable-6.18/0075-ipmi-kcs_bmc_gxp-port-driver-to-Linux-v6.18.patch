@@ -366,6 +366,3 @@ index 000000000000..a81a73c0e501
 +MODULE_AUTHOR("Jorge Cisneros <jorge.cisneros@hpe.com>");
 +MODULE_DESCRIPTION("HPE device interface to the KCS BMC device");
 +MODULE_LICENSE("GPL v2");
--- 
-2.54.0
-

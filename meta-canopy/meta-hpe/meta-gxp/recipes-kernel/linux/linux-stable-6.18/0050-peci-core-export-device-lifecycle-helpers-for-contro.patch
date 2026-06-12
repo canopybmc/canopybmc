@@ -74,6 +74,3 @@ index 3e0bc37591d6..6c872d9458d4 100644
  
  static inline struct peci_controller *to_peci_controller(void *d)
  {
--- 
-2.54.0
-

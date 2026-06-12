@@ -36,6 +36,3 @@ index 2dac8ba82787..fbccc1d1b637 100644
  	{ }
  };
  MODULE_DEVICE_TABLE(peci, peci_cpu_device_ids);
--- 
-2.54.0
-

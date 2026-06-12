@@ -59,6 +59,3 @@ index 0d178150aaf0..4ef72e6ac5bb 100644
  
  			i2c_mux_ctrl: mux-controller {
  				compatible = "mmio-mux";
--- 
-2.54.0
-

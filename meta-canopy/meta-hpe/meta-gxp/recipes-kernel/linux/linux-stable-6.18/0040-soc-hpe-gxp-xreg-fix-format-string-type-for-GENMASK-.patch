@@ -26,6 +26,3 @@ index 33656f77db79..709a56222bff 100644
  }
  
  static ssize_t sideband_sel_store(struct device *dev,
--- 
-2.54.0
-

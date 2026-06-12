@@ -77,6 +77,3 @@ index 000000000000..ef4978c14012
 +      host-power-supply = <&host_power>;
 +      regulator-name = "i2c-passthrough";
 +    };
--- 
-2.54.0
-

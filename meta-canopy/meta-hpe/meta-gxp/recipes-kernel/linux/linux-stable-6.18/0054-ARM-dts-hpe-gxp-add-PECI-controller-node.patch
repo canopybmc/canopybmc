@@ -31,6 +31,3 @@ index 684ab1bcbd70..ad736250ea59 100644
  		coretemp: coretemp@c0000130 {
  			compatible = "hpe,gxp-coretemp";
  			reg = <0xc0000130 0x8>;
--- 
-2.54.0
-

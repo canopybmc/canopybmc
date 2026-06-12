@@ -31,6 +31,3 @@ index b046ac45d6fc..d3b6fd4d7b15 100644
  	dev_info(pt->dev, "I2C passthrough enabled\n");
  }
  
--- 
-2.54.0
-

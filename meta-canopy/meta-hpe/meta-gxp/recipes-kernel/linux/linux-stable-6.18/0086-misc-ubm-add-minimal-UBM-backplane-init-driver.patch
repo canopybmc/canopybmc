@@ -227,6 +227,3 @@ index 000000000000..bce484b900f2
 +
 +MODULE_AUTHOR("Christian Walter <christian.walter@9elements.com>");
 +MODULE_DESCRIPTION("UBM backplane controller init driver");
--- 
-2.54.0
-

@@ -45,6 +45,3 @@ index e6327af45fc7..12d253f452d9 100644
  }
  EXPORT_SYMBOL_NS_GPL(peci_request_status, "PECI");
  
--- 
-2.54.0
-

@@ -93,7 +93,7 @@ SRC_URI:append = " \
     file://0062-hwmon-gxp-fan-ctrl-restore-fan-speed-on-kernel-panic.patch \
     file://0063-peci-core-serialize-device-creation-with-per-control.patch \
     file://0064-regulator-gxp-cpld-debounce-PGOOD-IRQ-before-notifyi.patch \
-    file://0065-ARM-dts-hpe-gxp-add-mmio-mux-for-i2c-bus-select.patch \
+    file://0065-ARM-dts-hpe-gxp-add-mmio-mux-for-i2c-bus-mux-select-.patch \
     file://0066-hwmon-add-HPE-GXP-PSU-driver.patch \
     file://0067-ARM-dts-hpe-gxp-rename-PSU-GPIO-lines.patch \
     file://0068-hwmon-sbtsi_temp-add-regulator-supply-and-probe-defe.patch \
@@ -107,13 +107,13 @@ SRC_URI:append = " \
     file://0076-media-add-GXP-thumbnail-video-capture-driver.patch \
     file://0077-ARM-dts-hpe-gxp-add-video-thumbnail-and-USB-UDC-node.patch \
     file://0078-usb-gadget-udc-add-HPE-GXP-USB-device-controller-dri.patch \
-    file://0079-usb-gadget-gxp-udc-reset-data-toggle-on-endpoint-init.patch \
-    file://0080-usb-gadget-gxp-udc-fix-connect-retry.patch \
+    file://0079-usb-gadget-gxp-udc-reset-data-toggle-on-endpoint-ini.patch \
+    file://0080-usb-gadget-gxp-udc-fix-connect-retry-with-full-state.patch \
     file://0081-spi-gxp-support-addressed-reads-with-dummy-cycles.patch \
     file://0082-soc-hpe-gxp-power-ctrl-re-arm-boot-gate-after-PGOOD-.patch \
     file://0083-usb-gadget-gxp-udc-add-port-watchdog-for-EHCI-handof.patch \
     file://0084-peci-controller-gxp-prevent-overlapping-transfers.patch \
-    file://0085-mtd-spi-nor-macronix-allow-mx66l51235f-without-SFDP.patch \
+    file://0085-mtd-spi-nor-macronix-allow-MX66L51235F-probe-without.patch \
     file://0086-misc-ubm-add-minimal-UBM-backplane-init-driver.patch \
     file://0087-ARM-dts-hpe-gxp-enable-ramoops.patch \
     "

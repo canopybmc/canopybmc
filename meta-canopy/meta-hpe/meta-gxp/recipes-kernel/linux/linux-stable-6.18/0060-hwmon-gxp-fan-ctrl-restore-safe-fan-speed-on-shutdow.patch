@@ -108,6 +108,3 @@ index 862216218784..545c4fffe904 100644
  	.driver = {
  		.name	= "gxp-fan-ctrl",
  		.of_match_table = gxp_fan_ctrl_of_match,
--- 
-2.54.0
-

@@ -413,6 +413,3 @@ index 000000000000..7dfbfb4998be
 +MODULE_AUTHOR("Marcello Sylvester Bauer <marcello.bauer@9elements.com>");
 +MODULE_DESCRIPTION("HPE GXP GPIO driver");
 +MODULE_LICENSE("GPL");
--- 
-2.54.0
-

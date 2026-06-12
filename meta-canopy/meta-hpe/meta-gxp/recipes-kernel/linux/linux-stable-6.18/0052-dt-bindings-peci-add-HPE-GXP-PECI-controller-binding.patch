@@ -65,6 +65,3 @@ index 000000000000..258d0ccc65a1
 +      interrupt-parent = <&vic1>;
 +      peci-supply = <&host_power>;
 +    };
--- 
-2.54.0
-

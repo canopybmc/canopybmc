@@ -55,6 +55,3 @@ index 000000000000..2ce7fce9fda7
 +      compatible = "hpe,gxp-coretemp";
 +      reg = <0xc0000130 0x8>;
 +    };
--- 
-2.54.0
-

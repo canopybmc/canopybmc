@@ -93,6 +93,3 @@ index 000000000000..d86aa4b7b8d1
 +        serial-line = <3>;
 +        vuart-cfg = <&vuart_cfg>;
 +    };
--- 
-2.54.0
-

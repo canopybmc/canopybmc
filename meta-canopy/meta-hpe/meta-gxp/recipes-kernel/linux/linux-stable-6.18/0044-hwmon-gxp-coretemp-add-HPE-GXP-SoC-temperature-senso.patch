@@ -190,6 +190,3 @@ index 000000000000..6c62cf5369a9
 +MODULE_AUTHOR("Gilbert Chen <gilbert.chen@hpe.com>");
 +MODULE_DESCRIPTION("HPE GXP SoC core temperature sensor");
 +MODULE_LICENSE("GPL");
--- 
-2.54.0
-

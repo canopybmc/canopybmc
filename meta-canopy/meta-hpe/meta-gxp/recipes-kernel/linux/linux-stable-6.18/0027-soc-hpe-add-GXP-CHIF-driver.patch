@@ -779,6 +779,3 @@ index 000000000000..8cc303256639
 +MODULE_AUTHOR("Gilbert Chen <gilbert.chen@hpe.com>");
 +MODULE_DESCRIPTION("HPE GXP Channel Interface (CHIF) driver");
 +MODULE_LICENSE("GPL");
--- 
-2.54.0
-

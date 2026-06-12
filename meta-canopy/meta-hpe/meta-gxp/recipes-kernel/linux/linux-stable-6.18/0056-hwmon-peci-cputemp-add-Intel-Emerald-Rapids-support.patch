@@ -63,6 +63,3 @@ index 007fa621e10f..f4277a1f01be 100644
  	{ }
  };
  MODULE_DEVICE_TABLE(auxiliary, peci_cputemp_ids);
--- 
-2.54.0
-

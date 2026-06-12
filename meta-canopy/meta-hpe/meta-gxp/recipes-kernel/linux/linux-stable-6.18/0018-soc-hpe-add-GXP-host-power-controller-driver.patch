@@ -549,6 +549,3 @@ index 000000000000..9a8c0cbc50f5
 +MODULE_AUTHOR("Marcello Sylvester Bauer <marcello.bauer@9elements.com>");
 +MODULE_DESCRIPTION("HPE GXP host power controller driver");
 +MODULE_LICENSE("GPL");
--- 
-2.54.0
-

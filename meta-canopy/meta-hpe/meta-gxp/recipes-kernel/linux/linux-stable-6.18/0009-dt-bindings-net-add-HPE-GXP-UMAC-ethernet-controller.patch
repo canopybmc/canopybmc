@@ -139,6 +139,3 @@ index 000000000000..0ad0ee8afbb7
 +        int-phy-handle = <&int_phy0>;
 +        mac-address = [00 11 22 33 44 55];
 +    };
--- 
-2.54.0
-

@@ -26,6 +26,3 @@ index 2b7531b599ba..acfeb84f9456 100644
  		fan-keys {
  		compatible = "gpio-keys-polled";
  		poll-interval = <1000>;
--- 
-2.54.0
-

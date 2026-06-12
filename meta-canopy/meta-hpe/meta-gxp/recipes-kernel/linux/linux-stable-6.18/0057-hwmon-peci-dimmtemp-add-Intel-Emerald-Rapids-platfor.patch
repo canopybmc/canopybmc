@@ -72,6 +72,3 @@ index fbe82d9852e0..a281476c7a31 100644
  	{ }
  };
  MODULE_DEVICE_TABLE(auxiliary, peci_dimmtemp_ids);
--- 
-2.54.0
-

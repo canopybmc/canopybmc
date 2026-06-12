@@ -1253,6 +1253,3 @@ index 000000000000..097055a1da8e
 +MODULE_AUTHOR("Richard Yu <richard.yu@hpe.com>");
 +MODULE_DESCRIPTION("HPE GXP USB Device Controller driver");
 +MODULE_LICENSE("GPL");
--- 
-2.54.0
-

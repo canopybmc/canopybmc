@@ -155,6 +155,3 @@ index 00e057050437..0ec8818784d2 100644
  
  	hwmon_dev = devm_hwmon_device_register_with_info(&pdev->dev,
  							 "hpe_gxp_fan_ctrl",
--- 
-2.54.0
-

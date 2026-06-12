@@ -66,6 +66,3 @@ index bc29a684a8f4..3c3897639e29 100644
 -      hpe,fn2 = <&fn2>;
 +      fan-supply = <&host_power>;
      };
--- 
-2.54.0
-

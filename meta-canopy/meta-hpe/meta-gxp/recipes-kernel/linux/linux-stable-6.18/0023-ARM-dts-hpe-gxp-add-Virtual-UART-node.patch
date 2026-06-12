@@ -48,6 +48,3 @@ index 7584b6a58218..210b6900512d 100644
  		st: timer@c0000080 {
  			compatible = "hpe,gxp-timer";
  			reg = <0xc0000080 0x16>;
--- 
-2.54.0
-

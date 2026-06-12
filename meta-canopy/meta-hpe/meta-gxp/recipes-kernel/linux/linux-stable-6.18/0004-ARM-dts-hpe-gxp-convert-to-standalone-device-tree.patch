@@ -93,6 +93,3 @@ index cf735b3c4f35..6bea75085cd0 100644
  	cpus {
  		#address-cells = <1>;
  		#size-cells = <0>;
--- 
-2.54.0
-

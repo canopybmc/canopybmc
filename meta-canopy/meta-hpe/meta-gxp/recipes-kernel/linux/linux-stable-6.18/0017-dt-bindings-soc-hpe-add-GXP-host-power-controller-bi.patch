@@ -114,6 +114,3 @@ index 000000000000..07137edff254
 +        #gpio-cells = <2>;
 +        gpio-line-names = "power-ctrl-out", "power-ctrl-good", "reset-out";
 +    };
--- 
-2.54.0
-

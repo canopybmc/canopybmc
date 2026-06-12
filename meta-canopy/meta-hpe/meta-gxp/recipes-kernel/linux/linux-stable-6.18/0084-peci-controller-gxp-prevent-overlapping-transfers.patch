@@ -89,6 +89,3 @@ index bbfba8a5bb09..d59008102e24 100644
  
  	controller = devm_peci_controller_add(priv->dev, &gxp_peci_ops);
  	if (IS_ERR(controller))
--- 
-2.54.0
-

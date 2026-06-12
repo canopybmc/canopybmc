@@ -25,6 +25,3 @@ index 4687c5cd47c2..91e07803f8d4 100644
  						"gxp-power-ctrl-pgood", pctrl);
  		if (ret < 0)
  			dev_warn(dev, "failed to request pgood irq: %d\n", ret);
--- 
-2.54.0
-

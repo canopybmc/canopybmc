@@ -44,6 +44,3 @@ index 538e2f16e2fd..cd803cc04bb4 100644
  		.fixup_flags = SPI_NOR_4B_OPCODES,
  		.fixups = &macronix_qpp4b_fixups,
  	}, {
--- 
-2.54.0
-
