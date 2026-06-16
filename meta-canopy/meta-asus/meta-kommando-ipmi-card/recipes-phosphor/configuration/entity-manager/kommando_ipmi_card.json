@@ -6,7 +6,7 @@
             "Index": 0,
             "Connector": {
                 "Pwm": 0,
-                "PwmName": "Pwm_0"
+                "Tachs": [0]
             }
         },
         {
@@ -15,7 +15,7 @@
             "Index": 1,
             "Connector": {
                 "Pwm": 1,
-                "PwmName": "Pwm_1"
+                "Tachs": [1]
             }
         },
         {
@@ -24,7 +24,7 @@
             "Index": 2,
             "Connector": {
                 "Pwm": 2,
-                "PwmName": "Pwm_2"
+                "Tachs": [2]
             }
         },
         {
@@ -33,7 +33,7 @@
             "Index": 3,
             "Connector": {
                 "Pwm": 3,
-                "PwmName": "Pwm_3"
+                "Tachs": [3]
             }
         },
         {
@@ -42,7 +42,7 @@
             "Index": 4,
             "Connector": {
                 "Pwm": 4,
-                "PwmName": "Pwm_4"
+                "Tachs": [4]
             }
         },
         {
@@ -51,7 +51,7 @@
             "Index": 5,
             "Connector": {
                 "Pwm": 5,
-                "PwmName": "Pwm_5"
+                "Tachs": [5]
             }
         },
         {
@@ -60,7 +60,7 @@
             "Index": 6,
             "Connector": {
                 "Pwm": 6,
-                "PwmName": "Pwm_6"
+                "Tachs": [6]
             }
         },
         {
@@ -69,7 +69,7 @@
             "Index": 7,
             "Connector": {
                 "Pwm": 7,
-                "PwmName": "Pwm_7"
+                "Tachs": [7]
             }
         }
     ],

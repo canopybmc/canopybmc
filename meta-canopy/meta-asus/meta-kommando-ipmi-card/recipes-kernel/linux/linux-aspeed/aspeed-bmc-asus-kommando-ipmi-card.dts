@@ -92,53 +92,37 @@
 		};
 	};
 
-	fan0: pwm-fan0 {
+	pwm-fan0 {
         compatible = "pwm-fan";
         pwms = <&pwm_tach 0 40000 0>;
-        #cooling-cells = <2>;
-        cooling-levels = <124 152 180 204 228 252>;
     };
-    fan1: pwm-fan1 {
+    pwm-fan1 {
         compatible = "pwm-fan";
         pwms = <&pwm_tach 1 40000 0>;
-        #cooling-cells = <2>;
-        cooling-levels = <124 152 180 204 228 252>;
     };
-    fan2: pwm-fan2 {
+    pwm-fan2 {
         compatible = "pwm-fan";
         pwms = <&pwm_tach 2 40000 0>;
-        #cooling-cells = <2>;
-        cooling-levels = <124 152 180 204 228 252>;
     };
-    fan3: pwm-fan3 {
+    pwm-fan3 {
         compatible = "pwm-fan";
         pwms = <&pwm_tach 3 40000 0>;
-        #cooling-cells = <2>;
-        cooling-levels = <124 152 180 204 228 252>;
     };
-    fan4: pwm-fan4 {
+    pwm-fan4 {
         compatible = "pwm-fan";
         pwms = <&pwm_tach 4 40000 0>;
-        #cooling-cells = <2>;
-        cooling-levels = <124 152 180 204 228 252>;
     };
-    fan5: pwm-fan5 {
+    pwm-fan5 {
         compatible = "pwm-fan";
         pwms = <&pwm_tach 5 40000 0>;
-        #cooling-cells = <2>;
-        cooling-levels = <124 152 180 204 228 252>;
     };
-    fan6: pwm-fan6 {
+    pwm-fan6 {
         compatible = "pwm-fan";
         pwms = <&pwm_tach 6 40000 0>;
-        #cooling-cells = <2>;
-		cooling-levels = <124 152 180 204 228 252>;
     };
-    fan7: pwm-fan7 {
+    pwm-fan7 {
         compatible = "pwm-fan";
         pwms = <&pwm_tach 7 40000 0>;
-        #cooling-cells = <2>;
-		cooling-levels = <124 152 180 204 228 252>;
     };	
 };
 
