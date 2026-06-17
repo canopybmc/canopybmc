@@ -32,6 +32,15 @@ DMA buffers: stop the TX queue, disable channels and interrupts,
 drain NAPI, free the IRQ, then free DMA memory.
 
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+
+net: ethernet: gxp: fix discarded-qualifiers warning in umac
+
+Add const qualifier to umac_set_mac_address() parameter since the
+function only reads from the address buffer. This fixes a
+-Wdiscarded-qualifiers warning when passing ndev->dev_addr (which
+is const unsigned char *).
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/net/ethernet/Kconfig             |   1 +
  drivers/net/ethernet/Makefile            |   1 +
@@ -455,10 +464,10 @@ index 000000000000..8af492ef0d5b
 +	return phy_mii_ioctl(ndev->phydev, ifr, cmd);
 +}
 +
-+static void umac_set_mac_address(struct net_device *ndev, void *p_addr)
++static void umac_set_mac_address(struct net_device *ndev, const void *p_addr)
 +{
 +	struct umac_priv *umac = netdev_priv(ndev);
-+	char *addr = (char *)p_addr;
++	const char *addr = p_addr;
 +	unsigned int value;
 +
 +	value = addr[0] << 8 | addr[1];
