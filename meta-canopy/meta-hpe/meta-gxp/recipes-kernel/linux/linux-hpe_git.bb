@@ -106,7 +106,6 @@ SRC_URI:append = " \
     file://0076-media-add-GXP-thumbnail-video-capture-driver.patch \
     file://0077-ARM-dts-hpe-gxp-add-video-thumbnail-and-USB-UDC-node.patch \
     file://0078a-usb-gadget-udc-add-HPE-GXP-USB-device-controller-dri.patch \
-    file://0078b-usb-gadget-gxp-udc-reset-data-toggle-on-endpoint-ini.patch \
     file://0078c-usb-gadget-gxp-udc-fix-connect-retry-with-full-state.patch \
     file://0079-usb-gadget-gxp-udc-add-port-watchdog-for-EHCI-handof.patch \
     file://0086-misc-ubm-add-minimal-UBM-backplane-init-driver.patch \
