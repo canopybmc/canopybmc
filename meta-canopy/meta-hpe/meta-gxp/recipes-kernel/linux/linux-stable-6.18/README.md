@@ -59,8 +59,7 @@
 ### CHIF
 
 - 0030 # dt-bindings: soc: hpe: add GXP CHIF binding
-- 0031a # soc: hpe: add GXP CHIF driver
-    - 0031b # soc: hpe: gxp-chif: replace stack buffer with dma_wmb barrier
+- 0031 # soc: hpe: add GXP CHIF driver
     - 0088 # soc: hpe: gxp-chif: expose poll on char device
 - 0032 # ARM: dts: hpe-gxp: add CHIF node
 
