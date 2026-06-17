@@ -28,8 +28,8 @@ Signed-off-by: Georg Hackel <georg.hackel@9elements.com>
 ---
  drivers/usb/gadget/udc/Kconfig   |    7 +
  drivers/usb/gadget/udc/Makefile  |    1 +
- drivers/usb/gadget/udc/gxp_udc.c | 1188 ++++++++++++++++++++++++++++++
- 3 files changed, 1196 insertions(+)
+ drivers/usb/gadget/udc/gxp_udc.c | 1207 ++++++++++++++++++++++++++++++
+ 3 files changed, 1215 insertions(+)
  create mode 100644 drivers/usb/gadget/udc/gxp_udc.c
 
 diff --git a/drivers/usb/gadget/udc/Kconfig b/drivers/usb/gadget/udc/Kconfig
@@ -67,7 +67,7 @@ new file mode 100644
 index 000000000000..097055a1da8e
 --- /dev/null
 +++ b/drivers/usb/gadget/udc/gxp_udc.c
-@@ -0,0 +1,1188 @@
+@@ -0,0 +1,1207 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +/* Copyright (C) 2022 Hewlett-Packard Enterprise Development Company, L.P. */
 +
@@ -207,6 +207,7 @@ index 000000000000..097055a1da8e
 +
 +static void gxp_udc_out_0byte_status(struct gxp_udc_ep *ep);
 +static void gxp_udc_in_0byte_status(struct gxp_udc_ep *ep);
++static int gxp_udc_ep_nuke(struct gxp_udc_ep *ep);
 +
 +static unsigned char gxp_udc_femap_read(struct gxp_udc_drvdata *drvdata,
 +					int fep)
@@ -594,6 +595,10 @@ index 000000000000..097055a1da8e
 +	unsigned char femap;
 +	int i, j;
 +
++	writel(0, drvdata->base + EVDADDR);
++	drvdata->gadget.speed = USB_SPEED_UNKNOWN;
++	drvdata->defer_set_address = false;
++
 +	val = readl(drvdata->base + EVDISTAT);
 +	val |= EVDISTAT_MASK;
 +	writel(val, drvdata->base + EVDISTAT);
@@ -638,6 +643,10 @@ index 000000000000..097055a1da8e
 +	unsigned int val;
 +	unsigned char femap;
 +	int i;
++
++	drvdata->gadget.speed = USB_SPEED_UNKNOWN;
++	writel(0, drvdata->base + EVDADDR);
++	drvdata->defer_set_address = false;
 +
 +	val = readl(drvdata->base + EVDIEN);
 +	val &= ~EVDIEN_MASK;
@@ -693,6 +702,9 @@ index 000000000000..097055a1da8e
 +		return -ENODEV;
 +
 +	drvdata = container_of(gadget, struct gxp_udc_drvdata, gadget);
++
++	cancel_delayed_work_sync(&drvdata->connect_work);
++
 +	spin_lock_irqsave(&drvdata->lock, flags);
 +
 +	gxp_udc_disconnect(drvdata);
@@ -709,6 +721,7 @@ index 000000000000..097055a1da8e
 +		container_of(work, struct gxp_udc_drvdata, connect_work.work);
 +	unsigned long flags;
 +	u32 evdcs;
++	u32 i;
 +
 +	spin_lock_irqsave(&drvdata->lock, flags);
 +
@@ -738,13 +751,18 @@ index 000000000000..097055a1da8e
 +		drvdata->vdevnum, drvdata->connect_retries,
 +		GXP_UDC_CONNECT_MAX_RETRIES);
 +
-+	/* Toggle connect bit: disconnect */
-+	evdcs &= ~EVDCS_CONNECT;
-+	writel(evdcs, drvdata->base + EVDCS);
++	gxp_udc_disconnect(drvdata);
++
++	spin_unlock_irqrestore(&drvdata->lock, flags);
++	synchronize_irq(drvdata->irq);
++	spin_lock_irqsave(&drvdata->lock, flags);
++
++	for (i = 0; i < drvdata->fepnum + 1; i++)
++		gxp_udc_ep_nuke(&drvdata->ep[i]);
 +	spin_unlock_irqrestore(&drvdata->lock, flags);
 +
-+	/* Brief disconnect period for host to notice */
-+	msleep(100);
++	usb_gadget_udc_reset(&drvdata->gadget, drvdata->driver);
++	msleep(500);
 +
 +	spin_lock_irqsave(&drvdata->lock, flags);
 +	if (!drvdata->driver) {
@@ -752,10 +770,8 @@ index 000000000000..097055a1da8e
 +		return;
 +	}
 +
-+	/* Reconnect */
-+	evdcs = readl(drvdata->base + EVDCS);
-+	evdcs |= EVDCS_CONNECT;
-+	writel(evdcs, drvdata->base + EVDCS);
++	/* Full reconnect -- EP0 init, FEMAP, interrupts */
++	gxp_udc_connect(drvdata);
 +	spin_unlock_irqrestore(&drvdata->lock, flags);
 +
 +	/* Schedule another check */
@@ -1057,9 +1073,12 @@ index 000000000000..097055a1da8e
 +
 +		if (evdistat & EVDISTAT_PORTRST) {
 +			writel(0, drvdata->base + EVDADDR);
++			drvdata->defer_set_address = false;
 +			spin_lock(&drvdata->lock);
 +			for (i = 0; i < drvdata->fepnum + 1; i++)
 +				gxp_udc_ep_nuke(&drvdata->ep[i]);
++			gxp_udc_ep_init(&drvdata->ep[0],
++					USB_ENDPOINT_XFER_CONTROL, 1, 64);
 +			spin_unlock(&drvdata->lock);
 +			usb_gadget_udc_reset(&drvdata->gadget,
 +					     drvdata->driver);
