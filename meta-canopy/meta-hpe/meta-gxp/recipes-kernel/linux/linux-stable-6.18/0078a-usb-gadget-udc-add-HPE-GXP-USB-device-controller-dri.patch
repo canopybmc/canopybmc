@@ -22,6 +22,9 @@ https://lore.kernel.org/linux-arm-kernel/20221103160625.15574-2-richard.yu@hpe.c
 
 Upstream-Status: Pending
 Signed-off-by: Richard Yu <richard.yu@hpe.com>
+Co-developed-by: Christian Walter <christian.walter@9elements.com>
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+Signed-off-by: Georg Hackel <georg.hackel@9elements.com>
 ---
  drivers/usb/gadget/udc/Kconfig   |    7 +
  drivers/usb/gadget/udc/Makefile  |    1 +
@@ -311,7 +314,7 @@ index 000000000000..097055a1da8e
 +	if (type == USB_ENDPOINT_XFER_INT || type == USB_ENDPOINT_XFER_ISOC)
 +		val |= EVDEPCC_TXN_PER_UFRAME(1);
 +
-+	val |= EVDEPCC_EPENABLE;
++	val |= EVDEPCC_EPENABLE | EVDEPCC_DT_RESET;
 +	writel(val, ep->base + EVDEPCC);
 +
 +	val = readl(ep->base + EVDEPSTS);
