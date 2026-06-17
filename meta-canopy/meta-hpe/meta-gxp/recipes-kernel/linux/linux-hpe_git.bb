@@ -41,7 +41,6 @@ SRC_URI:append = " \
     file://0010-ARM-dts-hpe-gxp-add-NVMEM-virtual-EEPROM-with-MAC-ad.patch \
     file://0011-dt-bindings-net-add-HPE-GXP-UMAC-ethernet-controller.patch \
     file://0012a-net-ethernet-add-HPE-GXP-UMAC-driver.patch \
-    file://0012b-net-ethernet-gxp-fix-DMA-use-after-free-in-umac_stop.patch \
     file://0012c-net-ethernet-gxp-fix-discarded-qualifiers-warning-in.patch \
     file://0013-ARM-dts-hpe-gxp-add-UMAC-ethernet-and-MDIO-nodes.patch \
     file://0014-dt-bindings-soc-hpe-add-GXP-SoC-subsystem-bindings.patch \
