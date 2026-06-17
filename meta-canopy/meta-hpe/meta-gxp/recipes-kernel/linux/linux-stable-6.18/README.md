@@ -63,7 +63,7 @@
 
 - 0030 # dt-bindings: soc: hpe: add GXP CHIF binding
 - 0031a # soc: hpe: add GXP CHIF driver
-- 0031b # soc: hpe: gxp-chif: replace stack buffer with dma_wmb barrier
+    - TODO: fix commit message
 - 0032 # ARM: dts: hpe-gxp: add CHIF node
 
 ### CPLD host power supply

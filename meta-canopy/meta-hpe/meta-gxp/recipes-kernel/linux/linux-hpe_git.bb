@@ -60,7 +60,6 @@ SRC_URI:append = " \
     file://0029-ARM-dts-hpe-gxp-add-Virtual-UART-node.patch \
     file://0030-dt-bindings-soc-hpe-add-GXP-CHIF-binding.patch \
     file://0031a-soc-hpe-add-GXP-CHIF-driver.patch \
-    file://0031b-soc-hpe-gxp-chif-replace-stack-buffer-with-dma_wmb-b.patch \
     file://0032-ARM-dts-hpe-gxp-add-CHIF-node.patch \
     file://0033-dt-bindings-regulator-add-HPE-GXP-CPLD-host-power-su.patch \
     file://0034-regulator-gxp-cpld-add-HPE-GXP-CPLD-host-power-suppl.patch \
