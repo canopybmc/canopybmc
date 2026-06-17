@@ -149,7 +149,6 @@
 - 0077 # ARM: dts: hpe-gxp: add video thumbnail and USB UDC nodes
 - 0078a # usb: gadget: udc: add HPE GXP USB device controller driver
     - TODO: Fix commit message
-- 0078c # usb: gadget: gxp-udc: fix connect-retry with full state reset
 - 0079 # usb: gadget: gxp-udc: add port watchdog for EHCI handoff
 
 ### UBM backplane 
