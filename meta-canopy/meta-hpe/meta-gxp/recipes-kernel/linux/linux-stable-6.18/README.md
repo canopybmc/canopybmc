@@ -25,8 +25,7 @@
 ### UMAC ethernet controller
 
 - 0011 # dt-bindings: net: add HPE GXP UMAC ethernet controller bindings
-- 0012a # net: ethernet: add HPE GXP UMAC driver
-    - 0012c # net: ethernet: gxp: fix discarded-qualifiers warning in umac
+- 0012 # net: ethernet: add HPE GXP UMAC driver
 - 0013 # ARM: dts: hpe-gxp: add UMAC ethernet and MDIO nodes
 
 ### GXP SOC
