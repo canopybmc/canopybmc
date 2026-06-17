@@ -31,8 +31,7 @@
 ### GXP SOC
 
 - 0014 # dt-bindings: soc: hpe: add GXP SoC subsystem bindings
-- 0015a # soc: hpe: add GXP SoC infrastructure drivers
-    - 0015b # soc: hpe: gxp-xreg: fix format string type for GENMASK result
+- 0015 # soc: hpe: add GXP SoC infrastructure drivers
 - 0016 # gpio: add HPE GXP GPIO controller driver
 
 ### power, temp, cooling
