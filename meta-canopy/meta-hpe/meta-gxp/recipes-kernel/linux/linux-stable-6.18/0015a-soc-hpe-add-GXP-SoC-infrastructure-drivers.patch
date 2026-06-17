@@ -10,6 +10,14 @@ Include gxp-regs.h with named register constants.
 Co-developed-by: Gilbert Chen <gilbert.chen@hpe.com>
 Signed-off-by: Gilbert Chen <gilbert.chen@hpe.com>
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+
+soc: hpe: gxp-xreg: fix format string type for GENMASK result
+
+Cast the GENMASK(1, 0) result to unsigned int before passing to
+%x format specifier. GENMASK returns unsigned long on ARM, causing
+a -Wformat warning.
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/soc/Kconfig              |   1 +
  drivers/soc/Makefile             |   1 +
@@ -19,9 +27,9 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  drivers/soc/hpe/gxp-fn2.c        | 279 ++++++++++++
  drivers/soc/hpe/gxp-soclib.c     |  37 ++
  drivers/soc/hpe/gxp-soclib.h     |  14 +
- drivers/soc/hpe/gxp-xreg.c       | 746 +++++++++++++++++++++++++++++++
+ drivers/soc/hpe/gxp-xreg.c       | 747 +++++++++++++++++++++++++++++++
  include/linux/soc/hpe/gxp-regs.h | 208 +++++++++
- 10 files changed, 1622 insertions(+)
+ 10 files changed, 1623 insertions(+)
  create mode 100644 drivers/soc/hpe/Kconfig
  create mode 100644 drivers/soc/hpe/Makefile
  create mode 100644 drivers/soc/hpe/gxp-csm.c
@@ -762,7 +770,7 @@ new file mode 100644
 index 000000000000..33656f77db79
 --- /dev/null
 +++ b/drivers/soc/hpe/gxp-xreg.c
-@@ -0,0 +1,746 @@
+@@ -0,0 +1,747 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * HPE GXP XREG (Extended Register Block) driver
@@ -916,7 +924,8 @@ index 000000000000..33656f77db79
 +
 +	regmap_read(drvdata->xreg_map, XREG_PSU_SIDEBAND, &value);
 +
-+	return sysfs_emit(buf, "0x%02x\n", value & XREG_PSU_SIDEBAND_MASK);
++	return sysfs_emit(buf, "0x%02x\n",
++			  (unsigned int)(value & XREG_PSU_SIDEBAND_MASK));
 +}
 +
 +static ssize_t sideband_sel_store(struct device *dev,

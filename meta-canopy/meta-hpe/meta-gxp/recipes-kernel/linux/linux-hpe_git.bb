@@ -44,7 +44,6 @@ SRC_URI:append = " \
     file://0013-ARM-dts-hpe-gxp-add-UMAC-ethernet-and-MDIO-nodes.patch \
     file://0014-dt-bindings-soc-hpe-add-GXP-SoC-subsystem-bindings.patch \
     file://0015a-soc-hpe-add-GXP-SoC-infrastructure-drivers.patch \
-    file://0015b-soc-hpe-gxp-xreg-fix-format-string-type-for-GENMASK-.patch \
     file://0016-gpio-add-HPE-GXP-GPIO-controller-driver.patch \
     file://0017-dt-bindings-hwmon-hpe-gxp-fan-ctrl-use-syscon-phandl.patch \
     file://0018a-hwmon-gxp-fan-ctrl-use-syscon-phandles-for-XREG-and-.patch \
