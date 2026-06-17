@@ -47,7 +47,6 @@ SRC_URI:append = " \
     file://0016-gpio-add-HPE-GXP-GPIO-controller-driver.patch \
     file://0017-dt-bindings-hwmon-hpe-gxp-fan-ctrl-use-syscon-phandl.patch \
     file://0018a-hwmon-gxp-fan-ctrl-use-syscon-phandles-for-XREG-and-.patch \
-    file://0018b-hwmon-gxp-fan-ctrl-fix-PWM-register-offset-and-fan-f.patch \
     file://0019-dt-bindings-soc-hpe-add-GXP-host-power-controller-bi.patch \
     file://0020-soc-hpe-add-GXP-host-power-controller-driver.patch \
     file://0021-ARM-dts-hpe-gxp-add-SoC-infrastructure-and-power-con.patch \

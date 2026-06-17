@@ -40,18 +40,18 @@
 
 - 0017 # dt-bindings: hwmon: hpe,gxp-fan-ctrl: use syscon phandles
 - 0018a # hwmon: gxp-fan-ctrl: use syscon phandles for XREG and FN2
-- 0018b # hwmon: gxp-fan-ctrl: fix PWM register offset and fan fault bit mapping
-
-- 0019 # dt-bindings: soc: hpe: add GXP host power controller binding
-- 0020 # soc: hpe: add GXP host power controller driver
-
-- 0021 # ARM: dts: hpe-gxp: add SoC infrastructure and power control
-
-- 0022 # soc: hpe: gxp-power-ctrl: implement ForceRestart as VPBTN power cycle
-- 0023 # soc: hpe: gxp-power-ctrl: run full prepare-boot sequence on probe
-- 0024 # soc: hpe: gxp-power-ctrl: use CSM SW_RESET for warm reset
-- 0025 # soc: hpe: gxp-power-ctrl: demote PGOOD deasserted message to dev_dbg
-- 0026 # soc: hpe: gxp-power-ctrl: use IRQF_SHARED for PGOOD interrupt
+    - TODO: fix commit message
+- TODO: group the rest
+    - 0019 # dt-bindings: soc: hpe: add GXP host power controller binding
+    - 0020 # soc: hpe: add GXP host power controller driver
+    - ---
+    - 0021 # ARM: dts: hpe-gxp: add SoC infrastructure and power control
+    - ---
+    - 0022 # soc: hpe: gxp-power-ctrl: implement ForceRestart as VPBTN power cycle
+    - 0023 # soc: hpe: gxp-power-ctrl: run full prepare-boot sequence on probe
+    - 0024 # soc: hpe: gxp-power-ctrl: use CSM SW_RESET for warm reset
+    - 0025 # soc: hpe: gxp-power-ctrl: demote PGOOD deasserted message to dev_dbg
+    - 0026 # soc: hpe: gxp-power-ctrl: use IRQF_SHARED for PGOOD interrupt
 
 ### Virtual UART
 
