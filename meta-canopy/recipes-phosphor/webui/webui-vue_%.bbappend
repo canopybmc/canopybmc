@@ -15,6 +15,10 @@
 # upstream repo stays untouched.
 FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 
+SRC_URI:append = " \
+    file://0001-Fix-sensors-page-being-empty.patch \
+    "
+
 # Resolve the overlay directory at parse time
 CANOPY_WEBUI_OVERLAYS := "${THISDIR}/${BPN}"
 

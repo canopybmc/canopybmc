@@ -1,0 +1,74 @@
+From 32fdea48a4e44d0e368bfd0154fe9186044cfb5c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Gr=C3=A9goire=20Layet?= <gregoire.layet@9elements.com>
+Date: Thu, 18 Jun 2026 10:05:50 +0200
+Subject: [PATCH] Fix sensors page being empty
+
+Issue:
+The sensors page should list all sensors from all hosts.
+This is not the case.
+
+The commit adding this issue was 'Implemented Power page with VueQuery
+and Composition API'
+99099183438d878391f66d3c674fa2cd037a7840
+Committed on June 9, 2026 [1]
+
+The commit add to the discoverParentsWithSubResource function the select
+query parameter to the parentCollectionPath.
+As of today this function is only used in useAllSubResources.
+The useAllSubResources function is also only used once, with the
+parentCollectionPath='/redfish/v1/Chassis'.
+
+This path get back :
+{
+  "@odata.id": "/redfish/v1/Systems",
+  "@odata.type": "#ComputerSystemCollection.ComputerSystemCollection",
+  "Members": [
+    {
+      "@odata.id": "/redfish/v1/Systems/system"
+    }
+  ],
+  "Members@odata.count": 1,
+  "Name": "Computer System Collection"
+}
+
+If this is filtered with the select='Sensors', then we have nothing.
+
+There is no reason to apply the select filter to the
+parentCollectionPath query.
+
+Solution:
+This patch remove the filter on the parentCollectionPath query.
+
+Tested:
+- all sensors are now visible in the sensors page
+
+[1] https://github.com/openbmc/webui-vue/commit/99099183438d878391f66d3c674fa2cd037a7840
+
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/webui-vue/+/91429]
+Change-Id: I0a35f9468a9583e4e87b6fd21cd9d81c08fd4fbe
+Signed-off-by: Grégoire Layet <gregoire.layet@9elements.com>
+---
+ src/api/composables/useAllSubResources.ts | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/src/api/composables/useAllSubResources.ts b/src/api/composables/useAllSubResources.ts
+index 8f830b4f..545bcbb3 100644
+--- a/src/api/composables/useAllSubResources.ts
++++ b/src/api/composables/useAllSubResources.ts
+@@ -31,12 +31,11 @@ export async function discoverParentsWithSubResource(
+   canUseSelect: boolean,
+ ): Promise<string[]> {
+   try {
+-    const selectParam = canUseSelect ? `?$select=${subResourceName}` : '';
+     const { data } = await api.get<{
+       Members?: CollectionMember[];
+       '@odata.id'?: string;
+       [key: string]: unknown;
+-    }>(`${parentCollectionPath}${selectParam}`);
++    }>(parentCollectionPath);
+ 
+     if (!data.Members || !Array.isArray(data.Members)) {
+       // Check if this is a single resource with the sub-resource
+-- 
+2.53.0
+
