@@ -1,0 +1,101 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Wed, 18 Jun 2026 00:00:00 +0000
+Subject: [PATCH] fru-device: load synthetic FRUs from /etc/fru
+
+fru-device already loads a single file-based "baseboard" FRU from
+/etc/fru/baseboard.fru.bin and inserts it at bus 0 / address 0. On
+platforms with no physical FRU EEPROMs (e.g. HPE ProLiant Gen11, where
+baseboard/CPU/DIMM inventory comes from device-tree VPD and host SMBIOS),
+we need to publish more than one synthetic FRU through the standard
+xyz.openbmc_project.FruDevice service so the stock IPMI storage handlers
+can serve them.
+
+Generalize the mechanism: in addition to baseboard.fru.bin, scan /etc/fru
+for files named "<bus>-<address>.fru.bin" (decimal) and insert each into
+the bus map at the encoded (bus, address). Encoding the identifiers in the
+filename keeps the resulting FruDevice bus/address stable across reboots,
+which is required for deterministic IPMI FRU device IDs and for correlating
+EntityManager FRU-locator decorators.
+
+A companion service (fru-synthesizer) writes these files from D-Bus
+inventory and calls ReScan.
+
+Upstream-Status: Inappropriate [HPE platform integration]
+
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+diff --git a/src/fru_device/fru_device.cpp b/src/fru_device/fru_device.cpp
+index 2b73b7694..3e47c6a8c 100644
+--- a/src/fru_device/fru_device.cpp
++++ b/src/fru_device/fru_device.cpp
+@@ -1003,6 +1003,59 @@ static bool readBaseboardFRU(std::vector<uint8_t>& baseboardFRU)
+     return true;
+ }
+ 
++// Load additional synthetic (non-EEPROM) FRUs from /etc/fru. Files must be
++// named "<bus>-<address>.fru.bin" (decimal) so each resulting FruDevice object
++// gets a stable bus/address identifier. This lets platforms without physical
++// FRU EEPROMs publish baseboard/CPU/DIMM FRU data (sourced from device-tree VPD
++// or host SMBIOS by a companion service) through the standard FruDevice service.
++static void loadSyntheticFRUs(BusMap& busmap)
++{
++    const static std::string fruDir = "/etc/fru";
++    std::error_code ec;
++    if (!fs::is_directory(fruDir, ec))
++    {
++        return;
++    }
++
++    static const std::regex fileRegex(R"(^([0-9]+)-([0-9]+)\.fru\.bin$)");
++    for (const auto& entry : fs::directory_iterator(fruDir, ec))
++    {
++        if (ec)
++        {
++            break;
++        }
++
++        const std::string name = entry.path().filename().string();
++        std::smatch match;
++        if (!std::regex_match(name, match, fileRegex))
++        {
++            continue;
++        }
++
++        size_t bus = std::stoul(match[1].str());
++        size_t address = std::stoul(match[2].str());
++
++        std::ifstream fruFile(entry.path(), std::ios::binary);
++        if (!fruFile.good())
++        {
++            continue;
++        }
++        fruFile.seekg(0, std::ios_base::end);
++        size_t fileSize = static_cast<size_t>(fruFile.tellg());
++        if (fileSize == 0 || fileSize > maxFruSize)
++        {
++            continue;
++        }
++        std::vector<uint8_t> fru(fileSize);
++        fruFile.seekg(0, std::ios_base::beg);
++        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
++        fruFile.read(reinterpret_cast<char*>(fru.data()), fileSize);
++
++        auto busEntry = busmap.try_emplace(bus, std::make_shared<DeviceMap>());
++        busEntry.first->second->emplace(address, std::move(fru));
++    }
++}
++
+ bool writeFruByteData(bool is16Bit, int file, uint8_t address, uint16_t index,
+                       uint8_t byteData)
+ {
+@@ -1320,6 +1373,7 @@ void rescanBusses(
+                         busmap.try_emplace(0, std::make_shared<DeviceMap>());
+                     bus0.first->second->emplace(0, baseboardFRU);
+                 }
++                loadSyntheticFRUs(busmap);
+                 for (auto devicemap : busmap)
+                 {
+                     for (auto device : *devicemap.second)
+--
+2.43.0
