@@ -13,6 +13,11 @@ PACKAGECONFIG:append = " dts-vpd"
 # Baseboard (PCA) VPD support for devicetree-vpd-parser
 SRC_URI += "file://0001-devicetree-vpd-parser-add-baseboard-PCA-VPD-support.patch"
 
+# Let fru-device publish multiple synthetic (non-EEPROM) FRUs from /etc/fru,
+# so baseboard/CPU/DIMM FRU (sourced from device-tree VPD + host SMBIOS by the
+# fru-synthesizer service) are served over IPMI via xyz.openbmc_project.FruDevice.
+SRC_URI += "file://0005-fru-device-load-synthetic-FRUs-from-etc-fru.patch"
+
 # HPE ProLiant Gen11 baseboard configurations
 SRC_URI += " \
     file://blocklist.json \

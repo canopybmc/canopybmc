@@ -1,0 +1,14 @@
+[Unit]
+Description=Synthesize IPMI FRU data from D-Bus inventory
+Wants=xyz.openbmc_project.FruDevice.service
+After=xyz.openbmc_project.FruDevice.service
+After=xyz.openbmc_project.EntityManager.service
+
+[Service]
+ExecStart=/usr/bin/fru-synthesizer
+Restart=on-failure
+RestartSec=5
+SyslogIdentifier=fru-synthesizer
+
+[Install]
+WantedBy=multi-user.target

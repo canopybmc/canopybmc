@@ -41,6 +41,7 @@ SUMMARY:${PN}-system = "HPE System"
 RDEPENDS:${PN}-system = " \
         entity-manager \
         dbus-sensors \
+        fru-synthesizer \
         gxp-chif-service \
         smbios-mdr \
         udev-gxp-i2c-passthrough \

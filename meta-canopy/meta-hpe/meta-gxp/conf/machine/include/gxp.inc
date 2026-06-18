@@ -52,3 +52,5 @@ PREFERRED_PROVIDER_virtual/obmc-fan-mgmt = "packagegroup-hpe-apps"
 PREFERRED_PROVIDER_virtual/obmc-flash-mgmt = "packagegroup-hpe-apps"
 PREFERRED_PROVIDER_virtual/obmc-system-mgmt = "packagegroup-hpe-apps"
 PREFERRED_PROVIDER_virtual/obmc-host-ipmi-hw = "phosphor-ipmi-kcs"
+
+VIRTUAL-RUNTIME_phosphor-ipmi-providers = ""
