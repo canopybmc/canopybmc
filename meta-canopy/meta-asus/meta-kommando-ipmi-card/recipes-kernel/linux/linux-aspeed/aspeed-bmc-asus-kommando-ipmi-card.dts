@@ -92,38 +92,7 @@
 		};
 	};
 
-	pwm-fan0 {
-        compatible = "pwm-fan";
-        pwms = <&pwm_tach 0 40000 0>;
-    };
-    pwm-fan1 {
-        compatible = "pwm-fan";
-        pwms = <&pwm_tach 1 40000 0>;
-    };
-    pwm-fan2 {
-        compatible = "pwm-fan";
-        pwms = <&pwm_tach 2 40000 0>;
-    };
-    pwm-fan3 {
-        compatible = "pwm-fan";
-        pwms = <&pwm_tach 3 40000 0>;
-    };
-    pwm-fan4 {
-        compatible = "pwm-fan";
-        pwms = <&pwm_tach 4 40000 0>;
-    };
-    pwm-fan5 {
-        compatible = "pwm-fan";
-        pwms = <&pwm_tach 5 40000 0>;
-    };
-    pwm-fan6 {
-        compatible = "pwm-fan";
-        pwms = <&pwm_tach 6 40000 0>;
-    };
-    pwm-fan7 {
-        compatible = "pwm-fan";
-        pwms = <&pwm_tach 7 40000 0>;
-    };	
+	
 };
 
 &fmc {
@@ -214,14 +183,46 @@
                  &pinctrl_tach4_default &pinctrl_tach5_default
                  &pinctrl_tach6_default &pinctrl_tach7_default>;
 
-    fan-0 { tach-ch = /bits/ 8 <0x00>; };
-    fan-1 { tach-ch = /bits/ 8 <0x01>; };
-    fan-2 { tach-ch = /bits/ 8 <0x02>; };
-    fan-3 { tach-ch = /bits/ 8 <0x03>; };
-    fan-4 { tach-ch = /bits/ 8 <0x04>; };
-    fan-5 { tach-ch = /bits/ 8 <0x05>; };
-    fan-6 { tach-ch = /bits/ 8 <0x06>; };
-    fan-7 { tach-ch = /bits/ 8 <0x07>; };
+	pwm-fan0 {
+        compatible = "pwm-fan";
+        pwms = <&pwm_tach 0 40000 0>;
+		tach-ch = /bits/ 8 <0x00>;
+    };
+    pwm-fan1 {
+        compatible = "pwm-fan";
+        pwms = <&pwm_tach 1 40000 0>;
+		tach-ch = /bits/ 8 <0x01>;
+    };
+    pwm-fan2 {
+        compatible = "pwm-fan";
+        pwms = <&pwm_tach 2 40000 0>;
+		tach-ch = /bits/ 8 <0x02>;
+    };
+    pwm-fan3 {
+        compatible = "pwm-fan";
+        pwms = <&pwm_tach 3 40000 0>;
+		tach-ch = /bits/ 8 <0x03>;
+    };
+    pwm-fan4 {
+        compatible = "pwm-fan";
+        pwms = <&pwm_tach 4 40000 0>;
+		tach-ch = /bits/ 8 <0x04>;
+    };
+    pwm-fan5 {
+        compatible = "pwm-fan";
+        pwms = <&pwm_tach 5 40000 0>;
+		tach-ch = /bits/ 8 <0x05>;
+    };
+    pwm-fan6 {
+        compatible = "pwm-fan";
+        pwms = <&pwm_tach 6 40000 0>;
+		tach-ch = /bits/ 8 <0x06>;
+    };
+    pwm-fan7 {
+        compatible = "pwm-fan";
+        pwms = <&pwm_tach 7 40000 0>;
+		tach-ch = /bits/ 8 <0x07>; 
+    };	
 };
 
 

@@ -1,0 +1,27 @@
+From 0b0dadf0f0d36bbf6f1a366c4c0e1356c0c43e9a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Gr=C3=A9goire=20Layet?= <gregoire.layet@9elements.com>
+Date: Thu, 18 Jun 2026 09:53:10 +0200
+Subject: [PATCH] fan: improve find pwm-fan path
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Upstream-Status: Pending
+Signed-off-by: Grégoire Layet <gregoire.layet@9elements.com>
+---
+ src/fan/FanMain.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/fan/FanMain.cpp b/src/fan/FanMain.cpp
+index c6a8f57..4724c8d 100644
+--- a/src/fan/FanMain.cpp
++++ b/src/fan/FanMain.cpp
+@@ -167,7 +167,7 @@ bool findPwmfanPath(unsigned int configPwmfanIndex,
+             continue;
+         }
+ 
+-        if (link.filename().string() == pwmfanDevName)
++        if (link.filename().string().ends_with(pwmfanDevName))
+         {
+             pwmPath = path;
+             return true;
