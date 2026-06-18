@@ -56,11 +56,16 @@
 			compatible = "shared-dma-pool";
 			reusable;
 		};
-		// pcie_bmc_dev_mem: pcie_bmc_dev_memory@9ef00000{
-		// 	reg = <0x9ef00000 0x100000>;
-		// 	compatible = "shared-dma-pool";
-		// 	no-map;
-		// };
+
+		ramoops@b3e00000 {
+			compatible = "ramoops";
+			reg = <0xb3e00000 0x100000>; /* 8 * (4 * 0x8000) */
+			record-size = <0x8000>;
+			console-size = <0x8000>;
+			ftrace-size = <0x8000>;
+			pmsg-size = <0x8000>;
+			max-reason = <3>; /* KMSG_DUMP_EMERG */
+		};
 	};
 
 	bmc_dev@1e7e0000 {

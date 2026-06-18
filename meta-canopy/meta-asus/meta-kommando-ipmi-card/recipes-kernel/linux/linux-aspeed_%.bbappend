@@ -3,6 +3,7 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 SRC_URI:append:kommando-ipmi-card = " \
      file://pwm.cfg \
      file://bmc-dev.cfg \
+     file://pstore.cfg \
      file://aspeed-bmc-asus-kommando-ipmi-card.dts \
      file://v2-0001-soc-aspeed-add-BMC-side-PCIe-BMC-device-driver.patch \
     "
