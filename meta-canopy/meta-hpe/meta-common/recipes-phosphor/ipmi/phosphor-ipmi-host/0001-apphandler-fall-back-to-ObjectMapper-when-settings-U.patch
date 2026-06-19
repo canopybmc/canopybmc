@@ -1,0 +1,79 @@
+From 8d45c6eb95c9226368690780f8f5a544544db573 Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Thu, 9 Jul 2026 20:14:28 +0200
+Subject: [PATCH] apphandler: fall back to ObjectMapper when settings UUID is
+ absent
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+phosphor-ipmi-host's ipmiAppGetSystemGuid hard-codes
+xyz.openbmc_project.Settings / /xyz/openbmc_project/Common/UUID as the
+only source for the system UUID.  On platforms where the UUID is not
+vended by phosphor-settings — for example when it is exposed by a
+different service at a different object path — the command returns an
+Unspecified Error.
+
+Make the lookup more resilient by keeping the existing settings read
+as the primary path and, only when it fails, falling back to
+ObjectMapper: call getDbusObject() to discover whichever service
+currently advertises xyz.openbmc_project.Common.UUID, then read the
+UUID property from that object. This preserves backward compatibility
+while allowing platforms with alternative UUID providers to work
+correctly.
+
+Upstream-Status: Pending
+
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ apphandler.cpp | 31 ++++++++++++++++++++++++++++---
+ 1 file changed, 28 insertions(+), 3 deletions(-)
+
+diff --git a/apphandler.cpp b/apphandler.cpp
+index ddc15612..f5e15af2 100644
+--- a/apphandler.cpp
++++ b/apphandler.cpp
+@@ -866,12 +866,37 @@ auto ipmiAppGetSystemGuid(ipmi::Context::ptr& ctx)
+         ctx, uuidService, uuidObject, uuidInterface, uuidProperty, rfc4122Uuid);
+     if (ec.value())
+     {
+-        lg2::error("Failed to read System UUID property, "
+-                   "interface: {INTERFACE}, property: {PROPERTY}, "
++        lg2::error("Failed to read System UUID from settings, falling back to "
++                   "ObjectMapper, interface: {INTERFACE}, property: {PROPERTY}, "
+                    "error: {ERROR}",
+                    "INTERFACE", uuidInterface, "PROPERTY", uuidProperty,
+                    "ERROR", ec.message());
+-        return ipmi::responseUnspecifiedError();
++
++        // Fallback to ObjectMapper in case phosphor-settings does not provide it
++        ipmi::DbusObjectInfo uuidObjectInfo{};
++        ec = ipmi::getDbusObject(ctx, uuidInterface, "/", {}, uuidObjectInfo);
++        if (ec.value())
++        {
++            lg2::error("Failed to find System UUID object, "
++                       "interface: {INTERFACE}, error: {ERROR}",
++                       "INTERFACE", uuidInterface, "ERROR", ec.message());
++            return ipmi::responseUnspecifiedError();
++        }
++
++        ec = ipmi::getDbusProperty(ctx, uuidObjectInfo.second,
++                                   uuidObjectInfo.first, uuidInterface,
++                                   uuidProperty, rfc4122Uuid);
++        if (ec.value())
++        {
++            lg2::error("Failed to read System UUID property, "
++                       "service: {SERVICE}, object: {OBJECT}, "
++                       "interface: {INTERFACE}, property: {PROPERTY}, "
++                       "error: {ERROR}",
++                       "SERVICE", uuidObjectInfo.second, "OBJECT",
++                       uuidObjectInfo.first, "INTERFACE", uuidInterface,
++                       "PROPERTY", uuidProperty, "ERROR", ec.message());
++            return ipmi::responseUnspecifiedError();
++        }
+     }
+     std::array<uint8_t, 16> uuid;
+     try
+-- 
+2.39.5
+
