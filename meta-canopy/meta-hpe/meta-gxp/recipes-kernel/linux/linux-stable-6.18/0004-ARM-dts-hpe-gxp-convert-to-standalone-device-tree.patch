@@ -1,4 +1,4 @@
-From d6fa9d16396a0c84f116fdcde578bd889d3ea6c6 Mon Sep 17 00:00:00 2001
+From 459f31665206bfd88d456bffca7e5198fe80c109 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 5 Feb 2026 10:05:32 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: convert to standalone device tree
@@ -94,5 +94,5 @@ index cf735b3c4f35..6bea75085cd0 100644
  		#address-cells = <1>;
  		#size-cells = <0>;
 -- 
-2.52.0
+2.54.0
 

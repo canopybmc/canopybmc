@@ -1,4 +1,4 @@
-From 6bbb2b5d279eba1bd80edfa3d347fbe6db847eda Mon Sep 17 00:00:00 2001
+From 3b978a5137f2d7b903520f165950aef02b794d98 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 3 Feb 2026 00:46:54 +0100
 Subject: [PATCH] soc: hpe: add GXP CHIF driver
@@ -780,5 +780,5 @@ index 000000000000..8cc303256639
 +MODULE_DESCRIPTION("HPE GXP Channel Interface (CHIF) driver");
 +MODULE_LICENSE("GPL");
 -- 
-2.52.0
+2.54.0
 

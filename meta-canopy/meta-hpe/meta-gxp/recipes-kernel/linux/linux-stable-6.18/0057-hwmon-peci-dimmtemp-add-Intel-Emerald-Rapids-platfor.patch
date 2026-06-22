@@ -1,4 +1,4 @@
-From f4f665e20f02187e62b49133a59259a33c77f58d Mon Sep 17 00:00:00 2001
+From cecf9ba1c4587d70adf546746fbb20d24d3605bd Mon Sep 17 00:00:00 2001
 From: Ivan Mikhaylov <fr0st61te@gmail.com>
 Date: Tue, 7 Oct 2025 00:53:20 +0300
 Subject: [PATCH] hwmon: (peci/dimmtemp) add Intel Emerald Rapids platform
@@ -73,5 +73,5 @@ index fbe82d9852e0..a281476c7a31 100644
  };
  MODULE_DEVICE_TABLE(auxiliary, peci_dimmtemp_ids);
 -- 
-2.52.0
+2.54.0
 

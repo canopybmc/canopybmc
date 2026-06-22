@@ -1,5 +1,6 @@
+From c21ace28d43cab25c24fe2b888255a63925872af Mon Sep 17 00:00:00 2001
 From: Richard Yu <richard.yu@hpe.com>
-Date: Sat, 8 Mar 2026 00:00:00 +0000
+Date: Sun, 8 Mar 2026 00:00:00 +0000
 Subject: [PATCH] usb: gadget: udc: add HPE GXP USB device controller driver
 
 Add the USB Device Controller driver for the HPE GXP SoC. The GXP has
@@ -24,18 +25,18 @@ Signed-off-by: Richard Yu <richard.yu@hpe.com>
 ---
  drivers/usb/gadget/udc/Kconfig   |    7 +
  drivers/usb/gadget/udc/Makefile  |    1 +
- drivers/usb/gadget/udc/gxp_udc.c | 1188 +++++++++++++++++++++++++++++
+ drivers/usb/gadget/udc/gxp_udc.c | 1188 ++++++++++++++++++++++++++++++
  3 files changed, 1196 insertions(+)
  create mode 100644 drivers/usb/gadget/udc/gxp_udc.c
 
 diff --git a/drivers/usb/gadget/udc/Kconfig b/drivers/usb/gadget/udc/Kconfig
-index 8487599a3969..b1c2e0d3a5f6 100644
+index 26460340fbc9..3079a6e7b7b6 100644
 --- a/drivers/usb/gadget/udc/Kconfig
 +++ b/drivers/usb/gadget/udc/Kconfig
-@@ -106,6 +106,13 @@ config USB_GR_UDC
+@@ -109,6 +109,13 @@ config USB_GR_UDC
  	  Select this to support Aeroflex Gaisler GRUSBDC cores from the GRLIB
  	  VHDL IP core library.
-
+ 
 +config USB_GXP_UDC
 +	tristate "HPE GXP UDC Driver"
 +	depends on ARCH_HPE_GXP || COMPILE_TEST
@@ -47,10 +48,11 @@ index 8487599a3969..b1c2e0d3a5f6 100644
  	tristate "OMAP USB Device Controller"
  	depends on ARCH_OMAP1
 diff --git a/drivers/usb/gadget/udc/Makefile b/drivers/usb/gadget/udc/Makefile
-index ba2391f58c65..c3d3c3a4e5f6 100644
+index 1b9b1a4f9c57..51df0f39843d 100644
 --- a/drivers/usb/gadget/udc/Makefile
 +++ b/drivers/usb/gadget/udc/Makefile
-@@ -31,5 +31,6 @@ obj-$(CONFIG_USB_LPC32XX)	+= lpc32xx_udc.o
+@@ -31,6 +31,7 @@ obj-$(CONFIG_USB_FSL_QE)	+= fsl_qe_udc.o
+ obj-$(CONFIG_USB_LPC32XX)	+= lpc32xx_udc.o
  obj-$(CONFIG_USB_EG20T)		+= pch_udc.o
  obj-$(CONFIG_USB_GR_UDC)	+= gr_udc.o
 +obj-$(CONFIG_USB_GXP_UDC)	+= gxp_udc.o
@@ -59,7 +61,7 @@ index ba2391f58c65..c3d3c3a4e5f6 100644
  obj-$(CONFIG_USB_ASPEED_VHUB)	+= aspeed-vhub/
 diff --git a/drivers/usb/gadget/udc/gxp_udc.c b/drivers/usb/gadget/udc/gxp_udc.c
 new file mode 100644
-index 000000000000..b1c2e0d3a5f6
+index 000000000000..097055a1da8e
 --- /dev/null
 +++ b/drivers/usb/gadget/udc/gxp_udc.c
 @@ -0,0 +1,1188 @@
@@ -1251,5 +1253,6 @@ index 000000000000..b1c2e0d3a5f6
 +MODULE_AUTHOR("Richard Yu <richard.yu@hpe.com>");
 +MODULE_DESCRIPTION("HPE GXP USB Device Controller driver");
 +MODULE_LICENSE("GPL");
---
-2.53.0
+-- 
+2.54.0
+

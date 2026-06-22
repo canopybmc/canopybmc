@@ -1,4 +1,4 @@
-From 620d807cfac9d350b84c1af0cc43b78c6e304c3a Mon Sep 17 00:00:00 2001
+From 745d583325f53aa9580a9309a1ac9573eb30e591 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 8 Feb 2026 22:18:58 +0100
 Subject: [PATCH] dt-bindings: soc: hpe: add GXP SoC subsystem bindings
@@ -215,5 +215,5 @@ index 000000000000..6393d7476040
 +        #gpio-cells = <2>;
 +    };
 -- 
-2.52.0
+2.54.0
 

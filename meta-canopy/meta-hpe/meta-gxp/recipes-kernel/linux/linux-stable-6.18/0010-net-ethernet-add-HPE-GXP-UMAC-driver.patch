@@ -1,4 +1,4 @@
-From 7ac19528012887324280feb7c292107b73428f9a Mon Sep 17 00:00:00 2001
+From 52d3b61ec718608ebe2c3690ccc0e8834b99d6c4 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 27 Jan 2026 23:48:29 +0100
 Subject: [PATCH] net: ethernet: add HPE GXP UMAC driver
@@ -1298,5 +1298,5 @@ index 000000000000..84bd6fb35f91
 +
 +#endif
 -- 
-2.52.0
+2.54.0
 

@@ -1,4 +1,4 @@
-From f054e12f4f8e4ba2998b0577606d62f60f4b9af8 Mon Sep 17 00:00:00 2001
+From ecf767b0c4c76d7101211aaa6a1cb48e70ec3256 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Mon, 9 Feb 2026 01:07:46 +0100
 Subject: [PATCH] soc: hpe: gxp-power-ctrl: implement ForceRestart as VPBTN
@@ -206,5 +206,5 @@ index 9a8c0cbc50f5..9c490e9daaab 100644
  	pctrl->gc.label = "gxp-power-ctrl";
  	pctrl->gc.parent = dev;
 -- 
-2.52.0
+2.54.0
 

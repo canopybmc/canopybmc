@@ -1,4 +1,4 @@
-From 05e9d2b392e17659cce9f7b7d510c27ec50b808c Mon Sep 17 00:00:00 2001
+From af0e588956dc2fd982d286e205ddd010583ae6bb Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 21:53:52 +0100
 Subject: [PATCH] hwmon: gxp-coretemp: add HPE GXP SoC temperature sensor
@@ -22,7 +22,7 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  create mode 100644 drivers/hwmon/gxp-coretemp.c
 
 diff --git a/drivers/hwmon/Kconfig b/drivers/hwmon/Kconfig
-index 18d5d4d9589c..bda5b5e87084 100644
+index c8a64b3563ef..ec3613a76554 100644
 --- a/drivers/hwmon/Kconfig
 +++ b/drivers/hwmon/Kconfig
 @@ -821,6 +821,15 @@ config SENSORS_GXP_FAN_CTRL
@@ -191,5 +191,5 @@ index 000000000000..6c62cf5369a9
 +MODULE_DESCRIPTION("HPE GXP SoC core temperature sensor");
 +MODULE_LICENSE("GPL");
 -- 
-2.52.0
+2.54.0
 

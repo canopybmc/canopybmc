@@ -1,4 +1,4 @@
-From 99481446d60a28e7d5b51840145ff6ed0023bcff Mon Sep 17 00:00:00 2001
+From 7177c57e85184ce6d1fd3e7a7c1c794a202f0074 Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
 Date: Wed, 11 Mar 2026 16:06:09 -0300
 Subject: [PATCH] ipmi: kcs_bmc_gxp: port driver to Linux v6.18
@@ -99,7 +99,7 @@ index 000000000000..892ac21bee98
 +        kcs-bmc-cfg = <&kcs_conf>;
 +    };
 diff --git a/drivers/char/ipmi/Kconfig b/drivers/char/ipmi/Kconfig
-index 92bed266d07c..ee7ffdb383fc 100644
+index 13dd872a9502..dd5af0a79065 100644
 --- a/drivers/char/ipmi/Kconfig
 +++ b/drivers/char/ipmi/Kconfig
 @@ -113,6 +113,18 @@ endif # IPMI_HANDLER
@@ -122,10 +122,10 @@ index 92bed266d07c..ee7ffdb383fc 100644
  	depends on ARCH_ASPEED || COMPILE_TEST
  	select IPMI_KCS_BMC
 diff --git a/drivers/char/ipmi/Makefile b/drivers/char/ipmi/Makefile
-index 4ea450a82242..d5fce4c9b35b 100644
+index 81fa8cd202de..8a23e1bcb7f9 100644
 --- a/drivers/char/ipmi/Makefile
 +++ b/drivers/char/ipmi/Makefile
-@@ -29,3 +29,4 @@ obj-$(CONFIG_ASPEED_KCS_IPMI_BMC) += kcs_bmc_aspeed.o
+@@ -30,3 +30,4 @@ obj-$(CONFIG_ASPEED_KCS_IPMI_BMC) += kcs_bmc_aspeed.o
  obj-$(CONFIG_NPCM7XX_KCS_IPMI_BMC) += kcs_bmc_npcm7xx.o
  obj-$(CONFIG_IPMB_DEVICE_INTERFACE) += ipmb_dev_int.o
  obj-$(CONFIG_SSIF_IPMI_BMC) += ssif_bmc.o
@@ -367,5 +367,5 @@ index 000000000000..a81a73c0e501
 +MODULE_DESCRIPTION("HPE device interface to the KCS BMC device");
 +MODULE_LICENSE("GPL v2");
 -- 
-2.53.0
+2.54.0
 

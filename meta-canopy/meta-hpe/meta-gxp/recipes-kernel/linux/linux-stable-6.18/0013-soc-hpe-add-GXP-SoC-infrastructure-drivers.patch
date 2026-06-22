@@ -1,4 +1,4 @@
-From 37deb2aeca2288b4868529523f3d9ac45659f412 Mon Sep 17 00:00:00 2001
+From 49ad5d799e7c1c3c1e7a94f84d761231d5fd136e Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 8 Feb 2026 22:19:53 +0100
 Subject: [PATCH] soc: hpe: add GXP SoC infrastructure drivers
@@ -1724,5 +1724,5 @@ index 000000000000..61ac3adc2605
 +
 +#endif /* __LINUX_SOC_HPE_GXP_REGS_H */
 -- 
-2.52.0
+2.54.0
 

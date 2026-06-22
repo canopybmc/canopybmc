@@ -1,5 +1,6 @@
+From 7e975d0dadd047a2634360051a016136e95b5277 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
-Date: Sat, 8 Mar 2026 00:00:00 +0000
+Date: Sun, 8 Mar 2026 00:00:00 +0000
 Subject: [PATCH] soc: hpe: add GXP I2C passthrough driver
 
 Add a platform driver that enables CPU-side I2C bus access on HPE
@@ -21,21 +22,21 @@ PGOOD -> i2c-passthrough -> sbtsi/sbrmi/spd5118.
 Upstream-Status: Pending
 Signed-off-by: Christian Walter <christian.walter@9elements.com>
 ---
- drivers/soc/hpe/Kconfig              |  13 ++
- drivers/soc/hpe/Makefile             |   1 +
- drivers/soc/hpe/gxp-i2c-passthrough.c| 295 ++++++++++++++++++++++++++
- include/linux/soc/hpe/gxp-regs.h     |   3 +
+ drivers/soc/hpe/Kconfig               |  13 ++
+ drivers/soc/hpe/Makefile              |   1 +
+ drivers/soc/hpe/gxp-i2c-passthrough.c | 295 ++++++++++++++++++++++++++
+ include/linux/soc/hpe/gxp-regs.h      |   3 +
  4 files changed, 312 insertions(+)
  create mode 100644 drivers/soc/hpe/gxp-i2c-passthrough.c
 
 diff --git a/drivers/soc/hpe/Kconfig b/drivers/soc/hpe/Kconfig
-index 1a2b3c4d5e6f..7a8b9c0d1e2f 100644
+index 6ebcc9678b09..168b5569462b 100644
 --- a/drivers/soc/hpe/Kconfig
 +++ b/drivers/soc/hpe/Kconfig
-@@ -73,4 +73,17 @@ config SOC_HPE_GXP_CHIF
- 	  support for the HPE GXP CHIF interface used in HPE ProLiant servers
- 	  for communication between the BMC and host firmware.
-
+@@ -86,4 +86,17 @@ config SOC_HPE_GXP_CHIF
+ 	  (/dev/chif24) for bidirectional host-BMC communication
+ 	  via 1MB DMA-coherent shared memory.
+ 
 +config SOC_HPE_GXP_I2C_PASSTHROUGH
 +	tristate "HPE GXP I2C passthrough controller"
 +	depends on ARCH_HPE_GXP || COMPILE_TEST
@@ -51,16 +52,17 @@ index 1a2b3c4d5e6f..7a8b9c0d1e2f 100644
 +
  endif # SOC_HPE
 diff --git a/drivers/soc/hpe/Makefile b/drivers/soc/hpe/Makefile
-index 2b3c4d5e6f7a..8a9b0c1d2e3f 100644
+index 5fefa0ddee15..794a0ae91e75 100644
 --- a/drivers/soc/hpe/Makefile
 +++ b/drivers/soc/hpe/Makefile
-@@ -5,2 +5,3 @@ obj-$(CONFIG_SOC_HPE_GXP_FN2)		+= gxp-fn2.o
+@@ -9,3 +9,4 @@ obj-$(CONFIG_SOC_HPE_GXP_XREG)		+= gxp-xreg.o
+ obj-$(CONFIG_SOC_HPE_GXP_FN2)		+= gxp-fn2.o
  obj-$(CONFIG_SOC_HPE_GXP_POWER_CTRL)	+= gxp-power-ctrl.o
  obj-$(CONFIG_SOC_HPE_GXP_CHIF)		+= gxp-chif.o
 +obj-$(CONFIG_SOC_HPE_GXP_I2C_PASSTHROUGH)	+= gxp-i2c-passthrough.o
 diff --git a/drivers/soc/hpe/gxp-i2c-passthrough.c b/drivers/soc/hpe/gxp-i2c-passthrough.c
 new file mode 100644
-index 000000000000..b1c2d3e4f5a6
+index 000000000000..b046ac45d6fc
 --- /dev/null
 +++ b/drivers/soc/hpe/gxp-i2c-passthrough.c
 @@ -0,0 +1,295 @@
@@ -360,20 +362,22 @@ index 000000000000..b1c2d3e4f5a6
 +MODULE_DESCRIPTION("HPE GXP I2C Passthrough Controller");
 +MODULE_LICENSE("GPL");
 diff --git a/include/linux/soc/hpe/gxp-regs.h b/include/linux/soc/hpe/gxp-regs.h
-index c3d4e5f6a7b8..d4e5f6a7b8c9 100644
+index 61ac3adc2605..7b47eed1259f 100644
 --- a/include/linux/soc/hpe/gxp-regs.h
 +++ b/include/linux/soc/hpe/gxp-regs.h
-@@ -43,7 +43,10 @@
+@@ -142,9 +142,12 @@
+ 
  /* ROM state */
  #define CSM_ROM_STATE		0xb0	/* ROM ready / DIMM access state (RW) */
 +#define CSM_ROM_STATE_ROM_RELEASED	BIT(3)	/* ROM has released I2C */
 +#define CSM_ROM_STATE_PASSTHROUGH	BIT(6)	/* I2C passthrough enable */
-
+ 
  /* SPD config */
  #define CSM_SPD_CONFIG		0x110	/* SPD read mode configuration (RW) */
 +#define CSM_SPD_CONFIG_PASSTHROUGH	BIT(6)	/* SPD passthrough enable */
-
+ 
  /* GPI (General Purpose Input) data registers */
+ #define CSM_GPIDATL		0x40	/* GPI data low [31:0] */
 -- 
-2.53.0
+2.54.0
 

@@ -1,4 +1,4 @@
-From f3b5abab02f62fb336d69d306c5341c4e9a948fb Mon Sep 17 00:00:00 2001
+From a82abbe9a28a5d9d98f0542a5b01137ae005c570 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 22:01:59 +0100
 Subject: [PATCH] peci: controller: add HPE GXP PECI controller driver
@@ -259,5 +259,5 @@ index 000000000000..13a1e87151b0
 +MODULE_LICENSE("GPL");
 +MODULE_IMPORT_NS("PECI");
 -- 
-2.52.0
+2.54.0
 

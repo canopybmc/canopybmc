@@ -1,4 +1,4 @@
-From 050e4d609c269fe45864d2a14f17a3d7fd9da270 Mon Sep 17 00:00:00 2001
+From 2b866e6717ea6e9aa617002f99a937c186bf205d Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 11:42:14 +0100
 Subject: [PATCH] soc: hpe: gxp-xreg: fix format string type for GENMASK result
@@ -27,5 +27,5 @@ index 33656f77db79..709a56222bff 100644
  
  static ssize_t sideband_sel_store(struct device *dev,
 -- 
-2.52.0
+2.54.0
 

@@ -1,4 +1,4 @@
-From c166294c2ad32291daf2ff5a1ea0c73be65a7c39 Mon Sep 17 00:00:00 2001
+From 6162d75ffda00e87c7ce00d0d52c4364b7e0e189 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 10 Feb 2026 16:25:34 +0100
 Subject: [PATCH] soc: hpe: gxp-power-ctrl: run full prepare-boot sequence on
@@ -65,5 +65,5 @@ index 9c490e9daaab..08d3fa6f7a1b 100644
  
  /*
 -- 
-2.52.0
+2.54.0
 

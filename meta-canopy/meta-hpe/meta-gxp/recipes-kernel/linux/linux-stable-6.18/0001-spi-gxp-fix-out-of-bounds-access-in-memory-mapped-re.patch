@@ -1,4 +1,4 @@
-From fd7fdc1dd6785ed4c40da9c6a1db19a925def5ed Mon Sep 17 00:00:00 2001
+From 50bbf92ee74e1cdb092a9d6b4686371773743e3d Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 3 Feb 2026 01:52:15 +0100
 Subject: [PATCH] spi: gxp: fix out-of-bounds access in memory-mapped read
@@ -67,5 +67,5 @@ index 3aff5a166c94..5e3fbf91ca0c 100644
  	ctlr->mode_bits = data->mode_bits;
  	ctlr->bus_num = pdev->id;
 -- 
-2.52.0
+2.54.0
 

@@ -1,4 +1,4 @@
-From 99117e79a7d997c2e1823059a5242b3112fb54bb Mon Sep 17 00:00:00 2001
+From c7e99fdbd75da58efc343e1c85ecaf05a22d2293 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Mon, 2 Feb 2026 11:12:39 +0100
 Subject: [PATCH] nvmem: add HPE GXP virtual EEPROM driver
@@ -22,7 +22,7 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  create mode 100644 drivers/nvmem/gxp-nvmem.c
 
 diff --git a/drivers/nvmem/Kconfig b/drivers/nvmem/Kconfig
-index e0d88d3199c1..57d9a231b9d0 100644
+index 11b098705ec6..e5adfa8b7348 100644
 --- a/drivers/nvmem/Kconfig
 +++ b/drivers/nvmem/Kconfig
 @@ -84,6 +84,17 @@ config NVMEM_BRCM_NVRAM
@@ -172,5 +172,5 @@ index 000000000000..e0cc9d1b395e
 +MODULE_DESCRIPTION("HPE GXP Virtual EEPROM NVMEM Driver");
 +MODULE_LICENSE("GPL");
 -- 
-2.52.0
+2.54.0
 

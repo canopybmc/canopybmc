@@ -1,4 +1,4 @@
-From 9a9e25f1913172be6045c2b088537c5440280df4 Mon Sep 17 00:00:00 2001
+From 73b8ba12f2f57fc6836160ea8e85023af8feb43b Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 22:02:16 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add PECI controller node
@@ -13,7 +13,7 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 8 insertions(+)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index ed9858b462dc..f8d6df913a50 100644
+index 684ab1bcbd70..ad736250ea59 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
 @@ -529,6 +529,14 @@ umac1: ethernet@c0005000 {
@@ -32,5 +32,5 @@ index ed9858b462dc..f8d6df913a50 100644
  			compatible = "hpe,gxp-coretemp";
  			reg = <0xc0000130 0x8>;
 -- 
-2.52.0
+2.54.0
 

@@ -1,5 +1,6 @@
+From 14a184531f8b33c7c50f0a0fa1dffd28dd3e5d46 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
-Date: Sat, 8 Mar 2026 00:00:00 +0000
+Date: Sun, 8 Mar 2026 00:00:00 +0000
 Subject: [PATCH] dt-bindings: soc: hpe: add GXP I2C passthrough binding
 
 Add YAML binding for the HPE GXP I2C passthrough controller. On HPE
@@ -11,13 +12,13 @@ state as a regulator for downstream drivers (sbtsi, sbrmi, spd5118).
 Upstream-Status: Pending
 Signed-off-by: Christian Walter <christian.walter@9elements.com>
 ---
- .../soc/hpe/hpe,gxp-i2c-passthrough.yaml     | 56 ++++++++++++++++++
- 1 file changed, 56 insertions(+)
+ .../soc/hpe/hpe,gxp-i2c-passthrough.yaml      | 55 +++++++++++++++++++
+ 1 file changed, 55 insertions(+)
  create mode 100644 Documentation/devicetree/bindings/soc/hpe/hpe,gxp-i2c-passthrough.yaml
 
 diff --git a/Documentation/devicetree/bindings/soc/hpe/hpe,gxp-i2c-passthrough.yaml b/Documentation/devicetree/bindings/soc/hpe/hpe,gxp-i2c-passthrough.yaml
 new file mode 100644
-index 000000000000..a1b2c3d4e5f6
+index 000000000000..ef4978c14012
 --- /dev/null
 +++ b/Documentation/devicetree/bindings/soc/hpe/hpe,gxp-i2c-passthrough.yaml
 @@ -0,0 +1,55 @@
@@ -77,5 +78,5 @@ index 000000000000..a1b2c3d4e5f6
 +      regulator-name = "i2c-passthrough";
 +    };
 -- 
-2.53.0
+2.54.0
 

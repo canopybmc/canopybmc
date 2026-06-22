@@ -1,4 +1,4 @@
-From 1676cde05b38dee169461f516d84032ac6677733 Mon Sep 17 00:00:00 2001
+From f492ebfa51fcdae85439db064299369088d50763 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Mon, 20 Apr 2026 14:00:46 +0200
 Subject: [PATCH] peci: controller: gxp: prevent overlapping transfers
@@ -89,3 +89,6 @@ index bbfba8a5bb09..d59008102e24 100644
  
  	controller = devm_peci_controller_add(priv->dev, &gxp_peci_ops);
  	if (IS_ERR(controller))
+-- 
+2.54.0
+

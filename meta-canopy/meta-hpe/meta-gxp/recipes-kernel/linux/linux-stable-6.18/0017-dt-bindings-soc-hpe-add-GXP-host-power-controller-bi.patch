@@ -1,4 +1,4 @@
-From 8ec5568b1470a3163790210c96c475261ab4359b Mon Sep 17 00:00:00 2001
+From 894a9773d4e83e6b53fac25c5e93427dc527e005 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 8 Feb 2026 22:20:57 +0100
 Subject: [PATCH] dt-bindings: soc: hpe: add GXP host power controller binding
@@ -115,5 +115,5 @@ index 000000000000..07137edff254
 +        gpio-line-names = "power-ctrl-out", "power-ctrl-good", "reset-out";
 +    };
 -- 
-2.52.0
+2.54.0
 

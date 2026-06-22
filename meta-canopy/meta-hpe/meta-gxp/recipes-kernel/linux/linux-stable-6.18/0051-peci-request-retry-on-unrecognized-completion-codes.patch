@@ -1,4 +1,4 @@
-From 12c77fc1fe10a252ef8179e99b57cdfe9caed324 Mon Sep 17 00:00:00 2001
+From 762484214f3dd61120a09a59d0c871939ff6f1c7 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 09:54:22 +0100
 Subject: [PATCH] peci: request: retry on unrecognized completion codes
@@ -46,5 +46,5 @@ index e6327af45fc7..12d253f452d9 100644
  EXPORT_SYMBOL_NS_GPL(peci_request_status, "PECI");
  
 -- 
-2.52.0
+2.54.0
 
