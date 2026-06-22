@@ -1,4 +1,4 @@
-From 92384c8e01fbc9deddff2c08df59dc4a9d7e62a6 Mon Sep 17 00:00:00 2001
+From 3e5e964e6bc98b0aae69005d618dabaf5ab449d1 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 15 Feb 2026 13:17:26 +0100
 Subject: [PATCH] fansensor: add fan fault monitoring via hwmon fault attribute
@@ -9,20 +9,20 @@ Emit Redfish ResourceEvent log entries for fault and recovery events.
 
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
- src/fan/FanFault.cpp | 138 +++++++++++++++++++++++++++++++++++++++++++
- src/fan/FanFault.hpp |  48 +++++++++++++++
+ src/fan/FanFault.cpp | 133 +++++++++++++++++++++++++++++++++++++++++++
+ src/fan/FanFault.hpp |  48 ++++++++++++++++
  src/fan/FanMain.cpp  |  25 +++++++-
  src/fan/meson.build  |   1 +
- 4 files changed, 210 insertions(+), 2 deletions(-)
+ 4 files changed, 205 insertions(+), 2 deletions(-)
  create mode 100644 src/fan/FanFault.cpp
  create mode 100644 src/fan/FanFault.hpp
 
 diff --git a/src/fan/FanFault.cpp b/src/fan/FanFault.cpp
 new file mode 100644
-index 0000000..be7ab75
+index 0000000..fd60339
 --- /dev/null
 +++ b/src/fan/FanFault.cpp
-@@ -0,0 +1,138 @@
+@@ -0,0 +1,133 @@
 +/*
 +// Copyright (c) 2026 9elements GmbH
 +//
@@ -101,15 +101,10 @@ index 0000000..be7ab75
 +
 +void FanFault::notify(bool functional)
 +{
-+    using Property = std::string;
-+    using Value = std::variant<bool>;
-+    using PropertyMap = std::map<Property, Value>;
++    using PropertyMap = std::map<std::string, std::variant<bool>>;
++    using InterfaceMap = std::map<std::string, PropertyMap>;
 +
-+    using Interface = std::string;
-+    using InterfaceMap = std::map<Interface, PropertyMap>;
-+
-+    using Object = sdbusplus::message::object_path;
-+    using ObjectMap = std::map<Object, InterfaceMap>;
++    using ObjectMap = std::map<sdbusplus::object_path, InterfaceMap>;
 +
 +    ObjectMap objectMap;
 +    InterfaceMap interfaceMap;
@@ -216,7 +211,7 @@ index 0000000..bfcf629
 +    static constexpr unsigned int pollIntervalMs = 5000;
 +};
 diff --git a/src/fan/FanMain.cpp b/src/fan/FanMain.cpp
-index 5f9782f..3eb050d 100644
+index 7f8d831..a459a47 100644
 --- a/src/fan/FanMain.cpp
 +++ b/src/fan/FanMain.cpp
 @@ -14,6 +14,7 @@

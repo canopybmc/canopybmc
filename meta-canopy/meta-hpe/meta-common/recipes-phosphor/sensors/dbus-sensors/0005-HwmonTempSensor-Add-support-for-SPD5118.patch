@@ -1,4 +1,4 @@
-From cc1bb1ac542b4d7ae8daf1ab841601ecda8a2f7e Mon Sep 17 00:00:00 2001
+From 78d31d2494a58b08c413dd536e04e1a06eb72791 Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
 Date: Mon, 9 Mar 2026 20:19:03 -0300
 Subject: [PATCH] HwmonTempSensor: Add support for SPD5118
