@@ -13,6 +13,8 @@ The driver validates each 128-byte block on probe by checking the
 version byte and verifying a 16-bit checksum over the entire block sums
 to zero.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/nvmem/Kconfig     |  11 ++++

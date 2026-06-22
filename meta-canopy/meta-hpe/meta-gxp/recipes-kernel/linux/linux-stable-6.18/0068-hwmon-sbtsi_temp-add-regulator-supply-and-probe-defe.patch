@@ -11,6 +11,8 @@ yet responsive (-ETIMEDOUT, -ENXIO, -ENODEV).
 Introduce sbtsi_powered() helper to guard read and write paths when
 the supply is present but disabled.
 
+Upstream-Status: Pending
+
 Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
 ---
  drivers/hwmon/sbtsi_temp.c | 45 ++++++++++++++++++++++++++++++++++++++

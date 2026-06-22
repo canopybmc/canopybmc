@@ -23,6 +23,9 @@ to the register-based path since the memory-mapped window does not
 support non-standard SPI commands.
 
 Fixes: d1fe233a1e8d ("spi: spi-gxp: Add support for HPE GXP SoCs")
+
+Upstream-Status: Pending
+
 Signed-off-by: Christian Walter <christian.walter@9elements.com>
 ---
  drivers/spi/spi-gxp.c | 9 +++++++--

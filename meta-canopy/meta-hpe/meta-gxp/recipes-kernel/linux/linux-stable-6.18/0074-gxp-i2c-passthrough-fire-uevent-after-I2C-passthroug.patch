@@ -6,6 +6,8 @@ Subject: [PATCH] gxp-i2c-passthrough: fire uevent after I2C passthrough enable
 Fire a KOBJ_CHANGE uevent after bus_rescan_devices() completes so
 udev can react to I2C devices becoming accessible behind the mux.
 
+Upstream-Status: Pending
+
 Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
 ---
  drivers/soc/hpe/gxp-i2c-passthrough.c | 2 ++

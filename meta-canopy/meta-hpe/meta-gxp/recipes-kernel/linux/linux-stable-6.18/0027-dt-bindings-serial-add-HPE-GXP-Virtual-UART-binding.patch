@@ -7,6 +7,8 @@ Add YAML binding for the HPE GXP BMC SoC Virtual UART (VUART). The
 VUART provides a 16550A-compatible serial interface between the BMC
 and host CPU over an internal LPC bus path.
 
+Upstream-Status: Pending
+
 Co-developed-by: John Chung <john.chung@hpe.com>
 Signed-off-by: John Chung <john.chung@hpe.com>
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>

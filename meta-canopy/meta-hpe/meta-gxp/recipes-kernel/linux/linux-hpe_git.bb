@@ -10,8 +10,6 @@ require linux-hpe.inc
 require linux-gxp-flash-layout.inc
 require linux-gxp-multi-dtb.inc
 
-ERROR_QA:remove = "patch-status"
-
 SRC_URI:append = " \
     file://common/defconfig \
     file://common/openbmc-common.cfg \

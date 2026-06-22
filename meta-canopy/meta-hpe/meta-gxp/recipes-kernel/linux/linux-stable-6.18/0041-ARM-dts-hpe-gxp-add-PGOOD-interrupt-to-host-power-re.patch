@@ -9,6 +9,8 @@ line 1 (PGOOD) so the regulator driver can fire notifier events
 on host power transitions. This enables event-based PECI device
 lifecycle management.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  arch/arm/boot/dts/hpe/hpe-gxp.dts | 4 ++++

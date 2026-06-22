@@ -10,6 +10,8 @@ devices on a controller. Move declarations to the public peci.h
 header so controller drivers can manage device lifecycle in response
 to host power state changes.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/peci/core.c     | 15 +++++++++++++++

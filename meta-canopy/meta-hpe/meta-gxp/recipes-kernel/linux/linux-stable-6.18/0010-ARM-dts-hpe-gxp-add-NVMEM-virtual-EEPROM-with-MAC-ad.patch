@@ -9,6 +9,8 @@ region, which contains board identification data. This includes the
 serial numbers, part numbers, and MAC addresses used by the UMAC
 Ethernet controllers.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  arch/arm/boot/dts/hpe/hpe-gxp.dts | 36 +++++++++++++++++++++++++++++++

@@ -19,6 +19,8 @@ and coding standards:
 
 No functional changes intended.
 
+Upstream-Status: Pending
+
 Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
 ---
  .../bindings/ipmi/hpe,gxp-kcs-bmc.yaml        |  63 +++++

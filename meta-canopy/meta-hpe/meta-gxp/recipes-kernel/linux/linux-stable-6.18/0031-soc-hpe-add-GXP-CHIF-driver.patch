@@ -14,6 +14,8 @@ Features:
 - Read/write interface for packet exchange
 - Sysfs interface for protocol header inspection
 
+Upstream-Status: Pending
+
 Co-developed-by: Gilbert Chen <gilbert.chen@hpe.com>
 Signed-off-by: Gilbert Chen <gilbert.chen@hpe.com>
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>

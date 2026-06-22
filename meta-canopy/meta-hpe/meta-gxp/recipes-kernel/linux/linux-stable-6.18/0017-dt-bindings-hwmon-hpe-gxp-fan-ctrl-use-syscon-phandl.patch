@@ -7,6 +7,8 @@ Change the fan controller binding from 3 direct reg regions to
 1 reg + 2 syscon phandles (hpe,xreg and hpe,fn2). This avoids
 MMIO resource conflicts with the XREG and FN2 syscon nodes.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  .../bindings/hwmon/hpe,gxp-fan-ctrl.yaml      | 28 ++++++++++---------

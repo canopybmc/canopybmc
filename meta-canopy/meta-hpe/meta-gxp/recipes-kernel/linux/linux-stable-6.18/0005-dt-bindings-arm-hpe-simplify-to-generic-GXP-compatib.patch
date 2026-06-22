@@ -13,6 +13,8 @@ removing the board-specific "hpe,gxp-dl360gen10" string that was added
 without corresponding device tree differences to justify it. Update
 the DL360 Gen10 board device tree accordingly.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  Documentation/devicetree/bindings/arm/hpe,gxp.yaml | 7 +------

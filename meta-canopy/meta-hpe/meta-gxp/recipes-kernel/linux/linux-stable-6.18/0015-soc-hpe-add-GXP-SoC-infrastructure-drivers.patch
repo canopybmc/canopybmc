@@ -7,6 +7,8 @@ Add the core HPE GXP BMC SoC drivers: gxp-soclib shared library,
 gxp-csm, gxp-xreg (150 GPIO lines), gxp-fn2 (power state GPIOs).
 Include gxp-regs.h with named register constants.
 
+Upstream-Status: Pending
+
 Co-developed-by: Gilbert Chen <gilbert.chen@hpe.com>
 Signed-off-by: Gilbert Chen <gilbert.chen@hpe.com>
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>

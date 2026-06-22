@@ -9,6 +9,8 @@ and host CPU using DMA-coherent shared memory with doorbell interrupts.
 
 The CHIF node must be a child of the FN2 syscon node.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  .../bindings/soc/hpe/hpe,gxp-chif.yaml        | 52 +++++++++++++++++++

@@ -24,6 +24,8 @@ Gen11 device tree overlays.
 Tested: Cold boot on HPE ProLiant DL380 Gen11 -- NVMe drives visible in
 BIOS after applying the init command during early POST.
 
+Upstream-Status: Pending
+
 Signed-off-by: Christian Walter <christian.walter@9elements.com>
 ---
  drivers/misc/Kconfig    |  11 +++
