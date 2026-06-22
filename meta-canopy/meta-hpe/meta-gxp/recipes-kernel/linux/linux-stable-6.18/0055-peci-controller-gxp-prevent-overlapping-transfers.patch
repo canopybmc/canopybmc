@@ -17,6 +17,9 @@ initialize the cached status to DONE in probe so the first transfer can
 start before any completion has been reported.
 
 Fixes: a71f071eb32d ("peci: controller: add HPE GXP PECI controller driver")
+
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/peci/controller/peci-gxp.c | 34 ++++++++++++++++++++++++------

@@ -17,6 +17,8 @@ This results in a kernel panic:
 Fix by resetting i2cg_map to NULL when the syscon lookup fails,
 allowing the lookup to be retried on subsequent probe calls.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/i2c/busses/i2c-gxp.c | 5 ++++-

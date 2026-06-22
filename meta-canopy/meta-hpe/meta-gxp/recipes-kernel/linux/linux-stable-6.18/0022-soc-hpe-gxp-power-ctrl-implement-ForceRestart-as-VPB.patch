@@ -13,6 +13,8 @@ PGOOD IRQ to confirm power-off via a completion, then prepare_boot
 and a second VPBTN pulse to power on. The resetting flag blocks
 concurrent power button operations and prevents double-scheduling.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/soc/hpe/gxp-power-ctrl.c | 120 ++++++++++++++++++++++++++++---

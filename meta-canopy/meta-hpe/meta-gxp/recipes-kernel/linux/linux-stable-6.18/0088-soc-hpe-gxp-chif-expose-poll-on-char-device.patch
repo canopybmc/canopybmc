@@ -11,6 +11,8 @@ the wakeup on it meant a process waiting via poll()/select()/epoll() was
 registered on the wait queue by poll_wait() but never woken, and would
 block indefinitely even though packets had arrived.
 
+Upstream-Status: Pending
+
 Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
 ---
  drivers/soc/hpe/gxp-chif.c | 21 +++++++++++++++++++--

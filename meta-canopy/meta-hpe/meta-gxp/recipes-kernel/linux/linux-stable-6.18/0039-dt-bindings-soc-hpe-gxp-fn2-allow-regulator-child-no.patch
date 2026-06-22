@@ -8,6 +8,8 @@ matching the hpe,gxp-host-power-supply binding. This enables
 the FN2 syscon to host a regulator exposing the CPLD power-good
 state to consumer devices.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  .../devicetree/bindings/soc/hpe/hpe,gxp-fn2.yaml       | 10 ++++++++++

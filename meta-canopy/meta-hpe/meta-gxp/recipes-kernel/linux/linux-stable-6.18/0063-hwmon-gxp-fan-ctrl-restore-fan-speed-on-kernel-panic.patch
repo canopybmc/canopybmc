@@ -11,6 +11,8 @@ fans at whatever duty cycle userspace last programmed.
 The notifier only performs writeb() to MMIO registers, which is safe
 in atomic/NMI panic context.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/hwmon/gxp-fan-ctrl.c | 31 +++++++++++++++++++++++++++++++

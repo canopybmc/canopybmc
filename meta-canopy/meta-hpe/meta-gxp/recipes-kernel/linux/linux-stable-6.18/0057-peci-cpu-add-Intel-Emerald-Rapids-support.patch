@@ -13,6 +13,8 @@ Tested the patch series with AST2600 BMC with 5S Intel Emerald Rapids
 processors & verified by reading cpu & dimm temperature which matches
 host sensor values from lmsensors.
 
+Upstream-Status: Backport [https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=906f25050add51f1a412ea37e618d8748f75e23a]
+
 Signed-off-by: Ivan Mikhaylov <fr0st61te@gmail.com>
 Reviewed-by: Paul Menzel <pmenzel@molgen.mpg.de>
 Link: https://lore.kernel.org/r/20251006215321.5036-2-fr0st61te@gmail.com

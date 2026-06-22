@@ -11,6 +11,8 @@ part number, and MAC addresses.
 The binding uses the standard NVMEM framework with fixed cell
 definitions as child nodes.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  .../bindings/nvmem/hpe,gxp-nvmem.yaml         | 64 +++++++++++++++++++

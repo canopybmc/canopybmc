@@ -5,6 +5,8 @@ Subject: [PATCH] hwmon: (peci/cputemp) add Intel Emerald Rapids support
 
 Add support to read DTS for reading Intel Emerald Rapids platform.
 
+Upstream-Status: Backport [https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=a45b3ae40451542e3d6b37b8fba04e280cc8efa7]
+
 Signed-off-by: Ivan Mikhaylov <fr0st61te@gmail.com>
 Reviewed-by: Paul Menzel <pmenzel@molgen.mpg.de>
 Link: https://lore.kernel.org/r/20251006215321.5036-4-fr0st61te@gmail.com

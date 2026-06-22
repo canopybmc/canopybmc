@@ -25,6 +25,8 @@ polls the VUHC port_owner GPIO at 100ms and does a soft_connect
 toggle), but is handled entirely in the kernel driver at a sensible
 polling rate.
 
+Upstream-Status: Pending
+
 Signed-off-by: Christian Walter <christian.walter@9elements.com>
 ---
  drivers/usb/gadget/udc/gxp_udc.c | 12 +++++++++++-

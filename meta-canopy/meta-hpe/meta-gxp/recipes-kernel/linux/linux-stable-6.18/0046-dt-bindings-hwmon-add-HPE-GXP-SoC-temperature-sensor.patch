@@ -8,6 +8,8 @@ Add device tree binding for the internal temperature sensor in HPE GXP
 BMC SoCs. The sensor provides die temperature readings through a
 memory-mapped register interface.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  .../bindings/hwmon/hpe,gxp-coretemp.yaml      | 35 +++++++++++++++++++

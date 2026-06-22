@@ -11,6 +11,8 @@ a linear conversion formula.
 The driver uses the devm_hwmon_device_register_with_info API to expose
 a single temp1_input attribute.
 
+Upstream-Status: Pending
+
 Co-developed-by: Gilbert Chen <gilbert.chen@hpe.com>
 Signed-off-by: Gilbert Chen <gilbert.chen@hpe.com>
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>

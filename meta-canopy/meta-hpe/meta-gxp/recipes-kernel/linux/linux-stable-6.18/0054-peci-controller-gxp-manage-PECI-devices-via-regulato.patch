@@ -13,6 +13,8 @@ on subsequent power cycles.
 The work is deferred to a workqueue since the notifier callback runs
 in blocking context and device creation/destruction may sleep.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/peci/controller/peci-gxp.c | 58 ++++++++++++++++++++++++++++++
