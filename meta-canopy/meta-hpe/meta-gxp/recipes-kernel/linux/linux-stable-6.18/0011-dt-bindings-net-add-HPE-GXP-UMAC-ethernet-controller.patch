@@ -12,6 +12,8 @@ The GXP includes two UMAC ethernet controllers:
 - One connected to an external Marvell PHY for dedicated BMC management
 - One using NCSI for sideband communication with the host NIC
 
+Upstream-Status: Pending
+
 Co-developed-by: Michal Gorlas <michal.gorlas@9elements.com>
 Signed-off-by: Michal Gorlas <michal.gorlas@9elements.com>
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>

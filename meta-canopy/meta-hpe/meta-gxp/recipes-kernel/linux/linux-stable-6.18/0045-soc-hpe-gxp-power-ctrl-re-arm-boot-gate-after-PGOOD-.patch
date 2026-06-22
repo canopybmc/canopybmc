@@ -17,6 +17,8 @@ in the PGOOD IRQ handler, matching the behavior of the original HPE
 userspace-based script implementation which unconditionally locks the
 gate and then re-arms it before waiting for PGOOD to return.
 
+Upstream-Status: Pending
+
 Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
 ---
  drivers/soc/hpe/gxp-power-ctrl.c | 22 +++++++++++++++++++++-

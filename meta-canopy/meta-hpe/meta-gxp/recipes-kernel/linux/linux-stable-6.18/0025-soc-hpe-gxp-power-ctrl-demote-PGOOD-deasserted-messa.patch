@@ -8,6 +8,8 @@ The "PGOOD deasserted, boot gate held" message fires on every host
 power-off, which is normal operation. Demote from dev_info to dev_dbg
 so it is silent by default but available via dynamic debug.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/soc/hpe/gxp-power-ctrl.c | 4 ++--

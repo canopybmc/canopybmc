@@ -10,6 +10,8 @@ event forwarding, and implements platform-aware eSPI OOB reset.
 Exposes three GPIO lines: power-ctrl-out, power-ctrl-good, and
 reset-out.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/soc/hpe/Kconfig          |  16 +

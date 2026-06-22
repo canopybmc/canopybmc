@@ -6,6 +6,8 @@ Subject: [PATCH] dt-bindings: soc: hpe: add GXP SoC subsystem bindings
 Add YAML bindings for the HPE GXP CSM, XREG, and FN2 register
 blocks that provide core BMC SoC infrastructure.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  .../bindings/soc/hpe/hpe,gxp-csm.yaml         | 39 ++++++++++

@@ -8,6 +8,8 @@ ASRSTAT/ASRESTAT registers. Writing ASRESTAT bit 7 triggers a host CPU
 reset that keeps PGOOD high, avoiding unnecessary shutdown/boot
 sequencing.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/soc/hpe/gxp-power-ctrl.c | 165 +++++++------------------------

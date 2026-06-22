@@ -7,6 +7,8 @@ Add device tree nodes for the GXP Virtual UART: a syscon node for the
 host-side configuration registers and the VUART serial device itself.
 The VUART is assigned to ttyS3 via the serial-line property.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  arch/arm/boot/dts/hpe/hpe-gxp.dts | 18 ++++++++++++++++++

@@ -15,6 +15,8 @@ add_lock pattern, to serialize peci_device_create() and
 peci_device_destroy(). This replaces the file-local peci_device_del_lock
 with the per-controller lock, which also covers the creation path.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/peci/core.c   |  2 ++

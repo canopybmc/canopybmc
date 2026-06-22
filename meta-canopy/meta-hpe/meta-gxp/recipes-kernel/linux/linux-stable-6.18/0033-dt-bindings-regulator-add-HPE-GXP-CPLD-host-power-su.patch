@@ -8,6 +8,8 @@ The CPLD manages a power rail gating fans and other host-dependent
 devices; the regulator exposes the power-good state from the FN2
 system event status register to consumer drivers.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  .../regulator/hpe,gxp-host-power-supply.yaml  | 44 +++++++++++++++++++

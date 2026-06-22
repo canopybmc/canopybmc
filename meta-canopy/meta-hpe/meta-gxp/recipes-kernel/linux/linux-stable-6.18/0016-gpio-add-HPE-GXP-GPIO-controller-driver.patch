@@ -7,6 +7,8 @@ Add a GPIO driver providing 300 lines through the GXP CSM GPI/GPO
 chains and VUHC register blocks. Uses of_iomap for the CSM region
 to avoid resource conflicts with the CSM syscon node.
 
+Upstream-Status: Pending
+
 Co-developed-by: Gilbert Chen <gilbert.chen@hpe.com>
 Signed-off-by: Gilbert Chen <gilbert.chen@hpe.com>
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>

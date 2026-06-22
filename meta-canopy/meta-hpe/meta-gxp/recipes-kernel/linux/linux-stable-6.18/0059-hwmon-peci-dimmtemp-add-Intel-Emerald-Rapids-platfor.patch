@@ -13,6 +13,8 @@ Verified read of DIMM temperature thresholds & temperature.
 Using Sapphire's callbacks about getting thresholds because it's same
 platform/socket.
 
+Upstream-Status: Backport [https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=03c5ecc276fdc696ec469ee3a784726b809ecf26]
+
 Signed-off-by: Ivan Mikhaylov <fr0st61te@gmail.com>
 Reviewed-by: Paul Menzel <pmenzel@molgen.mpg.de>
 Link: https://lore.kernel.org/r/20251006215321.5036-3-fr0st61te@gmail.com

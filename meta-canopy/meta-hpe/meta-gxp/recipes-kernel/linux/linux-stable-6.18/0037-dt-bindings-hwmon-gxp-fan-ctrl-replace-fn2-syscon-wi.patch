@@ -9,6 +9,8 @@ regulator reference. Power gating state is now provided through the
 regulator framework instead of a direct FN2 regmap dependency. Add
 fan-common.yaml reference for standard fan properties.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  .../bindings/hwmon/hpe,gxp-fan-ctrl.yaml      | 21 +++++++++++--------

@@ -5,6 +5,8 @@ Subject: [PATCH] ARM: dts: hpe-gxp: add coretemp sensor node
 
 Add device tree node for the GXP SoC internal temperature sensor.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  arch/arm/boot/dts/hpe/hpe-gxp.dts | 5 +++++

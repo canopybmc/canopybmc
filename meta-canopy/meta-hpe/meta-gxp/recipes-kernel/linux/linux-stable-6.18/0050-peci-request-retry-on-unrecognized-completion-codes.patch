@@ -13,6 +13,8 @@ Replace the WARN_ONCE with dev_dbg and return -EAGAIN for all
 unrecognized codes so the existing exponential backoff retry
 logic can handle these transient conditions.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/peci/request.c | 15 +++++++++++----

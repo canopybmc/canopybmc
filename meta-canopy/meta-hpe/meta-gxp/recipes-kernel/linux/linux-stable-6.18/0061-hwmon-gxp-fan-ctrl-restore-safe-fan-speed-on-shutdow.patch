@@ -13,6 +13,8 @@ PWM duty cycle to all present fans on kernel shutdown or driver
 removal. The duty cycle is configurable via the fan-shutdown-percent
 DT property, defaulting to 50% (PWM 128) when unset.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/hwmon/gxp-fan-ctrl.c | 39 +++++++++++++++++++++++++++++++++++-

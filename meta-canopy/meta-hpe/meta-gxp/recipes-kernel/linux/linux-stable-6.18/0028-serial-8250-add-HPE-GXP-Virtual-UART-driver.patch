@@ -9,6 +9,8 @@ host CPU over an internal LPC bus path, with GXP-specific control
 registers for FIFO management, baud rate, and host-side interrupt
 routing via a separate syscon configuration block.
 
+Upstream-Status: Pending
+
 Co-developed-by: John Chung <john.chung@hpe.com>
 Signed-off-by: John Chung <john.chung@hpe.com>
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>

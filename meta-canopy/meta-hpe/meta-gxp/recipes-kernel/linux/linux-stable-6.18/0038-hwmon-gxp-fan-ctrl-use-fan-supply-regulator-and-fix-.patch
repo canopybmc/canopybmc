@@ -11,6 +11,8 @@ at probe time and use is_visible to hide absent fan channels.
 Remove non-standard fan_enable attribute and add standard pwm_enable.
 Reject PWM writes with -EACCES when host power is off.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/hwmon/gxp-fan-ctrl.c | 196 ++++++++++++++++-------------------

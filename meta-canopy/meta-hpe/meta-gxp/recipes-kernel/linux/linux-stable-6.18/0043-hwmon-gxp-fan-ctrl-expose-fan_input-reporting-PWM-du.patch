@@ -15,6 +15,8 @@ driver's show_in() behavior.
 This enables standard hwmon fan discovery by userspace tools that
 scan for fan*_input files.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  Documentation/hwmon/gxp-fan-ctrl.rst |  6 ++++--

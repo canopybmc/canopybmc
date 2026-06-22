@@ -36,6 +36,8 @@ root@hpe-proliant-g11:~# ls /dev/sbrmi-*
 /dev/sbrmi-3c
 ```
 
+Upstream-Status: Pending
+
 Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
 ---
  drivers/misc/amd-sbi/rmi-core.c  | 349 ++++++++++++++++++++-----------

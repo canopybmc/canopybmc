@@ -7,6 +7,8 @@ Add device tree node for the GXP PECI controller used for host CPU
 thermal management. A peci-supply reference to the host power
 regulator gates PECI bus access when the host is off.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  arch/arm/boot/dts/hpe/hpe-gxp.dts | 8 ++++++++

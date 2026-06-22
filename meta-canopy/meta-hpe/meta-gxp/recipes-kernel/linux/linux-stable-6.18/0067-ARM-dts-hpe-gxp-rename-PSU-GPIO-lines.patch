@@ -13,6 +13,8 @@ convention expected by entity-manager:
 This naming convention matches the GPIO line names referenced in the
 entity-manager PSU configuration for the HPE ProLiant Gen11 platform.
 
+Upstream-Status: Pending
+
 Signed-off-by: Nabla <nabla@9e.network>
 ---
  arch/arm/boot/dts/hpe/hpe-gxp.dts | 24 ++++++++++++------------

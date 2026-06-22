@@ -6,6 +6,8 @@ Subject: [PATCH] ARM: dts: hpe-gxp: add gpio-keys-polled node for fan presence
 Add a gpio-keys-polled node exposing the eight XREG fan-installed
 status GPIOs as input events for userspace fan presence detection.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  arch/arm/boot/dts/hpe/hpe-gxp.dts | 55 ++++++++++++++++++++++++++++++-

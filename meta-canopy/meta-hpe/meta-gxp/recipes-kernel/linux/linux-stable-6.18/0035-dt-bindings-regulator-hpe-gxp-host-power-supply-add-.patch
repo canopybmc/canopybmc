@@ -9,6 +9,8 @@ supply binding. When an interrupt is specified, the regulator driver
 fires notifier events on host power transitions, enabling consumer
 drivers to respond to power state changes.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  .../bindings/regulator/hpe,gxp-host-power-supply.yaml | 11 +++++++++++

@@ -9,6 +9,8 @@ the CPLD power-good state through the regulator framework. Switch
 the fan controller to use fan-supply instead of the direct FN2
 syscon reference.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  arch/arm/boot/dts/hpe/hpe-gxp.dts | 7 ++++++-

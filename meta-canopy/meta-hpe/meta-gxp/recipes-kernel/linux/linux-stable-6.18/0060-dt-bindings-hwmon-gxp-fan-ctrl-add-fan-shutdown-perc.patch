@@ -9,6 +9,8 @@ PWM duty cycle applied to all present fans during kernel shutdown or
 driver removal. This prevents fans from staying at a low duty cycle
 set by userspace if the BMC reboots while the host is under load.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  .../devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml    | 10 ++++++++++

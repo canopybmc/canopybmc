@@ -8,6 +8,8 @@ hpe,xreg and hpe,fn2 phandles, matching the HPE reference driver.
 Read fan install status from XREG offset 0x78 and power state from
 FN2 SEVSTAT at offset 0x70 via regmap.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 
 hwmon: gxp-fan-ctrl: fix PWM register offset and fan fault bit mapping

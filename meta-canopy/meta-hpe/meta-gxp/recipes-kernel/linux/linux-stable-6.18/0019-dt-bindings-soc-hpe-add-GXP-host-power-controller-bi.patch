@@ -8,6 +8,8 @@ GPIO lines with CPLD boot sequence management. Exposes three
 virtual GPIO lines: power-ctrl-out, power-ctrl-good, and
 reset-out.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  .../bindings/soc/hpe/hpe,gxp-power-ctrl.yaml  | 94 +++++++++++++++++++

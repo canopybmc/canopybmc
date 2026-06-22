@@ -18,6 +18,8 @@ separate gxp-bmc-flash-layout.dtsi file, following the pattern used by
 Aspeed. This allows OpenBMC/Yocto recipes to override the flash layout
 without modifying the kernel base DTS.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  .../boot/dts/hpe/gxp-bmc-flash-layout.dtsi    |  58 ++++

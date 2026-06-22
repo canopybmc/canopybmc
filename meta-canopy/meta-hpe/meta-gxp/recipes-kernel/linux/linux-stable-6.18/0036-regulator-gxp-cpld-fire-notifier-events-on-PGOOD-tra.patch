@@ -12,6 +12,8 @@ through the standard regulator notifier mechanism.
 The interrupt is optional and specified via the DT interrupts
 property. When absent, the driver behaves as before.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/regulator/gxp-cpld-regulator.c | 59 ++++++++++++++++++++++++--

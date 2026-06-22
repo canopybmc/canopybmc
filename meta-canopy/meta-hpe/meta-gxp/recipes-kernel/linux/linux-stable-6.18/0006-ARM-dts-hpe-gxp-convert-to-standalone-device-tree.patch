@@ -13,6 +13,8 @@ Merge the board-specific nodes into the SoC device tree and rename
 hpe-gxp.dtsi to hpe-gxp.dts, producing a single standalone device tree
 that can be used directly by all GXP platforms.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  arch/arm/boot/dts/hpe/Makefile                |  2 +-

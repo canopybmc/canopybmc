@@ -16,6 +16,8 @@ see a single notification after the signal has settled. This moves
 the debounce responsibility from individual consumers to the
 provider where it belongs.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/regulator/gxp-cpld-regulator.c | 35 +++++++++++++++++++++++---

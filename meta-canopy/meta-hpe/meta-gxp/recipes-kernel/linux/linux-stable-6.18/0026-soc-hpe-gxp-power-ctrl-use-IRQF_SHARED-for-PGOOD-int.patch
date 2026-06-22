@@ -7,6 +7,8 @@ Add IRQF_SHARED to the PGOOD interrupt request flags so the CPLD
 regulator driver can share the same FN2 virtual IRQ for firing
 regulator notifier events on power state transitions.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/soc/hpe/gxp-power-ctrl.c | 2 +-

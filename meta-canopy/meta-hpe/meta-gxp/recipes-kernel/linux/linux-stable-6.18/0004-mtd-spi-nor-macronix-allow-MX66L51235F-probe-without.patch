@@ -25,6 +25,8 @@ This provides basic read/write/erase without quad-SPI — which is
 sufficient for BMC access to the host BIOS flash where only single-
 lane reads are used.
 
+Upstream-Status: Pending
+
 Signed-off-by: Christian Walter <christian.walter@9elements.com>
 ---
  drivers/mtd/spi-nor/macronix.c | 3 ++-

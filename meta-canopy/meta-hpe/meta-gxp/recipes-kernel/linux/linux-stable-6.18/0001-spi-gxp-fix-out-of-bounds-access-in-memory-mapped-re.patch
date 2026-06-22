@@ -19,6 +19,9 @@ path where it fits and gracefully degrades to register-based access
 otherwise.
 
 Fixes: d1fe233a1e8d ("spi: spi-gxp: Add support for HPE GXP SoCs")
+
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/spi/spi-gxp.c | 8 +++++++-

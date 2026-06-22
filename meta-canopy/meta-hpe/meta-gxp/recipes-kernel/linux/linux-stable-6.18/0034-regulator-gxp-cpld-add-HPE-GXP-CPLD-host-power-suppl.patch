@@ -10,6 +10,8 @@ and other host-dependent peripherals. this driver reads the power-good
 status from the FN2 system event status register via regmap. Enable and
 disable operations are no-ops since the CPLD controls the rail directly.
 
+Upstream-Status: Pending
+
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
  drivers/regulator/Kconfig              | 11 ++++

@@ -12,6 +12,8 @@ interrupt-driven transfers and completion-based synchronization.
 An optional peci-supply regulator allows gating PECI transfers
 when the host is powered off, avoiding command timeouts.
 
+Upstream-Status: Pending
+
 Co-developed-by: Gilbert Chen <gilbert.chen@hpe.com>
 Signed-off-by: Gilbert Chen <gilbert.chen@hpe.com>
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
