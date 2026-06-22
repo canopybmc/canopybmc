@@ -1,4 +1,4 @@
-From bcad6c98e27aceb1546c8e9ab2f5e640754ae67d Mon Sep 17 00:00:00 2001
+From 5c8c5563b6afeb9c322819083e75c32986938024 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 8 Feb 2026 22:20:50 +0100
 Subject: [PATCH] hwmon: gxp-fan-ctrl: use syscon phandles for XREG and FN2
@@ -15,7 +15,7 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  2 files changed, 30 insertions(+), 30 deletions(-)
 
 diff --git a/drivers/hwmon/Kconfig b/drivers/hwmon/Kconfig
-index 2760feb9f83b..18d5d4d9589c 100644
+index 2a71b6e834b0..c8a64b3563ef 100644
 --- a/drivers/hwmon/Kconfig
 +++ b/drivers/hwmon/Kconfig
 @@ -813,6 +813,8 @@ config SENSORS_GPIO_FAN
@@ -156,5 +156,5 @@ index 00e057050437..0ec8818784d2 100644
  	hwmon_dev = devm_hwmon_device_register_with_info(&pdev->dev,
  							 "hpe_gxp_fan_ctrl",
 -- 
-2.52.0
+2.54.0
 

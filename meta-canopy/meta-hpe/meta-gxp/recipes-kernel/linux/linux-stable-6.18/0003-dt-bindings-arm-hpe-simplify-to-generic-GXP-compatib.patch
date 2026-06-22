@@ -1,4 +1,4 @@
-From 9e6eda9506e05ad66ee17702fbe12e79effa416e Mon Sep 17 00:00:00 2001
+From 339d6d8f32ef19769a361ed22dccdf4ff4a35d4d Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 5 Feb 2026 10:04:46 +0100
 Subject: [PATCH] dt-bindings: arm: hpe: simplify to generic GXP compatible
@@ -51,5 +51,5 @@ index 3a7382ce40ef..794e5bd11214 100644
  
  	aliases {
 -- 
-2.52.0
+2.54.0
 

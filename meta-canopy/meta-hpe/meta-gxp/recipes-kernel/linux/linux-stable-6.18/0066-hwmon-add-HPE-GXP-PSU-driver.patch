@@ -1,4 +1,4 @@
-From 0ecfb79cd78d5738828be7f5e2cf4c42c6fc12b5 Mon Sep 17 00:00:00 2001
+From 30d5c7b618ba88af687ea7b983013a54e78285db Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Tue, 17 Feb 2026 22:00:46 +0100
 Subject: [PATCH] hwmon: add HPE GXP PSU driver
@@ -25,7 +25,7 @@ Signed-off-by: Christian Walter <christian.walter@9elements.com>
  create mode 100644 drivers/hwmon/gxp-psu.c
 
 diff --git a/drivers/hwmon/Kconfig b/drivers/hwmon/Kconfig
-index bda5b5e87084..bf3ef8fc9548 100644
+index ec3613a76554..1ec0e368daea 100644
 --- a/drivers/hwmon/Kconfig
 +++ b/drivers/hwmon/Kconfig
 @@ -829,6 +829,14 @@ config SENSORS_GXP_CORETEMP
@@ -452,5 +452,5 @@ index 000000000000..489d5d2f05d9
 +MODULE_DESCRIPTION("HPE GXP PSU driver");
 +MODULE_LICENSE("GPL");
 -- 
-2.48.1
+2.54.0
 

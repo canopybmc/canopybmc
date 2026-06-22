@@ -1,4 +1,4 @@
-From 874308372f4a864d8915f6a7e19d0eb3737062cb Mon Sep 17 00:00:00 2001
+From 3667a28f1f343a78f7d1af8edaf9c73b66876aab Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 12:29:04 +0100
 Subject: [PATCH] soc: hpe: gxp-power-ctrl: demote PGOOD deasserted message to
@@ -29,5 +29,5 @@ index 0b797a72a5f4..4687c5cd47c2 100644
  
  	/* Forward event to power-ctrl-good virtual GPIO consumers */
 -- 
-2.52.0
+2.54.0
 

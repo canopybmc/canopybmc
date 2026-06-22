@@ -1,4 +1,4 @@
-From b3d54af3310d6394bdd70454c6a1f3d8cd4e1aae Mon Sep 17 00:00:00 2001
+From 69a9c3941251e1ebfab72e5bf46556a5d71932ac Mon Sep 17 00:00:00 2001
 From: Tan Siewert <tan.siewert@9elements.com>
 Date: Thu, 21 May 2026 14:31:27 +0200
 Subject: [PATCH] ARM: dts: hpe: gxp: enable ramoops
@@ -12,7 +12,7 @@ Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
  1 file changed, 16 insertions(+)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index 21ccbf5de019..dfbcc02e5462 100644
+index 21ccbf5de019..0646d3bf6e63 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
 @@ -32,6 +32,22 @@ memory@40000000 {

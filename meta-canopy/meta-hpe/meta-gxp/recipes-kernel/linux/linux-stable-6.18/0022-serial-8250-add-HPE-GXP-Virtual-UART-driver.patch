@@ -1,4 +1,4 @@
-From 9dbe7e8cdc426714c61c204b5cb4f8189b9dbf40 Mon Sep 17 00:00:00 2001
+From fb5dd567069ed861705092ad038be6f087c0cfd5 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 10 Feb 2026 12:38:34 +0100
 Subject: [PATCH] serial: 8250: add HPE GXP Virtual UART driver
@@ -21,7 +21,7 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 
 diff --git a/drivers/tty/serial/8250/8250_gxp_vuart.c b/drivers/tty/serial/8250/8250_gxp_vuart.c
 new file mode 100644
-index 000000000000..ee3a584fd319
+index 000000000000..d617326a474b
 --- /dev/null
 +++ b/drivers/tty/serial/8250/8250_gxp_vuart.c
 @@ -0,0 +1,447 @@
@@ -508,5 +508,5 @@ index 9ec4d5fe64de..262b29479e79 100644
  obj-$(CONFIG_SERIAL_8250_BCM7271)	+= 8250_bcm7271.o
  obj-$(CONFIG_SERIAL_8250_BOCA)		+= 8250_boca.o
 -- 
-2.52.0
+2.54.0
 

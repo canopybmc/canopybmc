@@ -1,5 +1,6 @@
+From eb84d3a9934bda7ca4c9b67c6ca344f2d589543a Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
-Date: Sat, 8 Mar 2026 00:00:00 +0000
+Date: Sun, 8 Mar 2026 00:00:00 +0000
 Subject: [PATCH] ARM: dts: hpe-gxp: add video thumbnail and USB UDC nodes
 
 Add device tree nodes for the GXP video thumbnail engine and USB
@@ -16,16 +17,17 @@ UDC allocation follows HPE convention:
 Upstream-Status: Pending
 Signed-off-by: Christian Walter <christian.walter@9elements.com>
 ---
- arch/arm/boot/dts/hpe/hpe-gxp.dts | 41 ++++++++++++++++++++++++++++++
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 41 +++++++++++++++++++++++++++++++
  1 file changed, 41 insertions(+)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index 031d0ab2f4cf..21ccbf5de019 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-@@ -616,4 +616,45 @@ fanctrl: fan-controller@c1000c00 {
- 			fan-shutdown-percent = <50>;
+@@ -624,6 +624,47 @@ i2c_passthrough: i2c-passthrough {
+ 			regulator-name = "i2c-passthrough";
  		};
-
+ 
 +		thumbnail: video@c0000500 {
 +			compatible = "hpe,gxp-video-thumbnail";
 +			reg = <0xc0000500 0x20>;
@@ -68,5 +70,8 @@ diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.d
 +		};
 +
  		spifi1: spi@c0000280 {
---
-2.53.0
+ 			compatible = "hpe,gxp-spifi";
+ 			reg = <0xc0000280 0x80>, <0xc000e000 0x100>, <0xf0000000 0x4000000>;
+-- 
+2.54.0
+

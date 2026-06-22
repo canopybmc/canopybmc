@@ -1,4 +1,4 @@
-From 6ff7ed3be2788945018e18ba5d92db98ba7dacb1 Mon Sep 17 00:00:00 2001
+From add3f3b4518b8ae4ff3f16301f624bad3a3c48d8 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Tue, 14 Apr 2026 13:33:33 +0200
 Subject: [PATCH] usb: gadget: gxp-udc: reset data toggle on endpoint init
@@ -20,7 +20,7 @@ Signed-off-by: Christian Walter <christian.walter@9elements.com>
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/drivers/usb/gadget/udc/gxp_udc.c b/drivers/usb/gadget/udc/gxp_udc.c
-index 0cdb8e298865..32e648a2039c 100644
+index 097055a1da8e..7eb54845529f 100644
 --- a/drivers/usb/gadget/udc/gxp_udc.c
 +++ b/drivers/usb/gadget/udc/gxp_udc.c
 @@ -244,7 +244,7 @@ static int gxp_udc_ep_init(struct gxp_udc_ep *ep, int type, int dir_in,
@@ -33,4 +33,5 @@ index 0cdb8e298865..32e648a2039c 100644
  
  	val = readl(ep->base + EVDEPSTS);
 -- 
-2.48.1
+2.54.0
+

@@ -1,4 +1,4 @@
-From 27608fa1aed3ecf9f7fd6d4ebb34f5842fa3aab7 Mon Sep 17 00:00:00 2001
+From 86955068627922b476a4da5f46cc9ac57bbb5067 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Tue, 17 Feb 2026 22:05:28 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: rename PSU GPIO lines
@@ -19,7 +19,7 @@ Signed-off-by: Nabla <nabla@9e.network>
  1 file changed, 12 insertions(+), 12 deletions(-)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index b7b49835dbd7..da251ea92480 100644
+index 0d178150aaf0..4ef72e6ac5bb 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
 @@ -159,24 +159,24 @@ xreg: xreg@d1000000 {
@@ -60,5 +60,5 @@ index b7b49835dbd7..da251ea92480 100644
  			i2c_mux_ctrl: mux-controller {
  				compatible = "mmio-mux";
 -- 
-2.48.1
+2.54.0
 

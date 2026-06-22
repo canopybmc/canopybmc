@@ -1,4 +1,4 @@
-From e98c3cbbdbdd3446c45da5537cb547253b19db4f Mon Sep 17 00:00:00 2001
+From f3be39a51fbd57d9b1d821a7ff5680b6c8cf1401 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 5 Feb 2026 10:06:30 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: expand device tree for boot support
@@ -417,5 +417,5 @@ index 6bea75085cd0..eda3e01cfea2 100644
  		};
  	};
 -- 
-2.52.0
+2.54.0
 

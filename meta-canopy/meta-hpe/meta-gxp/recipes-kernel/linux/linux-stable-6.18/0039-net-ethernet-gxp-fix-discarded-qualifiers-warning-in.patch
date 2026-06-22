@@ -1,4 +1,4 @@
-From 4440622316288fc4b2496e09e81b9325d7a9475d Mon Sep 17 00:00:00 2001
+From a4c74a1afd8c73476c340d1437122916ad73ad52 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 11:43:03 +0100
 Subject: [PATCH] net: ethernet: gxp: fix discarded-qualifiers warning in umac
@@ -31,5 +31,5 @@ index 20552334065c..014751e14f00 100644
  
  	value = addr[0] << 8 | addr[1];
 -- 
-2.52.0
+2.54.0
 

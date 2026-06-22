@@ -1,5 +1,6 @@
+From a4a29b016d99a3626cdfc885ed003d56a5f75c87 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
-Date: Mon, 17 Feb 2026 00:00:00 +0000
+Date: Tue, 17 Feb 2026 00:00:00 +0000
 Subject: [PATCH] ARM: dts: hpe-gxp: add mmio-mux for i2c bus mux select
  registers
 
@@ -34,9 +35,11 @@ Signed-off-by: Christian Walter <christian.walter@9elements.com>
  1 file changed, 14 insertions(+)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index 9b396a9c2348..0d178150aaf0 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-@@ -175,5 +175,19 @@
+@@ -177,6 +177,20 @@ xreg: xreg@d1000000 {
+ 				"psu3-dc-ok", "psu4-dc-ok",
  				"psu5-dc-ok", "psu6-dc-ok",
  				"psu7-dc-ok", "psu8-dc-ok";
 +
@@ -54,5 +57,8 @@ diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.d
 +					<0x88 0xff000000>;  /* 7: i2c7 mux select */
 +			};
  		};
-
+ 
  		fn2: fn2@80200000 {
+-- 
+2.54.0
+

@@ -1,4 +1,4 @@
-From f53dd8036e3addd5eacd85e9b2bc7c8e1d292803 Mon Sep 17 00:00:00 2001
+From 524266aa647997ce62be74ceecaeea8941de23c5 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 09:31:22 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add CPLD host power regulator and
@@ -15,12 +15,12 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 6 insertions(+), 1 deletion(-)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index f591685921f1..85f192f93b83 100644
+index f6f2e2d4bc7b..a3b56c366287 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
 @@ -203,6 +203,11 @@ chif: chif {
  				interrupts = <12>;
- 				interrupt-parent = <&vic0>;
+ 				interrupt-parent = <&vic1>;
  			};
 +
 +			host_power: regulator-host-power {
@@ -40,5 +40,5 @@ index f591685921f1..85f192f93b83 100644
  
  		spifi1: spi@c0000280 {
 -- 
-2.52.0
+2.54.0
 

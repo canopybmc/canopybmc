@@ -2,8 +2,8 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/linux-hpe:"
 FILESEXTRAPATHS:prepend := "${THISDIR}/linux-stable-6.18:"
 
 KBRANCH = "dev-6.18"
-LINUX_VERSION = "6.18.25"
-SRCREV = "a256b1e6892e7fe840f0f9746316fa938e9a421f"
+LINUX_VERSION = "6.18.35"
+SRCREV = "cf42ecff238c6c385328a8d2a9b436f3944f02f8"
 
 require linux-hpe.inc
 

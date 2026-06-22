@@ -1,4 +1,4 @@
-From 398d69770e8f2e6707b1b753f541dff5d3bda7c6 Mon Sep 17 00:00:00 2001
+From ef018e762ff93860df8c9d41ccb562c82d2c3f1e Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 09:18:10 +0100
 Subject: [PATCH] dt-bindings: hwmon: gxp-fan-ctrl: replace fn2 syscon with
@@ -67,5 +67,5 @@ index bc29a684a8f4..3c3897639e29 100644
 +      fan-supply = <&host_power>;
      };
 -- 
-2.52.0
+2.54.0
 

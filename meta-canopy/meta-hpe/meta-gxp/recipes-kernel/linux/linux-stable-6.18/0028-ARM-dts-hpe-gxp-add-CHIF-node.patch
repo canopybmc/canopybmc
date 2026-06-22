@@ -1,4 +1,4 @@
-From 3d3c8dbc196c7378c2fdf8c265ccbc2cc6bdbbe0 Mon Sep 17 00:00:00 2001
+From c7d1882c8f738b4dd35cd3ff95b36a2eddb93ec6 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 3 Feb 2026 16:10:37 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add CHIF node
@@ -12,7 +12,7 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 6 insertions(+)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index 210b6900512d..f591685921f1 100644
+index 210b6900512d..f6f2e2d4bc7b 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
 @@ -197,6 +197,12 @@ fn2: fn2@80200000 {
@@ -29,5 +29,5 @@ index 210b6900512d..f591685921f1 100644
  
  		espi: espi@80fe0000 {
 -- 
-2.52.0
+2.54.0
 

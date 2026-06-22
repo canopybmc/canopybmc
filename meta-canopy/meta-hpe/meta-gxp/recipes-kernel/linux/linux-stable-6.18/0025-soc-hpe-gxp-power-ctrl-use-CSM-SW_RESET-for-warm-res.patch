@@ -1,4 +1,4 @@
-From c57cfeafc09b16884a7b3922e7797b1afc9e12ec Mon Sep 17 00:00:00 2001
+From 3513bb2f1a0767c690ae6bba93e951f0caaa28a2 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Wed, 11 Feb 2026 00:55:30 +0100
 Subject: [PATCH] soc: hpe: gxp-power-ctrl: use CSM SW_RESET for warm reset
@@ -281,5 +281,5 @@ index 08d3fa6f7a1b..0b797a72a5f4 100644
  	pctrl->gc.label = "gxp-power-ctrl";
  	pctrl->gc.parent = dev;
 -- 
-2.52.0
+2.54.0
 

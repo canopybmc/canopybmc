@@ -1,4 +1,4 @@
-From 12b3c6a9cb90af2ad8606a54207463a1050b1b04 Mon Sep 17 00:00:00 2001
+From 3ded5e1475bc22b484a77693ccc4f7f12e76bc3e Mon Sep 17 00:00:00 2001
 From: Ivan Mikhaylov <fr0st61te@gmail.com>
 Date: Tue, 7 Oct 2025 00:53:21 +0300
 Subject: [PATCH] hwmon: (peci/cputemp) add Intel Emerald Rapids support
@@ -14,7 +14,7 @@ Signed-off-by: Guenter Roeck <linux@roeck-us.net>
  1 file changed, 18 insertions(+)
 
 diff --git a/drivers/hwmon/peci/cputemp.c b/drivers/hwmon/peci/cputemp.c
-index c7112dbf008b..b350c9a76894 100644
+index 007fa621e10f..f4277a1f01be 100644
 --- a/drivers/hwmon/peci/cputemp.c
 +++ b/drivers/hwmon/peci/cputemp.c
 @@ -364,6 +364,7 @@ static int init_core_mask(struct peci_cputemp *priv)
@@ -64,5 +64,5 @@ index c7112dbf008b..b350c9a76894 100644
  };
  MODULE_DEVICE_TABLE(auxiliary, peci_cputemp_ids);
 -- 
-2.52.0
+2.54.0
 

@@ -1,4 +1,4 @@
-From 1fc25b56467423a0bd5ab7c7511eb4e75d201774 Mon Sep 17 00:00:00 2001
+From 43ecdc33e05de8ee5c094cbe49d5967f3ade68be Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 11:18:05 +0100
 Subject: [PATCH] peci: core: export device lifecycle helpers for controller
@@ -75,5 +75,5 @@ index 3e0bc37591d6..6c872d9458d4 100644
  static inline struct peci_controller *to_peci_controller(void *d)
  {
 -- 
-2.52.0
+2.54.0
 

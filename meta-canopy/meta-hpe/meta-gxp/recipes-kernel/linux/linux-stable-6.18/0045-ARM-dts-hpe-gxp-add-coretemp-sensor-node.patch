@@ -1,4 +1,4 @@
-From 070eee977d4f358ac66a59fa5847eb6e9d9eefb3 Mon Sep 17 00:00:00 2001
+From 797bc0e5c3186c000d8cbc941d9353252dd42fef Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 21:59:42 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add coretemp sensor node
@@ -11,7 +11,7 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 5 insertions(+)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index c8794c02ba69..236d691d8109 100644
+index 2b7531b599ba..acfeb84f9456 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
 @@ -525,6 +525,11 @@ umac1: ethernet@c0005000 {
@@ -27,5 +27,5 @@ index c8794c02ba69..236d691d8109 100644
  		compatible = "gpio-keys-polled";
  		poll-interval = <1000>;
 -- 
-2.52.0
+2.54.0
 

@@ -1,4 +1,4 @@
-From 17e6f8d6377e4cab84567fe72df00560ad8027a4 Mon Sep 17 00:00:00 2001
+From eacdea5c24b09b814b4e1a7767dd5f2de0682348 Mon Sep 17 00:00:00 2001
 From: Tan Siewert <tan.siewert@9elements.com>
 Date: Wed, 15 Apr 2026 01:46:26 +0200
 Subject: [PATCH] soc: hpe: gxp-power-ctrl: re-arm boot gate after PGOOD
@@ -64,5 +64,5 @@ index 91e07803f8d4..fabe671e1f57 100644
  
  	/* Forward event to power-ctrl-good virtual GPIO consumers */
 -- 
-2.53.0
+2.54.0
 

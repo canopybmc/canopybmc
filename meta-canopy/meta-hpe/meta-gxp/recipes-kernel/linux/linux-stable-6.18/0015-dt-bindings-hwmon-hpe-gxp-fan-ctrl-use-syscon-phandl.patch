@@ -1,4 +1,4 @@
-From 758b130a0a9d4c3adee61358b9feb1acdb58fc1f Mon Sep 17 00:00:00 2001
+From d21edd34eeae36389fb29ccb1efbff1b8d1068f4 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 8 Feb 2026 22:20:31 +0100
 Subject: [PATCH] dt-bindings: hwmon: hpe,gxp-fan-ctrl: use syscon phandles
@@ -61,5 +61,5 @@ index 4a52aac6be72..bc29a684a8f4 100644
 +      hpe,fn2 = <&fn2>;
      };
 -- 
-2.52.0
+2.54.0
 

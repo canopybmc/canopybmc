@@ -1,4 +1,4 @@
-From 979c1f71ba2614ab37f2cdd75352346e4adfa61d Mon Sep 17 00:00:00 2001
+From 73f27041a7089e0a7e3b30f50cc72d023b7c99a6 Mon Sep 17 00:00:00 2001
 From: Ivan Mikhaylov <fr0st61te@gmail.com>
 Date: Tue, 7 Oct 2025 00:53:19 +0300
 Subject: [PATCH] peci: cpu: add Intel Emerald Rapids support
@@ -37,5 +37,5 @@ index 2dac8ba82787..fbccc1d1b637 100644
  };
  MODULE_DEVICE_TABLE(peci, peci_cpu_device_ids);
 -- 
-2.52.0
+2.54.0
 

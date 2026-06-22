@@ -1,4 +1,4 @@
-From fea96c1456a537cee718dda09d507485058b4561 Mon Sep 17 00:00:00 2001
+From 17b859880ee2fbaa6a10797fada1ffb806d26de4 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 27 Jan 2026 23:48:19 +0100
 Subject: [PATCH] dt-bindings: net: add HPE GXP UMAC ethernet controller
@@ -140,5 +140,5 @@ index 000000000000..0ad0ee8afbb7
 +        mac-address = [00 11 22 33 44 55];
 +    };
 -- 
-2.52.0
+2.54.0
 

@@ -1,4 +1,4 @@
-From 556d968b086ad0b236438fda5a843a81b2907457 Mon Sep 17 00:00:00 2001
+From 4c8beb30e46115d08103d055dbcafd3eab81d5fd Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 08:37:32 +0100
 Subject: [PATCH] net: ethernet: gxp: fix DMA use-after-free in umac_stop
@@ -52,5 +52,5 @@ index 8af492ef0d5b..20552334065c 100644
  	return 0;
  }
 -- 
-2.52.0
+2.54.0
 

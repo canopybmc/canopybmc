@@ -1,4 +1,4 @@
-From a160aa67d30df47d22d2acd8fced6714e304e0ee Mon Sep 17 00:00:00 2001
+From d21441cae92320b97c34c3864f687d870e5a032a Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 11:42:40 +0100
 Subject: [PATCH] soc: hpe: gxp-chif: replace stack buffer with dma_wmb barrier
@@ -38,5 +38,5 @@ index 8cc303256639..640eae54142d 100644
  	if (p_ccb->doorbell_base)
  		regmap_write(drvdata->fn2_map, REG_OUTDOOR, 1 << channel);
 -- 
-2.52.0
+2.54.0
 

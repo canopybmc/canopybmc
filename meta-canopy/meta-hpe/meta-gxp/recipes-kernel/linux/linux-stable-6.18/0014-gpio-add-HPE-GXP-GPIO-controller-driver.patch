@@ -1,4 +1,4 @@
-From bcbf0008c599ae0175f1451dd803f65e11d47983 Mon Sep 17 00:00:00 2001
+From c9e8ac9353c98901fa32f0d507af7c7356df7715 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 8 Feb 2026 22:20:24 +0100
 Subject: [PATCH] gpio: add HPE GXP GPIO controller driver
@@ -18,7 +18,7 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  create mode 100644 drivers/gpio/gpio-gxp.c
 
 diff --git a/drivers/gpio/Kconfig b/drivers/gpio/Kconfig
-index e053524c5e35..61bc255088b8 100644
+index 3b7284938bab..3154880d397b 100644
 --- a/drivers/gpio/Kconfig
 +++ b/drivers/gpio/Kconfig
 @@ -370,6 +370,16 @@ config GPIO_GRGPIO
@@ -414,5 +414,5 @@ index 000000000000..7dfbfb4998be
 +MODULE_DESCRIPTION("HPE GXP GPIO driver");
 +MODULE_LICENSE("GPL");
 -- 
-2.52.0
+2.54.0
 

@@ -1,5 +1,6 @@
+From a2e2f5ed6d5dd71a0b4c88f33cea378679223aea Mon Sep 17 00:00:00 2001
 From: Nick Hawkins <nick.hawkins@hpe.com>
-Date: Sat, 8 Mar 2026 00:00:00 +0000
+Date: Sun, 8 Mar 2026 00:00:00 +0000
 Subject: [PATCH] media: add GXP thumbnail video capture driver
 
 Add a V4L2 video capture driver for the HPE GXP SoC thumbnail video
@@ -20,20 +21,21 @@ Key design decisions:
 Upstream-Status: Pending
 Signed-off-by: Nick Hawkins <nick.hawkins@hpe.com>
 ---
- drivers/media/platform/Kconfig                    |   1 +
- drivers/media/platform/Makefile                   |   1 +
- drivers/media/platform/hpe/Kconfig                |  12 +
- drivers/media/platform/hpe/Makefile               |   2 +
- drivers/media/platform/hpe/gxp-thumbnail-video.c  | 827 ++++++++++++++++++
- 5 files changed, 843 insertions(+)
+ drivers/media/platform/Kconfig                |   1 +
+ drivers/media/platform/Makefile               |   1 +
+ drivers/media/platform/hpe/Kconfig            |  12 +
+ drivers/media/platform/hpe/Makefile           |   2 +
+ .../media/platform/hpe/gxp-thumbnail-video.c  | 833 ++++++++++++++++++
+ 5 files changed, 849 insertions(+)
  create mode 100644 drivers/media/platform/hpe/Kconfig
  create mode 100644 drivers/media/platform/hpe/Makefile
  create mode 100644 drivers/media/platform/hpe/gxp-thumbnail-video.c
 
 diff --git a/drivers/media/platform/Kconfig b/drivers/media/platform/Kconfig
+index 9287faafdce5..401a1835ce28 100644
 --- a/drivers/media/platform/Kconfig
 +++ b/drivers/media/platform/Kconfig
-@@ -73,6 +73,7 @@ source "drivers/media/platform/aspeed/Kconfig"
+@@ -69,6 +69,7 @@ source "drivers/media/platform/aspeed/Kconfig"
  source "drivers/media/platform/atmel/Kconfig"
  source "drivers/media/platform/broadcom/Kconfig"
  source "drivers/media/platform/cadence/Kconfig"
@@ -42,9 +44,10 @@ diff --git a/drivers/media/platform/Kconfig b/drivers/media/platform/Kconfig
  source "drivers/media/platform/imagination/Kconfig"
  source "drivers/media/platform/intel/Kconfig"
 diff --git a/drivers/media/platform/Makefile b/drivers/media/platform/Makefile
+index 6fd7db0541c7..640d7355db16 100644
 --- a/drivers/media/platform/Makefile
 +++ b/drivers/media/platform/Makefile
-@@ -10,6 +10,7 @@ obj-y += aspeed/
+@@ -12,6 +12,7 @@ obj-y += aspeed/
  obj-y += atmel/
  obj-y += broadcom/
  obj-y += cadence/
@@ -54,7 +57,7 @@ diff --git a/drivers/media/platform/Makefile b/drivers/media/platform/Makefile
  obj-y += intel/
 diff --git a/drivers/media/platform/hpe/Kconfig b/drivers/media/platform/hpe/Kconfig
 new file mode 100644
-index 000000000000..a1b2c3d4e5f6
+index 000000000000..9ef212688b85
 --- /dev/null
 +++ b/drivers/media/platform/hpe/Kconfig
 @@ -0,0 +1,12 @@
@@ -70,10 +73,9 @@ index 000000000000..a1b2c3d4e5f6
 +	select VIDEOBUF2_DMA_CONTIG
 +	help
 +	  Support for the HPE GXP Thumbnail Video Engine embedded in the
-+	  GXP SoC. The engine captures host video output for remote KVM.
 diff --git a/drivers/media/platform/hpe/Makefile b/drivers/media/platform/hpe/Makefile
 new file mode 100644
-index 000000000000..b1c2e0d3a5f6
+index 000000000000..92134defd89d
 --- /dev/null
 +++ b/drivers/media/platform/hpe/Makefile
 @@ -0,0 +1,2 @@
@@ -81,7 +83,7 @@ index 000000000000..b1c2e0d3a5f6
 +obj-$(CONFIG_VIDEO_GXP_THUMBNAIL)	+= gxp-thumbnail-video.o
 diff --git a/drivers/media/platform/hpe/gxp-thumbnail-video.c b/drivers/media/platform/hpe/gxp-thumbnail-video.c
 new file mode 100644
-index 000000000000..a1b2c3d4e5f6
+index 000000000000..6ca3e24ac325
 --- /dev/null
 +++ b/drivers/media/platform/hpe/gxp-thumbnail-video.c
 @@ -0,0 +1,833 @@
@@ -918,3 +920,6 @@ index 000000000000..a1b2c3d4e5f6
 +
 +MODULE_DESCRIPTION("HPE GXP Thumbnail Video Engine driver");
 +MODULE_LICENSE("GPL");
+-- 
+2.54.0
+

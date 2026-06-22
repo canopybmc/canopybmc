@@ -1,4 +1,4 @@
-From e55f53179197e948bdaff49d418966d6247f0db8 Mon Sep 17 00:00:00 2001
+From 02c04e0cf0f588d4fe4c8977752697d3780ee1c3 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 10 Feb 2026 12:38:40 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add Virtual UART node
@@ -49,5 +49,5 @@ index 7584b6a58218..210b6900512d 100644
  			compatible = "hpe,gxp-timer";
  			reg = <0xc0000080 0x16>;
 -- 
-2.52.0
+2.54.0
 

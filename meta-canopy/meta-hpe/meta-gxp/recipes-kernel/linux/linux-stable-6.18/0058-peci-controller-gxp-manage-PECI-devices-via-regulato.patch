@@ -1,4 +1,4 @@
-From bcec0aaad7cabcb75b3223a91dc3166edb77a73a Mon Sep 17 00:00:00 2001
+From 1bcadce033538637c37c1997ae399de793354c5f Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 11:19:29 +0100
 Subject: [PATCH] peci: controller: gxp: manage PECI devices via regulator
@@ -109,5 +109,5 @@ index 13a1e87151b0..bbfba8a5bb09 100644
  }
  
 -- 
-2.52.0
+2.54.0
 

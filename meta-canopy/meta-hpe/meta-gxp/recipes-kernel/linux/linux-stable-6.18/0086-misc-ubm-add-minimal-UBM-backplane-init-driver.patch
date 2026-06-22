@@ -1,6 +1,6 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From 7d8ed267fc8749ce1a7bcaa1a4d8f55c62840e73 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
-Date: Thu, 24 Apr 2026 16:00:00 +0200
+Date: Fri, 24 Apr 2026 16:00:00 +0200
 Subject: [PATCH] misc: ubm: add minimal UBM backplane init driver
 
 Universal Backplane Management (UBM, SFF-TA-1005) controllers require
@@ -26,17 +26,20 @@ BIOS after applying the init command during early POST.
 
 Signed-off-by: Christian Walter <christian.walter@9elements.com>
 ---
- drivers/misc/Kconfig    |  11 ++++
+ drivers/misc/Kconfig    |  11 +++
  drivers/misc/Makefile   |   1 +
- drivers/misc/ubm-init.c | 158 +++++++++++++++++++++++++++++++++++++++
+ drivers/misc/ubm-init.c | 158 ++++++++++++++++++++++++++++++++++++++++
  3 files changed, 170 insertions(+)
  create mode 100644 drivers/misc/ubm-init.c
 
 diff --git a/drivers/misc/Kconfig b/drivers/misc/Kconfig
-index b9c11f67315f..16ba5cea12b4 100644
+index b9c11f67315f..4436226378bb 100644
 --- a/drivers/misc/Kconfig
 +++ b/drivers/misc/Kconfig
-@@ -658,4 +658,15 @@ source "drivers/misc/mchp_pci1xxxx/Kconfig"
+@@ -658,6 +658,17 @@ source "drivers/misc/cardreader/Kconfig"
+ source "drivers/misc/uacce/Kconfig"
+ source "drivers/misc/pvpanic/Kconfig"
+ source "drivers/misc/mchp_pci1xxxx/Kconfig"
 +
 +config UBM_INIT
 +	tristate "UBM backplane controller init driver"
@@ -51,7 +54,6 @@ index b9c11f67315f..16ba5cea12b4 100644
  source "drivers/misc/keba/Kconfig"
  source "drivers/misc/amd-sbi/Kconfig"
  source "drivers/misc/rp1/Kconfig"
- endmenu
 diff --git a/drivers/misc/Makefile b/drivers/misc/Makefile
 index b32a2597d246..646a9d06ffe8 100644
 --- a/drivers/misc/Makefile
@@ -63,7 +65,7 @@ index b32a2597d246..646a9d06ffe8 100644
 +obj-$(CONFIG_UBM_INIT)		+= ubm-init.o
 diff --git a/drivers/misc/ubm-init.c b/drivers/misc/ubm-init.c
 new file mode 100644
-index 000000000000..76c97615601f
+index 000000000000..bce484b900f2
 --- /dev/null
 +++ b/drivers/misc/ubm-init.c
 @@ -0,0 +1,158 @@
@@ -225,4 +227,6 @@ index 000000000000..76c97615601f
 +
 +MODULE_AUTHOR("Christian Walter <christian.walter@9elements.com>");
 +MODULE_DESCRIPTION("UBM backplane controller init driver");
-+MODULE_LICENSE("GPL");
+-- 
+2.54.0
+

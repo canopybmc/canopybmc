@@ -1,4 +1,4 @@
-From 3adc308aa8d4f9bf0a2354d6637868cee1aa66de Mon Sep 17 00:00:00 2001
+From efa77c69961e615d20291c87b7a89e38e926fc57 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 11:18:52 +0100
 Subject: [PATCH] regulator: gxp-cpld: fire notifier events on PGOOD
@@ -119,5 +119,5 @@ index ad2c977d1805..2bbf9555f871 100644
  
  static const struct of_device_id gxp_cpld_reg_of_match[] = {
 -- 
-2.52.0
+2.54.0
 

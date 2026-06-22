@@ -1,4 +1,4 @@
-From f9645dc306114a7802909bfabd450719b803c389 Mon Sep 17 00:00:00 2001
+From 57a04204d51da66375f584393fff1bac7143e632 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 8 Feb 2026 22:21:32 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add SoC infrastructure and power control
@@ -202,5 +202,5 @@ index 14b333d8297d..7584b6a58218 100644
  
  		spifi1: spi@c0000280 {
 -- 
-2.52.0
+2.54.0
 
