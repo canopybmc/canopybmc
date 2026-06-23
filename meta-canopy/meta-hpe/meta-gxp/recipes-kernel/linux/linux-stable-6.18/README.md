@@ -51,21 +51,21 @@ Every patch should contain an "Upstream-Status" tag as described in the
 - 0019 # dt-bindings: soc: hpe: add GXP host power controller binding
 - 0020 # soc: hpe: add GXP host power controller driver
 - 0021 # ARM: dts: hpe-gxp: add SoC infrastructure and power control
-    - TODO: only regarding power controller. so split out LED,…
+    - TODO: ? only regarding power controller. so split out LED,…
 - further addition
     - 0022 # soc: hpe: gxp-power-ctrl: implement ForceRestart as VPBTN power cycle
 - ---
 - squash
-    - 0023 # soc: hpe: gxp-power-ctrl: run full prepare-boot sequence on probe
-        - TODO: squash to 0020?
+    - 0023 # `soc: hpe: gxp-power-ctrl: run full prepare-boot sequence on probe`
+        - TODO: ? squash to 0020 soc: hpe: add GXP host power controller driver
     - 0024 # soc: hpe: gxp-power-ctrl: use CSM SW_RESET for warm reset
-        - TODO: squash to 0020?
+        - TODO: ? squash to 0020 soc: hpe: add GXP host power controller driver
     - 0025 # soc: hpe: gxp-power-ctrl: demote PGOOD deasserted message to dev_dbg
-        - TODO: squash to 0020.
+        - TODO: squash to 0020 soc: hpe: add GXP host power controller driver
     - 0026 # soc: hpe: gxp-power-ctrl: use IRQF_SHARED for PGOOD interrupt
-        - TODO: squash to 0020
+        - TODO: squash to 0020 soc: hpe: add GXP host power controller driver
     - 0045 # soc: hpe: gxp-power-ctrl: re-arm boot gate after PGOOD de-assertion
-        - TODO: squash to 0020
+        - TODO: ? squash to 0020 soc: hpe: add GXP host power controller driver
     - 0067 # ARM: dts: hpe-gxp: rename PSU GPIO lines
         - TODO: squash to 0021 ARM: dts: hpe-gxp: add SoC infrastructure and power control
         - TODO: fix Signed-off-by
@@ -163,7 +163,7 @@ Every patch should contain an "Upstream-Status" tag as described in the
 - 0072 # soc: hpe: add GXP I2C passthrough driver
 - 0073 # ARM: dts: hpe-gxp: add I2C passthrough node
 - 0074 # gxp-i2c-passthrough: fire uevent after I2C passthrough enable
-    - TODO: could be integrated in 0072?
+    - TODO: ? could be integrated in 0072
 
 ### KCS
 
