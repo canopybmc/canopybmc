@@ -1,0 +1,75 @@
+From 80d983887dfdfc7e70a6db95f8cb95b7312f3044 Mon Sep 17 00:00:00 2001
+Message-ID: <80d983887dfdfc7e70a6db95f8cb95b7312f3044.1782224059.git.gregoire.layet@9elements.com>
+In-Reply-To: <cover.1782224059.git.gregoire.layet@9elements.com>
+References: <cover.1782224059.git.gregoire.layet@9elements.com>
+From: =?UTF-8?q?Gr=C3=A9goire=20Layet?= <gregoire.layet@9elements.com>
+Date: Wed, 17 Jun 2026 10:45:53 +0200
+Subject: [PATCH v3 1/7] dt-bindings: serial: 8250: aspeed: add compatible
+ string for ast2600
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The ast2600 was using the ast2500 vuart compatible string.
+This change makes it possible to have ast2600-specific properties.
+
+Upstream-Status: Submitted [lore, https://lore.kernel.org/all/cover.1782224059.git.gregoire.layet@9elements.com/]
+Signed-off-by: Grégoire Layet <gregoire.layet@9elements.com>
+---
+ .../devicetree/bindings/serial/8250.yaml      | 20 +++++++++++--------
+ 1 file changed, 12 insertions(+), 8 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/serial/8250.yaml b/Documentation/devicetree/bindings/serial/8250.yaml
+index bb7b9c87a807..3cbd0f532e15 100644
+--- a/Documentation/devicetree/bindings/serial/8250.yaml
++++ b/Documentation/devicetree/bindings/serial/8250.yaml
+@@ -23,7 +23,9 @@ allOf:
+     then:
+       properties:
+         compatible:
+-          const: aspeed,ast2500-vuart
++          anyOf:
++            - const: aspeed,ast2500-vuart
++            - const: aspeed,ast2600-vuart
+   - if:
+       properties:
+         compatible:
+@@ -287,17 +289,19 @@ properties:
+   aspeed,sirq-polarity-sense:
+     $ref: /schemas/types.yaml#/definitions/phandle-array
+     description: |
+-      Phandle to aspeed,ast2500-scu compatible syscon alongside register
+-      offset and bit number to identify how the SIRQ polarity should be
+-      configured. One possible data source is the LPC/eSPI mode bit. Only
+-      applicable to aspeed,ast2500-vuart.
++      Phandle to aspeed,ast2500-scu or aspeed,ast2600-scu compatible syscon
++      alongside register offset and bit number to identify how the SIRQ
++      polarity should be configured. One possible data source is the LPC/eSPI
++      mode bit. Only applicable to aspeed,ast2500-vuart and
++      aspeed,ast2600-vuart.
+     deprecated: true
+ 
+   aspeed,lpc-io-reg:
+     $ref: /schemas/types.yaml#/definitions/uint32-array
+     maxItems: 1
+     description: |
+-      The VUART LPC address.  Only applicable to aspeed,ast2500-vuart.
++      The VUART LPC address. Only applicable to aspeed,ast2500-vuart and
++      aspeed,ast2600-vuart.
+ 
+   aspeed,lpc-interrupts:
+     $ref: /schemas/types.yaml#/definitions/uint32-array
+@@ -305,8 +309,8 @@ properties:
+     maxItems: 2
+     description: |
+       A 2-cell property describing the VUART SIRQ number and SIRQ
+-      polarity (IRQ_TYPE_LEVEL_LOW or IRQ_TYPE_LEVEL_HIGH).  Only
+-      applicable to aspeed,ast2500-vuart.
++      polarity (IRQ_TYPE_LEVEL_LOW or IRQ_TYPE_LEVEL_HIGH). Only
++      applicable to aspeed,ast2500-vuart and aspeed,ast2600-vuart.
+ 
+ required:
+   - reg
+-- 
+2.54.0
+

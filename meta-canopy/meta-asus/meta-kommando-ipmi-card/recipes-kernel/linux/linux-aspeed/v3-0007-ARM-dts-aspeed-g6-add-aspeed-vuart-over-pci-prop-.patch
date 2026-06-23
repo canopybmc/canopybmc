@@ -1,0 +1,44 @@
+From 86fc0b2a105a16ceb301ba53fadd096877455bb8 Mon Sep 17 00:00:00 2001
+Message-ID: <86fc0b2a105a16ceb301ba53fadd096877455bb8.1782224060.git.gregoire.layet@9elements.com>
+In-Reply-To: <cover.1782224059.git.gregoire.layet@9elements.com>
+References: <cover.1782224059.git.gregoire.layet@9elements.com>
+From: =?UTF-8?q?Gr=C3=A9goire=20Layet?= <gregoire.layet@9elements.com>
+Date: Wed, 17 Jun 2026 09:22:49 +0000
+Subject: [PATCH v3 7/7] ARM: dts: aspeed: g6: add aspeed,vuart-over-pci prop
+ to vuart3 and 4
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The VUART 3 and 4 are VUART over PCI.
+This flag indicates this information.
+
+Upstream-Status: Submitted [lore, https://lore.kernel.org/all/cover.1782224059.git.gregoire.layet@9elements.com/]
+Signed-off-by: Grégoire Layet <gregoire.layet@9elements.com>
+---
+ arch/arm/boot/dts/aspeed/aspeed-g6.dtsi | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/arm/boot/dts/aspeed/aspeed-g6.dtsi b/arch/arm/boot/dts/aspeed/aspeed-g6.dtsi
+index 7c02633f2bd6..2a19463b4c21 100644
+--- a/arch/arm/boot/dts/aspeed/aspeed-g6.dtsi
++++ b/arch/arm/boot/dts/aspeed/aspeed-g6.dtsi
+@@ -723,6 +723,7 @@ vuart3: serial@1e787800 {
+ 				interrupts = <GIC_SPI 180 IRQ_TYPE_LEVEL_HIGH>;
+ 				clocks = <&syscon ASPEED_CLK_APB2>;
+ 				no-loopback-test;
++				aspeed,vuart-over-pci;
+ 				status = "disabled";
+ 			};
+ 
+@@ -743,6 +744,7 @@ vuart4: serial@1e788800 {
+ 				interrupts = <GIC_SPI 181 IRQ_TYPE_LEVEL_HIGH>;
+ 				clocks = <&syscon ASPEED_CLK_APB2>;
+ 				no-loopback-test;
++				aspeed,vuart-over-pci;
+ 				status = "disabled";
+ 			};
+ 
+-- 
+2.54.0
+

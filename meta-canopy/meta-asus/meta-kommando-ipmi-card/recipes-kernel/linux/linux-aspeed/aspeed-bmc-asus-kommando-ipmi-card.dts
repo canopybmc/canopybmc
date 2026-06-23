@@ -68,17 +68,6 @@
 		};
 	};
 
-	bmc_dev@1e7e0000 {
-		status = "okay";
-		compatible = "aspeed,ast2600-bmc-device";
-		reg = <0x1e7e0000 0xb000>;
-		interrupts-extended = <&gic GIC_SPI 99 IRQ_TYPE_LEVEL_HIGH>,
-						      <&scu_ic0 ASPEED_AST2600_SCU_IC0_PCIE_PERST_LO_TO_HI>;
-		aspeed,scu = <&syscon>;
-		// memory-region = <&pcie_bmc_dev_mem>;
-		pcie2lpc;
-	};
-
 	pcie_lpc: pcie-lpc@1e789800 {
 		compatible = "aspeed,ast2600-lpc-v2","simple-mfd", "syscon";
 		reg = <0x1e789800 0x800>;
@@ -244,4 +233,10 @@
 	status = "okay";
 	aspeed,lpc-io-reg = <0x3f8>;
 	aspeed,lpc-interrupts = <0 IRQ_TYPE_LEVEL_LOW>;
+};
+
+&vuart4 {
+	status = "okay";
+	aspeed,lpc-io-reg = <0x2f8>;
+	aspeed,lpc-interrupts = <1 IRQ_TYPE_LEVEL_LOW>;
 };
