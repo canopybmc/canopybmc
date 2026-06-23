@@ -1,0 +1,13 @@
+[Unit]
+Description=Flash Host BIOS image %I to HPE ProLiant Gen11 SPI flash
+Wants=reboot-guard-enable.service
+After=reboot-guard-enable.service
+OnSuccess=reboot-guard-disable.service
+OnFailure=reboot-guard-disable.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+ExecStart=/usr/sbin/obmc-flash-host-bios /tmp/images/%i
+TimeoutStartSec=1800
+TimeoutStopSec=30

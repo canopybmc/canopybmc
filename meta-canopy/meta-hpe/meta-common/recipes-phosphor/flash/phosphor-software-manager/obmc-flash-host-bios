@@ -1,0 +1,209 @@
+#!/bin/bash
+
+redfish_log() {
+	# Usage: redfish_log <message> <severity> [key value [key value ...]]
+	local message="$1" severity="$2"
+	shift 2
+	local pairs=() n=0
+	while [ $# -ge 2 ]; do
+		pairs+=("$1" "$2")
+		n=$((n + 1))
+		shift 2
+	done
+	busctl call \
+		xyz.openbmc_project.Logging /xyz/openbmc_project/logging \
+		xyz.openbmc_project.Logging.Create Create "ssa{ss}" \
+		"$message" "$severity" "$n" "${pairs[@]}" 2>/dev/null || true
+}
+
+die() {
+	logger -t obmc-flash-host-bios "Error: $*"
+	redfish_log "BIOS update failed" \
+		"xyz.openbmc_project.Logging.Entry.Level.Error" \
+		"REASON" "$*"
+	exit 1
+}
+
+info() { logger -t obmc-flash-host-bios "$*"; }
+
+BIOS_SIZE=$((32 * 1024 * 1024))
+HPE_FINGERPRINT_MAGIC="--=</"
+HPE_IMAGE_MAGIC="HPIMAGE"
+
+POWER_BUTTON_PATH="/xyz/openbmc_project/chassis/buttons/power"
+POWER_BUTTON_IFACE="xyz.openbmc_project.Chassis.Buttons"
+POWER_CONTROL_SERVICE="$(mapper get-service "$POWER_BUTTON_PATH")"
+
+HOSTSTATE_SVC="xyz.openbmc_project.State.Host"
+HOSTSTATE_PATH="/xyz/openbmc_project/state/host0"
+HOSTSTATE_IFACE="xyz.openbmc_project.State.Host"
+HOSTSTATE_PROP="CurrentHostState"
+HOSTSTATE_OFF="xyz.openbmc_project.State.Host.HostState.Off"
+
+check_host_off() {
+	local state
+	state="$(busctl get-property "$HOSTSTATE_SVC" "$HOSTSTATE_PATH" \
+		"$HOSTSTATE_IFACE" "$HOSTSTATE_PROP")" \
+		|| die "could not read host state from D-Bus"
+	[ "$state" = "s \"$HOSTSTATE_OFF\"" ] \
+		|| die "host must be off before performing BIOS update"
+}
+
+power_mask_set() {
+	if busctl set-property \
+			"$POWER_CONTROL_SERVICE" \
+			"$POWER_BUTTON_PATH" \
+			"$POWER_BUTTON_IFACE" \
+			ButtonMasked b true 2>/dev/null; then
+		info "power button masked"
+	else
+		info "WARNING: could not mask power button"
+	fi
+}
+
+power_mask_clear() {
+	if busctl set-property \
+			"$POWER_CONTROL_SERVICE" \
+			"$POWER_BUTTON_PATH" \
+			"$POWER_BUTTON_IFACE" \
+			ButtonMasked b false 2>/dev/null; then
+		info "power button unmasked"
+	else
+		info "WARNING: could not unmask power button"
+	fi
+}
+
+check_bios_image() {
+	local image_file="$1"
+	local file_size
+
+	[ -r "$image_file" ] || die "can't read BIOS image $image_file"
+
+	file_size="$(stat -c '%s' "$image_file")"
+	[ "$file_size" -ge "$BIOS_SIZE" ] \
+		|| die "invalid BIOS image (smaller than $BIOS_SIZE bytes)"
+}
+
+check_model() {
+	local image_dir="$1"
+	local manifest="$image_dir/MANIFEST"
+
+	[ -f "$manifest" ] || die "MANIFEST not found in $image_dir"
+
+	local target_model
+	target_model="$(grep '^TargetModel=' "$manifest" | cut -d= -f2-)"
+	[ -n "$target_model" ] || die "TargetModel not set in MANIFEST, refusing to flash"
+
+	local live_model
+	live_model="$(tr -d '\0' < /proc/device-tree/model)"
+	[ -n "$live_model" ] \
+		|| die "could not read model from /proc/device-tree/model"
+
+	[ "$target_model" = "$live_model" ] \
+		|| die "model mismatch: image is for '$target_model', hardware is '$live_model'"
+
+	info "hardware model check passed ('$live_model')"
+}
+
+find_imgfile() {
+	local image_dir="$1"
+	local img='' path name
+
+	for path in "$image_dir"/*; do
+		name="$(basename "$path")"
+		case "$name" in
+			MANIFEST|publickey|*.sig) continue ;;
+		esac
+		[ -f "$path" ] || continue
+		[ -z "$img" ] || die "multiple potential image files in $image_dir"
+		img="$path"
+	done
+
+	[ -n "$img" ] || die "no image file found in $image_dir"
+	echo "$img"
+}
+
+flash_bios_image() {
+	local image_file="$1"
+	local file_size header_size flash_image found=0 status=0
+
+	file_size="$(stat -c '%s' "$image_file")"
+	header_size=$((file_size - BIOS_SIZE))
+
+	if [ "$header_size" -gt 0 ]; then
+		local fingerprint hpimage_found
+		fingerprint="$(dd if="$image_file" bs=5 count=1 2>/dev/null)"
+		[ "$fingerprint" = "$HPE_FINGERPRINT_MAGIC" ] \
+			|| die "image is larger than $BIOS_SIZE bytes but lacks magic"
+		hpimage_found="$(dd if="$image_file" bs=1 count="$header_size" 2>/dev/null \
+			| grep -c "$HPE_IMAGE_MAGIC")" \
+			|| die "image header does not contain HPIMAGE block"
+		[ "$hpimage_found" -gt 0 ] \
+			|| die "image header does not contain HPIMAGE block"
+		flash_image="$(dirname "$image_file")/bios-stripped.bin"
+
+		info "stripping $header_size byte HPE header, writing to $flash_image"
+		dd if="$image_file" of="$flash_image" bs="$header_size" skip=1 2>/dev/null \
+			|| die "failed to strip HPE header from $image_file"
+	else
+		flash_image="$image_file"
+	fi
+
+	for partition in host-prime host-second; do
+		local mtd_dev="/dev/mtd/$partition"
+		if [ ! -e "$mtd_dev" ]; then
+			info "WARNING: $mtd_dev not found, skipping $partition"
+			continue
+		fi
+		found=$((found + 1))
+		info "writing $mtd_dev ..."
+		if flashcp -v -p "$flash_image" "$mtd_dev"; then
+			info "$partition done"
+		else
+			info "ERROR: failed to write $partition"
+			status=1
+		fi
+		info "$partition done"
+	done
+
+	[ "$found" -gt 0 ] || die "no MTD partitions found (host-prime / host-second)"
+	return "$status"
+}
+
+[ -n "$1" ] && [ -d "$1" ] || { echo "Usage: obmc-flash-host-bios <image-dir>" >&2; exit 1; }
+IMAGE_DIR="$1"
+
+info "Starting BIOS update from $IMAGE_DIR"
+
+info "Checking host state..."
+check_host_off
+
+info "Checking model compatibility..."
+check_model "$IMAGE_DIR"
+target_model="$(grep '^TargetModel=' "$IMAGE_DIR/MANIFEST" | cut -d= -f2-)"
+
+info "Locating image file..."
+image_file="$(find_imgfile "$IMAGE_DIR")"
+
+info "Checking BIOS image..."
+check_bios_image "$image_file"
+
+redfish_log "BIOS update started" \
+	"xyz.openbmc_project.Logging.Entry.Level.Informational" \
+	"IMAGE_DIR"    "$IMAGE_DIR" \
+	"TARGET_MODEL" "$target_model" \
+	"IMAGE_FILE"   "$(basename "$image_file")"
+
+power_mask_set
+trap 'power_mask_clear' EXIT
+
+info "Flashing BIOS..."
+if flash_bios_image "$image_file"; then
+	info "BIOS update complete."
+	redfish_log "BIOS update completed successfully" \
+		"xyz.openbmc_project.Logging.Entry.Level.Informational" \
+		"TARGET_MODEL" "$target_model" \
+		"IMAGE_FILE"   "$(basename "$image_file")"
+else
+	die "BIOS update failed on one or more partitions."
+fi
