@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+#
+# This script requires unencrypted, signed BIOS firmware files which are
+# not publicly distributed.
+# The structure is:
+# - Signature with PEM certificates (base64 + some ASCII)
+# - HPIMAGE metadata block
+# - BIOS payload
+#
+# This will strip the (for us) arbritrary data and write the BIOS payload
+# into a file that will be bundled into an archive.
+#
+# Usage:
+#	gen-hpe-bios-tar -i <input> -m <model> -v <version> [-k <privkey>] \
+#			 [-o <output.tar>]
+#
+# Arguments:
+#	-i <input>	Input file: HPE-signed (*.signed.flash) or raw 32 MiB image
+#				    (if dumped)
+#	-m <model>	Target model identifier
+#	-v <version>	Version string to embed in the MANIFEST (e.g. "2.92")
+#	-k <privkey>	Path to RSA private key for signing (PEM format).
+#			Defaults to the OpenBMC insecure dev key, searched in:
+#			1. $SIGNING_KEY environment variable
+#			2. $(dirname $0)/../../openbmc/meta-phosphor/
+#			   recipes-phosphor/flash/files/OpenBMC.priv
+#	-o <output>	Output tarball path. Default: ./<model>-bios-<version>.tar
+#	-h		Show this help message.
+#
+# Examples:
+#	# From an HPE-signed file (header stripped automatically):
+#	gen-hpe-bios-tar -i <T_Identifier>_<version>_<date>.signed.flash \
+#		-m dl360g11 -v 2.92
+#
+#	# From a raw SPI dump:
+#	gen-hpe-bios-tar -i dl365-g11-host-prime.img -m dl365g11 -v 3.14
+
+set -euo pipefail
+
+export BIOS_SIZE=33554432
+export HPE_HEADER_MAGIC="--=</"
+export IMAGE_NAME="ImageHost.bin"
+
+# These must match /proc/device-tree/model.
+declare -A MODEL_TARGET=(
+	[dl360g11]="HPE ProLiant DL360 Gen11"
+	[dl365g11]="HPE ProLiant DL365 Gen11"
+	[dl110g11]="HPE ProLiant DL110 Gen11"
+	[dl145g11]="HPE ProLiant DL145 Gen11"
+	[dl320g11]="HPE ProLiant DL320 Gen11"
+	[dl325g11]="HPE ProLiant DL325 Gen11"
+	[dl345g11]="HPE ProLiant DL345 Gen11"
+	[dl380g11]="HPE ProLiant DL380 Gen11"
+	[dl385g11]="HPE ProLiant DL385 Gen11"
+	[dl560g11]="HPE ProLiant DL560 Gen11"
+	[rl300g11]="HPE ProLiant RL300 Gen11"
+)
+
+die() {
+	echo "ERROR: $*" >&2
+	exit 1
+}
+
+usage() {
+	sed -n '/^# Usage:/,/^[^#]/{ /^#/{ s/^# \{0,1\}//; p } }' "$0"
+}
+
+is_hpe_signed() {
+	local file="$1"
+	local magic
+	magic=$(dd if="$file" bs=5 count=1 2>/dev/null | cat)
+	[[ "$magic" == "$HPE_HEADER_MAGIC" ]]
+}
+
+strip_hpe_header() {
+	local src="$1"
+	local dst="$2"
+	local filesize
+	filesize=$(wc -c < "$src")
+	local overhead=$(( filesize - BIOS_SIZE ))
+
+	if (( overhead <= 0 )); then
+		die "File '$src' is not larger than $BIOS_SIZE bytes; cannot be HPE-signed"
+	fi
+
+	echo "	Stripping HPE header: ${overhead} bytes (0x$(printf '%x' $overhead))"
+
+	dd if="$src" of="$dst" bs="$overhead" skip=1 2>/dev/null
+}
+
+find_default_key() {
+	if [[ -n "${SIGNING_KEY:-}" && -f "$SIGNING_KEY" ]]; then
+		echo "$SIGNING_KEY"
+		return
+	fi
+
+	local script_dir
+	script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+	local intree="${script_dir}/../../openbmc/meta-phosphor/recipes-phosphor/flash/files/OpenBMC.priv"
+	if [[ -f "$intree" ]]; then
+		echo "$intree"
+		return
+	fi
+
+	die "Cannot find OpenBMC private key. Set SIGNING_KEY or pass -k <path>."
+}
+
+derive_public_key() {
+	local privkey="$1"
+	local pubkey="$2"
+	openssl pkey -in "$privkey" -pubout -out "$pubkey"
+}
+
+sign_file() {
+	local privkey="$1"
+	local file="$2"
+	openssl dgst -sha256 -sign "$privkey" -out "${file}.sig" "$file"
+}
+
+INPUT=""
+MODEL=""
+MACHINENAME="hpe-proliant-g11"
+VERSION=""
+PRIVKEY=""
+OUTPUT=""
+
+while getopts ":i:m:v:k:o:h" opt; do
+	case "$opt" in
+		i) INPUT="$OPTARG" ;;
+		m) MODEL="$OPTARG" ;;
+		v) VERSION="$OPTARG" ;;
+		k) PRIVKEY="$OPTARG" ;;
+		o) OUTPUT="$OPTARG" ;;
+		h) usage; exit 0 ;;
+		:) die "Option -$OPTARG requires an argument." ;;
+		\?) die "Unknown option: -$OPTARG" ;;
+	esac
+done
+
+[[ -n "$INPUT" ]]	|| die "Missing required argument: -i <input>"
+[[ -n "$MODEL" ]]	|| die "Missing required argument: -m <model>"
+[[ -n "$VERSION" ]] || die "Missing required argument: -v <version>"
+[[ -f "$INPUT" ]]	|| die "Input file not found: $INPUT"
+
+if [[ -v MODEL_TARGET["$MODEL"] ]]; then
+	TARGET_MODEL="${MODEL_TARGET[$MODEL]}"
+else
+	die "Unknown model '$MODEL'. Add it to MODEL_TARGET in this script."
+fi
+
+if [[ -z "$OUTPUT" ]]; then
+	OUTPUT="./${MODEL}-bios-${VERSION}.tar"
+fi
+
+if [[ -z "$PRIVKEY" ]]; then
+	PRIVKEY="$(find_default_key)"
+fi
+[[ -f "$PRIVKEY" ]] || die "Private key not found: $PRIVKEY"
+
+echo "gen-hpe-bios-tar"
+echo "    Input:	$INPUT"
+echo "    Model:	$MODEL"
+echo "    Version:	$VERSION"
+echo "    Target:	$TARGET_MODEL"
+echo "    Key:		$PRIVKEY"
+echo "    Output:	$OUTPUT"
+
+TMPDIR=$(mktemp -d /tmp/gen-hpe-bios-tar.XXXXXX)
+trap 'rm -rf "$TMPDIR"' EXIT
+
+RAWBIN="${TMPDIR}/${IMAGE_NAME}"
+
+echo ""
+echo "Extracting raw BIOS payload..."
+if is_hpe_signed "$INPUT"; then
+	echo "    Detected HPE signed file (magic: '${HPE_HEADER_MAGIC}...')"
+	strip_hpe_header "$INPUT" "$RAWBIN"
+else
+	echo "    Detected raw image (no HPE header)"
+	cp "$INPUT" "$RAWBIN"
+fi
+
+ACTUAL_SIZE=$(wc -c < "$RAWBIN")
+if (( ACTUAL_SIZE != BIOS_SIZE )); then
+	die "Extracted payload size is ${ACTUAL_SIZE} bytes, expected ${BIOS_SIZE}. Aborting."
+fi
+echo "    Payload size: ${ACTUAL_SIZE} bytes (32 MiB)"
+
+echo ""
+echo "Generating MANIFEST..."
+MANIFEST="${TMPDIR}/MANIFEST"
+cat > "$MANIFEST" <<EOF
+purpose=xyz.openbmc_project.Software.Version.VersionPurpose.Host
+version=${VERSION}
+MachineName=${MACHINENAME}
+TargetModel=${TARGET_MODEL}
+KeyType=OpenBMC
+HashType=RSA-SHA256
+EOF
+echo "    MANIFEST:"
+sed 's/^/     /' "$MANIFEST"
+
+echo ""
+echo "Signing..."
+PUBKEY="${TMPDIR}/publickey"
+derive_public_key "$PRIVKEY" "$PUBKEY"
+echo "    Public key derived from private key"
+
+sign_file "$PRIVKEY" "$RAWBIN"
+echo "    Signed: ${IMAGE_NAME}"
+sign_file "$PRIVKEY" "$MANIFEST"
+echo "    Signed: MANIFEST"
+sign_file "$PRIVKEY" "$PUBKEY"
+echo "    Signed: publickey"
+
+echo ""
+echo "Creating tarball..."
+tar -C "$TMPDIR" -cvf "$OUTPUT" \
+	"$IMAGE_NAME" "${IMAGE_NAME}.sig" \
+	MANIFEST MANIFEST.sig \
+	publickey publickey.sig \
+	2>&1 | sed 's/^/  /'
+
+TARSIZE=$(wc -c < "$OUTPUT")
+echo ""
+echo "Done: $OUTPUT (${TARSIZE} bytes)"
