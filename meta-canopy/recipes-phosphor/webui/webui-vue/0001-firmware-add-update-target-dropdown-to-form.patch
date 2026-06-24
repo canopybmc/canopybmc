@@ -1,0 +1,188 @@
+From e27e3810d5f7788e4cebfe52ccf3ad3425413ad6 Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Wed, 24 Jun 2026 23:57:45 +0200
+Subject: [PATCH] firmware: add update target dropdown to form
+
+The firmware update form always uses the BMC path as the Targets value
+in the multipart HTTP push request, breaking updates for other
+components such as BIOS (bios_active), SPI and CPLD modules.
+
+Fetch all members of /redfish/v1/UpdateService/FirmwareInventory and
+expose those with Updateable=true as selectable targets in a new
+dropdown, using the Description field as the display label. The
+dropdown defaults to the bmc_active entry to preserve existing
+behavior. The selected target is passed as Targets in the update
+request, replacing the previous hardcoded getBmcPath dispatch.
+
+This also enables updating firmware targets that are exposed as
+"xyz.openbmc_project.Configuration.SPIFlash".
+
+Upstream-Status: Pending
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ src/locales/en-US.json                        |  1 +
+ src/store/modules/Operations/FirmwareStore.js | 24 ++++++++++-
+ .../Firmware/FirmwareFormUpdate.vue           | 41 +++++++++++++++++++
+ 3 files changed, 65 insertions(+), 1 deletion(-)
+
+diff --git a/src/locales/en-US.json b/src/locales/en-US.json
+index c9f3822..a693ca0 100644
+--- a/src/locales/en-US.json
++++ b/src/locales/en-US.json
+@@ -362,6 +362,7 @@
+                 "fileSource": "File source",
+                 "imageFile": "Image file",
+                 "startUpdate": "Start update",
++                "updateTarget": "Update target",
+                 "workstation": "Workstation"
+             }
+         },
+diff --git a/src/store/modules/Operations/FirmwareStore.js b/src/store/modules/Operations/FirmwareStore.js
+index 07ce606..c279593 100644
+--- a/src/store/modules/Operations/FirmwareStore.js
++++ b/src/store/modules/Operations/FirmwareStore.js
+@@ -11,6 +11,7 @@ const FirmwareStore = {
+     applyTime: null,
+     multipartHttpPushUri: null,
+     httpPushUri: null,
++    updateableInventoryItems: [],
+   },
+   getters: {
+     isSingleFileUploadEnabled: (state) => state.biosFirmware.length === 0,
+@@ -34,6 +35,16 @@ const FirmwareStore = {
+         (firmware) => firmware.id !== state.biosActiveFirmwareId,
+       );
+     },
++    updateableInventoryItems: (state) => state.updateableInventoryItems,
++    defaultUpdateTarget: (state) => {
++      if (state.bmcActiveFirmwareId) {
++        const bmcItem = state.updateableInventoryItems.find((item) =>
++          item.location.endsWith('/' + state.bmcActiveFirmwareId),
++        );
++        if (bmcItem) return bmcItem.location;
++      }
++      return state.updateableInventoryItems[0]?.location || null;
++    },
+   },
+   mutations: {
+     setActiveBmcFirmwareId: (state, id) => (state.bmcActiveFirmwareId = id),
+@@ -44,6 +55,8 @@ const FirmwareStore = {
+     setHttpPushUri: (state, httpPushUri) => (state.httpPushUri = httpPushUri),
+     setMultipartHttpPushUri: (state, multipartHttpPushUri) =>
+       (state.multipartHttpPushUri = multipartHttpPushUri),
++    setUpdateableInventoryItems: (state, items) =>
++      (state.updateableInventoryItems = items),
+   },
+   actions: {
+     async getFirmwareInformation({ dispatch }) {
+@@ -81,6 +94,7 @@ const FirmwareStore = {
+         .then((response) => {
+           const bmcFirmware = [];
+           const biosFirmware = [];
++          const updateableInventoryItems = [];
+           response.forEach(({ data }) => {
+             const firmwareType = data?.RelatedItem?.[0]?.['@odata.id']
+               .split('/')
+@@ -96,9 +110,17 @@ const FirmwareStore = {
+             } else if (firmwareType === 'Bios') {
+               biosFirmware.push(item);
+             }
++            if (data?.Updateable === true) {
++              updateableInventoryItems.push({
++                location: data?.['@odata.id'],
++                description:
++                  data?.Description || data?.Name || data?.Id || data?.['@odata.id'],
++              });
++            }
+           });
+           commit('setBmcFirmware', bmcFirmware);
+           commit('setBiosFirmware', biosFirmware);
++          commit('setUpdateableInventoryItems', updateableInventoryItems);
+         })
+         .catch((error) => {
+           console.log(error);
+@@ -140,7 +162,7 @@ const FirmwareStore = {
+         });
+     },
+     async uploadFirmwareMultipartHttpPush(
+-      { state },
++      { state, getters },
+       { image, targets, forceUpdate, applyTime = 'Immediate' },
+     ) {
+       const formData = new FormData();
+diff --git a/src/views/Operations/Firmware/FirmwareFormUpdate.vue b/src/views/Operations/Firmware/FirmwareFormUpdate.vue
+index 30aca15..22d829a 100644
+--- a/src/views/Operations/Firmware/FirmwareFormUpdate.vue
++++ b/src/views/Operations/Firmware/FirmwareFormUpdate.vue
+@@ -2,6 +2,21 @@
+   <div>
+     <div class="form-background p-3">
+       <b-form @submit.prevent="onSubmitUpload">
++        <!-- Update target selection -->
++        <b-form-group
++          v-if="updateTargetOptions.length > 0"
++          :label="$t('pageFirmware.form.updateFirmware.updateTarget')"
++          label-for="update-target"
++          class="mb-3"
++        >
++          <b-form-select
++            id="update-target"
++            v-model="selectedTarget"
++            :options="updateTargetOptions"
++            :disabled="isPageDisabled"
++          />
++        </b-form-group>
++
+         <!-- Workstation Upload -->
+         <b-form-group
+           :label="$t('pageFirmware.form.updateFirmware.imageFile')"
+@@ -75,10 +90,34 @@ export default {
+       loading,
+       showUpdateModal: false,
+       file: null,
++      selectedTarget: null,
+       isServerPowerOffRequired:
+         import.meta.env.VITE_SERVER_OFF_REQUIRED === 'true',
+     };
+   },
++  computed: {
++    updateTargetOptions() {
++      return this.$store.getters['firmware/updateableInventoryItems'].map(
++        (item) => ({
++          value: item.location,
++          text: item.description,
++        }),
++      );
++    },
++    defaultUpdateTarget() {
++      return this.$store.getters['firmware/defaultUpdateTarget'];
++    },
++  },
++  watch: {
++    defaultUpdateTarget: {
++      immediate: true,
++      handler(newVal) {
++        if (newVal && this.selectedTarget === null) {
++          this.selectedTarget = newVal;
++        }
++      },
++    },
++  },
+   validations() {
+     return {
+       file: {
+@@ -109,9 +148,11 @@ export default {
+       this.dispatchWorkstationUpload(timerId);
+     },
+     dispatchWorkstationUpload(timerId) {
++      const targets = this.selectedTarget ? [this.selectedTarget] : undefined;
+       this.$store
+         .dispatch('firmware/uploadFirmware', {
+           image: this.file,
++          targets,
+         })
+         .catch(({ message }) => {
+           this.endLoader();
+-- 
+2.53.0
+
