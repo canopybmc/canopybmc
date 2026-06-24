@@ -1,4 +1,4 @@
-From 3e5e964e6bc98b0aae69005d618dabaf5ab449d1 Mon Sep 17 00:00:00 2001
+From 8cce2ccc45cfedd903197cb72921edddeba441a0 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 15 Feb 2026 13:17:26 +0100
 Subject: [PATCH] fansensor: add fan fault monitoring via hwmon fault attribute
@@ -211,7 +211,7 @@ index 0000000..bfcf629
 +    static constexpr unsigned int pollIntervalMs = 5000;
 +};
 diff --git a/src/fan/FanMain.cpp b/src/fan/FanMain.cpp
-index 7f8d831..a459a47 100644
+index 1be87a6..5a2aa0b 100644
 --- a/src/fan/FanMain.cpp
 +++ b/src/fan/FanMain.cpp
 @@ -14,6 +14,7 @@
@@ -273,7 +273,7 @@ index 7f8d831..a459a47 100644
          }
  
          createRedundancySensor(tachSensors, dbusConnection, objectServer);
-@@ -684,12 +703,13 @@ int main()
+@@ -684,12 +703,13 @@ int fanSensorMain()
          pwmSensors;
      boost::container::flat_map<std::string, std::weak_ptr<PresenceGpio>>
          presenceGpios;
@@ -288,7 +288,7 @@ index 7f8d831..a459a47 100644
      });
  
      boost::asio::steady_timer filterTimer(io);
-@@ -711,7 +731,8 @@ int main()
+@@ -711,7 +731,8 @@ int fanSensorMain()
                      return;
                  }
                  createSensors(io, objectServer, tachSensors, pwmSensors,
@@ -299,14 +299,17 @@ index 7f8d831..a459a47 100644
          };
  
 diff --git a/src/fan/meson.build b/src/fan/meson.build
-index 1de6634..146a9f9 100644
+index 0f7bf8d..e95b701 100644
 --- a/src/fan/meson.build
 +++ b/src/fan/meson.build
-@@ -4,6 +4,7 @@ endif
- 
- executable(
-     'fansensor',
-+    'FanFault.cpp',
+@@ -5,6 +5,7 @@ endif
+ fan_lib = static_library(
+     'fan',
      'FanMain.cpp',
++    'FanFault.cpp',
      'PresenceGpio.cpp',
      'TachSensor.cpp',
+     '../PwmSensor.cpp',
+-- 
+2.54.0
+

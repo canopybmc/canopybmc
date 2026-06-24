@@ -1,0 +1,1447 @@
+From 48f29870ef42339cef3310d7f1d047d416227c4f Mon Sep 17 00:00:00 2001
+From: Willy Tu <wltu@google.com>
+Date: Tue, 24 Mar 2026 15:14:33 +0000
+Subject: [PATCH] reduce image size by moving to Multi-call Binary
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This is done to reduce the daemon size when installed on a SPI flash.
+The goal is to
+- Reduced ELF Overhead
+- Shared Libraries/Static Linking
+- Shared Common Code
+
+Tested:
+```
+$ ls -l /usr/local/libexec/dbus-sensors/
+total 0
+lrwxrwxrwx 1 root root 26 Mar 25 16:29 adcsensor -> /usr/local/bin/dbussensors
+lrwxrwxrwx 1 root root 26 Mar 25 16:29 cablemonitor -> /usr/local/bin/dbussensors
+lrwxrwxrwx 1 root root 26 Mar 25 16:29 exitairtempsensor -> /usr/local/bin/dbussensors
+lrwxrwxrwx 1 root root 26 Mar 25 16:29 externalsensor -> /usr/local/bin/dbussensors
+lrwxrwxrwx 1 root root 26 Mar 25 16:29 fansensor -> /usr/local/bin/dbussensors
+lrwxrwxrwx 1 root root 26 Mar 25 16:29 hwmontempsensor -> /usr/local/bin/dbussensors
+lrwxrwxrwx 1 root root 26 Mar 25 16:29 intelcpusensor -> /usr/local/bin/dbussensors
+lrwxrwxrwx 1 root root 26 Mar 25 16:29 intrusionsensor -> /usr/local/bin/dbussensors
+lrwxrwxrwx 1 root root 26 Mar 25 16:29 ipmbsensor -> /usr/local/bin/dbussensors
+lrwxrwxrwx 1 root root 26 Mar 25 16:29 leakdetector -> /usr/local/bin/dbussensors
+lrwxrwxrwx 1 root root 26 Mar 25 16:29 mctpreactor -> /usr/local/bin/dbussensors
+lrwxrwxrwx 1 root root 26 Mar 25 16:29 mcutempsensor -> /usr/local/bin/dbussensors
+lrwxrwxrwx 1 root root 26 Mar 25 16:29 nvidiagpusensor -> /usr/local/bin/dbussensors
+lrwxrwxrwx 1 root root 26 Mar 25 16:29 nvmesensor -> /usr/local/bin/dbussensors
+lrwxrwxrwx 1 root root 26 Mar 25 16:29 psusensor -> /usr/local/bin/dbussensors
+lrwxrwxrwx 1 root root 26 Mar 25 16:29 smbpbisensor -> /usr/local/bin/dbussensors
+```
+
+Before:
+```
+$ tree /tmp/package_files/dbus-sensors/
+/tmp/package_files/dbus-sensors/
+└── usr
+    ├── lib
+    │   └── systemd
+    │       ├── system
+    │       │   ├── xyz.openbmc_project.adcsensor.service
+    │       │   ├── xyz.openbmc_project.exitairsensor.service
+    │       │   ├── xyz.openbmc_project.externalsensor.service
+    │       │   ├── xyz.openbmc_project.fansensor.service
+    │       │   ├── xyz.openbmc_project.hwmontempsensor.service
+    │       │   ├── xyz.openbmc_project.intelcpusensor.service
+    │       │   ├── xyz.openbmc_project.intrusionsensor.service
+    │       │   ├── xyz.openbmc_project.ipmbsensor.service
+    │       │   ├── xyz.openbmc_project.mcutempsensor.service
+    │       │   └── xyz.openbmc_project.psusensor.service
+    │       └── system-preset
+    │           └── 98-dbus-sensors.preset
+    └── libexec
+        └── dbus-sensors
+            ├── adcsensor
+            ├── exitairtempsensor
+            ├── externalsensor
+            ├── fansensor
+            ├── hwmontempsensor
+            ├── intelcpusensor
+            ├── intrusionsensor
+            ├── ipmbsensor
+            ├── mcutempsensor
+            └── psusensor
+
+8 directories, 21 files
+```
+
+After:
+```
+$ tree /tmp/package_files/dbus-sensors-multicall/
+/tmp/package_files/dbus-sensors-multicall/
+└── usr
+    ├── bin
+    │   └── dbussensors
+    ├── lib
+    │   └── systemd
+    │       ├── system
+    │       │   ├── xyz.openbmc_project.adcsensor.service
+    │       │   ├── xyz.openbmc_project.exitairsensor.service
+    │       │   ├── xyz.openbmc_project.externalsensor.service
+    │       │   ├── xyz.openbmc_project.fansensor.service
+    │       │   ├── xyz.openbmc_project.hwmontempsensor.service
+    │       │   ├── xyz.openbmc_project.intelcpusensor.service
+    │       │   ├── xyz.openbmc_project.intrusionsensor.service
+    │       │   ├── xyz.openbmc_project.ipmbsensor.service
+    │       │   ├── xyz.openbmc_project.mcutempsensor.service
+    │       │   └── xyz.openbmc_project.psusensor.service
+    │       └── system-preset
+    │           └── 98-dbus-sensors.preset
+    └── libexec
+        └── dbus-sensors
+            ├── adcsensor -> /usr/bin/dbussensors
+            ├── exitairtempsensor -> /usr/bin/dbussensors
+            ├── externalsensor -> /usr/bin/dbussensors
+            ├── fansensor -> /usr/bin/dbussensors
+            ├── hwmontempsensor -> /usr/bin/dbussensors
+            ├── intelcpusensor -> /usr/bin/dbussensors
+            ├── intrusionsensor -> /usr/bin/dbussensors
+            ├── ipmbsensor -> /usr/bin/dbussensors
+            ├── mcutempsensor -> /usr/bin/dbussensors
+            └── psusensor -> /usr/bin/dbussensors
+
+9 directories, 22 files
+```
+
+Size Diff:
+```
+$ ls -lh /tmp/compressed_packages/
+total 5.4M
+-rw-r--r-- 1 wltu primarygroup 2.0M Mar 25 16:40 dbus-sensors-multicall.squashfs
+-rw-r--r-- 1 wltu primarygroup 3.4M Mar 24 17:45 dbus-sensors.squashfs
+```
+
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/dbus-sensors/+/88663]
+Change-Id: Id569ab1b38cb67fa2da346f70b17dca73e818432
+Signed-off-by: Willy Tu <wltu@google.com>
+---
+ src/DbusSensorsMain.cpp                   | 161 ++++++++++++++++++++++
+ src/adc/ADCSensor.hpp                     |   2 +
+ src/adc/ADCSensorMain.cpp                 |   3 +-
+ src/adc/meson.build                       |  17 ++-
+ src/cable-monitor/CableMonitor.cpp        |   6 +-
+ src/cable-monitor/CableMonitor.hpp        |   2 +
+ src/cable-monitor/meson.build             |  20 ++-
+ src/exit-air/ExitAirTempSensor.cpp        |   2 +-
+ src/exit-air/ExitAirTempSensor.hpp        |   2 +
+ src/exit-air/meson.build                  |  16 ++-
+ src/external/ExternalSensor.hpp           |   2 +
+ src/external/ExternalSensorMain.cpp       |   3 +-
+ src/external/meson.build                  |  17 ++-
+ src/fan/FanMain.cpp                       |   2 +-
+ src/fan/FanSensor.hpp                     |   2 +
+ src/fan/meson.build                       |  18 ++-
+ src/hwmon-temp/HwmonTempMain.cpp          |   3 +-
+ src/hwmon-temp/HwmonTempSensor.hpp        |   2 +
+ src/hwmon-temp/meson.build                |  19 ++-
+ src/intel-cpu/IntelCPUSensor.hpp          |   2 +
+ src/intel-cpu/IntelCPUSensorMain.cpp      |   2 +-
+ src/intel-cpu/meson.build                 |  15 +-
+ src/intrusion/ChassisIntrusionSensor.hpp  |   2 +
+ src/intrusion/IntrusionSensorMain.cpp     |   2 +-
+ src/intrusion/meson.build                 |  15 +-
+ src/ipmb/IpmbSensor.hpp                   |   2 +
+ src/ipmb/IpmbSensorMain.cpp               |  15 +-
+ src/ipmb/meson.build                      |  16 ++-
+ src/leakdetector/LeakDetectionManager.cpp |   6 +-
+ src/leakdetector/LeakDetectionManager.hpp |   2 +
+ src/leakdetector/meson.build              |  25 +++-
+ src/mctp/MCTPReactor.hpp                  |   2 +
+ src/mctp/MCTPReactorMain.cpp              |   2 +-
+ src/mctp/meson.build                      |  17 ++-
+ src/mcu/MCUTempSensor.cpp                 |  11 +-
+ src/mcu/MCUTempSensor.hpp                 |   2 +
+ src/mcu/meson.build                       |  15 +-
+ src/meson.build                           |  16 +++
+ src/nvidia-gpu/MctpRequester.cpp          |   4 +-
+ src/nvidia-gpu/NvidiaGpuSensor.hpp        |   2 +
+ src/nvidia-gpu/NvidiaGpuSensorMain.cpp    |   2 +-
+ src/nvidia-gpu/meson.build                |  15 +-
+ src/nvme/NVMeSensor.hpp                   |   2 +
+ src/nvme/NVMeSensorMain.cpp               |   3 +-
+ src/nvme/meson.build                      |  15 +-
+ src/psu/PSUSensor.hpp                     |   2 +
+ src/psu/PSUSensorMain.cpp                 |   3 +-
+ src/psu/meson.build                       |  21 ++-
+ src/smbpbi/SmbpbiSensor.cpp               |  25 +++-
+ src/smbpbi/SmbpbiSensor.hpp               |  16 +--
+ src/smbpbi/meson.build                    |  15 +-
+ 51 files changed, 485 insertions(+), 108 deletions(-)
+ create mode 100644 src/DbusSensorsMain.cpp
+ create mode 100644 src/fan/FanSensor.hpp
+
+diff --git a/src/DbusSensorsMain.cpp b/src/DbusSensorsMain.cpp
+new file mode 100644
+index 0000000..ba7702d
+--- /dev/null
++++ b/src/DbusSensorsMain.cpp
+@@ -0,0 +1,161 @@
++
++#ifdef ADC
++#include "adc/ADCSensor.hpp"
++#endif
++#ifdef CABLEMONITOR
++#include "cable-monitor/CableMonitor.hpp"
++#endif
++#ifdef EXITAIRTEMP
++#include "exit-air/ExitAirTempSensor.hpp"
++#endif
++#ifdef EXTERNAL
++#include "external/ExternalSensor.hpp"
++#endif
++#ifdef FAN
++#include "fan/FanSensor.hpp"
++#endif
++#ifdef HWMONTEMP
++#include "hwmon-temp/HwmonTempSensor.hpp"
++#endif
++#ifdef INTELCPU
++#include "intel-cpu/IntelCPUSensor.hpp"
++#endif
++#ifdef INTRUSION
++#include "intrusion/ChassisIntrusionSensor.hpp"
++#endif
++#ifdef IPMB
++#include "ipmb/IpmbSensor.hpp"
++#endif
++#ifdef LEAKDETECTOR
++#include "leakdetector/LeakDetectionManager.hpp"
++#endif
++#ifdef MCTP
++#include "mctp/MCTPReactor.hpp"
++#endif
++#ifdef MCU
++#include "mcu/MCUTempSensor.hpp"
++#endif
++#ifdef NVDIAGPU
++#include "nvidia-gpu/NvidiaGpuSensor.hpp"
++#endif
++#ifdef NVME
++#include "nvme/NVMeSensor.hpp"
++#endif
++#ifdef PSU
++#include "psu/PSUSensor.hpp"
++#endif
++#ifdef SMBPBI
++#include "smbpbi/SmbpbiSensor.hpp"
++#endif
++
++#include <phosphor-logging/lg2.hpp>
++
++#include <string>
++
++int main(int argc, char* argv[])
++{
++    if (argc < 1)
++    {
++        lg2::error("No program name provided");
++        return 1;
++    }
++    std::string programName = argv[0];
++#ifdef ADC
++    if (programName.ends_with("adcsensor"))
++    {
++        return adcSensorMain();
++    }
++#endif
++#ifdef CABLEMONITOR
++    if (programName.ends_with("cablemonitor"))
++    {
++        return cable::cableMonitorMain();
++    }
++#endif
++#ifdef EXITAIRTEMP
++    if (programName.ends_with("exitairtempsensor"))
++    {
++        return exitAirTempSensorMain();
++    }
++#endif
++#ifdef INTELCPU
++    if (programName.ends_with("intelcpusensor"))
++    {
++        return intelCPUSensorMain();
++    }
++#endif
++#ifdef EXTERNAL
++    if (programName.ends_with("externalsensor"))
++    {
++        return externalSensorMain();
++    }
++#endif
++#ifdef FAN
++    if (programName.ends_with("fansensor"))
++    {
++        return fanSensorMain();
++    }
++#endif
++#ifdef HWMONTEMP
++    if (programName.ends_with("hwmontempsensor"))
++    {
++        return hwmonTempSensorMain();
++    }
++#endif
++#ifdef INTRUSION
++    if (programName.ends_with("intrusionsensor"))
++    {
++        return intrusionSensorMain();
++    }
++#endif
++#ifdef IPMB
++    if (programName.ends_with("ipmbsensor"))
++    {
++        return ipmbSensorMain();
++    }
++#endif
++#ifdef LEAKDETECTOR
++    if (programName.ends_with("leakdetector"))
++    {
++        return leak::leakDetectionManagerMain();
++    }
++#endif
++#ifdef MCTP
++    if (programName.ends_with("mctpreactor"))
++    {
++        return mctpReactorMain();
++    }
++#endif
++#ifdef MCU
++    if (programName.ends_with("mcutempsensor"))
++    {
++        return mcuTempSensorMain();
++    }
++#endif
++#ifdef NVDIAGPU
++    if (programName.ends_with("nvidiagpusensor"))
++    {
++        return nvidiaGpuSensorMain();
++    }
++#endif
++#ifdef NVME
++    if (programName.ends_with("nvmesensor"))
++    {
++        return nvmeSensorMain();
++    }
++#endif
++#ifdef PSU
++    if (programName.ends_with("psusensor"))
++    {
++        return psuSensorMain();
++    }
++#endif
++#ifdef SMBPBI
++    if (programName.ends_with("smbpbisensor"))
++    {
++        return smbpbiSensorMain();
++    }
++#endif
++
++    return 0;
++}
+diff --git a/src/adc/ADCSensor.hpp b/src/adc/ADCSensor.hpp
+index 618c43f..154ff3b 100644
+--- a/src/adc/ADCSensor.hpp
++++ b/src/adc/ADCSensor.hpp
+@@ -97,3 +97,5 @@ class ADCSensor : public Sensor, public std::enable_shared_from_this<ADCSensor>
+     void checkThresholds() override;
+     void restartRead();
+ };
++
++int adcSensorMain();
+diff --git a/src/adc/ADCSensorMain.cpp b/src/adc/ADCSensorMain.cpp
+index b8078c0..0e8e025 100644
+--- a/src/adc/ADCSensorMain.cpp
++++ b/src/adc/ADCSensorMain.cpp
+@@ -313,7 +313,7 @@ void createSensors(
+     getter->getConfiguration(sensorTypes);
+ }
+ 
+-int main()
++int adcSensorMain()
+ {
+     boost::asio::io_context io;
+     auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
+@@ -415,4 +415,5 @@ int main()
+ 
+     setupManufacturingModeMatch(*systemBus);
+     io.run();
++    return 0;
+ }
+diff --git a/src/adc/meson.build b/src/adc/meson.build
+index 42f32df..8d56cf3 100644
+--- a/src/adc/meson.build
++++ b/src/adc/meson.build
+@@ -1,13 +1,20 @@
+ if not get_option('adc').allowed()
+     subdir_done()
+ endif
+-executable(
++
++adcsensor_lib = static_library(
+     'adcsensor',
+     'ADCSensor.cpp',
+     'ADCSensorMain.cpp',
+     dependencies: [default_deps, gpiodcxx, thresholds_dep, utils_dep],
+-    include_directories: src_inc,
+-    install: true,
+-    install_dir: '/usr/libexec/dbus-sensors',
+ )
+-
++dbus_sensors_deps += declare_dependency(
++    link_with: [adcsensor_lib],
++    dependencies: [default_deps, gpiodcxx, thresholds_dep, utils_dep],
++)
++install_symlink(
++    'adcsensor',
++    install_dir: get_option('libexecdir') / 'dbus-sensors',
++    pointing_to: get_option('prefix') / get_option('bindir') / 'dbussensors',
++)
++dbus_sensors_cpp_args += ['-DADC']
+diff --git a/src/cable-monitor/CableMonitor.cpp b/src/cable-monitor/CableMonitor.cpp
+index 1c0fff1..189d1b9 100644
+--- a/src/cable-monitor/CableMonitor.cpp
++++ b/src/cable-monitor/CableMonitor.cpp
+@@ -174,9 +174,7 @@ auto Monitor::reconcileCableData() -> void
+     }
+ }
+ 
+-} // namespace cable
+-
+-int main()
++int cableMonitorMain()
+ {
+     constexpr auto path = "/xyz/openbmc_project/cable_monitor";
+     constexpr auto serviceName = "xyz.openbmc_project.cablemonitor";
+@@ -190,3 +188,5 @@ int main()
+     ctx.run();
+     return 0;
+ }
++
++} // namespace cable
+diff --git a/src/cable-monitor/CableMonitor.hpp b/src/cable-monitor/CableMonitor.hpp
+index 55bd568..00b4862 100644
+--- a/src/cable-monitor/CableMonitor.hpp
++++ b/src/cable-monitor/CableMonitor.hpp
+@@ -61,4 +61,6 @@ class Monitor
+     notify_watch::NotifyWatch notifyWatch;
+ };
+ 
++int cableMonitorMain();
++
+ } // namespace cable
+diff --git a/src/cable-monitor/meson.build b/src/cable-monitor/meson.build
+index 5213534..1daf320 100644
+--- a/src/cable-monitor/meson.build
++++ b/src/cable-monitor/meson.build
+@@ -3,7 +3,7 @@ if not get_option('cable-monitor').allowed()
+ endif
+ phosphor_dbus_interfaces_dep = dependency('phosphor-dbus-interfaces')
+ 
+-executable(
++cablemonitor_lib = static_library(
+     'cablemonitor',
+     'CableMonitor.cpp',
+     'CableConfig.cpp',
+@@ -16,7 +16,21 @@ executable(
+         entitymanagerinterface_dep,
+     ],
+     include_directories: src_inc,
+-    install: true,
++)
++dbus_sensors_deps += declare_dependency(
++    link_with: [cablemonitor_lib],
++    dependencies: [
++        default_deps,
++        utils_dep,
++        phosphor_dbus_interfaces_dep,
++        notifywatch_dep,
++        entitymanagerinterface_dep,
++    ],
++    include_directories: src_inc,
++)
++install_symlink(
++    'cablemonitor',
+     install_dir: get_option('libexecdir') / 'dbus-sensors',
++    pointing_to: get_option('prefix') / get_option('bindir') / 'dbussensors',
+ )
+-
++dbus_sensors_cpp_args += ['-DCABLEMONITOR']
+diff --git a/src/exit-air/ExitAirTempSensor.cpp b/src/exit-air/ExitAirTempSensor.cpp
+index 950dd28..f4c1d9f 100644
+--- a/src/exit-air/ExitAirTempSensor.cpp
++++ b/src/exit-air/ExitAirTempSensor.cpp
+@@ -916,7 +916,7 @@ void createSensor(sdbusplus::asio::object_server& objectServer,
+     getter->getConfiguration(monitorTypes);
+ }
+ 
+-int main()
++int exitAirTempSensorMain()
+ {
+     boost::asio::io_context io;
+     auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
+diff --git a/src/exit-air/ExitAirTempSensor.hpp b/src/exit-air/ExitAirTempSensor.hpp
+index 9f20c70..2e2f66e 100644
+--- a/src/exit-air/ExitAirTempSensor.hpp
++++ b/src/exit-air/ExitAirTempSensor.hpp
+@@ -87,3 +87,5 @@ struct ExitAirTempSensor :
+     static double getTotalCFM();
+     bool calculate(double& val);
+ };
++
++int exitAirTempSensorMain();
+diff --git a/src/exit-air/meson.build b/src/exit-air/meson.build
+index f70c5e3..081590e 100644
+--- a/src/exit-air/meson.build
++++ b/src/exit-air/meson.build
+@@ -2,12 +2,18 @@ if not get_option('exit-air').allowed()
+     subdir_done()
+ endif
+ 
+-executable(
++exitairtempsensor_lib = static_library(
+     'exitairtempsensor',
+     'ExitAirTempSensor.cpp',
+     dependencies: [default_deps, thresholds_dep, utils_dep],
+-    include_directories: src_inc,
+-    install: true,
+-    install_dir: '/usr/libexec/dbus-sensors',
+ )
+-
++dbus_sensors_deps += declare_dependency(
++    link_with: [exitairtempsensor_lib],
++    dependencies: [default_deps, thresholds_dep, utils_dep],
++)
++install_symlink(
++    'exitairtempsensor',
++    install_dir: get_option('libexecdir') / 'dbus-sensors',
++    pointing_to: get_option('prefix') / get_option('bindir') / 'dbussensors',
++)
++dbus_sensors_cpp_args += ['-DEXITAIRTEMP']
+diff --git a/src/external/ExternalSensor.hpp b/src/external/ExternalSensor.hpp
+index ff25c4e..3f24bfe 100644
+--- a/src/external/ExternalSensor.hpp
++++ b/src/external/ExternalSensor.hpp
+@@ -67,3 +67,5 @@ class ExternalSensor :
+     void checkThresholds() override;
+     void externalSetTrigger();
+ };
++
++int externalSensorMain();
+diff --git a/src/external/ExternalSensorMain.cpp b/src/external/ExternalSensorMain.cpp
+index 29be7cb..073e58e 100644
+--- a/src/external/ExternalSensorMain.cpp
++++ b/src/external/ExternalSensorMain.cpp
+@@ -334,7 +334,7 @@ void createSensors(
+     getter->getConfiguration(sensorTypes);
+ }
+ 
+-int main()
++int externalSensorMain()
+ {
+     lg2::debug("ExternalSensor service starting up");
+ 
+@@ -394,4 +394,5 @@ int main()
+     lg2::debug("ExternalSensor service entering main loop");
+ 
+     io.run();
++    return 0;
+ }
+diff --git a/src/external/meson.build b/src/external/meson.build
+index de8de23..a6f1950 100644
+--- a/src/external/meson.build
++++ b/src/external/meson.build
+@@ -1,13 +1,22 @@
+ if not get_option('external').allowed()
+     subdir_done()
+ endif
+-executable(
++
++externalsensor_lib = static_library(
+     'externalsensor',
+     'ExternalSensor.cpp',
+     'ExternalSensorMain.cpp',
+     dependencies: [default_deps, thresholds_dep, utils_dep],
+     include_directories: src_inc,
+-    install: true,
+-    install_dir: '/usr/libexec/dbus-sensors',
+ )
+-
++dbus_sensors_deps += declare_dependency(
++    link_with: [externalsensor_lib],
++    dependencies: [default_deps, thresholds_dep, utils_dep],
++    include_directories: src_inc,
++)
++install_symlink(
++    'externalsensor',
++    install_dir: get_option('libexecdir') / 'dbus-sensors',
++    pointing_to: get_option('prefix') / get_option('bindir') / 'dbussensors',
++)
++dbus_sensors_cpp_args += ['-DEXTERNAL']
+diff --git a/src/fan/FanMain.cpp b/src/fan/FanMain.cpp
+index c6a8f57..47a512b 100644
+--- a/src/fan/FanMain.cpp
++++ b/src/fan/FanMain.cpp
+@@ -650,7 +650,7 @@ void createSensors(
+     getter->getConfiguration(sensorTypes, retries);
+ }
+ 
+-int main()
++int fanSensorMain()
+ {
+     boost::asio::io_context io;
+     auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
+diff --git a/src/fan/FanSensor.hpp b/src/fan/FanSensor.hpp
+new file mode 100644
+index 0000000..35b370c
+--- /dev/null
++++ b/src/fan/FanSensor.hpp
+@@ -0,0 +1,2 @@
++
++int fanSensorMain();
+diff --git a/src/fan/meson.build b/src/fan/meson.build
+index 1de6634..0f7bf8d 100644
+--- a/src/fan/meson.build
++++ b/src/fan/meson.build
+@@ -2,15 +2,23 @@ if not get_option('fan').allowed()
+     subdir_done()
+ endif
+ 
+-executable(
+-    'fansensor',
++fan_lib = static_library(
++    'fan',
+     'FanMain.cpp',
+     'PresenceGpio.cpp',
+     'TachSensor.cpp',
+     '../PwmSensor.cpp',
+     dependencies: [default_deps, gpiodcxx, thresholds_dep, utils_dep],
+     include_directories: src_inc,
+-    install: true,
+-    install_dir: '/usr/libexec/dbus-sensors',
+ )
+-
++dbus_sensors_deps += declare_dependency(
++    link_with: [fan_lib],
++    dependencies: [default_deps, gpiodcxx, thresholds_dep, utils_dep],
++    include_directories: src_inc,
++)
++install_symlink(
++    'fansensor',
++    install_dir: get_option('libexecdir') / 'dbus-sensors',
++    pointing_to: get_option('prefix') / get_option('bindir') / 'dbussensors',
++)
++dbus_sensors_cpp_args += ['-DFAN']
+diff --git a/src/hwmon-temp/HwmonTempMain.cpp b/src/hwmon-temp/HwmonTempMain.cpp
+index 616d0f8..0a2b2cb 100644
+--- a/src/hwmon-temp/HwmonTempMain.cpp
++++ b/src/hwmon-temp/HwmonTempMain.cpp
+@@ -596,7 +596,7 @@ static void powerStateChanged(
+     }
+ }
+ 
+-int main()
++int hwmonTempSensorMain()
+ {
+     boost::asio::io_context io;
+     auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
+@@ -663,4 +663,5 @@ int main()
+     matches.emplace_back(std::move(ifaceRemovedMatch));
+ 
+     io.run();
++    return 0;
+ }
+diff --git a/src/hwmon-temp/HwmonTempSensor.hpp b/src/hwmon-temp/HwmonTempSensor.hpp
+index 0c27ef9..02f2dbc 100644
+--- a/src/hwmon-temp/HwmonTempSensor.hpp
++++ b/src/hwmon-temp/HwmonTempSensor.hpp
+@@ -70,3 +70,5 @@ class HwmonTempSensor :
+     void restartRead();
+     void checkThresholds() override;
+ };
++
++int hwmonTempSensorMain();
+diff --git a/src/hwmon-temp/meson.build b/src/hwmon-temp/meson.build
+index 4e4f550..604aae1 100644
+--- a/src/hwmon-temp/meson.build
++++ b/src/hwmon-temp/meson.build
+@@ -1,13 +1,22 @@
+ if not get_option('hwmon-temp').allowed()
+     subdir_done()
+ endif
+-executable(
+-    'hwmontempsensor',
++
++hwmontemp_lib = static_library(
++    'hwmontemp',
+     'HwmonTempMain.cpp',
+     'HwmonTempSensor.cpp',
+     dependencies: [default_deps, devicemgmt_dep, thresholds_dep, utils_dep],
+     include_directories: src_inc,
+-    install: true,
+-    install_dir: '/usr/libexec/dbus-sensors',
+ )
+-
++dbus_sensors_deps += declare_dependency(
++    link_with: [hwmontemp_lib],
++    dependencies: [default_deps, devicemgmt_dep, thresholds_dep, utils_dep],
++    include_directories: src_inc,
++)
++install_symlink(
++    'hwmontempsensor',
++    install_dir: get_option('libexecdir') / 'dbus-sensors',
++    pointing_to: get_option('prefix') / get_option('bindir') / 'dbussensors',
++)
++dbus_sensors_cpp_args += ['-DHWMONTEMP']
+diff --git a/src/intel-cpu/IntelCPUSensor.hpp b/src/intel-cpu/IntelCPUSensor.hpp
+index 28ea7df..815d977 100644
+--- a/src/intel-cpu/IntelCPUSensor.hpp
++++ b/src/intel-cpu/IntelCPUSensor.hpp
+@@ -119,3 +119,5 @@ inline bool cpuIsPresent(const SensorBaseConfigMap& gpioConfig)
+ 
+     return resp;
+ }
++
++int intelCPUSensorMain();
+diff --git a/src/intel-cpu/IntelCPUSensorMain.cpp b/src/intel-cpu/IntelCPUSensorMain.cpp
+index d2d2c14..594db16 100644
+--- a/src/intel-cpu/IntelCPUSensorMain.cpp
++++ b/src/intel-cpu/IntelCPUSensorMain.cpp
+@@ -791,7 +791,7 @@ bool getCpuConfig(const std::shared_ptr<sdbusplus::asio::connection>& systemBus,
+     return false;
+ }
+ 
+-int main()
++int intelCPUSensorMain()
+ {
+     boost::asio::io_context io;
+     auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
+diff --git a/src/intel-cpu/meson.build b/src/intel-cpu/meson.build
+index ed79bd7..10702de 100644
+--- a/src/intel-cpu/meson.build
++++ b/src/intel-cpu/meson.build
+@@ -10,12 +10,21 @@ endif
+ 
+ peci_dep = dependency('libpeci', required: true)
+ 
+-executable(
++intelcpusensor_lib = static_library(
+     'intelcpusensor',
+     'IntelCPUSensorMain.cpp',
+     'IntelCPUSensor.cpp',
+     dependencies: [default_deps, gpiodcxx, thresholds_dep, utils_dep, peci_dep],
+     include_directories: intel_cpu_inc,
+-    install: true,
+-    install_dir: '/usr/libexec/dbus-sensors',
+ )
++dbus_sensors_deps += declare_dependency(
++    link_with: [intelcpusensor_lib],
++    dependencies: [default_deps, gpiodcxx, thresholds_dep, utils_dep, peci_dep],
++    include_directories: intel_cpu_inc,
++)
++install_symlink(
++    'intelcpusensor',
++    install_dir: get_option('libexecdir') / 'dbus-sensors',
++    pointing_to: get_option('prefix') / get_option('bindir') / 'dbussensors',
++)
++dbus_sensors_cpp_args += ['-DINTELCPU']
+diff --git a/src/intrusion/ChassisIntrusionSensor.hpp b/src/intrusion/ChassisIntrusionSensor.hpp
+index b02b903..cf29c38 100644
+--- a/src/intrusion/ChassisIntrusionSensor.hpp
++++ b/src/intrusion/ChassisIntrusionSensor.hpp
+@@ -95,3 +95,5 @@ class ChassisIntrusionHwmonSensor :
+     int readSensor() override;
+     void pollSensorStatus() override;
+ };
++
++int intrusionSensorMain();
+diff --git a/src/intrusion/IntrusionSensorMain.cpp b/src/intrusion/IntrusionSensorMain.cpp
+index ebca567..c8f0f46 100644
+--- a/src/intrusion/IntrusionSensorMain.cpp
++++ b/src/intrusion/IntrusionSensorMain.cpp
+@@ -455,7 +455,7 @@ static bool initializeLanStatus(
+     return true;
+ }
+ 
+-int main()
++int intrusionSensorMain()
+ {
+     std::shared_ptr<ChassisIntrusionSensor> intrusionSensor;
+ 
+diff --git a/src/intrusion/meson.build b/src/intrusion/meson.build
+index db31e08..5cad8cb 100644
+--- a/src/intrusion/meson.build
++++ b/src/intrusion/meson.build
+@@ -2,12 +2,21 @@ if not get_option('intrusion').allowed()
+     subdir_done()
+ endif
+ 
+-executable(
++intrusionsensor_lib = static_library(
+     'intrusionsensor',
+     'ChassisIntrusionSensor.cpp',
+     'IntrusionSensorMain.cpp',
+     dependencies: [default_deps, gpiodcxx, i2c, utils_dep],
+     include_directories: src_inc,
+-    install: true,
+-    install_dir: '/usr/libexec/dbus-sensors',
+ )
++dbus_sensors_deps += declare_dependency(
++    link_with: [intrusionsensor_lib],
++    dependencies: [default_deps, gpiodcxx, i2c, utils_dep],
++    include_directories: src_inc,
++)
++install_symlink(
++    'intrusionsensor',
++    install_dir: get_option('libexecdir') / 'dbus-sensors',
++    pointing_to: get_option('prefix') / get_option('bindir') / 'dbussensors',
++)
++dbus_sensors_cpp_args += ['-DINTRUSION']
+diff --git a/src/ipmb/IpmbSensor.hpp b/src/ipmb/IpmbSensor.hpp
+index c5844cf..a6b8b30 100644
+--- a/src/ipmb/IpmbSensor.hpp
++++ b/src/ipmb/IpmbSensor.hpp
+@@ -154,3 +154,5 @@ void interfaceRemoved(
+     sdbusplus::message_t& message,
+     boost::container::flat_map<std::string, std::shared_ptr<IpmbSensor>>&
+         sensors);
++
++int ipmbSensorMain();
+diff --git a/src/ipmb/IpmbSensorMain.cpp b/src/ipmb/IpmbSensorMain.cpp
+index 8cf8def..de2c1f2 100644
+--- a/src/ipmb/IpmbSensorMain.cpp
++++ b/src/ipmb/IpmbSensorMain.cpp
+@@ -26,7 +26,8 @@
+ #include <vector>
+ 
+ std::unique_ptr<boost::asio::steady_timer> initCmdTimer;
+-boost::container::flat_map<std::string, std::shared_ptr<IpmbSensor>> sensors;
++boost::container::flat_map<std::string, std::shared_ptr<IpmbSensor>>
++    ipmbSensors;
+ boost::container::flat_map<uint8_t, std::shared_ptr<IpmbSDRDevice>> sdrsensor;
+ 
+ void sdrHandler(
+@@ -83,7 +84,7 @@ void reinitSensors(sdbusplus::message_t& message)
+                     return; // we're being canceled
+                 }
+ 
+-                for (const auto& [name, sensor] : sensors)
++                for (const auto& [name, sensor] : ipmbSensors)
+                 {
+                     if (sensor)
+                     {
+@@ -95,7 +96,7 @@ void reinitSensors(sdbusplus::message_t& message)
+     }
+ }
+ 
+-int main()
++int ipmbSensorMain()
+ {
+     boost::asio::io_context io;
+     auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
+@@ -106,7 +107,7 @@ int main()
+     initCmdTimer = std::make_unique<boost::asio::steady_timer>(io);
+ 
+     boost::asio::post(io, [&]() {
+-        createSensors(io, objectServer, sensors, systemBus);
++        createSensors(io, objectServer, ipmbSensors, systemBus);
+     });
+ 
+     boost::asio::steady_timer configTimer(io);
+@@ -120,8 +121,8 @@ int main()
+                 {
+                     return; // we're being canceled
+                 }
+-                createSensors(io, objectServer, sensors, systemBus);
+-                if (sensors.empty())
++                createSensors(io, objectServer, ipmbSensors, systemBus);
++                if (ipmbSensors.empty())
+                 {
+                     lg2::info("Configuration not detected");
+                 }
+@@ -156,7 +157,7 @@ int main()
+         static_cast<sdbusplus::bus_t&>(*systemBus),
+         "type='signal',member='InterfacesRemoved',arg0path='" +
+             std::string(inventoryPath) + "/'",
+-        [](sdbusplus::message_t& msg) { interfaceRemoved(msg, sensors); });
++        [](sdbusplus::message_t& msg) { interfaceRemoved(msg, ipmbSensors); });
+ 
+     setupManufacturingModeMatch(*systemBus);
+     io.run();
+diff --git a/src/ipmb/meson.build b/src/ipmb/meson.build
+index 2f743f8..21b2f58 100644
+--- a/src/ipmb/meson.build
++++ b/src/ipmb/meson.build
+@@ -2,14 +2,22 @@ if not get_option('ipmb').allowed()
+     subdir_done()
+ endif
+ 
+-executable(
++ipmbsensor_lib = static_library(
+     'ipmbsensor',
+     'IpmbSensorMain.cpp',
+     'IpmbSensor.cpp',
+     'IpmbSDRSensor.cpp',
+     dependencies: [default_deps, thresholds_dep, utils_dep],
+     include_directories: src_inc,
+-    install: true,
+-    install_dir: '/usr/libexec/dbus-sensors',
+ )
+-
++dbus_sensors_deps += declare_dependency(
++    link_with: [ipmbsensor_lib],
++    dependencies: [default_deps, thresholds_dep, utils_dep],
++    include_directories: src_inc,
++)
++install_symlink(
++    'ipmbsensor',
++    install_dir: get_option('libexecdir') / 'dbus-sensors',
++    pointing_to: get_option('prefix') / get_option('bindir') / 'dbussensors',
++)
++dbus_sensors_cpp_args += ['-DIPMB']
+diff --git a/src/leakdetector/LeakDetectionManager.cpp b/src/leakdetector/LeakDetectionManager.cpp
+index 3470c3e..9e8171a 100644
+--- a/src/leakdetector/LeakDetectionManager.cpp
++++ b/src/leakdetector/LeakDetectionManager.cpp
+@@ -143,9 +143,7 @@ auto DetectionManager::getDetectorConfig(sdbusplus::object_path objectPath)
+     co_return config;
+ }
+ 
+-} // namespace leak
+-
+-int main()
++int leakDetectionManagerMain()
+ {
+     constexpr auto path = leak::DetectorIntf::namespace_path::value;
+     constexpr auto serviceName = "xyz.openbmc_project.leakdetector";
+@@ -160,3 +158,5 @@ int main()
+     ctx.run();
+     return 0;
+ }
++
++} // namespace leak
+diff --git a/src/leakdetector/LeakDetectionManager.hpp b/src/leakdetector/LeakDetectionManager.hpp
+index af72747..73d9f2c 100644
+--- a/src/leakdetector/LeakDetectionManager.hpp
++++ b/src/leakdetector/LeakDetectionManager.hpp
+@@ -52,4 +52,6 @@ class DetectionManager
+     detector_map_t detectors;
+ };
+ 
++int leakDetectionManagerMain();
++
+ } // namespace leak
+diff --git a/src/leakdetector/meson.build b/src/leakdetector/meson.build
+index d2fdfaa..998ec2d 100644
+--- a/src/leakdetector/meson.build
++++ b/src/leakdetector/meson.build
+@@ -3,7 +3,7 @@ if not get_option('leakdetector').allowed()
+ endif
+ phosphor_dbus_interfaces_dep = dependency('phosphor-dbus-interfaces')
+ 
+-executable(
++leakdetector_lib = static_library(
+     'leakdetector',
+     'LeakDetectionManager.cpp',
+     'LeakGPIODetector.cpp',
+@@ -18,6 +18,25 @@ executable(
+         entitymanagerinterface_dep,
+     ],
+     include_directories: src_inc,
+-    install: true,
+-    install_dir: '/usr/libexec/dbus-sensors',
+ )
++dbus_sensors_deps += [
++    declare_dependency(
++        link_with: [leakdetector_lib],
++        dependencies: [
++            default_deps,
++            utils_dep,
++            phosphor_dbus_interfaces_dep,
++            gpiodcxx,
++            gpiointerface_dep,
++            entitymanagerinterface_dep,
++        ],
++        include_directories: src_inc,
++    ),
++    phosphor_dbus_interfaces_dep,
++]
++install_symlink(
++    'leakdetector',
++    install_dir: get_option('libexecdir') / 'dbus-sensors',
++    pointing_to: get_option('prefix') / get_option('bindir') / 'dbussensors',
++)
++dbus_sensors_cpp_args += ['-DLEAKDETECTOR']
+diff --git a/src/mctp/MCTPReactor.hpp b/src/mctp/MCTPReactor.hpp
+index 5f07a7a..92868fd 100644
+--- a/src/mctp/MCTPReactor.hpp
++++ b/src/mctp/MCTPReactor.hpp
+@@ -108,3 +108,5 @@ class MCTPReactor : public std::enable_shared_from_this<MCTPReactor>
+     void next(const std::shared_ptr<MCTPDevice>& dev, MCTPDeviceState next);
+     void terminate(const std::shared_ptr<MCTPDevice>& dev);
+ };
++
++int mctpReactorMain();
+diff --git a/src/mctp/MCTPReactorMain.cpp b/src/mctp/MCTPReactorMain.cpp
+index 9d2d321..0f9dddb 100644
+--- a/src/mctp/MCTPReactorMain.cpp
++++ b/src/mctp/MCTPReactorMain.cpp
+@@ -185,7 +185,7 @@ static void exitReactor(boost::asio::io_context* io, sdbusplus::message_t& msg)
+     io->stop();
+ }
+ 
+-int main()
++int mctpReactorMain()
+ {
+     constexpr std::chrono::seconds period(5);
+ 
+diff --git a/src/mctp/meson.build b/src/mctp/meson.build
+index 93baf02..edeabf4 100644
+--- a/src/mctp/meson.build
++++ b/src/mctp/meson.build
+@@ -2,13 +2,22 @@ if not get_option('mctp').allowed()
+     subdir_done()
+ endif
+ 
+-executable(
++mctpreactor_lib = static_library(
+     'mctpreactor',
+     'MCTPReactorMain.cpp',
+     'MCTPReactor.cpp',
+     'MCTPEndpoint.cpp',
+     dependencies: [default_deps, utils_dep],
+-    install: true,
+-    install_dir: '/usr/libexec/dbus-sensors',
++    include_directories: src_inc,
+ )
+-
++dbus_sensors_deps += declare_dependency(
++    link_with: [mctpreactor_lib],
++    dependencies: [default_deps, utils_dep],
++    include_directories: src_inc,
++)
++install_symlink(
++    'mctpreactor',
++    install_dir: get_option('libexecdir') / 'dbus-sensors',
++    pointing_to: get_option('prefix') / get_option('bindir') / 'dbussensors',
++)
++dbus_sensors_cpp_args += ['-DMCTP']
+diff --git a/src/mcu/MCUTempSensor.cpp b/src/mcu/MCUTempSensor.cpp
+index b6ab10c..a29a8ad 100644
+--- a/src/mcu/MCUTempSensor.cpp
++++ b/src/mcu/MCUTempSensor.cpp
+@@ -57,7 +57,8 @@ constexpr const char* sensorType = "MCUTempSensor";
+ static constexpr double mcuTempMaxReading = 0xFF;
+ static constexpr double mcuTempMinReading = 0;
+ 
+-boost::container::flat_map<std::string, std::unique_ptr<MCUTempSensor>> sensors;
++boost::container::flat_map<std::string, std::unique_ptr<MCUTempSensor>>
++    mcuTempSensors;
+ 
+ MCUTempSensor::MCUTempSensor(
+     std::shared_ptr<sdbusplus::asio::connection>& conn,
+@@ -260,7 +261,7 @@ void createSensors(
+         "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
+ }
+ 
+-int main()
++int mcuTempSensorMain()
+ {
+     boost::asio::io_context io;
+     auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
+@@ -270,7 +271,7 @@ int main()
+     systemBus->request_name("xyz.openbmc_project.MCUTempSensor");
+ 
+     boost::asio::post(io, [&]() {
+-        createSensors(io, objectServer, sensors, systemBus);
++        createSensors(io, objectServer, mcuTempSensors, systemBus);
+     });
+ 
+     boost::asio::steady_timer configTimer(io);
+@@ -290,8 +291,8 @@ int main()
+                     lg2::error("timer error");
+                     return;
+                 }
+-                createSensors(io, objectServer, sensors, systemBus);
+-                if (sensors.empty())
++                createSensors(io, objectServer, mcuTempSensors, systemBus);
++                if (mcuTempSensors.empty())
+                 {
+                     lg2::info("Configuration not detected");
+                 }
+diff --git a/src/mcu/MCUTempSensor.hpp b/src/mcu/MCUTempSensor.hpp
+index 9f441df..b0b4f85 100644
+--- a/src/mcu/MCUTempSensor.hpp
++++ b/src/mcu/MCUTempSensor.hpp
+@@ -35,3 +35,5 @@ struct MCUTempSensor : public Sensor
+     sdbusplus::asio::object_server& objectServer;
+     boost::asio::steady_timer waitTimer;
+ };
++
++int mcuTempSensorMain();
+diff --git a/src/mcu/meson.build b/src/mcu/meson.build
+index 23b76ab..3e9826e 100644
+--- a/src/mcu/meson.build
++++ b/src/mcu/meson.build
+@@ -2,11 +2,20 @@ if not get_option('mcu').allowed()
+     subdir_done()
+ endif
+ 
+-executable(
++mcutempsensor_lib = static_library(
+     'mcutempsensor',
+     'MCUTempSensor.cpp',
+     dependencies: [default_deps, i2c, thresholds_dep, utils_dep],
+     include_directories: src_inc,
+-    install: true,
+-    install_dir: '/usr/libexec/dbus-sensors',
+ )
++dbus_sensors_deps += declare_dependency(
++    link_with: [mcutempsensor_lib],
++    dependencies: [default_deps, i2c, thresholds_dep, utils_dep],
++    include_directories: src_inc,
++)
++install_symlink(
++    'mcutempsensor',
++    install_dir: get_option('libexecdir') / 'dbus-sensors',
++    pointing_to: get_option('prefix') / get_option('bindir') / 'dbussensors',
++)
++dbus_sensors_cpp_args += ['-DMCU']
+diff --git a/src/meson.build b/src/meson.build
+index 9e6da9e..4ffe8c9 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -113,6 +113,9 @@ notifywatch_dep = declare_dependency(
+ 
+ src_inc = include_directories('.')
+ 
++dbus_sensors_deps = []
++dbus_sensors_cpp_args = []
++
+ subdir('adc')
+ subdir('cable-monitor')
+ subdir('exit-air')
+@@ -130,3 +133,16 @@ subdir('nvme')
+ subdir('psu')
+ subdir('smbpbi')
+ subdir('tests')
++
++executable(
++    'dbussensors',
++    'DbusSensorsMain.cpp',
++    dependencies: [
++        default_deps,
++        thresholds_dep,
++        utils_dep,
++    ] + dbus_sensors_deps,
++    cpp_args: dbus_sensors_cpp_args,
++    install: true,
++    install_dir: get_option('bindir'),
++)
+diff --git a/src/nvidia-gpu/MctpRequester.cpp b/src/nvidia-gpu/MctpRequester.cpp
+index 5a942b7..18908ea 100644
+--- a/src/nvidia-gpu/MctpRequester.cpp
++++ b/src/nvidia-gpu/MctpRequester.cpp
+@@ -6,11 +6,11 @@
+ #include "MctpRequester.hpp"
+ 
+ #include "MctpAsioEndpoint.hpp"
++#include "NvidiaEventReporting.hpp"
++#include "OcpMctpVdm.hpp"
+ 
+ #include <sys/socket.h>
+ 
+-#include <NvidiaEventReporting.hpp>
+-#include <OcpMctpVdm.hpp>
+ #include <boost/asio/buffer.hpp>
+ #include <boost/asio/error.hpp>
+ #include <boost/asio/generic/datagram_protocol.hpp>
+diff --git a/src/nvidia-gpu/NvidiaGpuSensor.hpp b/src/nvidia-gpu/NvidiaGpuSensor.hpp
+index 0b1b8be..3db106e 100644
+--- a/src/nvidia-gpu/NvidiaGpuSensor.hpp
++++ b/src/nvidia-gpu/NvidiaGpuSensor.hpp
+@@ -65,3 +65,5 @@ struct NvidiaGpuTempSensor :
+     std::shared_ptr<sdbusplus::asio::dbus_interface>
+         commonPhysicalContextInterface;
+ };
++
++int nvidiaGpuSensorMain();
+diff --git a/src/nvidia-gpu/NvidiaGpuSensorMain.cpp b/src/nvidia-gpu/NvidiaGpuSensorMain.cpp
+index 4d165ab..3b18a5d 100644
+--- a/src/nvidia-gpu/NvidiaGpuSensorMain.cpp
++++ b/src/nvidia-gpu/NvidiaGpuSensorMain.cpp
+@@ -49,7 +49,7 @@ void configTimerExpiryCallback(
+                   dbusConnection, mctpRequester);
+ }
+ 
+-int main()
++int nvidiaGpuSensorMain()
+ {
+     boost::asio::io_context io;
+     auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
+diff --git a/src/nvidia-gpu/meson.build b/src/nvidia-gpu/meson.build
+index db60d66..1f31096 100644
+--- a/src/nvidia-gpu/meson.build
++++ b/src/nvidia-gpu/meson.build
+@@ -39,12 +39,21 @@ endif
+ gpusensor_include_dir = include_directories('.', is_system: true)
+ sensor_include_dir = include_directories('../..')
+ 
+-executable(
++nvidiagpusensor_lib = static_library(
+     'nvidiagpusensor',
+     gpusensor_sources + files('NvidiaGpuSensorMain.cpp'),
+     implicit_include_directories: false,
+     include_directories: [gpusensor_include_dir, sensor_include_dir],
+     dependencies: [thresholds_dep, utils_dep, mctpasio_dep],
+-    install: true,
+-    install_dir: '/usr/libexec/dbus-sensors',
+ )
++dbus_sensors_deps += declare_dependency(
++    link_with: [nvidiagpusensor_lib],
++    dependencies: [thresholds_dep, utils_dep, mctpasio_dep],
++    include_directories: [gpusensor_include_dir, sensor_include_dir],
++)
++install_symlink(
++    'nvidiagpusensor',
++    install_dir: get_option('libexecdir') / 'dbus-sensors',
++    pointing_to: get_option('prefix') / get_option('bindir') / 'dbussensors',
++)
++dbus_sensors_cpp_args += ['-DNVIDIAGPU']
+diff --git a/src/nvme/NVMeSensor.hpp b/src/nvme/NVMeSensor.hpp
+index 6508be9..cca546f 100644
+--- a/src/nvme/NVMeSensor.hpp
++++ b/src/nvme/NVMeSensor.hpp
+@@ -41,3 +41,5 @@ class NVMeSensor : public Sensor
+ 
+     void checkThresholds() override;
+ };
++
++int nvmeSensorMain();
+diff --git a/src/nvme/NVMeSensorMain.cpp b/src/nvme/NVMeSensorMain.cpp
+index 3afb1c3..20becc6 100644
+--- a/src/nvme/NVMeSensorMain.cpp
++++ b/src/nvme/NVMeSensorMain.cpp
+@@ -282,7 +282,7 @@ static void interfaceRemoved(sdbusplus::message_t& message, NVMEMap& contexts)
+     }
+ }
+ 
+-int main()
++int nvmeSensorMain()
+ {
+     boost::asio::io_context io;
+     auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
+@@ -334,4 +334,5 @@ int main()
+ 
+     setupManufacturingModeMatch(*systemBus);
+     io.run();
++    return 0;
+ }
+diff --git a/src/nvme/meson.build b/src/nvme/meson.build
+index 5289061..b5f425b 100644
+--- a/src/nvme/meson.build
++++ b/src/nvme/meson.build
+@@ -7,12 +7,21 @@ nvme_srcs += files('NVMeBasicContext.cpp')
+ 
+ nvme_deps = [default_deps, i2c, thresholds_dep, utils_dep, threads]
+ 
+-executable(
++nvmesensor_lib = static_library(
+     'nvmesensor',
+     sources: nvme_srcs,
+     dependencies: nvme_deps,
+     include_directories: src_inc,
+-    install: true,
+-    install_dir: '/usr/libexec/dbus-sensors',
+ )
++dbus_sensors_deps += declare_dependency(
++    link_with: [nvmesensor_lib],
++    dependencies: nvme_deps,
++    include_directories: src_inc,
++)
++install_symlink(
++    'nvmesensor',
++    install_dir: get_option('libexecdir') / 'dbus-sensors',
++    pointing_to: get_option('prefix') / get_option('bindir') / 'dbussensors',
++)
++dbus_sensors_cpp_args += ['-DNVME']
+ 
+diff --git a/src/psu/PSUSensor.hpp b/src/psu/PSUSensor.hpp
+index 73deef1..0fd66c5 100644
+--- a/src/psu/PSUSensor.hpp
++++ b/src/psu/PSUSensor.hpp
+@@ -85,3 +85,5 @@ struct PSUProperty
+     unsigned int sensorScaleFactor;
+     double sensorOffset;
+ };
++
++int psuSensorMain();
+diff --git a/src/psu/PSUSensorMain.cpp b/src/psu/PSUSensorMain.cpp
+index be2766e..4e82d55 100644
+--- a/src/psu/PSUSensorMain.cpp
++++ b/src/psu/PSUSensorMain.cpp
+@@ -1249,7 +1249,7 @@ static void powerStateChanged(
+     }
+ }
+ 
+-int main()
++int psuSensorMain()
+ {
+     boost::asio::io_context io;
+     auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
+@@ -1363,4 +1363,5 @@ int main()
+ 
+     setupManufacturingModeMatch(*systemBus);
+     io.run();
++    return 0;
+ }
+diff --git a/src/psu/meson.build b/src/psu/meson.build
+index abcdfe8..401b2b6 100644
+--- a/src/psu/meson.build
++++ b/src/psu/meson.build
+@@ -2,7 +2,7 @@ if not get_option('psu').allowed()
+     subdir_done()
+ endif
+ 
+-executable(
++psusensor_lib = static_library(
+     'psusensor',
+     'PSUEvent.cpp',
+     'PSUSensor.cpp',
+@@ -15,7 +15,22 @@ executable(
+         utils_dep,
+     ],
+     include_directories: src_inc,
+-    install: true,
+-    install_dir: '/usr/libexec/dbus-sensors',
+ )
++dbus_sensors_deps += declare_dependency(
++    link_with: [psusensor_lib],
++    dependencies: [
++        default_deps,
++        devicemgmt_dep,
++        pwmsensor_dep,
++        thresholds_dep,
++        utils_dep,
++    ],
++    include_directories: src_inc,
++)
++install_symlink(
++    'psusensor',
++    install_dir: get_option('libexecdir') / 'dbus-sensors',
++    pointing_to: get_option('prefix') / get_option('bindir') / 'dbussensors',
++)
++dbus_sensors_cpp_args += ['-DPSU']
+ 
+diff --git a/src/smbpbi/SmbpbiSensor.cpp b/src/smbpbi/SmbpbiSensor.cpp
+index c6c44f1..a5670a0 100644
+--- a/src/smbpbi/SmbpbiSensor.cpp
++++ b/src/smbpbi/SmbpbiSensor.cpp
+@@ -45,7 +45,8 @@ constexpr const char* configInterface =
+ constexpr const char* sensorRootPath = "/xyz/openbmc_project/sensors/";
+ constexpr const char* objectType = "SmbpbiVirtualEeprom";
+ 
+-boost::container::flat_map<std::string, std::unique_ptr<SmbpbiSensor>> sensors;
++boost::container::flat_map<std::string, std::unique_ptr<SmbpbiSensor>>
++    smbpbiSensors;
+ 
+ SmbpbiSensor::SmbpbiSensor(
+     std::shared_ptr<sdbusplus::asio::connection>& conn,
+@@ -500,7 +501,21 @@ void createSensors(
+         "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
+ }
+ 
+-int main()
++bool checkInvalidReading(uint8_t* reading, int length)
++{
++    // there is no value updated from HMC if reading data is all 0xff
++    uint8_t* ptr = reading;
++    for (int i = 0; i < length; i++, ptr++)
++    {
++        if (*ptr != 0xFF)
++        {
++            return false;
++        }
++    }
++    return true;
++}
++
++int smbpbiSensorMain()
+ {
+     boost::asio::io_context io;
+     auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
+@@ -509,7 +524,7 @@ int main()
+     systemBus->request_name("xyz.openbmc_project.SMBPBI");
+ 
+     boost::asio::post(io, [&]() {
+-        createSensors(io, objectServer, sensors, systemBus);
++        createSensors(io, objectServer, smbpbiSensors, systemBus);
+     });
+ 
+     boost::asio::steady_timer configTimer(io);
+@@ -529,8 +544,8 @@ int main()
+                     lg2::error("timer error");
+                     return;
+                 }
+-                createSensors(io, objectServer, sensors, systemBus);
+-                if (sensors.empty())
++                createSensors(io, objectServer, smbpbiSensors, systemBus);
++                if (smbpbiSensors.empty())
+                 {
+                     lg2::info("Configuration not detected");
+                 }
+diff --git a/src/smbpbi/SmbpbiSensor.hpp b/src/smbpbi/SmbpbiSensor.hpp
+index 074fa8d..245dc0d 100644
+--- a/src/smbpbi/SmbpbiSensor.hpp
++++ b/src/smbpbi/SmbpbiSensor.hpp
+@@ -74,16 +74,6 @@ struct SmbpbiSensor : public Sensor
+     size_t pollRateSecond;
+ };
+ 
+-bool checkInvalidReading(uint8_t* reading, int length)
+-{
+-    // there is no value updated from HMC if reading data is all 0xff
+-    uint8_t* ptr = reading;
+-    for (int i = 0; i < length; i++, ptr++)
+-    {
+-        if (*ptr != 0xFF)
+-        {
+-            return false;
+-        }
+-    }
+-    return true;
+-}
++bool checkInvalidReading(uint8_t* reading, int length);
++
++int smbpbiSensorMain();
+diff --git a/src/smbpbi/meson.build b/src/smbpbi/meson.build
+index e660734..bcea622 100644
+--- a/src/smbpbi/meson.build
++++ b/src/smbpbi/meson.build
+@@ -2,11 +2,20 @@ if not get_option('smbpbi').allowed()
+     subdir_done()
+ endif
+ 
+-executable(
++smbpbisensor_lib = static_library(
+     'smbpbisensor',
+     'SmbpbiSensor.cpp',
+     dependencies: [default_deps, i2c, thresholds_dep, utils_dep],
+     include_directories: src_inc,
+-    install: true,
+-    install_dir: '/usr/libexec/dbus-sensors',
+ )
++dbus_sensors_deps += declare_dependency(
++    link_with: [smbpbisensor_lib],
++    dependencies: [default_deps, i2c, thresholds_dep, utils_dep],
++    include_directories: src_inc,
++)
++install_symlink(
++    'smbpbisensor',
++    install_dir: get_option('libexecdir') / 'dbus-sensors',
++    pointing_to: get_option('prefix') / get_option('bindir') / 'dbussensors',
++)
++dbus_sensors_cpp_args += ['-DSMBPBI']
