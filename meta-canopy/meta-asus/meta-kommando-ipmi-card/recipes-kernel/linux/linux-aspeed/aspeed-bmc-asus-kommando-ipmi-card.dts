@@ -264,6 +264,16 @@
     };	
 };
 
+&spi1 {
+	status = "okay";
+
+	flash@0 {
+		status = "okay";
+		m25p,fast-read;
+		label = "spi-header";
+		spi-max-frequency = <100000000>; /* 100 MHz*/
+	};
+};
 
 &vhub {
 	status = "okay";
