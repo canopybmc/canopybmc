@@ -154,6 +154,21 @@
 
 &i2c3 {
 	status = "okay";
+
+	eeprom@55 {
+		compatible = "atmel,24c02";
+		reg = <0x55>;
+
+		nvmem-layout {
+			compatible = "fixed-layout";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			eth0_addr: eth-mac-addr@0 {
+				reg = <0x0 0x6>;
+			};
+		};
+	};
 };
 
 &i2c5 {
@@ -175,6 +190,8 @@
 
 &mac2 {
     status = "okay";
+	nvmem-cells = <&eth0_addr>;
+	nvmem-cell-names = "mac-address";
     phy-mode = "rgmii";
     phy-handle = <&ethphy2>;
     pinctrl-names = "default";
