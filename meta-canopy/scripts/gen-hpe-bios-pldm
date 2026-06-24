@@ -1,0 +1,264 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+#
+# This script requires unencrypted, signed BIOS firmware files which are
+# not publicly distributed.
+# The structure is:
+# - Signature with PEM certificates (base64 + some ASCII)
+# - HPIMAGE metadata block
+# - BIOS payload
+#
+# This will strip the (for us) arbritrary data and write the BIOS payload
+# into a PLDM firmware package that can be used to update the system
+# afterwards.
+#
+# The ROM version is auto-detected from the [ROM_INFO] block embedded
+# in the binary. Use `-v` to override it.
+#
+# Usage:
+#	gen-hpe-bios-pldm‎ -i <input> [-m <model>] [-v <version>] [-o <output>]
+#
+# Arguments:
+#	-i <input>	Input file: HPE-signed (*.signed.flash) or raw 32 MiB image
+#				    (if dumped)
+#	-m <model>	Target model identifier (auto-detected for known SYSIDs)
+#	-v <version>	Override version string (default: auto-detect from binary)
+#	-o <output>	Output file path (default: ./<model>-bios-<version>.pldm)
+#	-h		Show this help message.
+#
+# Requirements:
+#	jq, python3, bitarray (pip install bitarray), strings (binutils)
+#
+# Examples:
+#	gen-hpe-bios-tar -i U63_2.92_05_28_2026.unencrypted.signed.flash  # model from SYSID
+#	gen-hpe-bios-tar -i U54_2.92_05_28_2026.unencrypted.signed.flash -m dl360g11
+#	gen-hpe-bios-tar -i host-prime.img -m dl365g11 -v 3.14
+
+set -euo pipefail
+
+export BIOS_SIZE=33554432
+export HPE_HEADER_MAGIC="--=</"
+export IMAGE_NAME="ImageHost.bin"
+# HPE IANA ID
+export IANA_HEX="5CB80000"
+# Must match with https://github.com/openbmc/pldm/blob/master/fw-update/package_parser.cpp#L294
+export PACKAGE_UUID="F018878CCB7D49439800A02F059ACA02"
+export PKG_FORMAT_VERSION=1
+export COMPONENT_CLASSIFICATION=10
+export COMPONENT_IDENTIFIER=1
+export ACTIVATION_METHOD='[0]'
+
+# Compatible string format: com.hpe.Hardware.<ModelTag>.SPI.Host
+declare -A MODEL_COMPAT_TAG=(
+	[dl360g11]="ProLiantDL360G11"
+	[dl365g11]="ProLiantDL365G11"
+	[dl110g11]="ProLiantDL110G11"
+	[dl145g11]="ProLiantDL145G11"
+	[dl320g11]="ProLiantDL320G11"
+	[dl325g11]="ProLiantDL325G11"
+	[dl345g11]="ProLiantDL345G11"
+	[dl380g11]="ProLiantDL380G11"
+	[dl385g11]="ProLiantDL385G11"
+	[dl560g11]="ProLiantDL560G11"
+	[rl300g11]="ProLiantRL300G11"
+)
+
+# From [ROM_INFO] (ROM_SYSID). SYSIDs can support multiple models.
+declare -A SYSID_MODELS=(
+	[U63]="dl320g11"
+	[U54]="dl360g11 dl380g11"
+	[A55]="dl365g11 dl385g11"
+)
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+usage() {
+	grep '^#' "$0" | sed -n '/^# Usage:/,/^# Requirements:/p' | sed 's/^# \{0,1\}//'
+	echo ""
+	echo "Supported models:"
+	for k in "${!MODEL_COMPAT_TAG[@]}"; do
+		printf "  %-12s %s\n" "$k" "${MODEL_COMPAT_TAG[$k]}"
+	done | sort
+}
+
+is_hpe_signed() {
+	local file="$1"
+	local magic
+	magic=$(dd if="$file" bs=5 count=1 2>/dev/null | cat)
+	[[ "$magic" == "$HPE_HEADER_MAGIC" ]]
+}
+
+strip_hpe_header() {
+	local src="$1"
+	local dst="$2"
+	local filesize=$(wc -c < "$src")
+	local overhead=$(( filesize - BIOS_SIZE ))
+	(( overhead > 0 )) || die "'$src' is not larger than $BIOS_SIZE bytes"
+	echo "  Stripping HPE header: ${overhead} bytes"
+	dd if="$src" of="$dst" bs="$overhead" skip=1 2>/dev/null
+}
+
+rom_info_get() {
+	local file="$1"
+	local key="$2"
+	{ strings "$file" || true; } | awk "
+		/^\[ROM_INFO\]/ { in_block=1; next }
+		in_block && /^\[/  { in_block=0 }
+		in_block && /^${key}=/ { sub(/^${key}=/, \"\"); print; exit }
+	" || true
+}
+
+INPUT=""
+MODEL=""
+VERSION_OVERRIDE=""
+OUTPUT=""
+
+while getopts ":i:m:v:o:h" opt; do
+	case "$opt" in
+		i) INPUT="$OPTARG" ;;
+		m) MODEL="$OPTARG" ;;
+		v) VERSION_OVERRIDE="$OPTARG" ;;
+		o) OUTPUT="$OPTARG" ;;
+		h) usage; exit 0 ;;
+		:) die "Option -$OPTARG requires an argument." ;;
+		\?) die "Unknown option: -$OPTARG" ;;
+	esac
+done
+
+[[ -n "$INPUT" ]] || die "Missing required argument: -i <input>"
+[[ -f "$INPUT" ]] || die "Input file not found: $INPUT"
+
+ROM_SYSID="$(rom_info_get "$INPUT" ROM_SYSID)"
+
+if [[ -n "$MODEL" ]]; then
+	if [[ ! -v MODEL_COMPAT_TAG["$MODEL"] ]]; then
+		die "Unknown model '$MODEL'. Supported: ${!MODEL_COMPAT_TAG[*]}"
+	fi
+	MODELS=("$MODEL")
+	echo "  Model:      $MODEL (explicit)"
+else
+	if [[ -z "$ROM_SYSID" ]]; then
+		die "Could not detect ROM_SYSID from binary. Pass -m <model> explicitly."
+	fi
+	if [[ ! -v SYSID_MODELS["$ROM_SYSID"] ]]; then
+		die "Unknown ROM_SYSID '$ROM_SYSID'. Add it to SYSID_MODELS or pass -m explicitly."
+	fi
+	read -ra MODELS <<< "${SYSID_MODELS[$ROM_SYSID]}"
+	echo "  Models:     ${MODELS[*]} (auto-detected from ROM_SYSID=$ROM_SYSID)"
+fi
+
+if [[ -n "$VERSION_OVERRIDE" ]]; then
+	VERSION="$VERSION_OVERRIDE"
+	echo "  Version:    $VERSION (from -v)"
+else
+	ROM_VER_X="$(rom_info_get "$INPUT" ROM_MAJOR_VER)"
+	ROM_VER_Y="$(rom_info_get "$INPUT" ROM_MINOR_VER)"
+	[ -n "$ROM_VER_X" || -n "$ROM_VER_Y" ]] || \
+		die "Could not find [ROM_INFO]/ROM_VER_* in '$INPUT'. Use -v to specify version."
+	VERSION="$ROM_VER_X.$ROM_VER_Y"
+	echo "  Version:    $VERSION (auto-detected from ROM_INFO)"
+fi
+
+if [[ -z "$OUTPUT" ]]; then
+	VERSION_SAFE="${VERSION// /_}"
+	VERSION_SAFE="${VERSION_SAFE//\//-}"
+	NAME_PREFIX="${ROM_SYSID:-${MODELS[0]}}"
+	OUTPUT="./${NAME_PREFIX}-bios-${VERSION_SAFE}.pldm"
+fi
+
+echo "  Input:      $INPUT"
+echo "  Output:     $OUTPUT"
+
+TMPDIR=$(mktemp -d /tmp/gen-hpe-bios-tar.XXXXXX)
+trap 'rm -rf "$TMPDIR"' EXIT
+
+RAWBIN="${TMPDIR}/${IMAGE_NAME}"
+
+echo ""
+echo "Extracting raw BIOS payload..."
+if is_hpe_signed "$INPUT"; then
+	echo "  Detected HPE signed file (magic: '${HPE_HEADER_MAGIC}...')"
+	strip_hpe_header "$INPUT" "$RAWBIN"
+else
+	echo "  Detected raw image (no HPE header)"
+	cp "$INPUT" "$RAWBIN"
+fi
+
+ACTUAL_SIZE=$(wc -c < "$RAWBIN")
+(( ACTUAL_SIZE == BIOS_SIZE )) || \
+	die "Payload size is ${ACTUAL_SIZE} bytes, expected ${BIOS_SIZE}"
+echo "  Payload size: ${ACTUAL_SIZE} bytes (32 MiB)"
+
+METADATA_JSON="${TMPDIR}/metadata.json"
+
+COMPAT_JSON="{"
+for k in "${!MODEL_COMPAT_TAG[@]}"; do
+	COMPAT_JSON+="$(printf '"%s":"%s",' "$k" "${MODEL_COMPAT_TAG[$k]}")"
+done
+COMPAT_JSON="${COMPAT_JSON%,}}"
+
+COMPAT_STR_JSON="{"
+for k in "${!MODEL_COMPAT_TAG[@]}"; do
+	tag="${MODEL_COMPAT_TAG[$k]}"
+	compatible="com.hpe.Hardware.${tag}.SPI.Host"
+	COMPAT_STR_JSON+="$(printf '"%s":"%s",' "$k" "$compatible")"
+done
+COMPAT_STR_JSON="${COMPAT_STR_JSON%,}}"
+
+jq -n \
+	--arg      iana_hex      "$IANA_HEX" \
+	--arg      version       "$VERSION" \
+	--argjson  models        "$(printf '%s\n' "${MODELS[@]}" | jq -R . | jq -s .)" \
+	--argjson  compat_tags   "$COMPAT_JSON" \
+	--argjson  compat_str    "$COMPAT_STR_JSON" \
+	--arg      pkg_uuid      "$PACKAGE_UUID" \
+	--argjson  pkg_fmt_ver   "$PKG_FORMAT_VERSION" \
+	--argjson  comp_class    "$COMPONENT_CLASSIFICATION" \
+	--argjson  comp_id       "$COMPONENT_IDENTIFIER" \
+	--argjson  activation    "$ACTIVATION_METHOD" \
+'{
+    PackageHeaderInformation: {
+        PackageHeaderIdentifier:    $pkg_uuid,
+        PackageHeaderFormatVersion: $pkg_fmt_ver,
+        PackageVersionString:       $version
+    },
+    FirmwareDeviceIdentificationArea: [
+        $models[] | . as $model |
+        if $compat_tags[$model] == null then error("no compat tag for model \($model)") else . end |
+        {
+            DeviceUpdateOptionFlags:         [0],
+            ComponentImageSetVersionString:  $version,
+            ApplicableComponents:            [0],
+            Descriptors: [
+                { DescriptorType: 1,     DescriptorData: $iana_hex },
+                { DescriptorType: 65535, VendorDefinedDescriptorTitleString: $compat_str[$model],
+                                         VendorDefinedDescriptorData: "00" }
+            ]
+        }
+    ],
+    ComponentImageInformationArea: [{
+        ComponentClassification:            $comp_class,
+        ComponentIdentifier:                $comp_id,
+        ComponentOptions:                   [],
+        RequestedComponentActivationMethod: $activation,
+        ComponentVersionString:             $version
+    }]
+}' > "$METADATA_JSON"
+
+echo ""
+echo "PLDM metadata:"
+sed 's/^/  /' "$METADATA_JSON"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLDM_CREATOR="${SCRIPT_DIR}/pldm_fwup_pkg_creator.py"
+if [[ ! -f "$PLDM_CREATOR" ]]; then
+	die "pldm_fwup_pkg_creator.py not found at $PLDM_CREATOR"
+fi
+
+echo ""
+echo "Creating PLDM package..."
+python3 "$PLDM_CREATOR" "$OUTPUT" "$METADATA_JSON" "$RAWBIN"
+
+PKGSIZE=$(wc -c < "$OUTPUT")
+echo ""
+echo "Done: $OUTPUT (${PKGSIZE} bytes)"
