@@ -1,0 +1,201 @@
+From be589e9299c29c55d19e764b907dc2beaf8cbffe Mon Sep 17 00:00:00 2001
+From: Alexander Hansen <alexander.hansen@9elements.com>
+Date: Wed, 1 Jul 2026 15:24:18 +0200
+Subject: [PATCH 2/2] allow for updating spi partitions
+
+Some SPI flashes are partitioned to allow for A/B firmware updates
+without requiring multiple chips.
+
+Devicetree example:
+```
+flash@1 {
+compatible = "jedec,spi-nor";
+reg = <1>;
+partitions {
+ compatible = "fixed-partitions";
+ #address-cells = <1>;
+ #size-cells = <1>;
+
+ host-prime@0 {
+  label = "host-prime";
+  reg = <0x0 0x2000000>;
+ };
+ host-second@2000000 {
+  label = "host-second";
+  reg = <0x2000000 0x2000000>;
+ };
+};
+};
+```
+
+This shows up in sysfs like below:
+
+```
+root@hpe-proliant-g11:~# ls /sys/class/spi_master/spi1/spi1.1/mtd/
+mtd11    mtd11ro  mtd12    mtd12ro
+root@hpe-proliant-g11:~# cat /sys/class/spi_master/spi1/spi1.1/mtd/mtd11/name
+host-prime
+root@hpe-proliant-g11:~# cat /sys/class/spi_master/spi1/spi1.1/mtd/mtd12/name
+host-second
+```
+
+Adjust the code to allow for configuring the partition to be updated.
+In case no partition is configured (empty string property value), the
+update should work as before.
+
+Tested: TODO
+
+Change-Id: I42eaf85c925cde3d5029fb6b9165d2572ca13978
+Signed-off-by: Alexander Hansen <alexander.hansen@9elements.com>
+---
+Upstream-Status: Pending
+ bios/bios_software_manager.cpp | 23 +++++++++++++++----
+ bios/spi_device.cpp            | 42 ++++++++++++++++++++++++++--------
+ bios/spi_device.hpp            |  5 +++-
+ 3 files changed, 56 insertions(+), 14 deletions(-)
+
+diff --git a/bios/bios_software_manager.cpp b/bios/bios_software_manager.cpp
+index c441284..d1b3c87 100644
+--- a/bios/bios_software_manager.cpp
++++ b/bios/bios_software_manager.cpp
+@@ -46,6 +46,19 @@ sdbusplus::async::task<bool> BIOSSoftwareManager::initDevice(
+         co_return false;
+     }
+ 
++    std::optional<std::string> partition =
++        co_await dbusGetRequiredProperty<std::string>(ctx, service, path,
++                                                      configIface, "Partition");
++
++    if (!partition.has_value())
++    {
++        error("Missing property: Partition");
++        co_return false;
++    }
++
++    // empty string means no partition configured
++    partition = (partition == "") ? std::nullopt : partition;
++
+     enum FlashTool tool = flashToolNone;
+ 
+     if (config.configType == "IntelSPIFlash")
+@@ -85,15 +98,17 @@ sdbusplus::async::task<bool> BIOSSoftwareManager::initDevice(
+ 
+     enum FlashLayout layout = flashLayoutFlat;
+ 
+-    debug("SPI device: {INDEX1}:{INDEX2}", "INDEX1", spiControllerIndex.value(),
+-          "INDEX2", spiDeviceIndex.value());
++    debug("SPI device: {INDEX1}:{INDEX2}, Partition {PARTITION}", "INDEX1",
++          spiControllerIndex.value(), "INDEX2", spiDeviceIndex.value(),
++          "PARTITION", partition.value());
+ 
+     std::unique_ptr<SPIDevice> spiDevice;
+     try
+     {
+         spiDevice = std::make_unique<SPIDevice>(
+-            ctx, spiControllerIndex.value(), spiDeviceIndex.value(), dryRun,
+-            names, values, config, this, layout, tool);
++            ctx, spiControllerIndex.value(), spiDeviceIndex.value(),
++            partition.value(), dryRun, names, values, config, this, layout,
++            tool);
+     }
+     catch (std::exception& e)
+     {
+diff --git a/bios/spi_device.cpp b/bios/spi_device.cpp
+index cfc5f5c..0608f5b 100644
+--- a/bios/spi_device.cpp
++++ b/bios/spi_device.cpp
+@@ -56,20 +56,20 @@ static std::optional<std::string> getSPIDevAddr(uint64_t spiControllerIndex)
+     return std::nullopt;
+ }
+ 
+-SPIDevice::SPIDevice(sdbusplus::async::context& ctx,
+-                     uint64_t spiControllerIndex, uint64_t spiDeviceIndex,
+-                     bool dryRun, const std::vector<std::string>& gpioLinesIn,
+-                     const std::vector<bool>& gpioValuesIn,
+-                     SoftwareConfig& config, SoftwareManager* parent,
+-                     enum FlashLayout layout, enum FlashTool tool,
+-                     const std::string& versionDirPath) :
++SPIDevice::SPIDevice(
++    sdbusplus::async::context& ctx, uint64_t spiControllerIndex,
++    uint64_t spiDeviceIndex, const std::optional<std::string>& partition,
++    bool dryRun, const std::vector<std::string>& gpioLinesIn,
++    const std::vector<bool>& gpioValuesIn, SoftwareConfig& config,
++    SoftwareManager* parent, enum FlashLayout layout, enum FlashTool tool,
++    const std::string& versionDirPath) :
+     Device(ctx, config, parent,
+            {RequestedApplyTimes::Immediate, RequestedApplyTimes::OnReset}),
+     NotifyWatchIntf(ctx, versionDirPath), dryRun(dryRun),
+     gpioLines(gpioLinesIn),
+     gpioValues(gpioValuesIn.begin(), gpioValuesIn.end()),
+     spiControllerIndex(spiControllerIndex), spiDeviceIndex(spiDeviceIndex),
+-    layout(layout), tool(tool)
++    partition(partition), layout(layout), tool(tool)
+ {
+     auto optAddr = getSPIDevAddr(spiControllerIndex);
+ 
+@@ -511,6 +511,20 @@ auto SPIDevice::processUpdate(std::string versionFileName)
+     co_return;
+ }
+ 
++// @returns empty string if no name was found
++static std::string getMTDName(const std::filesystem::path& mtdPath)
++{
++    const std::filesystem::path namePath = mtdPath / "name";
++    std::string partitionName = "";
++
++    if (std::filesystem::exists(namePath))
++    {
++        std::ifstream nameFile(namePath);
++        nameFile >> partitionName;
++    }
++    return partitionName;
++}
++
+ std::optional<std::string> SPIDevice::getMTDDevicePath() const
+ {
+     const std::string spiPath =
+@@ -528,7 +542,17 @@ std::optional<std::string> SPIDevice::getMTDDevicePath() const
+     {
+         const std::string mtdName = entry.path().filename().string();
+ 
+-        if (mtdName.starts_with("mtd") && !mtdName.ends_with("ro"))
++        if (!mtdName.starts_with("mtd") || mtdName.ends_with("ro"))
++        {
++            continue;
++        }
++
++        if (!partition.has_value())
++        {
++            return "/dev/" + mtdName;
++        }
++
++        if (getMTDName(entry.path()) == partition.value())
+         {
+             return "/dev/" + mtdName;
+         }
+diff --git a/bios/spi_device.hpp b/bios/spi_device.hpp
+index a0b1b62..daed61a 100644
+--- a/bios/spi_device.hpp
++++ b/bios/spi_device.hpp
+@@ -43,7 +43,8 @@ class SPIDevice : public Device, public NotifyWatchIntf
+   public:
+     using Device::softwareCurrent;
+     SPIDevice(sdbusplus::async::context& ctx, uint64_t spiControllerIndex,
+-              uint64_t spiDeviceIndex, bool dryRun,
++              uint64_t spiDeviceIndex,
++              const std::optional<std::string>& partition, bool dryRun,
+               const std::vector<std::string>& gpioLinesIn,
+               const std::vector<bool>& gpioValuesIn, SoftwareConfig& config,
+               SoftwareManager* parent, enum FlashLayout layout,
+@@ -68,6 +69,8 @@ class SPIDevice : public Device, public NotifyWatchIntf
+ 
+     uint64_t spiControllerIndex;
+     uint64_t spiDeviceIndex;
++    // optional name of the flash partition as listed in /dev/mtd/by-name/
++    std::optional<std::string> partition;
+ 
+     // e.g. "1e631000.spi"
+     std::string spiDev;
+-- 
+2.54.0
+

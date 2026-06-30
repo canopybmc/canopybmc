@@ -909,6 +909,32 @@
             "Name": "GenericContainPort",
             "PortType": "containing",
             "Type": "Port"
+        },
+        {
+            "FirmwareInfo": {
+                "CompatibleHardware": "com.hpe.Hardware.ProLiantDL365G11.SPI.Host",
+                "VendorIANA": 47196
+            },
+            "MuxOutputs": [
+            ],
+            "Name": "UEFIPrimary",
+            "SPIControllerIndex": 1,
+            "SPIDeviceIndex": 1,
+            "Partition": "host-prime",
+            "Type": "SPIFlash"
+        },
+        {
+            "FirmwareInfo": {
+                "CompatibleHardware": "com.hpe.Hardware.ProLiantDL365G11.SPI.Host",
+                "VendorIANA": 47196
+            },
+            "MuxOutputs": [
+            ],
+            "Name": "UEFISecondary",
+            "SPIControllerIndex": 1,
+            "SPIDeviceIndex": 1,
+            "Partition": "host-second",
+            "Type": "SPIFlash"
         }
     ],
     "Name": "chassis",

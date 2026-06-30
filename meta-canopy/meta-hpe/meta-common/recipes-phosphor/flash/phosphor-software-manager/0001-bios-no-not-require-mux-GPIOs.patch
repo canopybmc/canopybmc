@@ -1,0 +1,236 @@
+From 7285b68bd6c1c78ab24d081a3a422921d9a2a86b Mon Sep 17 00:00:00 2001
+From: Alexander Hansen <alexander.hansen@9elements.com>
+Date: Thu, 25 Jun 2026 18:15:05 +0200
+Subject: [PATCH 1/2] bios: no not require mux GPIOs
+
+Not every platform has their SPI flash behind a gpio Mux, we should not
+stop the update process because no lines were configured.
+
+For example HPE ProLiant Gen11 does not have a gpio mux for the SPI
+flash.
+
+Also we should not assume a specific driver. In this patch, the step of
+binding the flash to the driver is skipped if the flash is already
+bound. In case of HPE ProLiant Gen11 it is already bound via devicetree
+and not using aspeed spi smc driver either, so binding that would not
+work since it is using an HPE GXP SoC for BMC.
+
+```
+root@hpe-proliant-g11:~# ls /sys/bus/spi/drivers/spi-nor/
+bind    spi0.0  spi1.0  spi1.1  uevent  unbind
+
+root@hpe-proliant-g11:~# zcat /proc/config.gz | grep -i HPE
+CONFIG_ARCH_HPE=y
+CONFIG_ARCH_HPE_GXP=y
+CONFIG_SOC_HPE=y
+CONFIG_SOC_HPE_GXP=y
+CONFIG_NVMEM_HPE_GXP=y
+```
+
+Tested: on HPE ProLiant Gen11 D360
+
+```
+root@hpe-proliant-g11:~# busctl introspect xyz.openbmc_project.EntityManager /xyz/openbmc_project/inventory/system/chassis/chassis/HostSPIFlash
+...
+xyz.openbmc_project.Configuration.... interface -         -                      -
+.Name                                 property  s         "HostSPIFlash"         emits-change
+.SPIControllerIndex                   property  t         1                      emits-change
+.SPIDeviceIndex                       property  t         1                      emits-change
+.Type                                 property  s         "SPIFlash"             emits-change
+xyz.openbmc_project.Configuration.... interface -         -                      -
+.CompatibleHardware                   property  s         "com.hpe.proliant.g11" emits-change
+.VendorIANA                           property  t         47196                  emits-change
+root@hpe-proliant-g11:~# busctl tree xyz.openbmc_project.Software.BIOS
+`- /xyz
+  `- /xyz/openbmc_project
+    `- /xyz/openbmc_project/software
+      `- /xyz/openbmc_project/software/HostSPIFlash_146
+```
+
+The fw inventory item shows up
+
+```
+curl --silent --show-error --insecure --user root:0penBmc https://hpe-dl360-g11-bmc.dut.lab.bs.9e.network:443/redfish/v1/UpdateService/FirmwareInventory
+{
+  "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory",
+  "@odata.type": "#SoftwareInventoryCollection.SoftwareInventoryCollection",
+  "Members": [
+    {
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/76399742"
+    },
+    {
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/HostSPIFlash_146"
+    },
+    {
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/bios_active"
+    }
+  ],
+  "Members@odata.count": 3,
+  "Name": "Software Inventory Collection"
+}
+```
+
+Starting the update request:
+
+```
+curl -k --insecure --user root:0penBmc -H Content-Type:multipart/form-data -X POST -F 'UpdateParameters={"Targets":["/redfish/v1/UpdateService/FirmwareInventory/HostSPIFlash_146"],"@Redfish.OperationApplyTime":"Immediate"};type=application/json' -F 'UpdateFile=@pldm-package-hpe-proliant-g11-d360-host.bin;type=application/octet-stream' https://hpe-dl360-g11-bmc.dut.lab.bs.9e.network:443/redfish/v1/UpdateService/update-multipart
+{
+  "@odata.id": "/redfish/v1/TaskService/Tasks/1",
+  "@odata.type": "#Task.v1_4_3.Task",
+  "HidePayload": false,
+  "Id": "1",
+  "Messages": [
+    {
+      "@odata.type": "#Message.v1_1_1.Message",
+      "Message": "The task with Id '1' has started.",
+      "MessageArgs": [
+        "1"
+      ],
+      "MessageId": "TaskEvent.1.0.TaskStarted",
+      "MessageSeverity": "OK",
+      "Resolution": "None."
+    }
+  ],
+  "Name": "Task 1",
+  "Payload": {
+    "HttpHeaders": [],
+    "HttpOperation": "POST",
+    "TargetUri": "/redfish/v1/UpdateService/update-multipart"
+  },
+  "PercentComplete": 0,
+  "StartTime": "2026-06-30T14:54:36+00:00",
+  "TaskMonitor": "/redfish/v1/TaskService/TaskMonitors/1",
+  "TaskState": "Running",
+  "TaskStatus": "OK"
+}
+```
+
+After completing the update, the new host fw version shows up in fw
+inventory:
+```
+{
+  "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory",
+  "@odata.type": "#SoftwareInventoryCollection.SoftwareInventoryCollection",
+  "Members": [
+    {
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/22ba1852"
+    },
+    {
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/HostSPIFlash_9805"
+    },
+    {
+      "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/bios_active"
+    }
+  ],
+  "Members@odata.count": 3,
+  "Name": "Software Inventory Collection"
+}
+```
+
+Change-Id: I7e24011890b4e28fbe832746de877078864a41a6
+Signed-off-by: Alexander Hansen <alexander.hansen@9elements.com>
+---
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/phosphor-bmc-code-mgmt/+/91736]
+ bios/spi_device.cpp | 73 ++++++++++++++++++++++++++++-----------------
+ 1 file changed, 45 insertions(+), 28 deletions(-)
+
+diff --git a/bios/spi_device.cpp b/bios/spi_device.cpp
+index b1ba4a4..cfc5f5c 100644
+--- a/bios/spi_device.cpp
++++ b/bios/spi_device.cpp
+@@ -233,47 +233,64 @@ sdbusplus::async::task<bool> SPIDevice::writeSPIFlash(const uint8_t* image,
+     }
+     else
+     {
+-        error("No GPIO lines configured for SPI muxing");
++        info("No GPIO lines configured for SPI muxing, proceeding.");
++    }
++
++    bool success = true;
++    bool needsUnbind = false;
++
++    if (!isSPIFlashBound())
++    {
++        needsUnbind = true;
++        success = co_await SPIDevice::bindSPIFlash();
++    }
++    else
++    {
++        debug("SPI flash already bound, skipping binding step.");
++    }
++
++    if (!success)
++    {
+         co_return false;
+     }
+ 
+-    bool success = co_await SPIDevice::bindSPIFlash();
+-    if (success)
++    if (dryRun)
++    {
++        info("dry run, NOT writing to the chip");
++    }
++    else
+     {
+-        if (dryRun)
++        if (tool == flashToolFlashrom)
+         {
+-            info("dry run, NOT writing to the chip");
++            success = co_await SPIDevice::writeSPIFlashWithFlashrom(
++                image, image_size);
++            if (!success)
++            {
++                error(
++                    "Error writing to SPI flash {CONTROLLERINDEX}:{DEVICEINDEX}",
++                    "CONTROLLERINDEX", spiControllerIndex, "DEVICEINDEX",
++                    spiDeviceIndex);
++            }
++        }
++        else if (tool == flashToolFlashcp)
++        {
++            success =
++                co_await SPIDevice::writeSPIFlashWithFlashcp(image, image_size);
+         }
+         else
+         {
+-            if (tool == flashToolFlashrom)
+-            {
+-                success = co_await SPIDevice::writeSPIFlashWithFlashrom(
+-                    image, image_size);
+-                if (!success)
+-                {
+-                    error(
+-                        "Error writing to SPI flash {CONTROLLERINDEX}:{DEVICEINDEX}",
+-                        "CONTROLLERINDEX", spiControllerIndex, "DEVICEINDEX",
+-                        spiDeviceIndex);
+-                }
+-            }
+-            else if (tool == flashToolFlashcp)
+-            {
+-                success = co_await SPIDevice::writeSPIFlashWithFlashcp(
+-                    image, image_size);
+-            }
+-            else
+-            {
+-                success =
+-                    co_await SPIDevice::writeSPIFlashDefault(image, image_size);
+-            }
++            success =
++                co_await SPIDevice::writeSPIFlashDefault(image, image_size);
+         }
++    }
+ 
++    lg2::info("Successfully updated SPI flash");
++
++    if (needsUnbind)
++    {
+         success = success && co_await SPIDevice::unbindSPIFlash();
+     }
+ 
+-    lg2::info("Successfully updated SPI flash");
+     co_return success;
+ }
+ 
+-- 
+2.54.0
+

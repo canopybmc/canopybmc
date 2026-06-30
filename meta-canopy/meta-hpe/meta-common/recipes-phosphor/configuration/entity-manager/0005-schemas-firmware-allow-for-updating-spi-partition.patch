@@ -1,0 +1,78 @@
+From 3a60aa4722f0ac38f8d1019d7ffd89b008ffca7e Mon Sep 17 00:00:00 2001
+From: Alexander Hansen <alexander.hansen@9elements.com>
+Date: Wed, 1 Jul 2026 14:18:29 +0200
+Subject: [PATCH] schemas/firmware: allow for updating spi partition
+
+Some SPI flashes are partitioned to allow for A/B firmware updates
+without requiring multiple chips.
+
+Devicetree example:
+```
+   flash@1 {
+    compatible = "jedec,spi-nor";
+    reg = <1>;
+    partitions {
+     compatible = "fixed-partitions";
+     #address-cells = <1>;
+     #size-cells = <1>;
+
+     host-prime@0 {
+      label = "host-prime";
+      reg = <0x0 0x2000000>;
+     };
+     host-second@2000000 {
+      label = "host-second";
+      reg = <0x2000000 0x2000000>;
+     };
+    };
+   };
+```
+
+This shows up in sysfs like below:
+
+```
+root@hpe-proliant-g11:~# ls /sys/class/spi_master/spi1/spi1.1/mtd/
+mtd11    mtd11ro  mtd12    mtd12ro
+root@hpe-proliant-g11:~# cat /sys/class/spi_master/spi1/spi1.1/mtd/mtd11/name
+host-prime
+root@hpe-proliant-g11:~# cat /sys/class/spi_master/spi1/spi1.1/mtd/mtd12/name
+host-second
+```
+
+Adjust the schema to allow for configuring the partition to be updated.
+
+Tested: TODO
+
+Change-Id: Ifd0fa059d7b4b597d860bb0f9509282f6202f372
+Signed-off-by: Alexander Hansen <alexander.hansen@9elements.com>
+---
+Upstream-Status: Pending
+ schemas/firmware.json | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/schemas/firmware.json b/schemas/firmware.json
+index ba32140..52da6be 100644
+--- a/schemas/firmware.json
++++ b/schemas/firmware.json
+@@ -95,6 +95,10 @@
+                     "description": "The index of the SPI device connected to that controller",
+                     "type": "number"
+                 },
++                "Partition": {
++                    "description": "The name of the partition to update. Leave empty if there is only a single partition without a name.",
++                    "type": "string"
++                },
+                 "MuxOutputs": {
+                     "$ref": "#/$defs/MuxOutputs"
+                 },
+@@ -107,6 +111,7 @@
+                 "Type",
+                 "SPIControllerIndex",
+                 "SPIDeviceIndex",
++                "Partition",
+                 "MuxOutputs",
+                 "FirmwareInfo"
+             ]
+-- 
+2.54.0
+
