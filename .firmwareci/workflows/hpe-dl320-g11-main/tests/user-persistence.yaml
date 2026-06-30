@@ -75,7 +75,7 @@ stages:
       - cmd: newdutctl
         name: Power off DUT
         parameters:
-          agent: "[[attributes.DutAgent]]"
+          agent: "[[attributes.Agent]]"
           device: "[[attributes.Device]]"
           command: power
           args: ["off"]
@@ -88,7 +88,7 @@ stages:
       - cmd: newdutctl
         name: Power on DUT
         parameters:
-          agent: "[[attributes.DutAgent]]"
+          agent: "[[attributes.Agent]]"
           device: "[[attributes.Device]]"
           command: power
           args: ["on"]
@@ -97,10 +97,10 @@ stages:
         options:
           timeout: 10m
         parameters:
-          agent: "[[attributes.DutAgent]]"
+          agent: "[[attributes.Agent]]"
           device: "[[attributes.Device]]"
           command: serial
-          args: ["Phosphor OpenBMC"]
+          args: ["expect", "Phosphor OpenBMC"]
 
   - name: Wait for BMC After Reboot
     steps:

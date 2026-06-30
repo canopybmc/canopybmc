@@ -3,7 +3,7 @@ post-stage:
   - cmd: newdutctl
     name: Power off DUT
     parameters:
-      agent: "[[attributes.DutAgent]]"
+      agent: "[[attributes.Agent]]"
       device: "[[attributes.Device]]"
       command: power
       args: ["off"]

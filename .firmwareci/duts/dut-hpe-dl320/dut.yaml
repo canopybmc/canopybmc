@@ -3,7 +3,8 @@ label: hpe-dl320
 attributes:
   BMC: dl320g11-bmc-fwci.lab.9e.network
   BMCPassword: 0penBmc
-  DutAgent: worker102.lab.9e.network:1024
+  Agent: worker102.lab.9e.network:1024
   Device: dl320
   Host: dl320g11-1.lab.9e.network
   HostUser: oscar
+reservation-system: dutctl

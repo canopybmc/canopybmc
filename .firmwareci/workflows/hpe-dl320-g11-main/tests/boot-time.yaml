@@ -8,7 +8,7 @@ pre-stage:
   - cmd: newdutctl
     name: Power off DUT
     parameters:
-      agent: "[[attributes.DutAgent]]"
+      agent: "[[attributes.Agent]]"
       device: "[[attributes.Device]]"
       command: power
       args: ["off"]
@@ -16,7 +16,7 @@ pre-stage:
   - cmd: newdutctl
     name: Emulate Flash
     parameters:
-      agent: "[[attributes.DutAgent]]"
+      agent: "[[attributes.Agent]]"
       device: "[[attributes.Device]]"
       command: emulate-bmc
       args: ["[[input.Binary]]"]
@@ -24,7 +24,7 @@ pre-stage:
   - cmd: newdutctl
     name: Power on DUT
     parameters:
-      agent: "[[attributes.DutAgent]]"
+      agent: "[[attributes.Agent]]"
       device: "[[attributes.Device]]"
       command: power
       args: ["on"]
@@ -34,10 +34,10 @@ pre-stage:
     options:
       timeout: 80s
     parameters:
-      agent: "[[attributes.DutAgent]]"
+      agent: "[[attributes.Agent]]"
       device: "[[attributes.Device]]"
       command: serial
-      args: ["Phosphor OpenBMC"]
+      args: ["expect", "Phosphor OpenBMC"]
 
 stages:
   - name: SSH Readiness
