@@ -1,0 +1,106 @@
+---
+name: Build, test and release
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "doc/**"
+      - "README.md"
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - "doc/**"
+      - "README.md"
+  workflow_dispatch: {}
+
+jobs:
+  get-matrix:
+    runs-on: ubuntu-latest
+    name: Get list of build targets
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Matrix
+      - name: get-matrix
+        id: get-matrix
+        run: |
+          matrix=$(jq -cn '[
+            "canopy-qemu",
+            "hpe-proliant-g11"
+          ]')
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+      - name: Check JSON validity
+        run: |
+          jq . <<< '${{ steps.get-matrix.outputs.matrix }}'
+
+      # Include
+      - name: get-include
+        id: get-include
+        run: |
+          include=$(jq -cn '[
+            {
+              "board": "hpe-proliant-g11",
+              "fwci_workflow_name": "hpe-dl320-g11-ci",
+              "fwci_binary_name": "Binary=obmc-phosphor-image-hpe-proliant-g11.GXP2loader-t282-t288-sgn00.static.mtd"
+            }
+          ]')
+          echo "include=$include" >> "$GITHUB_OUTPUT"
+      - name: Check JSON validity
+        run: |
+          jq . <<< '${{ steps.get-include.outputs.include }}'
+    outputs:
+      matrix: ${{ steps.get-matrix.outputs.matrix }}
+      include: ${{ steps.get-include.outputs.include }}
+
+  build-target:
+    runs-on: [self-hosted, Hydra, Large]
+    needs:
+      - get-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        board: ${{ fromJson(needs.get-matrix.outputs.matrix) }}
+        include: ${{ fromJson(needs.get-matrix.outputs.include) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Build
+        uses: ./.github/actions/build
+        with:
+          board: ${{ matrix.board }}
+          signing-key: ${{ secrets.HPE_9E_SIGNING_KEY }}
+        # This build action uploads the files as "obmc-phosphor-image-${{ inputs.board }}"
+
+  firmwareci:
+    runs-on: ubuntu-latest
+    needs:
+      - get-matrix
+      - build-target
+    strategy:
+      fail-fast: false
+      matrix:
+        board: ${{ fromJson(needs.get-matrix.outputs.matrix) }}
+        include: ${{ fromJson(needs.get-matrix.outputs.include) }}
+    steps:
+      - name: Download firmware image
+        uses: actions/download-artifact@v8
+        with:
+          name: obmc-phosphor-image-${{ matrix.board }}
+
+      - name: Upload to FirmwareCI
+        uses: docker://firmwareci/action:v6.0
+        with:
+          TOKEN: ${{ secrets.FWCI_TOKEN }}
+          WORKFLOW_NAME: ${{ matrix.fwci_workflow_name || format('{0}-ci', matrix.board) }}
+          BINARIES: ${{ matrix.fwci_binary_name || format('Binary=obmc-phosphor-image-{0}.static.mtd', matrix.board) }}
+          GITHUB_INSTALLATION_ID: ${{ secrets.FWCI_GITHUB_INSTALLATION_ID }}
