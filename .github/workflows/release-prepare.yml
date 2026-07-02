@@ -1,0 +1,58 @@
+---
+# Update versions and create release PR
+# Source: https://www.thisdot.co/blog/tag-and-release-your-project-with-github-actions-workflows
+#
+# For detailed description see "doc/releases.md"
+
+name: Release prepare
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The new version name / number"
+        required: true
+        type: string
+
+permissions:
+  contents: write # To push new branch
+  pull-requests: write # To create a pull request
+
+jobs:
+  release-prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Update version
+        run: |
+          jq --arg new_version "${{ inputs.version }}" '. as $old | .current = $new_version | .previous = $old.current ' release-notes/versions.json > release-notes/versions2.json
+          mv release-notes/versions2.json release-notes/versions.json
+
+      - name: Get the previous release version
+        id: get_version
+        run: |
+          PREVIOUS_VERSION=$( jq '.previous' < release-notes/versions.json )
+          echo "previous_version=${PREVIOUS_VERSION=$}" >> "${GITHUB_OUTPUT}"
+
+      - name: Update release notes
+        run: |
+          sed -i -E "s/.*SED_REPLACE_FULL_CHANGELOG_URL.*/\[compare ${{ steps.get_version.outputs.previous_version }} and ${{ inputs.version }}\]\(https:\/\/github.com\/canopybmc\/canopybmc\/compare\/${{ steps.get_version.outputs.previous_version }}...${{ inputs.version }}\)/" release-notes/next.md
+          mv release-notes/next.md "release-notes/${{ inputs.version }}.md"
+          cp release-notes/template.md release-notes/next.md
+
+      - name: Create pull request
+        id: create_pr
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: release/${{ inputs.version }}
+          commit-message: "chore: bump version to ${{ inputs.version }}"
+          title: "Release: ${{ inputs.version }} Pull Request"
+          body: "Prepare for next release"
+          assignees: "${{ github.actor }}"
+          reviewers: "${{ github.actor }}"

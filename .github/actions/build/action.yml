@@ -35,14 +35,11 @@ runs:
         fi
         bitbake obmc-phosphor-image
 
-    - name: Upload firmware image
+    - name: Upload firmware image with SBOM
       uses: actions/upload-artifact@v7
       with:
         name: obmc-phosphor-image-${{ inputs.board }}
-        path: build/${{ inputs.board }}/tmp/deploy/images/${{ inputs.board }}/obmc-phosphor-image-${{ inputs.board }}.*static.mtd
-
-    - name: Upload SBOM
-      uses: actions/upload-artifact@v7
-      with:
-        name: sbom-${{ inputs.board }}
-        path: build/${{ inputs.board }}/tmp/deploy/images/${{ inputs.board }}/obmc-phosphor-image-${{ inputs.board }}.spdx.json
+        path: |
+          build/${{ inputs.board }}/tmp/deploy/images/${{ inputs.board }}/obmc-phosphor-image-${{ inputs.board }}.*static.mtd
+          build/${{ inputs.board }}/tmp/deploy/images/${{ inputs.board }}/obmc-phosphor-image-${{ inputs.board }}.spdx.json
+          build/${{ inputs.board }}/tmp/deploy/images/${{ inputs.board }}/obmc-phosphor-image-${{ inputs.board }}.static.mtd*tar

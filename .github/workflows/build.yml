@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "*"
     paths-ignore:
       - "doc/**"
       - "README.md"
@@ -104,3 +106,63 @@ jobs:
           WORKFLOW_NAME: ${{ matrix.fwci_workflow_name || format('{0}-ci', matrix.board) }}
           BINARIES: firmware=${{ matrix.fwci_binary_name || format('obmc-phosphor-image-{0}.static.mtd', matrix.board) }}
           GITHUB_INSTALLATION_ID: ${{ secrets.FWCI_GITHUB_INSTALLATION_ID }}
+
+  release:
+    # For detailed description see "doc/releases.md"
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag'
+    needs:
+      - build-target # needed for artifacts
+      - firmwareci # we want to only release on functional and tested codebase
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Get the version of the new release
+        # The 'current' version in the JSON file is actually the next version at this point in time,
+        #   as it was just updated in the 'release-prepare.yml' job
+        id: get_version
+        run: |
+          CURRENT_VERSION=$( jq '.current' < release-notes/versions.json | sed 's/"//g' )
+          echo "current_version=${CURRENT_VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Check that release notes file for this release exists
+        run: |
+          if [ ! -f "release-notes/${{ steps.get_version.outputs.current_version }}.md" ]; then
+            echo "Error: Release notes file 'release-notes/${{ steps.get_version.outputs.current_version }}.md' does not exist"
+            exit 1
+          fi
+          echo "Release notes file found: release-notes/${{ steps.get_version.outputs.current_version }}.md"
+
+      - name: Checkout
+        # Checkout into sub-directory, this one is used to create a clean source archive
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          # TODO: Do we want all git submodules to also be part of the source release (the .tar file)?
+          path: "canopybmc-${{ steps.get_version.outputs.current_version }}"
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Create source archives
+        run: |
+          zip -r "canopybmc-${{ steps.get_version.outputs.current_version }}.zip" "canopybmc-${{ steps.get_version.outputs.current_version }}"
+          tar -czvf "canopybmc-${{ steps.get_version.outputs.current_version }}.tar.gz" "canopybmc-${{ steps.get_version.outputs.current_version }}"
+
+      - name: Download all firmware images
+        uses: actions/download-artifact@v8
+        with:
+          path: binaries/
+          pattern: obmc-phosphor-image-*
+
+      - name: Release with GH Release action
+        uses: softprops/action-gh-release@v3
+        with:
+          body_path: release-notes/${{ steps.get_version.outputs.current_version }}.md
+          files: |
+            canopybmc-${{ steps.get_version.outputs.current_version }}.zip
+            canopybmc-${{ steps.get_version.outputs.current_version }}.tar.gz
+            binaries/**/*
