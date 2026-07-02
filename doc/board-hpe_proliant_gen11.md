@@ -1,5 +1,34 @@
 # HPE ProLiant Gen11
 
+## Supported Boards
+
+The HPE ProLiant Gen11 family consists of several variants. This list shows
+all boards that are supported by the code and also lists (code) names
+used throughout the code or elsewhere in the vendor documentation.
+
+| Model                | Short    | SYSID | Validated |
+|----------------------|----------|-------|-----------|
+| ProLiant DL110 Gen11 | dl110g11 | U62   |    ❌     |
+| ProLiant DL145 Gen11 | dl145g11 | A58   |    ❌     |
+| ProLiant DL320 Gen11 | dl320g11 | U63   |    ✔️     |
+| ProLiant DL345 Gen11 | dl345g11 | A56   |    ⚠️     |
+| ProLiant DL360 Gen11 | dl360g11 | U54   |    ✔️     |
+| ProLiant DL365 Gen11 | dl365g11 | A55   |    ✔️     |
+| ProLiant DL380 Gen11 | dl380g11 | U54   |    ⚠️     |
+| ProLiant DL385 Gen11 | dl385g11 | A55   |    ⚠️     |
+
+**Legend**
+
+- ✔️: validated via CI or direct HW access
+- ⚠️: validated indirectly via HPE or OSFCI
+- ❌: not validated but supported in the code
+
+<!-- Unsupported right now. Comment out but keep for knowledge base -->
+<!-- | ProLiant ML110 Gen11 | ml110g11 | U63   | -->
+<!-- | ProLiant DL350 Gen11 | dl350g11 | U54   | -->
+<!-- | ProLiant DL560 Gen11 | dl560g11 | U59   | -->
+<!-- | ProLiant RL300 Gen11 | rl300g11 | R11   | -->
+
 ## Testing (OSFCI)
 
 HPE offers a public infrastructure on which the Canopy images (or OpenBMC in general)
