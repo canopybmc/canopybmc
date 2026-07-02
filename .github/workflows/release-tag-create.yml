@@ -1,0 +1,75 @@
+---
+# Update versions and create release PR
+# Source: https://www.thisdot.co/blog/tag-and-release-your-project-with-github-actions-workflows
+#
+# For detailed description see "doc/releases.md"
+
+name: Create release tag
+
+on:
+  pull_request:
+    types:
+      - closed
+
+permissions:
+  contents: write # To push new branch
+  actions: write # To trigger another workflow
+
+jobs:
+  release-tag-trigger:
+    runs-on: ubuntu-latest
+    if: |
+      startsWith(github.event.pull_request.title, 'Release:') &&
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.user.login == 'github-actions[bot]'
+    # The author `github-actions[bot]` is defined in
+    #   the [peter-evans/create-pull-request](https://github.com/peter-evans/create-pull-request) action
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Git
+        run: |
+          git config user.name "Release bot"
+          git config user.email "releasebot@noreply.com"
+
+      - name: Get the current version
+        id: get_version
+        run: |
+          NEXT_VERSION=$( jq '.current' < release-notes/versions.json | sed 's/"//g' )
+          echo "next_version=${NEXT_VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create tag
+        run: |
+          NEXT_VERSION=${{ steps.get_version.outputs.next_version }}
+          git pull
+          git tag -a "${NEXT_VERSION}" -m "${NEXT_VERSION}"
+          git push --follow-tags
+
+      - name: Trigger the build workflow
+        # This step is only necessary to work around GitHub limitations.
+        # In GitHub, there is a depth limit on workflows triggered by workflows to avoid infinite loops.
+        # So we have to trigger the `build.yml` workflow "manually" with this step, because GitHub
+        # will no automatically trigger any workflows on push event originating from a workflow, even
+        # when a tag is pushed.
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              const result = await github.rest.actions.createWorkflowDispatch({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'build.yml',
+                ref: "${{ steps.get_version.outputs.next_version }}",
+              })
+              console.log(result);
+            } catch(error) {
+              console.error(error);
+              core.setFailed(error);
+            }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
