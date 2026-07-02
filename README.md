@@ -29,7 +29,7 @@ source setup hpe-proliant-g11
 bitbake obmc-phosphor-image
 ```
 
-## Host System Requirements
+## Build System Requirements
 
 ### Supported Operating Systems
 
