@@ -1,0 +1,51 @@
+---
+# Update versions and create release PR
+# Source: https://www.thisdot.co/blog/tag-and-release-your-project-with-github-actions-workflows
+#
+# For detailed description see "release.yml"
+
+name: release-prepare
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The new version name / number"
+        required: true
+        type: string
+
+permissions:
+  contents: write # To push new branch
+  pull-requests: write # To create a pull request
+
+jobs:
+  release-prepare:
+    name: version_bump
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      # Bump version
+      # TODO: I do not know if we store the version somewhere as string in some config
+      #- name: Update version
+      #  run: |
+      #    sed -i -E "s/default: 'v[0-9\.]+'/default: '${{ inputs.version }}'/g" example.cfg
+
+      # Changelog
+      # TODO: Should be eventually automatic
+
+      - name: Create pull request
+        id: create_pr
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: release/${{ inputs.version }}
+          commit-message: "chore: bump version to ${{ inputs.version }}"
+          title: "Release: ${{ inputs.version }} Pull Request"
+          body: "Prepare for next release"
+          # TODO: Not sure who should be responsible
+          assignees: "AtomicFS"
+          reviewers: "AtomicFS"

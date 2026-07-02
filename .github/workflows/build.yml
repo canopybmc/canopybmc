@@ -9,6 +9,13 @@ on:
       - "doc/**"
       - "README.md"
   pull_request:
+    types:
+      # enabled by default
+      - opened
+      - synchronize
+      - reopened
+      # For releases
+      - closed
     branches:
       - main
     paths-ignore:
@@ -104,3 +111,26 @@ jobs:
           WORKFLOW_NAME: ${{ matrix.fwci_workflow_name || format('{0}-ci', matrix.board) }}
           BINARIES: ${{ matrix.fwci_binary_name || format('firmware=obmc-phosphor-image-{0}.static.mtd', matrix.board) }}
           GITHUB_INSTALLATION_ID: ${{ secrets.FWCI_GITHUB_INSTALLATION_ID }}
+
+  release:
+    runs-on: ubuntu-latest
+    if: startsWith(github.event.pull_request.title, 'Release:') && github.event.pull_request.merged == true
+    needs:
+      - build-target # needed for artifacts
+      - firmwareci # we want to only release on functional and tested codebase
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Download all firmware images
+        uses: actions/download-artifact@v8
+        with:
+          path: builds
+          pattern: obmc-phosphor-image-*
+      - name: Debug
+        run: ls -a1lh -R builds/
+
+      # TODO: add actual release steps
