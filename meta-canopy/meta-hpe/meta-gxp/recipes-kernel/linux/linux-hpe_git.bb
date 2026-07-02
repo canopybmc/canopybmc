@@ -117,4 +117,5 @@ SRC_URI:append = " \
     file://0086-misc-ubm-add-minimal-UBM-backplane-init-driver.patch \
     file://0087-ARM-dts-hpe-gxp-enable-ramoops.patch \
     file://0088-soc-hpe-gxp-chif-expose-poll-on-char-device.patch \
+    file://0089-i2c-gxp-support-SMBus-block-read-I2C_M_RECV_LEN.patch \
     "

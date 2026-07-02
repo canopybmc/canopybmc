@@ -1,0 +1,79 @@
+From 8fdd11fc9309ae19a4f0ffdd02da83a2895211e1 Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Wed, 01 Jul 2026 01:45:32 +0200
+Subject: [PATCH] i2c: gxp: support SMBus block read (I2C_M_RECV_LEN)
+
+The GXP I2C controller driver advertises I2C_FUNC_SMBUS_EMUL but its
+master transfer routine ignores the I2C_M_RECV_LEN message flag. When
+the SMBus core emulates a block read it issues the read message with
+I2C_M_RECV_LEN set and len == 1, expecting the adapter to treat the
+first received byte as the block length and clock out that many further
+bytes. Because the driver only ever transfers curr_msg->len bytes, a
+block read returns just the length byte and the data is never read.
+
+Handle I2C_M_RECV_LEN in the receive path: when the flag is set, use the
+first byte returned by the slave as the block length, extend the message
+length accordingly, and keep acking so the slave clocks out the rest of
+the block (including acking the length byte itself). Also advertise
+I2C_FUNC_SMBUS_READ_BLOCK_DATA.
+
+Assisted-by: claude:claude-opus-4-8
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ drivers/i2c/busses/i2c-gxp.c | 26 ++++++++++++++++++++++---
+ 1 file changed, 23 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/i2c/busses/i2c-gxp.c b/drivers/i2c/busses/i2c-gxp.c
+--- a/drivers/i2c/busses/i2c-gxp.c
++++ b/drivers/i2c/busses/i2c-gxp.c
+@@ -142,9 +142,11 @@
+ static u32 gxp_i2c_func(struct i2c_adapter *adap)
+ {
+ 	if (IS_ENABLED(CONFIG_I2C_SLAVE))
+-		return I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL | I2C_FUNC_SLAVE;
++		return I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL |
++		       I2C_FUNC_SMBUS_READ_BLOCK_DATA | I2C_FUNC_SLAVE;
+ 
+-	return I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL;
++	return I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL |
++	       I2C_FUNC_SMBUS_READ_BLOCK_DATA;
+ }
+ 
+ #if IS_ENABLED(CONFIG_I2C_SLAVE)
+@@ -245,7 +247,13 @@
+ 		}
+ 		drvdata->state = GXP_I2C_RDATA_PHASE;
+ 
+-		if (drvdata->buf_remaining == 1) {
++		/*
++		 * For SMBus block reads the slave returns the block length
++		 * as the first byte, so it must be acked to keep the slave
++		 * clocking out the remaining data.
++		 */
++		if (drvdata->buf_remaining == 1 &&
++		    !(drvdata->curr_msg->flags & I2C_M_RECV_LEN)) {
+ 			/* The last data, do not ack */
+ 			writeb(MASTER_EVT_CLR | RW_CMD,
+ 			       drvdata->base + GXP_I2CMCMD);
+@@ -284,6 +292,18 @@
+ 	drvdata->buf++;
+ 	drvdata->buf_remaining--;
+ 
++	/*
++	 * For an SMBus block read the first byte is the length of the
++	 * block. Extend the transfer to clock out the remaining bytes.
++	 */
++	if (drvdata->curr_msg->flags & I2C_M_RECV_LEN) {
++		drvdata->curr_msg->flags &= ~I2C_M_RECV_LEN;
++		if (value > I2C_SMBUS_BLOCK_MAX)
++			value = I2C_SMBUS_BLOCK_MAX;
++		drvdata->curr_msg->len += value;
++		drvdata->buf_remaining += value;
++	}
++
+ 	if (drvdata->buf_remaining == 0) {
+ 		/* No more data, this message is completed. */
+ 		drvdata->msgs_remaining--;
+--
+2.52.0
+
