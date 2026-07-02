@@ -1,0 +1,32 @@
+[
+    {
+        "Exposes": [
+            {
+                "Address": "$ADDRESS",
+                "Bus": "$BUS",
+                "Name": "UBM Backplane $BUS - 70 + 1 EEPROM",
+                "Type": "EEPROM"
+            }
+        ],
+        "Name": "UBM Backplane $BUS - 70 + 1",
+        "Probe": [
+            "xyz.openbmc_project.FruDevice({'ADDRESS': 87})",
+            "AND",
+            "xyz.openbmc_project.FruDevice({'PRODUCT_MANUFACTURER': 'HPE'})",
+            "AND",
+            "FOUND('chassis')"
+        ],
+        "Type": "Board",
+        "xyz.openbmc_project.Inventory.Decorator.Asset": {
+            "Manufacturer": "$PRODUCT_MANUFACTURER",
+            "Model": "$PRODUCT_PRODUCT_NAME",
+            "PartNumber": "$PRODUCT_PART_NUMBER",
+            "SerialNumber": "$PRODUCT_SERIAL_NUMBER",
+            "SparePartNumber": "$BOARD_PART_NUMBER"
+        },
+        "xyz.openbmc_project.Inventory.Decorator.Revision": {
+            "Version": "$PRODUCT_VERSION"
+        },
+        "xyz.openbmc_project.Inventory.Item.Board": {}
+    }
+]

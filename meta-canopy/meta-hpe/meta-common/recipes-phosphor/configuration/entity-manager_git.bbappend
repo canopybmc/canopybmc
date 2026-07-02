@@ -20,7 +20,7 @@ SRC_URI += "file://0005-fru-device-load-synthetic-FRUs-from-etc-fru.patch"
 
 # HPE ProLiant Gen11 baseboard configurations
 SRC_URI += " \
-    file://blocklist.json \
+    file://blacklist.json \
     file://dl110g11_baseboard.json \
     file://dl145g11_baseboard.json \
     file://dl320g11_baseboard.json \
@@ -34,10 +34,12 @@ SRC_URI += " \
     file://dl560g11_baseboard.json \
     file://rl300g11_baseboard.json \
     file://hpe_psu.json \
+    file://hpe_drv.json \
+    file://hpe_ubm.json \
 "
 
 do_install:append() {
-    install -D ${UNPACKDIR}/blocklist.json ${D}${datadir}/${BPN}/blacklist.json
+    install -D ${UNPACKDIR}/blacklist.json ${D}${datadir}/${BPN}/blacklist.json
     # Remove all default configs except for some vendors like NIC,
     # OCP and NVMes.
     # This saves us ~3 MiB in rofs.
@@ -64,4 +66,6 @@ do_install:append() {
     install -D ${UNPACKDIR}/dl560g11_baseboard.json ${D}${datadir}/${BPN}/configurations/hpe/dl560g11_baseboard.json
     install -D ${UNPACKDIR}/rl300g11_baseboard.json ${D}${datadir}/${BPN}/configurations/hpe/rl300g11_baseboard.json
     install -D ${UNPACKDIR}/hpe_psu.json ${D}${datadir}/${BPN}/configurations/hpe/hpe_psu.json
+    install -D ${UNPACKDIR}/hpe_drv.json ${D}${datadir}/${BPN}/configurations/hpe/hpe_drv.json
+    install -D ${UNPACKDIR}/hpe_ubm.json ${D}${datadir}/${BPN}/configurations/hpe/hpe_ubm.json
 }
