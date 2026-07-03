@@ -155,7 +155,7 @@
         },
         {
             "Class": "temp",
-            "InputUnavailableAsFailed": false,
+            "IgnoreFailIfHostOff": true,
             "Inputs": [
                 "Die CPU1"
             ],

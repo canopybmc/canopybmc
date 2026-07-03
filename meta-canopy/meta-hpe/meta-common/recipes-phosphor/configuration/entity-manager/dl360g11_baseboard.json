@@ -155,6 +155,7 @@
         },
         {
             "Class": "temp",
+            "IgnoreFailIfHostOff": true,
             "Inputs": [
                 "Die CPU1"
             ],
@@ -189,6 +190,7 @@
         {
             "Class": "temp",
             "InputUnavailableAsFailed": false,
+            "IgnoreFailIfHostOff": true,
             "Inputs": [
                 "Die CPU2"
             ],
