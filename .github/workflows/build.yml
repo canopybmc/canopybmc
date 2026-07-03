@@ -47,7 +47,7 @@ jobs:
             {
               "board": "hpe-proliant-g11",
               "fwci_workflow_name": "hpe-dl320-g11-ci",
-              "fwci_binary_name": "Binary=obmc-phosphor-image-hpe-proliant-g11.GXP2loader-t282-t288-sgn00.static.mtd"
+              "fwci_binary_name": "firmware=obmc-phosphor-image-hpe-proliant-g11.GXP2loader-t282-t288-sgn00.static.mtd"
             }
           ]')
           echo "include=$include" >> "$GITHUB_OUTPUT"
@@ -102,5 +102,5 @@ jobs:
         with:
           TOKEN: ${{ secrets.FWCI_TOKEN }}
           WORKFLOW_NAME: ${{ matrix.fwci_workflow_name || format('{0}-ci', matrix.board) }}
-          BINARIES: ${{ matrix.fwci_binary_name || format('Binary=obmc-phosphor-image-{0}.static.mtd', matrix.board) }}
+          BINARIES: ${{ matrix.fwci_binary_name || format('firmware=obmc-phosphor-image-{0}.static.mtd', matrix.board) }}
           GITHUB_INSTALLATION_ID: ${{ secrets.FWCI_GITHUB_INSTALLATION_ID }}

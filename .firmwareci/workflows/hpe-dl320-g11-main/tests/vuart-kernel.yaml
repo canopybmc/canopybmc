@@ -29,7 +29,7 @@ pre-stage:
       agent: "[[attributes.Agent]]"
       device: "[[attributes.Device]]"
       command: emulate-bmc
-      args: ["[[input.Binary]]"]
+      args: ["[[input.firmware]]"]
 
   - cmd: newdutctl
     name: Power on DUT

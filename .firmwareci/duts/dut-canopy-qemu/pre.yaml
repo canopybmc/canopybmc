@@ -9,7 +9,7 @@ pre-stage:
         "-nographic",
         "-net", "nic",
         "-net", "user,hostfwd=:127.0.0.1:2222-:22,hostfwd=:127.0.0.1:2443-:443,hostfwd=udp:127.0.0.1:2623-:623,hostname=qemu",
-        "-drive", "file=[[input.Binary]],if=mtd,format=raw",
+        "-drive", "file=[[input.firmware]],if=mtd,format=raw",
 
         # Bus 3 — temperature and power sensors
         "-device", "tmp105,address=0x48,id=tmp105_cpu0,bus=aspeed.i2c.bus.3",
