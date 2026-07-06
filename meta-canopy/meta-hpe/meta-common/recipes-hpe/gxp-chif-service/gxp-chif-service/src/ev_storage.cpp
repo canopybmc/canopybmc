@@ -2,10 +2,10 @@
 // Copyright (C) 2026 9elements GmbH
 #include "ev_storage.hpp"
 
-#include <phosphor-logging/lg2.hpp>
-
 #include <fcntl.h>
 #include <unistd.h>
+
+#include <phosphor-logging/lg2.hpp>
 
 #include <algorithm>
 #include <cstdio>
@@ -21,6 +21,11 @@ static constexpr size_t entryOverhead = maxEvNameLen + sizeof(uint16_t);
 static constexpr size_t headerSize = sizeof(uint32_t) + sizeof(uint32_t);
 
 EvStorage::EvStorage(std::filesystem::path path) : path_(std::move(path)) {}
+
+void EvStorage::addChangeCallback(ChangeCallback callback)
+{
+    changeCallbacks_.push_back(std::move(callback));
+}
 
 int EvStorage::load()
 {
@@ -43,8 +48,7 @@ int EvStorage::load()
     std::ifstream file(path_, std::ios::binary);
     if (!file)
     {
-        lg2::error("EV storage: failed to open {PATH}", "PATH",
-                   path_.string());
+        lg2::error("EV storage: failed to open {PATH}", "PATH", path_.string());
         return -1;
     }
 
@@ -55,8 +59,8 @@ int EvStorage::load()
 
     if (magic != evFileMagic)
     {
-        lg2::error("EV storage: bad magic {MAGIC} in {PATH}", "MAGIC",
-                   lg2::hex, magic, "PATH", path_.string());
+        lg2::error("EV storage: bad magic {MAGIC} in {PATH}", "MAGIC", lg2::hex,
+                   magic, "PATH", path_.string());
         return -1;
     }
 
@@ -76,8 +80,7 @@ int EvStorage::load()
         file.read(reinterpret_cast<char*>(&dataLen), sizeof(dataLen));
 
         if (dataLen > maxEvDataSize ||
-            totalRead + entryOverhead + dataLen > maxEvFileSize ||
-            !file.good())
+            totalRead + entryOverhead + dataLen > maxEvFileSize || !file.good())
         {
             lg2::warning("EV storage: truncated at entry {IDX}", "IDX", i);
             break;
@@ -155,21 +158,20 @@ bool EvStorage::set(const std::string& name, std::span<const uint8_t> data)
             }
         }
         it->data.assign(data.begin(), data.end());
-        return save();
+        return saveAndNotify(name);
     }
 
     // New entry — check space
     size_t needed = entryOverhead + data.size();
     if (serializedSize() + needed > maxEvFileSize)
     {
-        lg2::warning("EV storage: no space for {NAME} ({NEEDED} bytes)",
-                     "NAME", name, "NEEDED", needed);
+        lg2::warning("EV storage: no space for {NAME} ({NEEDED} bytes)", "NAME",
+                     name, "NEEDED", needed);
         return false;
     }
 
-    entries_.push_back(
-        {name, std::vector<uint8_t>(data.begin(), data.end())});
-    return save();
+    entries_.push_back({name, std::vector<uint8_t>(data.begin(), data.end())});
+    return saveAndNotify(name);
 }
 
 bool EvStorage::del(const std::string& name)
@@ -182,13 +184,13 @@ bool EvStorage::del(const std::string& name)
     }
 
     entries_.erase(it);
-    return save();
+    return saveAndNotify(name);
 }
 
 bool EvStorage::deleteAll()
 {
     entries_.clear();
-    return save();
+    return saveAndNotify({});
 }
 
 uint32_t EvStorage::count() const
@@ -210,6 +212,19 @@ size_t EvStorage::serializedSize() const
         total += entryOverhead + entry.data.size();
     }
     return total;
+}
+
+bool EvStorage::saveAndNotify(std::string_view name)
+{
+    if (!save())
+    {
+        return false;
+    }
+    for (const auto& cb : changeCallbacks_)
+    {
+        cb(name);
+    }
+    return true;
 }
 
 bool EvStorage::save()
@@ -259,9 +274,8 @@ bool EvStorage::save()
 
     // Copy from tmpfs to rwfs (cross-device rename is not possible)
     std::error_code ec;
-    std::filesystem::copy_file(tmpPath, path_,
-                               std::filesystem::copy_options::overwrite_existing,
-                               ec);
+    std::filesystem::copy_file(
+        tmpPath, path_, std::filesystem::copy_options::overwrite_existing, ec);
     std::filesystem::remove(tmpPath);
     if (ec)
     {
