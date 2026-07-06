@@ -39,8 +39,9 @@ RDEPENDS:${PN}-flash = " \
 
 SUMMARY:${PN}-system = "HPE System"
 RDEPENDS:${PN}-system = " \
-        entity-manager \
+        biosconfig-manager \
         dbus-sensors \
+        entity-manager \
         fru-synthesizer \
         gxp-chif-service \
         smbios-mdr \
