@@ -7,14 +7,15 @@
 #include "mdr_bridge.hpp"
 #include "platdef_extract.hpp"
 #include "rom_service.hpp"
-#include "smif_service.hpp"
 #include "smbios_writer.hpp"
+#include "smif_service.hpp"
+
+#include <fcntl.h>
+#include <systemd/sd-event.h>
+#include <unistd.h>
 
 #include <phosphor-logging/lg2.hpp>
 #include <sdbusplus/bus.hpp>
-
-#include <fcntl.h>
-#include <unistd.h>
 
 #include <cerrno>
 #include <csignal>
@@ -26,15 +27,11 @@ namespace
 constexpr auto chifDevice = "/dev/chif24";
 constexpr auto dbusName = "xyz.openbmc_project.GxpChif";
 
-// Global daemon pointer for signal handler
-chif::ChifDaemon* gDaemon = nullptr; // NOLINT
-
-void signalHandler(int /*sig*/)
+int onTerminate(sd_event_source* source, const struct signalfd_siginfo* /*si*/,
+                void* /*userdata*/)
 {
-    if (gDaemon)
-    {
-        gDaemon->stop();
-    }
+    sd_event_exit(sd_event_source_get_event(source), 0);
+    return 0;
 }
 
 // Real device channel wrapping /dev/chif24
@@ -64,6 +61,11 @@ class DeviceChannel : public chif::Channel
         return ::write(fd_, buf.data(), buf.size());
     }
 
+    int pollFd() const override
+    {
+        return fd_;
+    }
+
   private:
     int fd_;
 };
@@ -74,8 +76,7 @@ int main()
 {
     lg2::info("GXP CHIF service starting, version 1.0.0");
 
-    // Open the CHIF device
-    int fd = open(chifDevice, O_RDWR | O_CLOEXEC);
+    int fd = open(chifDevice, O_RDWR | O_CLOEXEC | O_NONBLOCK);
     if (fd < 0)
     {
         lg2::error("Failed to open {DEV}: {ERR}", "DEV", chifDevice, "ERR",
@@ -85,8 +86,15 @@ int main()
 
     auto channel = std::make_unique<DeviceChannel>(fd);
 
-    // Connect to D-Bus and request our well-known name
+    sd_event* event = nullptr;
+    if (int r = sd_event_default(&event); r < 0)
+    {
+        lg2::error("Failed to create event loop: {ERR}", "ERR", strerror(-r));
+        return 1;
+    }
+
     auto bus = sdbusplus::bus::new_default();
+    bus.attach_event(event, SD_EVENT_PRIORITY_NORMAL);
     bus.request_name(dbusName);
 
     // Create service components
@@ -113,18 +121,19 @@ int main()
         &evStorage, std::move(segmentBusMap)));
     daemon.registerHandler(std::make_unique<chif::HealthService>());
 
-    // Install signal handlers for graceful shutdown
-    gDaemon = &daemon;
-    struct sigaction sa{};
-    sa.sa_handler = signalHandler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    sigaction(SIGTERM, &sa, nullptr);
-    sigaction(SIGINT, &sa, nullptr);
+    sigset_t ss;
+    sigemptyset(&ss);
+    sigaddset(&ss, SIGTERM);
+    sigaddset(&ss, SIGINT);
+    sigprocmask(SIG_BLOCK, &ss, nullptr);
+    sd_event_add_signal(event, nullptr, SIGTERM, onTerminate, nullptr);
+    sd_event_add_signal(event, nullptr, SIGINT, onTerminate, nullptr);
 
     // Run the main event loop (blocks until stopped)
-    daemon.run();
+    daemon.run(event);
 
+    bus.detach_event();
+    sd_event_unref(event);
     lg2::info("GXP CHIF service exiting");
     return 0;
 }
