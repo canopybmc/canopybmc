@@ -22,6 +22,42 @@ jobs:
   release-prepare:
     runs-on: ubuntu-latest
     steps:
+      - name: Validate version
+        shell: bash
+        # Valid versions:
+        #   - 2025.01
+        #   - 2025.01.01
+        #   - 2025.12
+        #   - 2025.07-rc
+        #   - 2025.07-rc1
+        #   - 2025.07-rc42
+        #   - 2025.07-beta
+        #   - 2025.07-beta1
+        # Invalid:
+        #   - 2025.13          (invalid month)
+        #   - 2025.00          (invalid month)
+        #   - 25.07            (year not 4 digits)
+        #   - 2025.7           (month not 2 digits)
+        #   - 2025.07-rcy      (suffix after rc must be digits)
+        #   - 2025.07.01-beta  (qualifiers should not stack)
+        #   - 2025.07.01-beta1 (qualifiers should not stack)
+        # ^[0-9]{4}\.(0[1-9]|1[0-2])(\.[0-9]+|-rc([0-9]+)?|-beta([0-9]+)?)?$'
+        # ^YYYY     .MM             [.(X+|-rcX|betaX)]
+        #  Year      Month          Optional
+        #                           - .X, .XX, .XXX, ... (patch)
+        #                           - -rc, -rcX
+        #                           - -beta, -betaX
+        run: |
+          VERSION="${{ inputs.version }}"
+          REGEX='^[0-9]{4}\.(0[1-9]|1[0-2])(\.[0-9]+|-rc([0-9]+)?|-beta([0-9]+)?)?$'
+
+          if [[ "$VERSION" =~ $REGEX ]]; then
+            echo "Version '$VERSION' is valid."
+          else
+            echo "::error::Invalid version '$VERSION'. Expected format: YYYY.MM, YYYY.MM-rc, or YYYY.MM-rcN (e.g. 2025.07, 2025.07-rc, 2025.07-rc1)."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v7
         with:
