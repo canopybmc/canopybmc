@@ -1,4 +1,4 @@
-From bb94249e37b8d3b76b92ec38325955bedc399b6d Mon Sep 17 00:00:00 2001
+From 0784aa54ad963a50e11e262037ef19dd0adc0024 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 15 Feb 2026 13:16:07 +0100
 Subject: [PATCH] fansensor: support TachInput configuration for PWM-only fans
@@ -14,7 +14,7 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 26 insertions(+), 8 deletions(-)
 
 diff --git a/src/fan/FanMain.cpp b/src/fan/FanMain.cpp
-index c6a8f57..7f8d831 100644
+index 47a512b..1be87a6 100644
 --- a/src/fan/FanMain.cpp
 +++ b/src/fan/FanMain.cpp
 @@ -413,6 +413,18 @@ void createSensors(

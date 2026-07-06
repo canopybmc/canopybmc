@@ -1,4 +1,4 @@
-From 48f29870ef42339cef3310d7f1d047d416227c4f Mon Sep 17 00:00:00 2001
+From 504aa25f195d61790d027b93b9249f2a1072c28a Mon Sep 17 00:00:00 2001
 From: Willy Tu <wltu@google.com>
 Date: Tue, 24 Mar 2026 15:14:33 +0000
 Subject: [PATCH] reduce image size by moving to Multi-call Binary
@@ -159,8 +159,8 @@ Signed-off-by: Willy Tu <wltu@google.com>
  src/mcu/meson.build                       |  15 +-
  src/meson.build                           |  16 +++
  src/nvidia-gpu/MctpRequester.cpp          |   4 +-
- src/nvidia-gpu/NvidiaGpuSensor.hpp        |   2 +
  src/nvidia-gpu/NvidiaGpuSensorMain.cpp    |   2 +-
+ src/nvidia-gpu/NvidiaGpuTempSensor.hpp    |   2 +
  src/nvidia-gpu/meson.build                |  15 +-
  src/nvme/NVMeSensor.hpp                   |   2 +
  src/nvme/NVMeSensorMain.cpp               |   3 +-
@@ -1159,16 +1159,6 @@ index 5a942b7..18908ea 100644
  #include <boost/asio/buffer.hpp>
  #include <boost/asio/error.hpp>
  #include <boost/asio/generic/datagram_protocol.hpp>
-diff --git a/src/nvidia-gpu/NvidiaGpuSensor.hpp b/src/nvidia-gpu/NvidiaGpuSensor.hpp
-index 0b1b8be..3db106e 100644
---- a/src/nvidia-gpu/NvidiaGpuSensor.hpp
-+++ b/src/nvidia-gpu/NvidiaGpuSensor.hpp
-@@ -65,3 +65,5 @@ struct NvidiaGpuTempSensor :
-     std::shared_ptr<sdbusplus::asio::dbus_interface>
-         commonPhysicalContextInterface;
- };
-+
-+int nvidiaGpuSensorMain();
 diff --git a/src/nvidia-gpu/NvidiaGpuSensorMain.cpp b/src/nvidia-gpu/NvidiaGpuSensorMain.cpp
 index 4d165ab..3b18a5d 100644
 --- a/src/nvidia-gpu/NvidiaGpuSensorMain.cpp
@@ -1182,8 +1172,18 @@ index 4d165ab..3b18a5d 100644
  {
      boost::asio::io_context io;
      auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
+diff --git a/src/nvidia-gpu/NvidiaGpuTempSensor.hpp b/src/nvidia-gpu/NvidiaGpuTempSensor.hpp
+index d5e0924..41ebe85 100644
+--- a/src/nvidia-gpu/NvidiaGpuTempSensor.hpp
++++ b/src/nvidia-gpu/NvidiaGpuTempSensor.hpp
+@@ -68,3 +68,5 @@ struct NvidiaGpuTempSensor :
+     std::shared_ptr<sdbusplus::asio::dbus_interface>
+         commonPhysicalContextInterface;
+ };
++
++int nvidiaGpuSensorMain();
 diff --git a/src/nvidia-gpu/meson.build b/src/nvidia-gpu/meson.build
-index db60d66..1f31096 100644
+index e39ec97..d8e2c1e 100644
 --- a/src/nvidia-gpu/meson.build
 +++ b/src/nvidia-gpu/meson.build
 @@ -39,12 +39,21 @@ endif

@@ -1,4 +1,4 @@
-From 8cce2ccc45cfedd903197cb72921edddeba441a0 Mon Sep 17 00:00:00 2001
+From f3df971bc399e97bc71bc4ab8799f31fad273341 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 15 Feb 2026 13:17:26 +0100
 Subject: [PATCH] fansensor: add fan fault monitoring via hwmon fault attribute
@@ -310,6 +310,3 @@ index 0f7bf8d..e95b701 100644
      'PresenceGpio.cpp',
      'TachSensor.cpp',
      '../PwmSensor.cpp',
--- 
-2.54.0
-
