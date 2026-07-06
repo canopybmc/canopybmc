@@ -118,6 +118,12 @@ class Channel
     virtual ~Channel() = default;
     virtual ssize_t read(std::span<uint8_t> buf) = 0;
     virtual ssize_t write(std::span<const uint8_t> buf) = 0;
+
+    // fd to poll for readability, or -1 if not pollable (e.g. the test mock).
+    virtual int pollFd() const
+    {
+        return -1;
+    }
 };
 
 // Service handler interface — one per service_id.
