@@ -4,9 +4,11 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace chif
@@ -39,8 +41,10 @@ struct EvEntry
 class EvStorage
 {
   public:
-    explicit EvStorage(
-        std::filesystem::path path = "/var/lib/chif/evs.dat");
+    explicit EvStorage(std::filesystem::path path = "/var/lib/chif/evs.dat");
+
+    using ChangeCallback = std::function<void(std::string_view name)>;
+    void addChangeCallback(ChangeCallback callback);
 
     int load();
 
@@ -61,10 +65,12 @@ class EvStorage
 
   private:
     bool save();
+    bool saveAndNotify(std::string_view name);
     size_t serializedSize() const;
 
     std::filesystem::path path_;
     std::vector<EvEntry> entries_;
+    std::vector<ChangeCallback> changeCallbacks_;
 };
 
 } // namespace chif

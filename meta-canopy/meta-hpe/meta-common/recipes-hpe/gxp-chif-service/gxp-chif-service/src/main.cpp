@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2026 9elements GmbH
 
+#include "bios_config_service.hpp"
+#include "boot_service.hpp"
 #include "chif_daemon.hpp"
 #include "ev_storage.hpp"
 #include "health_service.hpp"
@@ -105,6 +107,10 @@ int main()
     {
         lg2::warning("EV storage failed to load, starting with empty store");
     }
+
+    // Boot configuration bridges (D-Bus <-> EV store).
+    chif::BootService bootService(bus, evStorage);
+    chif::BiosConfigService biosConfigService(bus, evStorage);
 
     // Extract PlatDef from host BIOS SPI flash and build I2C segment→bus map
     auto platDefBlob = chif::extractPlatDef();

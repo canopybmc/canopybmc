@@ -41,6 +41,8 @@ install_data(
 src_files = files(
     'src/main.cpp',
     'src/chif_daemon.cpp',
+    'src/boot_service.cpp',
+    'src/bios_config_service.cpp',
     'src/smif_service.cpp',
     'src/health_service.cpp',
     'src/ev_storage.cpp',
@@ -77,6 +79,8 @@ if get_option('tests').enabled()
         'src/smbios_writer.cpp',
         'src/mdr_bridge.cpp',
         'src/chif_daemon.cpp',
+        'src/boot_service.cpp',
+        'src/bios_config_service.cpp',
     )
 
     test_packet = executable(
@@ -123,4 +127,34 @@ if get_option('tests').enabled()
         ],
     )
     test('rom_service', test_rom_service)
+
+    test_boot_service = executable(
+        'test_boot_service',
+        'test/test_boot_service.cpp',
+        test_src_common,
+        dependencies: [
+            gtest_dep,
+            gtest_main_dep,
+            sdbusplus_dep,
+            phosphor_dbus_dep,
+            phosphor_logging_dep,
+            systemd_dep,
+        ],
+    )
+    test('boot_service', test_boot_service)
+
+    test_bios_config_service = executable(
+        'test_bios_config_service',
+        'test/test_bios_config_service.cpp',
+        test_src_common,
+        dependencies: [
+            gtest_dep,
+            gtest_main_dep,
+            sdbusplus_dep,
+            phosphor_dbus_dep,
+            phosphor_logging_dep,
+            systemd_dep,
+        ],
+    )
+    test('bios_config_service', test_bios_config_service)
 endif
