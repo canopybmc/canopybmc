@@ -11,10 +11,12 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstring>
 #include <format>
 #include <fstream>
+#include <span>
 #include <string_view>
 
 namespace chif
@@ -101,10 +103,18 @@ int SmifService::buildEvDataResponse(const ChifPktHeader& hdr,
                                      const EvEntry& ev)
 {
     // Layout: [header 8][errorCode 4][name 32][dataLen 2][data N]
-    // HPE pads zero-length EVs to 4 bytes on readback
-    size_t dataSize = ev.data.empty() ? 4 : ev.data.size();
+
+    // The ROM expects a fixed 4-byte descriptor for CQHMEM.
+    static constexpr std::array<uint8_t, 4> cqhmemData = {0x40, 0x60, 0x54,
+                                                          0x00};
+    std::span<const uint8_t> data = ev.data;
+    if (ev.name.starts_with("CQHMEM"))
+    {
+        data = cqhmemData;
+    }
+
     size_t payloadSize = sizeof(uint32_t) + maxEvNameLen + sizeof(uint16_t) +
-                         dataSize;
+                         data.size();
     auto respSize =
         static_cast<uint16_t>(sizeof(ChifPktHeader) + payloadSize);
 
@@ -117,23 +127,19 @@ int SmifService::buildEvDataResponse(const ChifPktHeader& hdr,
     initResponse(response, hdr, respSize);
 
     auto resp = responsePayload(response);
-    // errorCode = 0 (already zeroed)
 
-    // Name at offset 4 (response already zeroed, so null-padding is implicit)
     size_t nameLen = std::min(ev.name.size(), maxEvNameLen - 1);
     std::memcpy(resp.data() + sizeof(uint32_t), ev.name.c_str(), nameLen);
 
-    // dataLen at offset 36 (use padded size for zero-length EVs)
-    auto dataLen = static_cast<uint16_t>(dataSize);
+    auto dataLen = static_cast<uint16_t>(data.size());
     std::memcpy(resp.data() + sizeof(uint32_t) + maxEvNameLen, &dataLen,
                 sizeof(dataLen));
 
-    // data at offset 38 (zero-length EVs get 4 zero bytes from fill_n)
-    if (!ev.data.empty())
+    if (!data.empty())
     {
         std::memcpy(
             resp.data() + sizeof(uint32_t) + maxEvNameLen + sizeof(uint16_t),
-            ev.data.data(), ev.data.size());
+            data.data(), data.size());
     }
 
     return respSize;
@@ -163,8 +169,11 @@ int SmifService::handleGetEvByIndex(const ChifPktHeader& hdr,
     auto entry = evStorage_->getByIndex(index);
     if (!entry)
     {
+        lg2::debug("smif EV: get index {IDX} -> no such EV", "IDX", index);
         return buildSimpleResponse(hdr, response, ev(EvError::noSuchEv));
     }
+    lg2::debug("smif EV: get index {IDX} -> {NAME} ({BYTES} bytes)", "IDX",
+               index, "NAME", entry->name, "BYTES", entry->data.size());
     return buildEvDataResponse(hdr, response, *entry);
 }
 
@@ -178,10 +187,12 @@ int SmifService::handleSetDeleteEv(const ChifPktHeader& hdr,
     }
 
     uint8_t flags = reqPayload[0];
+    lg2::debug("smif EV: set/delete flags={FLAGS}", "FLAGS", flags);
 
     if (flags & evFlagDeleteAll)
     {
         bool ok = evStorage_->deleteAll();
+        lg2::debug("smif EV: delete-all -> {OK}", "OK", ok);
         return buildSimpleResponse(
             hdr, response, ok ? ev(EvError::success) : ev(EvError::nameTooLong));
     }
@@ -201,6 +212,8 @@ int SmifService::handleSetDeleteEv(const ChifPktHeader& hdr,
             return buildSimpleResponse(hdr, response, ev(EvError::nameTooLong));
         }
         bool ok = evStorage_->del(std::string(nameRegion.data()));
+        lg2::debug("smif EV: delete {NAME} -> {OK}", "NAME", nameRegion.data(),
+                   "OK", ok);
         return buildSimpleResponse(
             hdr, response, ok ? ev(EvError::success) : ev(EvError::deviceError));
     }
@@ -231,6 +244,7 @@ int SmifService::handleSetDeleteEv(const ChifPktHeader& hdr,
         // Set with sz_ev=0 is treated as delete
         if (dataLen == 0)
         {
+            lg2::debug("smif EV: set {NAME} size 0 -> delete", "NAME", nameBuf);
             evStorage_->del(nameBuf);
             return buildSimpleResponse(hdr, response, ev(EvError::success));
         }
@@ -242,6 +256,8 @@ int SmifService::handleSetDeleteEv(const ChifPktHeader& hdr,
 
         auto data = reqPayload.subspan(minSetPayload, dataLen);
         bool ok = evStorage_->set(nameBuf, data);
+        lg2::debug("smif EV: set {NAME} ({BYTES} bytes) -> {OK}", "NAME",
+                   nameBuf, "BYTES", dataLen, "OK", ok);
         return buildSimpleResponse(
             hdr, response, ok ? ev(EvError::success) : ev(EvError::nameTooLong));
     }
@@ -272,43 +288,38 @@ int SmifService::handleGetEvByName(const ChifPktHeader& hdr,
     auto entry = evStorage_->getByName(nameBuf);
     if (!entry)
     {
+        lg2::debug("smif EV: get name {NAME} -> no such EV", "NAME", nameBuf);
         return buildSimpleResponse(hdr, response, ev(EvError::noSuchEv));
     }
+    lg2::debug("smif EV: get name {NAME} -> {BYTES} bytes", "NAME", nameBuf,
+               "BYTES", entry->data.size());
     return buildEvDataResponse(hdr, response, *entry);
 }
 
 int SmifService::handleEvStats(const ChifPktHeader& hdr,
                                std::span<uint8_t> response)
 {
-    // HPE layout: [errorCode u32][rem_sz u32][present_evs u16][max_sz u16]
-    constexpr size_t payloadSize =
-        sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint16_t) +
-        sizeof(uint16_t); // 12 bytes
-    constexpr auto respSize =
-        static_cast<uint16_t>(sizeof(ChifPktHeader) + payloadSize);
-
-    if (response.size() < respSize)
+    struct EvStats
     {
-        return -1;
-    }
+        uint32_t errorCode;
+        uint32_t remSize; // remaining space in the EV file in bytes
+        uint32_t presentEvs; // number of EVs stored
+        uint32_t maxSizeKb; // max EV file size in KiB
+    } __attribute__((packed));
 
-    std::fill_n(response.data(), respSize, uint8_t{0});
-    initResponse(response, hdr, respSize);
+    uint32_t remSize =
+        evStorage_ ? static_cast<uint32_t>(evStorage_->remainingSize()) : 0;
+    uint32_t presentEvs = evStorage_ ? evStorage_->count() : 0;
+    auto maxSizeKb = static_cast<uint32_t>(EvStorage::maxSize() / 1024);
 
-    auto resp = responsePayload(response);
-    // errorCode = 0 (already zeroed)
+    lg2::debug("smif EV: stats present={CNT} rem={REM}B max={MAX}KiB", "CNT",
+               presentEvs, "REM", remSize, "MAX", maxSizeKb);
 
-    uint32_t remaining = evStorage_ ? static_cast<uint32_t>(
-                                          evStorage_->remainingSize())
-                                    : 0;
-    auto cnt = static_cast<uint16_t>(evStorage_ ? evStorage_->count() : 0);
-    auto maxSzKb = static_cast<uint16_t>(EvStorage::maxSize() / 1024);
-
-    std::memcpy(resp.data() + 4, &remaining, sizeof(remaining));
-    std::memcpy(resp.data() + 8, &cnt, sizeof(cnt));
-    std::memcpy(resp.data() + 10, &maxSzKb, sizeof(maxSzKb));
-
-    return respSize;
+    EvStats stats{};
+    stats.remSize = remSize;
+    stats.presentEvs = presentEvs;
+    stats.maxSizeKb = maxSizeKb;
+    return emitResponse(hdr, response, stats);
 }
 
 int SmifService::handleEvState(const ChifPktHeader& hdr,

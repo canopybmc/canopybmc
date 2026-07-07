@@ -135,10 +135,8 @@ class SmifService : public ServiceHandler
     int handleGetEvByName(const ChifPktHeader& hdr,
                           std::span<const uint8_t> reqPayload,
                           std::span<uint8_t> response);
-    int handleEvStats(const ChifPktHeader& hdr,
-                      std::span<uint8_t> response);
-    int handleEvState(const ChifPktHeader& hdr,
-                      std::span<uint8_t> response);
+    int handleEvStats(const ChifPktHeader& hdr, std::span<uint8_t> response);
+    int handleEvState(const ChifPktHeader& hdr, std::span<uint8_t> response);
     int handleGetEvAuthStatus(const ChifPktHeader& hdr,
                               std::span<uint8_t> response);
 
