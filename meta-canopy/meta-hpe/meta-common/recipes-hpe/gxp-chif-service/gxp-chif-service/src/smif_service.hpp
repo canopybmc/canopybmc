@@ -5,6 +5,8 @@
 #include "ev_storage.hpp"
 #include "packet.hpp"
 
+#include <sdbusplus/bus.hpp>
+
 #include <cstdint>
 #include <span>
 #include <string>
@@ -113,8 +115,10 @@ inline constexpr uint16_t smifCmdPlatDefV2End = 0x0207;
 class SmifService : public ServiceHandler
 {
   public:
-    explicit SmifService(EvStorage* evStorage = nullptr,
-                        std::unordered_map<uint8_t, int> segmentBusMap = {});
+    explicit SmifService(sdbusplus::bus_t* bus = nullptr,
+                         EvStorage* evStorage = nullptr,
+                         std::unordered_map<uint8_t, int> segmentBusMap = {},
+                         std::string netInterface = "eth0");
 
     int handle(std::span<const uint8_t> request,
                std::span<uint8_t> response) override;
@@ -158,6 +162,11 @@ class SmifService : public ServiceHandler
                           std::span<const uint8_t> reqPayload,
                           std::span<uint8_t> response);
 
+    // Network configuration handlers
+    int handleIPv4Config(const ChifPktHeader& hdr, std::span<uint8_t> response);
+    int handleNicConfig(const ChifPktHeader& hdr, std::span<uint8_t> response);
+    int handleIPv6Config(const ChifPktHeader& hdr, std::span<uint8_t> response);
+
     static std::string readDtString(const char* path);
     // "HPE ProLiant DL365 Gen11" -> "DL365G11"
     static std::string deriveShortProductId(const std::string& model);
@@ -170,8 +179,10 @@ class SmifService : public ServiceHandler
                                    std::span<uint8_t> response,
                                    const EvEntry& ev);
 
+    sdbusplus::bus_t* bus_;
     EvStorage* evStorage_;
     std::unordered_map<uint8_t, int> segmentToBus_;
+    std::string netInterface_;
     std::string boardSerial_;
     std::string productId_;
 };

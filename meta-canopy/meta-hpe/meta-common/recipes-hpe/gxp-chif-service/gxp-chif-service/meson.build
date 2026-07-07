@@ -44,6 +44,8 @@ src_files = files(
     'src/boot_service.cpp',
     'src/bios_config_service.cpp',
     'src/smif_service.cpp',
+    'src/smif_network.cpp',
+    'src/net_config.cpp',
     'src/health_service.cpp',
     'src/ev_storage.cpp',
     'src/uefi_fv.cpp',
@@ -51,6 +53,7 @@ src_files = files(
     'src/rom_service.cpp',
     'src/smbios_writer.cpp',
     'src/mdr_bridge.cpp',
+    'src/utils.cpp',
 )
 
 executable(
@@ -73,6 +76,8 @@ if get_option('tests').enabled()
 
     test_src_common = files(
         'src/smif_service.cpp',
+        'src/smif_network.cpp',
+        'src/net_config.cpp',
         'src/health_service.cpp',
         'src/ev_storage.cpp',
         'src/rom_service.cpp',
@@ -81,6 +86,7 @@ if get_option('tests').enabled()
         'src/chif_daemon.cpp',
         'src/boot_service.cpp',
         'src/bios_config_service.cpp',
+        'src/utils.cpp',
     )
 
     test_packet = executable(
