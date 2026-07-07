@@ -116,4 +116,5 @@ SRC_URI:append = " \
     file://0085-mtd-spi-nor-macronix-allow-mx66l51235f-without-SFDP.patch \
     file://0086-misc-ubm-add-minimal-UBM-backplane-init-driver.patch \
     file://0087-ARM-dts-hpe-gxp-enable-ramoops.patch \
+    file://0088-soc-hpe-gxp-chif-expose-poll-on-char-device.patch \
     "
