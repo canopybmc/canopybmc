@@ -2,9 +2,6 @@
 // Copyright (C) 2026 9elements GmbH
 #include "health_service.hpp"
 
-#include <algorithm>
-#include <cstring>
-
 namespace chif
 {
 
@@ -24,19 +21,7 @@ int HealthService::handle(std::span<const uint8_t> request,
         return -1;
     }
 
-    constexpr auto respSize =
-        static_cast<uint16_t>(sizeof(ChifPktHeader) + sizeof(uint32_t));
-
-    if (response.size() < respSize)
-    {
-        return -1;
-    }
-
-    auto hdr = parseHeader(request);
-
-    std::fill_n(response.data(), respSize, uint8_t{0});
-    initResponse(response, hdr, respSize);
-    return respSize;
+    return emitResponse(parseHeader(request), response, uint32_t{0});
 }
 
 } // namespace chif

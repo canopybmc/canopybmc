@@ -93,6 +93,23 @@ inline std::span<uint8_t> responsePayload(std::span<uint8_t> resp)
     return resp.subspan(sizeof(ChifPktHeader));
 }
 
+// Serialize a single packed POD payload behind a response header. Returns the
+// total response size, or -1 if the caller's buffer is too small.
+template <typename T>
+int emitResponse(const ChifPktHeader& reqHdr, std::span<uint8_t> resp,
+                 const T& payload)
+{
+    constexpr auto respSize =
+        static_cast<uint16_t>(sizeof(ChifPktHeader) + sizeof(T));
+    if (resp.size() < respSize)
+    {
+        return -1;
+    }
+    initResponse(resp, reqHdr, respSize);
+    std::memcpy(responsePayload(resp).data(), &payload, sizeof(T));
+    return respSize;
+}
+
 // Abstract channel for reading/writing CHIF packets.
 // DeviceChannel wraps /dev/chif24; MockChannel is for testing.
 class Channel

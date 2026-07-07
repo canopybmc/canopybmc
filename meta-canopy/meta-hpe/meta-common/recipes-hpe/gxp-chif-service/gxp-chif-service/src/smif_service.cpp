@@ -93,16 +93,7 @@ int SmifService::buildSimpleResponse(const ChifPktHeader& hdr,
                                      std::span<uint8_t> response,
                                      uint32_t errorCode)
 {
-    constexpr auto respSize =
-        static_cast<uint16_t>(sizeof(ChifPktHeader) + sizeof(uint32_t));
-    if (response.size() < respSize)
-    {
-        return -1;
-    }
-    initResponse(response, hdr, respSize);
-    auto resp = responsePayload(response);
-    std::memcpy(resp.data(), &errorCode, sizeof(errorCode));
-    return respSize;
+    return emitResponse(hdr, response, errorCode);
 }
 
 int SmifService::buildEvDataResponse(const ChifPktHeader& hdr,
