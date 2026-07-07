@@ -124,7 +124,7 @@ int main()
     daemon.registerHandler(
         std::make_unique<chif::RomService>(smbiosWriter, &mdrBridge));
     daemon.registerHandler(std::make_unique<chif::SmifService>(
-        &evStorage, std::move(segmentBusMap)));
+        &bus, &evStorage, std::move(segmentBusMap)));
     daemon.registerHandler(std::make_unique<chif::HealthService>());
 
     sigset_t ss;

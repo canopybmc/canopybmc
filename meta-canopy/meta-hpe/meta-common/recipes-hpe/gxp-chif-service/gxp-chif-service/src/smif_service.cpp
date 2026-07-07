@@ -64,9 +64,11 @@ std::string SmifService::deriveShortProductId(const std::string& model)
     return s;
 }
 
-SmifService::SmifService(EvStorage* evStorage,
-                         std::unordered_map<uint8_t, int> segmentBusMap) :
-    evStorage_(evStorage), segmentToBus_(std::move(segmentBusMap))
+SmifService::SmifService(sdbusplus::bus_t* bus, EvStorage* evStorage,
+                         std::unordered_map<uint8_t, int> segmentBusMap,
+                         std::string netInterface) :
+    bus_(bus), evStorage_(evStorage), segmentToBus_(std::move(segmentBusMap)),
+    netInterface_(std::move(netInterface))
 {
     boardSerial_ = readDtString("/proc/device-tree/serial-number");
     if (boardSerial_.empty())
@@ -758,6 +760,14 @@ int SmifService::handle(std::span<const uint8_t> request,
         // ---- Field access (serial number, product ID) ----
         case smifCmdFieldAccess:
             return handleFieldAccess(hdr, reqPayload, response);
+
+        // ---- Network configuration ----
+        case smifCmdIPv4Config:
+            return handleIPv4Config(hdr, response);
+        case smifCmdNicConfig:
+            return handleNicConfig(hdr, response);
+        case smifCmdIPv6Config:
+            return handleIPv6Config(hdr, response);
 
         default:
             return buildSimpleResponse(hdr, response, 0);
