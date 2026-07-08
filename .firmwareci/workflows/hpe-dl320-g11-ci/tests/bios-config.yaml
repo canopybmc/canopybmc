@@ -1,0 +1,164 @@
+name: "BIOS: Boot Option Config Bridge"
+description: >-
+  Verify that BiosConfigService parses the CQSBOOT#### boot option
+  records published by the host firmware and exposes them as read-only
+  BIOSConfig attributes. Checks the persisted EV store on the BMC, the
+  BaseBIOSTable published on D-Bus by biosconfig-manager, and the service
+  journal. Requires the host to complete at least one POST cycle so the
+  firmware publishes its boot options over CHIF.
+
+  Note! these attributes are currently not visible via the Redfish
+  /Systems/system/Bios route.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Wait for BMC and Power On Host
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: cmd
+        name: Wait for BMC services
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+      - cmd: shell
+        name: Power on host via Redfish
+        transport: &local
+          proto: local
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"ResetType":"On"}'
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+          expect:
+            - regex: "^(200|204)$"
+      - cmd: shell
+        name: Wait for SMBIOS transfer (host POST complete)
+        transport: *bmc_ssh
+        options:
+          timeout: 8m
+        parameters:
+          command: >-
+            while [ ! -f /var/lib/smbios/smbios2 ] ||
+                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
+            do sleep 1; done;
+            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
+          expect:
+            - regex: "SMBIOS ready"
+      # TODO: Fix static sleep, poll until OSStage or BootProgress work
+      # This is somewhat of a workaround for now to get the system boot into
+      # the OS at least once. Neither OSStage nor BootProgress work because the
+      # post-complete line is not asserting, and the BootProgress interface is
+      # not implemented by any software yet.
+      # Instead, we wait until a full boot happened, and reboot the system again
+      # to get the full EV vars.
+      # Why the EVs are not always being transmitted in the first run is not
+      # clear yet.
+      - cmd: cmd
+        name: Wait for the boot to be finished
+        transport: *bmc_ssh
+        options:
+          timeout: 3m
+        parameters:
+          executable: sleep
+          args: ["90"]
+      - cmd: shell
+        name: Shutdown the system and turn it on again
+        transport: *bmc_ssh
+        options:
+          timeout: 5m
+        parameters:
+          command: >-
+            obmcutil poweroff &&
+            while [ "$(busctl get-property xyz.openbmc_project.Chassis.Buttons /xyz/openbmc_project/state/chassis0 xyz.openbmc_project.State.Chassis CurrentPowerState)" != 's "xyz.openbmc_project.State.Chassis.PowerState.Off"' ]; do sleep 1; done; echo "System powered off" &&
+            obmcutil poweron && echo "System powered on"
+          expect:
+            - regex: "System powered on"
+      - cmd: shell
+        name: Clear stale SMBIOS marker
+        transport: *bmc_ssh
+        parameters:
+          command: "rm -f /var/lib/smbios/smbios2"
+      - cmd: shell
+        name: Wait for second POST (SMBIOS transfer)
+        transport: *bmc_ssh
+        options:
+          timeout: 8m
+        parameters:
+          command: >-
+            while [ ! -f /var/lib/smbios/smbios2 ] ||
+                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
+            do sleep 1; done;
+            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
+          expect:
+            - regex: "SMBIOS ready"
+      - cmd: cmd
+        name: Wait for all EVs to be published
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["30"]
+
+  - name: CHIF Service and EV Store
+    on-error: continue
+    steps:
+      - cmd: cmd
+        name: CHIF service is running
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.GxpChif.service"]
+      - cmd: shell
+        name: Boot option EVs (CQSBOOT) persisted by firmware
+        transport: *bmc_ssh
+        parameters:
+          command: "grep -a -o CQSBOOT /var/lib/chif/evs.dat 2>/dev/null | wc -l"
+          expect:
+            - regex: "^[1-9][0-9]*$"
+
+  - name: BIOSConfig Attributes Published
+    on-error: continue
+    steps:
+      - cmd: shell
+        name: BiosConfigService published boot options (journal)
+        transport: *bmc_ssh
+        parameters:
+          command: "journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep 'BIOS config: published'"
+          expect:
+            - regex: "published [1-9][0-9]* boot option"
+      - cmd: cmd
+        name: BIOSConfigManager registered on D-Bus
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: [list, --no-pager]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.BIOSConfigManager"
+      - cmd: shell
+        name: BaseBIOSTable contains Boot## attributes (D-Bus)
+        transport: *bmc_ssh
+        parameters:
+          command: >-
+            busctl get-property xyz.openbmc_project.BIOSConfigManager
+            /xyz/openbmc_project/bios_config/manager
+            xyz.openbmc_project.BIOSConfig.Manager BaseBIOSTable --no-pager
+          expect:
+            - regex: "Boot[0-9A-Fa-f]{2}"

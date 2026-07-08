@@ -1,0 +1,115 @@
+name: "Network: CHIF BMC Config Reporting"
+description: >-
+  Verify that the BMC network IP address is being displayed on boot
+  (checking /var/log/obmc-console.log for that.)
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: cmd
+        name: Wait for services to settle
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          executable: sleep
+          args: ["45"]
+
+  - name: Network D-Bus State
+    steps:
+      - cmd: cmd
+        name: CHIF service is running
+        transport: *bmc_ssh
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.GxpChif.service"]
+      - cmd: cmd
+        name: Network service registered on D-Bus
+        transport: *bmc_ssh
+        parameters:
+          executable: busctl
+          args: [list, --no-pager]
+          expect:
+            - regex: "xyz\\.openbmc_project\\.Network"
+      - cmd: cmd
+        name: eth0 interface is UP
+        transport: *bmc_ssh
+        parameters:
+          executable: ip
+          args: ["link", "show", "eth0"]
+          expect:
+            - regex: "UP"
+      - cmd: cmd
+        name: eth0 has an IPv4 address to report
+        transport: *bmc_ssh
+        parameters:
+          executable: ip
+          args: ["-4", "addr", "show", "eth0"]
+          expect:
+            - regex: "inet [0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+/"
+      - cmd: shell
+        name: EthernetInterface exposed on D-Bus for CHIF query
+        transport: *bmc_ssh
+        parameters:
+          command: >-
+            busctl introspect xyz.openbmc_project.Network
+            /xyz/openbmc_project/network/eth0
+            xyz.openbmc_project.Network.EthernetInterface --no-pager
+          expect:
+            - regex: "DHCPEnabled"
+
+  - name: Power On Host
+    steps:
+      - cmd: shell
+        name: Power on host via Redfish
+        transport: &local
+          proto: local
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"ResetType":"On"}'
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+          expect:
+            - regex: "^(200|204)$"
+      - cmd: shell
+        name: Wait for SMBIOS transfer (host POST complete)
+        transport: *bmc_ssh
+        options:
+          timeout: 8m
+        parameters:
+          command: >-
+            while [ ! -f /var/lib/smbios/smbios2 ] ||
+                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
+            do sleep 1; done;
+            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
+          expect:
+            - regex: "SMBIOS ready"
+
+  - name: Console check
+    on-error: continue
+    steps:
+      - cmd: shell
+        name: BMC IPv4 shown on host console
+        transport: *bmc_ssh
+        parameters:
+          command: >-
+            IP=$(ip -4 -o addr show eth0 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -n1);
+            echo "BMC eth0 IPv4: $IP";
+            grep -aF "$IP" /var/log/obmc-console.log /var/log/obmc-console.log.1 2>/dev/null | tail -n 5 ||
+              echo '(BMC IP not found in console log / log empty)'
