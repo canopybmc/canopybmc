@@ -157,6 +157,8 @@ jobs:
         with:
           path: binaries/
           pattern: obmc-phosphor-image-*
+          skip-decompress: true
+          # We want ZIP files for each target to be released
 
       - name: Release with GH Release action
         uses: softprops/action-gh-release@v3
