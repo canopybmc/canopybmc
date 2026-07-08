@@ -17,14 +17,14 @@ jobs:
           private-key: ${{ secrets.CANOPYBMC_BOT_APP_PRIVATE_KEY }}
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           token: ${{ steps.app-token.outputs.token }}
           submodules: recursive
           fetch-depth: 0
 
       - name: Install go-task
-        uses: arduino/setup-task@v2
+        uses: arduino/setup-task@v3
         with:
           version: 3.x
           repo-token: ${{ steps.app-token.outputs.token }}
