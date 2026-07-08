@@ -75,6 +75,10 @@ constexpr const char* fruDeviceMgrIntf =
 constexpr unsigned cpuBus = 254;
 constexpr unsigned dimmBus = 255;
 
+// Bound every blocking D-Bus call so a hung peer can't stall the
+// single-threaded regeneration loop indefinitely.
+constexpr auto dbusTimeout = std::chrono::seconds(30);
+
 using DbusValue =
     std::variant<bool, std::string, uint8_t, int16_t, uint16_t, int32_t,
                  uint32_t, int64_t, uint64_t, double, std::vector<std::string>>;
@@ -108,7 +112,7 @@ PropertyMap getAllProps(sdbusplus::bus_t& bus, const std::string& service,
         auto m = bus.new_method_call(service.c_str(), path.c_str(), propIntf,
                                      "GetAll");
         m.append(intf);
-        bus.call(m).read(props);
+        bus.call(m, dbusTimeout).read(props);
     }
     catch (const std::exception& e)
     {
@@ -127,7 +131,7 @@ SubTree getSubTree(sdbusplus::bus_t& bus, const std::string& intf)
                                      "GetSubTree");
         m.append(std::string(inventoryRoot), 0,
                  std::vector<std::string>{intf});
-        bus.call(m).read(tree);
+        bus.call(m, dbusTimeout).read(tree);
     }
     catch (const std::exception& e)
     {
@@ -431,7 +435,7 @@ void regenerate(sdbusplus::bus_t& bus)
     {
         auto m = bus.new_method_call(fruDeviceService, fruDevicePath,
                                      fruDeviceMgrIntf, "ReScan");
-        bus.call_noreply(m);
+        bus.call_noreply(m, dbusTimeout);
         lg2::info("Requested FruDevice ReScan");
     }
     catch (const std::exception& e)
