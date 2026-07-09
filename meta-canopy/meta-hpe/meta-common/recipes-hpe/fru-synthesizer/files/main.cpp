@@ -95,7 +95,8 @@ std::optional<std::string> getString(const PropertyMap& props,
         return std::nullopt;
     }
     const auto* s = std::get_if<std::string>(&it->second);
-    if (s == nullptr || s->empty())
+    if (s == nullptr || s->empty() || *s == "UNKNOWN" ||
+        *s == "NOT AVAILABLE")
     {
         return std::nullopt;
     }
