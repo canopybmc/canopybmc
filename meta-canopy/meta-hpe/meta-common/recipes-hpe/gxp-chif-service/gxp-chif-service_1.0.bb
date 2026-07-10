@@ -26,10 +26,18 @@ DEPENDS += " \
     sdbusplus \
     phosphor-dbus-interfaces \
     phosphor-logging \
+    ${@bb.utils.contains('PTEST_ENABLED', '1', 'gtest', '', d)} \
     "
 
 RDEPENDS:${PN} += "smbios-mdr"
 
 FILES:${PN} += "${nonarch_base_libdir}/udev/rules.d"
 
-EXTRA_OEMESON = "-Dtests=disabled"
+EXTRA_OEMESON = " \
+    -Dtests=${@bb.utils.contains('PTEST_ENABLED', '1', 'enabled', 'disabled', d)} \
+"
+
+do_install_ptest() {
+        install -d ${D}${PTEST_PATH}/test
+        cp -rf ${B}/test/*_test ${D}${PTEST_PATH}/test/
+}
