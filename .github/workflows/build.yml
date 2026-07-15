@@ -18,6 +18,9 @@ on:
       - "README.md"
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
 jobs:
   get-matrix:
     runs-on: ubuntu-latest
@@ -114,6 +117,8 @@ jobs:
     needs:
       - build-target # needed for artifacts
       - firmwareci # we want to only release on functional and tested codebase
+    permissions:
+      contents: write # To create a new release
     steps:
       - name: Checkout
         uses: actions/checkout@v7
