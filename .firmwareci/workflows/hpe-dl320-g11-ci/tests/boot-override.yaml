@@ -118,7 +118,7 @@ stages:
           executable: sleep
           args: ["30"]
 
-  - name: Boot EVs Present
+  - name: Boot EVs and override test
     on-error: continue
     steps:
       - cmd: shell
@@ -136,9 +136,6 @@ stages:
           expect:
             - regex: "^[1-9][0-9]*$"
 
-  - name: Set One-Time BIOS Setup Override via Redfish
-    on-error: continue
-    steps:
       - cmd: shell
         name: PATCH BootSourceOverride BiosSetup/Once
         transport: *local
@@ -177,9 +174,6 @@ stages:
             - regex: '"BootSourceOverrideTarget": *"BiosSetup"'
             - regex: '"BootSourceOverrideEnabled": *"Once"'
 
-  - name: Reboot Host to test override
-    on-error: continue
-    steps:
       - cmd: shell
         name: Clear stale SMBIOS marker
         transport: *bmc_ssh
@@ -227,9 +221,6 @@ stages:
           executable: hexdump
           args: ["-C", "/var/lib/chif/evs.dat"]
 
-  - name: Verify that the override got consumed
-    on-error: continue
-    steps:
       - cmd: shell
         name: Host consumed one-time boot (journal)
         transport: *bmc_ssh
@@ -263,9 +254,6 @@ stages:
           expect:
             - regex: '"BootSourceOverrideEnabled": *"Continuous"'
 
-  - name: Console check
-    on-error: continue
-    steps:
       - cmd: shell
         name: "Console shows System Utilities / BIOS setup entry"
         transport: *bmc_ssh
