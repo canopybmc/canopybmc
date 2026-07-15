@@ -134,9 +134,6 @@ stages:
           expect:
             - regex: "^[1-9][0-9]*$"
 
-  - name: BIOSConfig Attributes Published
-    on-error: continue
-    steps:
       - cmd: shell
         name: BiosConfigService published boot options (journal)
         transport: *bmc_ssh
