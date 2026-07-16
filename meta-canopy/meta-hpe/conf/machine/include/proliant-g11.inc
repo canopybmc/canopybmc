@@ -1,5 +1,4 @@
 KERNEL_DEVICETREE ?= "hpe/hpe-gxp.dtb"
-KERNEL_DTBVENDORED ?= "1"
 
 # bootblock loader variants in use
 HPE_GXP_LOADERS = "\
