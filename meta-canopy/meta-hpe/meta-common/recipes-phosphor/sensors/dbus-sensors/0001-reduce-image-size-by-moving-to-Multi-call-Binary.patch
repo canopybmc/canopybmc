@@ -1,4 +1,4 @@
-From 504aa25f195d61790d027b93b9249f2a1072c28a Mon Sep 17 00:00:00 2001
+From 66c06b6da94986da043d52407c2e01d23a255897 Mon Sep 17 00:00:00 2001
 From: Willy Tu <wltu@google.com>
 Date: Tue, 24 Mar 2026 15:14:33 +0000
 Subject: [PATCH] reduce image size by moving to Multi-call Binary
@@ -353,7 +353,7 @@ index 618c43f..154ff3b 100644
 +
 +int adcSensorMain();
 diff --git a/src/adc/ADCSensorMain.cpp b/src/adc/ADCSensorMain.cpp
-index b8078c0..0e8e025 100644
+index 81312c7..a8dd19f 100644
 --- a/src/adc/ADCSensorMain.cpp
 +++ b/src/adc/ADCSensorMain.cpp
 @@ -313,7 +313,7 @@ void createSensors(
@@ -471,7 +471,7 @@ index 5213534..1daf320 100644
 -
 +dbus_sensors_cpp_args += ['-DCABLEMONITOR']
 diff --git a/src/exit-air/ExitAirTempSensor.cpp b/src/exit-air/ExitAirTempSensor.cpp
-index 950dd28..f4c1d9f 100644
+index 0cb8d24..7a490c3 100644
 --- a/src/exit-air/ExitAirTempSensor.cpp
 +++ b/src/exit-air/ExitAirTempSensor.cpp
 @@ -916,7 +916,7 @@ void createSensor(sdbusplus::asio::object_server& objectServer,
@@ -484,7 +484,7 @@ index 950dd28..f4c1d9f 100644
      boost::asio::io_context io;
      auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
 diff --git a/src/exit-air/ExitAirTempSensor.hpp b/src/exit-air/ExitAirTempSensor.hpp
-index 9f20c70..2e2f66e 100644
+index 958dbed..190e3e3 100644
 --- a/src/exit-air/ExitAirTempSensor.hpp
 +++ b/src/exit-air/ExitAirTempSensor.hpp
 @@ -87,3 +87,5 @@ struct ExitAirTempSensor :
@@ -532,7 +532,7 @@ index ff25c4e..3f24bfe 100644
 +
 +int externalSensorMain();
 diff --git a/src/external/ExternalSensorMain.cpp b/src/external/ExternalSensorMain.cpp
-index 29be7cb..073e58e 100644
+index f9273fe..ea47d16 100644
 --- a/src/external/ExternalSensorMain.cpp
 +++ b/src/external/ExternalSensorMain.cpp
 @@ -334,7 +334,7 @@ void createSensors(
@@ -582,7 +582,7 @@ index de8de23..a6f1950 100644
 +)
 +dbus_sensors_cpp_args += ['-DEXTERNAL']
 diff --git a/src/fan/FanMain.cpp b/src/fan/FanMain.cpp
-index c6a8f57..47a512b 100644
+index ac14147..5168389 100644
 --- a/src/fan/FanMain.cpp
 +++ b/src/fan/FanMain.cpp
 @@ -650,7 +650,7 @@ void createSensors(
@@ -636,7 +636,7 @@ index 1de6634..0f7bf8d 100644
 +)
 +dbus_sensors_cpp_args += ['-DFAN']
 diff --git a/src/hwmon-temp/HwmonTempMain.cpp b/src/hwmon-temp/HwmonTempMain.cpp
-index 616d0f8..0a2b2cb 100644
+index df2bc54..3b021ec 100644
 --- a/src/hwmon-temp/HwmonTempMain.cpp
 +++ b/src/hwmon-temp/HwmonTempMain.cpp
 @@ -596,7 +596,7 @@ static void powerStateChanged(
@@ -707,7 +707,7 @@ index 28ea7df..815d977 100644
 +
 +int intelCPUSensorMain();
 diff --git a/src/intel-cpu/IntelCPUSensorMain.cpp b/src/intel-cpu/IntelCPUSensorMain.cpp
-index d2d2c14..594db16 100644
+index 15680eb..f3857ae 100644
 --- a/src/intel-cpu/IntelCPUSensorMain.cpp
 +++ b/src/intel-cpu/IntelCPUSensorMain.cpp
 @@ -791,7 +791,7 @@ bool getCpuConfig(const std::shared_ptr<sdbusplus::asio::connection>& systemBus,
@@ -759,7 +759,7 @@ index b02b903..cf29c38 100644
 +
 +int intrusionSensorMain();
 diff --git a/src/intrusion/IntrusionSensorMain.cpp b/src/intrusion/IntrusionSensorMain.cpp
-index ebca567..c8f0f46 100644
+index a2c2031..17e55e7 100644
 --- a/src/intrusion/IntrusionSensorMain.cpp
 +++ b/src/intrusion/IntrusionSensorMain.cpp
 @@ -455,7 +455,7 @@ static bool initializeLanStatus(
@@ -811,7 +811,7 @@ index c5844cf..a6b8b30 100644
 +
 +int ipmbSensorMain();
 diff --git a/src/ipmb/IpmbSensorMain.cpp b/src/ipmb/IpmbSensorMain.cpp
-index 8cf8def..de2c1f2 100644
+index a9499ef..adf252c 100644
 --- a/src/ipmb/IpmbSensorMain.cpp
 +++ b/src/ipmb/IpmbSensorMain.cpp
 @@ -26,7 +26,8 @@
@@ -986,7 +986,7 @@ index 5f07a7a..92868fd 100644
 +
 +int mctpReactorMain();
 diff --git a/src/mctp/MCTPReactorMain.cpp b/src/mctp/MCTPReactorMain.cpp
-index 9d2d321..0f9dddb 100644
+index ba1bbf8..9ac0d44 100644
 --- a/src/mctp/MCTPReactorMain.cpp
 +++ b/src/mctp/MCTPReactorMain.cpp
 @@ -185,7 +185,7 @@ static void exitReactor(boost::asio::io_context* io, sdbusplus::message_t& msg)
@@ -1030,7 +1030,7 @@ index 93baf02..edeabf4 100644
 +)
 +dbus_sensors_cpp_args += ['-DMCTP']
 diff --git a/src/mcu/MCUTempSensor.cpp b/src/mcu/MCUTempSensor.cpp
-index b6ab10c..a29a8ad 100644
+index 3156d4e..5db4888 100644
 --- a/src/mcu/MCUTempSensor.cpp
 +++ b/src/mcu/MCUTempSensor.cpp
 @@ -57,7 +57,8 @@ constexpr const char* sensorType = "MCUTempSensor";
@@ -1160,7 +1160,7 @@ index 5a942b7..18908ea 100644
  #include <boost/asio/error.hpp>
  #include <boost/asio/generic/datagram_protocol.hpp>
 diff --git a/src/nvidia-gpu/NvidiaGpuSensorMain.cpp b/src/nvidia-gpu/NvidiaGpuSensorMain.cpp
-index 4d165ab..3b18a5d 100644
+index f45f03e..3cc7842 100644
 --- a/src/nvidia-gpu/NvidiaGpuSensorMain.cpp
 +++ b/src/nvidia-gpu/NvidiaGpuSensorMain.cpp
 @@ -49,7 +49,7 @@ void configTimerExpiryCallback(
@@ -1222,7 +1222,7 @@ index 6508be9..cca546f 100644
 +
 +int nvmeSensorMain();
 diff --git a/src/nvme/NVMeSensorMain.cpp b/src/nvme/NVMeSensorMain.cpp
-index 3afb1c3..20becc6 100644
+index f4e2e49..82e8c7f 100644
 --- a/src/nvme/NVMeSensorMain.cpp
 +++ b/src/nvme/NVMeSensorMain.cpp
 @@ -282,7 +282,7 @@ static void interfaceRemoved(sdbusplus::message_t& message, NVMEMap& contexts)
@@ -1270,20 +1270,20 @@ index 5289061..b5f425b 100644
 +dbus_sensors_cpp_args += ['-DNVME']
  
 diff --git a/src/psu/PSUSensor.hpp b/src/psu/PSUSensor.hpp
-index 73deef1..0fd66c5 100644
+index b84e1ee..e442bf5 100644
 --- a/src/psu/PSUSensor.hpp
 +++ b/src/psu/PSUSensor.hpp
 @@ -85,3 +85,5 @@ struct PSUProperty
-     unsigned int sensorScaleFactor;
+     double sensorScaleFactor;
      double sensorOffset;
  };
 +
 +int psuSensorMain();
 diff --git a/src/psu/PSUSensorMain.cpp b/src/psu/PSUSensorMain.cpp
-index be2766e..4e82d55 100644
+index 8c3faa3..23b6e10 100644
 --- a/src/psu/PSUSensorMain.cpp
 +++ b/src/psu/PSUSensorMain.cpp
-@@ -1249,7 +1249,7 @@ static void powerStateChanged(
+@@ -1254,7 +1254,7 @@ static void powerStateChanged(
      }
  }
  
@@ -1292,7 +1292,7 @@ index be2766e..4e82d55 100644
  {
      boost::asio::io_context io;
      auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
-@@ -1363,4 +1363,5 @@ int main()
+@@ -1368,4 +1368,5 @@ int main()
  
      setupManufacturingModeMatch(*systemBus);
      io.run();
@@ -1337,7 +1337,7 @@ index abcdfe8..401b2b6 100644
 +dbus_sensors_cpp_args += ['-DPSU']
  
 diff --git a/src/smbpbi/SmbpbiSensor.cpp b/src/smbpbi/SmbpbiSensor.cpp
-index c6c44f1..a5670a0 100644
+index ff293ab..ca30226 100644
 --- a/src/smbpbi/SmbpbiSensor.cpp
 +++ b/src/smbpbi/SmbpbiSensor.cpp
 @@ -45,7 +45,8 @@ constexpr const char* configInterface =

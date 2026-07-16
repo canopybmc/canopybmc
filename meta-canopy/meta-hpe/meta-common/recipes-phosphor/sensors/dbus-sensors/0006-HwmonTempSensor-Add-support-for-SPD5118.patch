@@ -1,4 +1,4 @@
-From eb783ebf1c076c57379fa1e4a5bf02574ea9a18c Mon Sep 17 00:00:00 2001
+From a44cdcc373f3c8893ff84ecc39e89f9e46696986 Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
 Date: Mon, 9 Mar 2026 20:19:03 -0300
 Subject: [PATCH] HwmonTempSensor: Add support for SPD5118
@@ -11,7 +11,7 @@ Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
  1 file changed, 1 insertion(+)
 
 diff --git a/src/hwmon-temp/HwmonTempMain.cpp b/src/hwmon-temp/HwmonTempMain.cpp
-index 62ca99e..6d4f6ec 100644
+index b933611..0080eec 100644
 --- a/src/hwmon-temp/HwmonTempMain.cpp
 +++ b/src/hwmon-temp/HwmonTempMain.cpp
 @@ -88,6 +88,7 @@ static constexpr auto sensorTypes =
