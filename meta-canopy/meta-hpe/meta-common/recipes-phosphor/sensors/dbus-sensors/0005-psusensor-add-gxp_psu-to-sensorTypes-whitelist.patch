@@ -1,4 +1,4 @@
-From a3d5296bc74c5acab1ea3178078924766dacd4b5 Mon Sep 17 00:00:00 2001
+From fcf2eebf53bbfc0950538848bd9c32ebe8357799 Mon Sep 17 00:00:00 2001
 From: Canopy BMC <canopy@canopybmc.com>
 Date: Fri, 13 Feb 2026 12:00:00 +0000
 Subject: [PATCH] psusensor: add gxp_psu to sensorTypes whitelist
@@ -14,7 +14,7 @@ Signed-off-by: Canopy BMC <canopy@canopybmc.com>
  1 file changed, 1 insertion(+)
 
 diff --git a/src/psu/PSUSensorMain.cpp b/src/psu/PSUSensorMain.cpp
-index 4e82d55..b3133a3 100644
+index 23b6e10..e2130e0 100644
 --- a/src/psu/PSUSensorMain.cpp
 +++ b/src/psu/PSUSensorMain.cpp
 @@ -86,6 +86,7 @@ static constexpr auto sensorTypes = std::to_array<
