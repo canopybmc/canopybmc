@@ -46,6 +46,16 @@ GXP_SERVER_IDS = " \
 GXP_DT_OVERLAYS = "${@' '.join(['gxp-%s' % s for s in d.getVar('GXP_SERVER_IDS').split()])}"
 SRC_URI += "${@' '.join(['file://%s.dtso' % o for o in d.getVar('GXP_DT_OVERLAYS').split()])}"
 
+# Shared UBM backplane maps, pulled in by the overlays with dtc's /include/.
+# They unpack next to the .dtso sources, so a bare filename resolves without
+# an extra -i include path. Not built into .dtbo themselves: the compile loop
+# iterates GXP_SERVER_IDS, not a wildcard.
+SRC_URI += " \
+    file://gxp-ubm-mux3.dtsi \
+    file://gxp-ubm-mux4.dtsi \
+    file://gxp-ubm-mux6.dtsi \
+"
+
 GXP_OVERLAY_DIR = "${B}/gxp-overlays"
 EXTERNAL_KERNEL_DEVICETREE = "${GXP_OVERLAY_DIR}"
 FIT_CONF_DEFAULT_DTB = "${@os.path.basename(d.getVar('KERNEL_DEVICETREE'))}"

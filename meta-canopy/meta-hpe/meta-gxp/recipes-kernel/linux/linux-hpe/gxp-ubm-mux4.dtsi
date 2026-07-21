@@ -1,0 +1,242 @@
+// SPDX-License-Identifier: GPL-2.0-only
+	i2cmux@4 {
+		compatible = "i2c-mux";
+		i2c-parent = <&i2c4>;
+		mux-controls = <&i2c_mux_ctrl 4>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		i2c4@3 {
+			reg = <3>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c4@4 {
+			reg = <4>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c4@5 {
+			reg = <5>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c4@6 {
+			reg = <6>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c4@7 {
+			reg = <7>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c4@8 {
+			reg = <8>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+	};

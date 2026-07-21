@@ -1,0 +1,866 @@
+// SPDX-License-Identifier: GPL-2.0-only
+	i2cmux@3 {
+		compatible = "i2c-mux";
+		i2c-parent = <&i2c3>;
+		mux-controls = <&i2c_mux_ctrl 3>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		i2c3@1 {
+			reg = <1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@2 {
+			reg = <2>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@3 {
+			reg = <3>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@4 {
+			reg = <4>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@5 {
+			reg = <5>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@6 {
+			reg = <6>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@7 {
+			reg = <7>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@8 {
+			reg = <8>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@9 {
+			reg = <9>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@a {
+			reg = <0x0a>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@b {
+			reg = <0x0b>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@c {
+			reg = <0x0c>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@d {
+			reg = <0x0d>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@e {
+			reg = <0x0e>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@f {
+			reg = <0x0f>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@10 {
+			reg = <0x10>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@11 {
+			reg = <0x11>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@12 {
+			reg = <0x12>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@15 {
+			reg = <0x15>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@16 {
+			reg = <0x16>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@17 {
+			reg = <0x17>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+
+		i2c3@18 {
+			reg = <0x18>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			piceeprom@57 {
+				compatible = "atmel,24c02";
+				reg = <0x57>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			ubm@40 {
+				compatible = "ubm4";
+				reg = <0x40>;
+				vcc-supply = <&i2c_passthrough>;
+			};
+
+			switch@72 {
+				compatible = "nxp,pca9543";
+				reg = <0x72>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				vdd-supply = <&i2c_passthrough>;
+				i2c-mux-idle-disconnect;
+
+				i2c@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+
+				i2c@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+				};
+			};
+		};
+	};
