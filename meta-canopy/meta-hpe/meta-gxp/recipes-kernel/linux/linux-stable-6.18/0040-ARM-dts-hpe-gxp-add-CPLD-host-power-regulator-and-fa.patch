@@ -1,0 +1,43 @@
+From 524266aa647997ce62be74ceecaeea8941de23c5 Mon Sep 17 00:00:00 2001
+From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Date: Thu, 12 Feb 2026 09:31:22 +0100
+Subject: [PATCH] ARM: dts: hpe-gxp: add CPLD host power regulator and
+ fan-supply
+
+Add a host power regulator child node to the FN2 syscon, exposing
+the CPLD power-good state through the regulator framework. Switch
+the fan controller to use fan-supply instead of the direct FN2
+syscon reference.
+
+Upstream-Status: Pending
+
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+---
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index f6f2e2d4bc7b..a3b56c366287 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -203,6 +203,11 @@ chif: chif {
+ 				interrupts = <12>;
+ 				interrupt-parent = <&vic1>;
+ 			};
++
++			host_power: regulator-host-power {
++				compatible = "hpe,gxp-host-power-supply";
++				regulator-name = "host-power";
++			};
+ 		};
+ 
+ 		espi: espi@80fe0000 {
+@@ -524,7 +529,7 @@ fanctrl: fan-controller@c1000c00 {
+ 			compatible = "hpe,gxp-fan-ctrl";
+ 			reg = <0xc1000c00 0x200>;
+ 			hpe,xreg = <&xreg>;
+-			hpe,fn2 = <&fn2>;
++			fan-supply = <&host_power>;
+ 		};
+ 
+ 		spifi1: spi@c0000280 {

@@ -920,6 +920,3 @@ index 000000000000..6ca3e24ac325
 +
 +MODULE_DESCRIPTION("HPE GXP Thumbnail Video Engine driver");
 +MODULE_LICENSE("GPL");
--- 
-2.54.0
-

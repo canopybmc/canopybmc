@@ -6,6 +6,8 @@ Subject: [PATCH] misc: sbrmi: add regulator supply support
 Add optional "sbrmi-supply" regulator support. Probe is deferred if
 the supply is present but not yet enabled.
 
+Upstream-Status: Pending
+
 Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
 ---
  drivers/misc/amd-sbi/rmi-core.h |  2 ++
@@ -56,6 +58,3 @@ index f891f5af4bc6..205ef7b6d3be 100644
  
  	mutex_init(&data->lock);
  
--- 
-2.54.0
-
