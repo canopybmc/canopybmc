@@ -357,9 +357,6 @@
         "PartNumber": "$PartNumber",
         "SerialNumber": "$SerialNumber"
     },
-    "xyz.openbmc_project.Inventory.Decorator.AssetTag": {
-        "AssetTag": "HPE-OBMC-001"
-    },
     "xyz.openbmc_project.Inventory.Item": {
         "PrettyName": "ProLiant DL560 Gen11"
     },

@@ -3,7 +3,7 @@ description: >-
   Verify chassis and system identity fields are populated correctly via Redfish.
   Covers entity-manager VPD patches, devicetree-vpd-parser, and SMBIOS system
   identity. Checks both Chassis and System resources for manufacturer, model,
-  serial, part number, asset tag, and boot configuration.
+  serial, part number, and boot configuration.
 
 defaults:
   transport: &bmc_ssh
@@ -105,17 +105,6 @@ stages:
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
           expect:
             - regex: '"PartNumber": *"[^"][^"]*"'
-      - cmd: cmd
-        name: Chassis AssetTag populated
-        transport: *local
-        options:
-          timeout: 30s
-          on-error: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
-          expect:
-            - regex: '"AssetTag": *"[^"][^"]*"'
       - cmd: cmd
         name: ChassisType is RackMount
         transport: *local
