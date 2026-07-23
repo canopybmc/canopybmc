@@ -8,9 +8,12 @@ SRC_URI:append = " \
         file://0005-cmos-reset-Add-event-logs.patch \
         file://0006-cmos-reset-Add-power-control-capabilities.patch \
         file://0007-cmos-reset-Add-ActivationBlocksTransition.patch \
+        file://0008-Add-initial-hpe-gxp.patch \
         "
 
 EXTRA_OEMESON:append = " \
+        -Dplatforms=hpe-gxp \
+        -Dplatform-name=hpe-gxp \
         -Dcmos-reset=enabled \
         "
 

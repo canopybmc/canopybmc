@@ -1,0 +1,219 @@
+From e848a94099343f93a92da2958bcff9031198d93b Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Thu, 23 Jul 2026 17:45:50 +0200
+Subject: [PATCH] Add initial hpe gxp
+
+Add the minimum requirement for hpe gxp platform init
+
+Tested: Code compiles and CMOS reset works
+
+Upstream-Status: Pending
+Change-Id: I59dfb0491102468af8cbad22c80f544f366d0c57
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ hpe/gxp.cpp     | 116 ++++++++++++++++++++++++++++++++++++++++++++++++
+ hpe/hpe.hpp     |  17 +++++++
+ meson.build     |   7 ++-
+ meson.options   |   1 +
+ platform.hpp.in |   1 +
+ 5 files changed, 141 insertions(+), 1 deletion(-)
+ create mode 100644 hpe/gxp.cpp
+ create mode 100644 hpe/hpe.hpp
+
+diff --git a/hpe/gxp.cpp b/hpe/gxp.cpp
+new file mode 100644
+index 0000000..44c9e39
+--- /dev/null
++++ b/hpe/gxp.cpp
+@@ -0,0 +1,116 @@
++// SPDX-License-Identifier: Apache-2.0
++// SPDX-FileCopyrightText: Copyright OpenBMC Authors
++
++#include "hpe.hpp"
++#include "utilities.hpp"
++
++#include <systemd/sd-daemon.h>
++
++#include <sdbusplus/asio/connection.hpp>
++
++#include <chrono>
++#include <filesystem>
++#include <format>
++#include <fstream>
++#include <iostream>
++#include <string_view>
++
++namespace hpe
++{
++
++constexpr const auto nvramPath = "/dev/mtd/host-reserved";
++constexpr const auto chifEvsPath = "/var/lib/chif/evs.dat";
++constexpr const auto chifSvc = "xyz.openbmc_project.GxpChif.service";
++
++constexpr const auto systemdService = "org.freedesktop.systemd1";
++constexpr const auto systemdObjPath = "/org/freedesktop/systemd1";
++constexpr const auto systemdManagerInterface =
++    "org.freedesktop.systemd1.Manager";
++
++bool restartUnit(sdbusplus::bus_t& bus, const std::string& unit)
++{
++    info("Restarting {UNIT}", "UNIT", unit);
++
++    auto method = bus.new_method_call(systemdService, systemdObjPath,
++                                      systemdManagerInterface, "RestartUnit");
++
++    method.append(unit);
++    method.append("replace");
++
++    try
++    {
++        bus.call_noreply(method);
++    }
++    catch (const sdbusplus::exception_t& e)
++    {
++        error("Failed to restart unit {UNIT}, exception: {ERR}", "UNIT", unit,
++              "ERR", e);
++        return false;
++    }
++
++    return true;
++}
++
++int logged_system(std::string_view cmd)
++{
++    info("calling {CMD}", "CMD", cmd);
++    int rc = std::system(cmd.data());
++    return rc;
++}
++
++sdbusplus::async::task<bool> gxp_cmos_reset(
++    [[maybe_unused]] sdbusplus::async::context& ctx)
++{
++    auto bus = sdbusplus::bus::new_default_system();
++
++    info("CMOS reset triggered");
++    wait_for_path_to_exist(nvramPath, std::chrono::seconds(10));
++
++    int rc = logged_system(std::format("flash_eraseall {}", nvramPath));
++
++    if (rc < 0)
++    {
++        error("NVRAM erase failed with {ERR}", "ERR", rc);
++        co_return false;
++    }
++
++    try
++    {
++        if (std::filesystem::remove(chifEvsPath))
++        {
++            info("EV storage cleared");
++        }
++        else
++        {
++            warning("EV storage not found. Maybe removed?");
++        }
++    }
++    catch (const std::filesystem::filesystem_error& err)
++    {
++        error("Error clearing EV storage: {ERR}", "ERR", err.what());
++        co_return false;
++    }
++
++    if (!restartUnit(bus, chifSvc))
++    {
++        co_return false;
++    }
++
++    co_return true;
++}
++
++int init_gxp_base()
++{
++    info("GXP platform init");
++
++    int notify_rc = sd_notify(0, "READY=1\nSTATUS=GXP init complete");
++
++    if (notify_rc < 0)
++    {
++        error("sd_notify READY=1 failed: {RC}", "RC", notify_rc);
++        return EXIT_FAILURE;
++    }
++
++    return EXIT_SUCCESS;
++}
++} // namespace hpe
+diff --git a/hpe/hpe.hpp b/hpe/hpe.hpp
+new file mode 100644
+index 0000000..de93920
+--- /dev/null
++++ b/hpe/hpe.hpp
+@@ -0,0 +1,17 @@
++// SPDX-License-Identifier: Apache-2.0
++// SPDX-FileCopyrightText: Copyright OpenBMC Authors
++
++#pragma once
++
++#include <phosphor-logging/lg2.hpp>
++#include <sdbusplus/async.hpp>
++
++PHOSPHOR_LOG2_USING;
++
++namespace hpe
++{
++
++int init_gxp_base();
++sdbusplus::async::task<bool> gxp_cmos_reset(sdbusplus::async::context&);
++
++} // namespace hpe
+diff --git a/meson.build b/meson.build
+index 0c46879..a270727 100644
+--- a/meson.build
++++ b/meson.build
+@@ -34,6 +34,11 @@ if platform_name not in platforms
+ endif
+ 
+ platforms_map = {
++    'hpe-gxp': {
++        'src': files('hpe/gxp.cpp'),
++        'fn': 'hpe::init_gxp_base',
++        'cmos_reset_fn': 'hpe::gxp_cmos_reset',
++    },
+     'intel-acrp': {'src': files('intel/acrp.cpp'), 'fn': 'intel::init_acrp'},
+     'intel-jcrp': {'src': files('intel/jcrp.cpp'), 'fn': 'intel::init_jcrp'},
+     'nvidia-gb200': {
+@@ -79,7 +84,7 @@ exe = executable(
+         phosphor_logging_dep,
+         phosphor_dbus_interfaces_dep,
+     ],
+-    include_directories: ['.', 'cmos-reset', 'intel', 'nvidia'],
++    include_directories: ['.', 'cmos-reset', 'intel', 'hpe', 'nvidia'],
+     install: true,
+     install_dir: get_option('libexecdir'),
+ )
+diff --git a/meson.options b/meson.options
+index c0626b3..e673c62 100644
+--- a/meson.options
++++ b/meson.options
+@@ -4,6 +4,7 @@ option(
+     choices: [
+         'intel-acrp',
+         'intel-jcrp',
++        'hpe-gxp',
+         'nvidia-gb200',
+         'nvidia-gb200-with-p2020',
+         'nvidia-nvl32',
+diff --git a/platform.hpp.in b/platform.hpp.in
+index 8963825..81cd448 100644
+--- a/platform.hpp.in
++++ b/platform.hpp.in
+@@ -3,6 +3,7 @@
+ 
+ #pragma once
+ 
++#include "hpe.hpp"
+ #include "intel.hpp"
+ #include "nvidia.hpp"
+ 
+-- 
+2.53.0
+
