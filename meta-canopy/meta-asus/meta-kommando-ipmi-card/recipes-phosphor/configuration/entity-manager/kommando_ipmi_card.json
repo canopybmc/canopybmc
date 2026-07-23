@@ -1,0 +1,79 @@
+{
+    "Exposes": [
+        {
+            "Name": "Fan_0",
+            "Type": "AspeedFan",
+            "Index": 0,
+            "Connector": {
+                "Pwm": 0,
+                "Tachs": [0]
+            }
+        },
+        {
+            "Name": "Fan_1",
+            "Type": "AspeedFan",
+            "Index": 1,
+            "Connector": {
+                "Pwm": 1,
+                "Tachs": [1]
+            }
+        },
+        {
+            "Name": "Fan_2",
+            "Type": "AspeedFan",
+            "Index": 2,
+            "Connector": {
+                "Pwm": 2,
+                "Tachs": [2]
+            }
+        },
+        {
+            "Name": "Fan_3",
+            "Type": "AspeedFan",
+            "Index": 3,
+            "Connector": {
+                "Pwm": 3,
+                "Tachs": [3]
+            }
+        },
+        {
+            "Name": "Fan_4",
+            "Type": "AspeedFan",
+            "Index": 4,
+            "Connector": {
+                "Pwm": 4,
+                "Tachs": [4]
+            }
+        },
+        {
+            "Name": "Fan_5",
+            "Type": "AspeedFan",
+            "Index": 5,
+            "Connector": {
+                "Pwm": 5,
+                "Tachs": [5]
+            }
+        },
+        {
+            "Name": "Fan_6",
+            "Type": "AspeedFan",
+            "Index": 6,
+            "Connector": {
+                "Pwm": 6,
+                "Tachs": [6]
+            }
+        },
+        {
+            "Name": "Fan_7",
+            "Type": "AspeedFan",
+            "Index": 7,
+            "Connector": {
+                "Pwm": 7,
+                "Tachs": [7]
+            }
+        }
+    ],
+    "Name": "ASUS Kommando IPMI Card",
+    "Probe": "TRUE",
+    "Type": "Chassis"
+}

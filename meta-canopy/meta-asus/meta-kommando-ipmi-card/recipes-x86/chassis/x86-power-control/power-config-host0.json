@@ -1,0 +1,34 @@
+{
+    "gpio_configs": [
+        {
+            "Name": "PowerOk",
+            "LineName": "host0-ready-n",
+            "Type": "GPIO",
+            "Polarity": "ActiveHigh"
+        },
+        {
+            "Name": "PowerOut",
+            "LineName": "power-chassis-control-n",
+            "Type": "GPIO",
+            "Polarity": "ActiveLow"
+        },
+        {
+            "Name": "ResetOut",
+            "LineName": "reset-chassis-control-n",
+            "Type": "GPIO",
+            "Polarity": "ActiveLow"
+        }
+    ],
+    "timing_configs": {
+        "PowerPulseMs": 200,
+        "ForceOffPulseMs": 15000,
+        "ResetPulseMs": 500,
+        "PowerCycleMs": 5000,
+        "SioPowerGoodWatchdogMs": 1000,
+        "PowerOKWatchdogMs": 8000,
+        "GracefulPowerOffS": 300,
+        "WarmResetCheckMs": 500,
+        "PowerOffSaveMs": 7000,
+        "DbusGetPropertyRetry": 1000
+    }
+}

@@ -1,0 +1,327 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright 2025 Anirudh Srinivasan
+// Copyright 2026 Grégoire Layet - copied from linux kernel and edited
+
+/dts-v1/;
+
+#include "aspeed-g6.dtsi"
+#include "aspeed-g6-pinctrl.dtsi"
+#include <dt-bindings/gpio/aspeed-gpio.h>
+#include <dt-bindings/clock/ast2600-clock.h>
+#include <dt-bindings/interrupt-controller/aspeed-scu-ic.h>
+
+/ {
+	model = "Asus Kommando IPMI Expansion Card";
+	compatible = "asus,ast2600-kommando-ipmi-card", "aspeed,ast2600";
+
+	aliases {
+		serial4 = &uart5;
+	};
+
+	chosen {
+		stdout-path = "serial4:115200n8";
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led-fault {
+			gpios = <&gpio1 ASPEED_GPIO(C, 5) GPIO_ACTIVE_HIGH>;
+			label = "panic_amber";
+			panic-indicator;
+			default-state = "off";
+		};
+
+		led-heartbeat {
+			gpios = <&gpio0 ASPEED_GPIO(A, 7) GPIO_ACTIVE_LOW>;
+			label = "heartbeat_green";
+			linux,default-trigger = "timer";
+		};
+
+	};
+
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0x80000000 0x40000000>;
+	};
+
+	pwm-fan0 {
+      compatible = "pwm-fan";
+      pwms = <&pwm_tach 0 10000 0>;
+    };
+
+	pwm-fan1 {
+      compatible = "pwm-fan";
+      pwms = <&pwm_tach 1 10000 0>;
+    };
+
+	pwm-fan2 {
+      compatible = "pwm-fan";
+      pwms = <&pwm_tach 2 10000 0>;
+    };
+
+	pwm-fan3 {
+      compatible = "pwm-fan";
+      pwms = <&pwm_tach 3 10000 0>;
+    };
+
+	pwm-fan4 {
+      compatible = "pwm-fan";
+      pwms = <&pwm_tach 4 10000 0>;
+    };
+
+	pwm-fan5 {
+      compatible = "pwm-fan";
+      pwms = <&pwm_tach 5 10000 0>;
+    };
+
+	pwm-fan6 {
+      compatible = "pwm-fan";
+      pwms = <&pwm_tach 6 10000 0>;
+    };
+
+	pwm-fan7 {
+      compatible = "pwm-fan";
+      pwms = <&pwm_tach 7 10000 0>;
+    };
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		video_engine_memory: video {
+			size = <0x04000000>;
+			alignment = <0x01000000>;
+			compatible = "shared-dma-pool";
+			reusable;
+		};
+
+		ramoops@b3e00000 {
+			compatible = "ramoops";
+			reg = <0xb3e00000 0x100000>; /* 8 * (4 * 0x8000) */
+			record-size = <0x8000>;
+			console-size = <0x8000>;
+			ftrace-size = <0x8000>;
+			pmsg-size = <0x8000>;
+			max-reason = <3>; /* KMSG_DUMP_EMERG */
+		};
+	};
+
+	pcie_lpc: pcie-lpc@1e789800 {
+		compatible = "aspeed,ast2600-lpc-v2","simple-mfd", "syscon";
+		reg = <0x1e789800 0x800>;
+
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x0 0x1e789800 0x800>;
+
+		pcie_kcs4: pcie-kcs@114 {
+			compatible = "aspeed,ast2600-kcs-bmc";
+			reg = <0x114 0x1>, <0x118 0x1>, <0x11c 0x1>;
+			interrupts = <GIC_SPI 177 IRQ_TYPE_LEVEL_HIGH>;
+			aspeed,lpc-io-reg = <0x3a2 0x3a3>;
+
+			status = "okay";
+		};
+	};
+};
+
+&fmc {
+	status = "okay";
+
+	flash@0 {
+		status = "okay";
+		m25p,fast-read;
+		label = "bmc";
+		spi-max-frequency = <50000000>;
+#include "openbmc-flash-layout-64.dtsi"
+	};
+};
+
+&gpio0 {
+	gpio-line-names =
+	/*A0 0*/	"", "", "", "", "", "", "", "led-heartbeat",
+	/*B0 8*/	"", "", "", "", "", "", "", "",
+	/*C0 16*/	"", "", "", "", "", "", "", "",
+	/*D0 24*/	"", "", "", "", "", "", "", "",
+	/*E0 32*/	"", "", "", "", "", "", "", "",
+	/*F0 40*/	"", "", "", "", "", "", "", "",
+	/*G0 48*/	"", "", "", "", "", "", "", "",
+	/*H0 56*/	"", "", "", "", "", "", "", "",
+	/*I0 64*/	"", "", "", "reset-chassis-control-n", "", "", "", "",
+	/*J0 72*/	"", "", "", "", "", "", "", "",
+	/*K0 80*/	"", "", "", "", "", "", "", "",
+	/*L0 88*/	"", "", "", "", "", "", "", "",
+	/*M0 96*/	"", "", "", "", "", "", "", "",
+	/*N0 104*/	"", "", "", "", "", "", "", "",
+	/*O0 112*/	"", "", "", "", "", "", "", "",
+	/*P0 120*/	"", "", "", "", "", "", "", "",
+	/*Q0 128*/	"", "", "", "", "", "", "", "",
+	/*R0 136*/	"", "", "", "", "", "", "", "",
+	/*S0 144*/	"", "", "", "", "", "", "", "",
+	/*T0 152*/	"", "", "", "", "", "", "", "",
+	/*U0 160*/	"", "", "", "", "", "", "", "",
+	/*V0 168*/	"", "", "", "", "power-chassis-control-n", "", "host0-ready-n", "",
+	/*W0 176*/	"", "", "", "", "", "", "", "",
+	/*X0 184*/	"", "bmc-init", "bmc-ready-n", "", "", "", "", "",
+	/*Y0 192*/	"", "", "", "", "", "", "", "",
+	/*Z0 200*/	"", "", "", "", "", "", "", "";
+};
+
+&gpio1 {
+	gpio-line-names =
+	/*18A0 0*/  "","","","","","","","",
+	/*18B0 8*/  "","","","","","","","",
+	/*18C0 16*/ "","","","","","led-fault","","",
+	/*18D0 24*/ "","","","","","","","",
+	/*18E0 32*/ "","","","","","","","";
+};
+
+&i2c0 {
+	status = "okay";
+};
+
+&i2c1 {
+	status = "okay";
+};
+
+&i2c2 {
+	status = "okay";
+};
+
+&i2c3 {
+	status = "okay";
+
+	eeprom@55 {
+		compatible = "atmel,24c02";
+		reg = <0x55>;
+
+		nvmem-layout {
+			compatible = "fixed-layout";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			eth0_addr: eth-mac-addr@0 {
+				reg = <0x0 0x6>;
+			};
+		};
+	};
+};
+
+&i2c5 {
+	status = "okay";
+};
+
+&i2c6 {
+	status = "okay";
+};
+
+&i2c7 {
+	status = "okay";
+};
+
+&lpc_snoop {
+	status = "okay";
+	snoop-ports = <0x80>;
+};
+
+&mac2 {
+    status = "okay";
+	nvmem-cells = <&eth0_addr>;
+	nvmem-cell-names = "mac-address";
+    phy-mode = "rgmii";
+    phy-handle = <&ethphy2>;
+    pinctrl-names = "default";
+    pinctrl-0 = <&pinctrl_rgmii3_default>;
+};
+
+&mdio2 {
+    status = "okay";
+	pinctrl-names = "default";
+    pinctrl-0 = <&pinctrl_mdio3_default>;
+
+    ethphy2: ethernet-phy@0 {
+        compatible = "ethernet-phy-ieee802.3-c22";
+        reg = <0>;
+    };
+};
+
+&pwm_tach {
+    status = "okay";
+
+    pinctrl-names = "default";
+    pinctrl-0 = <&pinctrl_pwm0_default  &pinctrl_pwm1_default
+                 &pinctrl_pwm2_default  &pinctrl_pwm3_default
+                 &pinctrl_pwm4_default  &pinctrl_pwm5_default
+                 &pinctrl_pwm6_default  &pinctrl_pwm7_default
+                 &pinctrl_tach0_default &pinctrl_tach1_default
+                 &pinctrl_tach2_default &pinctrl_tach3_default
+                 &pinctrl_tach4_default &pinctrl_tach5_default
+                 &pinctrl_tach6_default &pinctrl_tach7_default>;
+
+	fan-0 {
+        pwms = <&pwm_tach 0 40000 0>;
+		tach-ch = /bits/ 8 <0x00>;
+    };
+    fan-1 {
+        pwms = <&pwm_tach 1 40000 0>;
+		tach-ch = /bits/ 8 <0x01>;
+    };
+    fan-2 {
+        pwms = <&pwm_tach 2 40000 0>;
+		tach-ch = /bits/ 8 <0x02>;
+    };
+    fan-3 {
+        pwms = <&pwm_tach 3 40000 0>;
+		tach-ch = /bits/ 8 <0x03>;
+    };
+    fan-4 {
+        pwms = <&pwm_tach 4 40000 0>;
+		tach-ch = /bits/ 8 <0x04>;
+    };
+    fan-5 {
+        pwms = <&pwm_tach 5 40000 0>;
+		tach-ch = /bits/ 8 <0x05>;
+    };
+    fan-6 {
+        pwms = <&pwm_tach 6 40000 0>;
+		tach-ch = /bits/ 8 <0x06>;
+    };
+    fan-7 {
+        pwms = <&pwm_tach 7 40000 0>;
+		tach-ch = /bits/ 8 <0x07>;
+    };
+};
+
+&spi1 {
+	status = "okay";
+
+	flash@0 {
+		status = "okay";
+		m25p,fast-read;
+		label = "spi-header";
+		spi-max-frequency = <100000000>; /* 100 MHz*/
+	};
+};
+
+&vhub {
+	status = "okay";
+};
+
+&video {
+	status = "okay";
+	memory-region = <&video_engine_memory>;
+};
+
+&vuart3 {
+	status = "okay";
+	aspeed,lpc-io-reg = <0x3f8>;
+	aspeed,lpc-interrupts = <0 IRQ_TYPE_LEVEL_LOW>;
+};
+
+&vuart4 {
+	status = "okay";
+	aspeed,lpc-io-reg = <0x2f8>;
+	aspeed,lpc-interrupts = <1 IRQ_TYPE_LEVEL_LOW>;
+};

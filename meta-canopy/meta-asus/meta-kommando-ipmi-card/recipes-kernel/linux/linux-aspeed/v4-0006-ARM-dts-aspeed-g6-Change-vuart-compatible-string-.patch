@@ -1,0 +1,64 @@
+From 47a4b38ad144809b7b3b4463f692d1b826147a9c Mon Sep 17 00:00:00 2001
+Message-ID: <47a4b38ad144809b7b3b4463f692d1b826147a9c.1783499488.git.gregoire.layet@9elements.com>
+In-Reply-To: <cover.1783499488.git.gregoire.layet@9elements.com>
+References: <cover.1783499488.git.gregoire.layet@9elements.com>
+From: =?UTF-8?q?Gr=C3=A9goire=20Layet?= <gregoire.layet@9elements.com>
+Date: Wed, 17 Jun 2026 10:48:24 +0200
+Subject: [PATCH v4 6/7] ARM: dts: aspeed: g6: Change vuart compatible string
+ for ast2600
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Use the ast2600 compatible string.
+This makes it more precise and enables specific ast2600 properties.
+Still use the ast2500 compatible string as a fallback.
+
+Upstream-Status: Pending
+Signed-off-by: Grégoire Layet <gregoire.layet@9elements.com>
+---
+ arch/arm/boot/dts/aspeed/aspeed-g6.dtsi | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/arch/arm/boot/dts/aspeed/aspeed-g6.dtsi b/arch/arm/boot/dts/aspeed/aspeed-g6.dtsi
+index 56bb3b0444f7..7c02633f2bd6 100644
+--- a/arch/arm/boot/dts/aspeed/aspeed-g6.dtsi
++++ b/arch/arm/boot/dts/aspeed/aspeed-g6.dtsi
+@@ -707,7 +707,7 @@ emmc: sdhci@1e750100 {
+ 			};
+
+ 			vuart1: serial@1e787000 {
+-				compatible = "aspeed,ast2500-vuart";
++				compatible = "aspeed,ast2600-vuart", "aspeed,ast2500-vuart";
+ 				reg = <0x1e787000 0x40>;
+ 				reg-shift = <2>;
+ 				interrupts = <GIC_SPI 147 IRQ_TYPE_LEVEL_HIGH>;
+@@ -717,7 +717,7 @@ vuart1: serial@1e787000 {
+ 			};
+
+ 			vuart3: serial@1e787800 {
+-				compatible = "aspeed,ast2500-vuart";
++				compatible = "aspeed,ast2600-vuart", "aspeed,ast2500-vuart";
+ 				reg = <0x1e787800 0x40>;
+ 				reg-shift = <2>;
+ 				interrupts = <GIC_SPI 180 IRQ_TYPE_LEVEL_HIGH>;
+@@ -727,7 +727,7 @@ vuart3: serial@1e787800 {
+ 			};
+
+ 			vuart2: serial@1e788000 {
+-				compatible = "aspeed,ast2500-vuart";
++				compatible = "aspeed,ast2600-vuart", "aspeed,ast2500-vuart";
+ 				reg = <0x1e788000 0x40>;
+ 				reg-shift = <2>;
+ 				interrupts = <GIC_SPI 148 IRQ_TYPE_LEVEL_HIGH>;
+@@ -737,7 +737,7 @@ vuart2: serial@1e788000 {
+ 			};
+
+ 			vuart4: serial@1e788800 {
+-				compatible = "aspeed,ast2500-vuart";
++				compatible = "aspeed,ast2600-vuart", "aspeed,ast2500-vuart";
+ 				reg = <0x1e788800 0x40>;
+ 				reg-shift = <2>;
+ 				interrupts = <GIC_SPI 181 IRQ_TYPE_LEVEL_HIGH>;
+--
+2.54.0

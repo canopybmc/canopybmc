@@ -1,0 +1,70 @@
+From 1ae2e99cf0a4a8960018e53bf27f5d297d97b033 Mon Sep 17 00:00:00 2001
+Message-ID: <1ae2e99cf0a4a8960018e53bf27f5d297d97b033.1783499488.git.gregoire.layet@9elements.com>
+In-Reply-To: <cover.1783499488.git.gregoire.layet@9elements.com>
+References: <cover.1783499488.git.gregoire.layet@9elements.com>
+From: =?UTF-8?q?Gr=C3=A9goire=20Layet?= <gregoire.layet@9elements.com>
+Date: Wed, 17 Jun 2026 09:05:50 +0000
+Subject: [PATCH v4 2/7] dt-bindings: serial: 8250: aspeed: add
+ aspeed,vuart-over-pci bool prop
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The ASPEED AST2600 has 2 VUART accessible over PCI.
+This boolean can be set to specify if the VUART is used over PCI.
+
+Upstream-Status: Pending
+Signed-off-by: Grégoire Layet <gregoire.layet@9elements.com>
+---
+ .../devicetree/bindings/serial/8250.yaml      | 22 +++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/serial/8250.yaml b/Documentation/devicetree/bindings/serial/8250.yaml
+index 8f22121381fc..2ea8981bba80 100644
+--- a/Documentation/devicetree/bindings/serial/8250.yaml
++++ b/Documentation/devicetree/bindings/serial/8250.yaml
+@@ -27,6 +27,16 @@ allOf:
+             enum:
+               - aspeed,ast2500-vuart
+               - aspeed,ast2600-vuart
++  - if:
++      required:
++        - aspeed,vuart-over-pci
++    then:
++      required:
++        - syscon
++      properties:
++        compatible:
++          contains:
++            const: aspeed,ast2600-vuart
+   - if:
+       properties:
+         compatible:
+@@ -223,6 +233,12 @@ properties:
+           - const: uartclk
+           - const: reg
+
++  syscon:
++    $ref: /schemas/types.yaml#/definitions/phandle
++    description:
++      Phandle to the SCU syscon, used to enable the VUART over the BMC PCI
++      device. Only applicable to aspeed,ast2600-vuart.
++
+   dmas:
+     minItems: 1
+     maxItems: 4
+@@ -316,6 +332,12 @@ properties:
+       polarity (IRQ_TYPE_LEVEL_LOW or IRQ_TYPE_LEVEL_HIGH). Only
+       applicable to aspeed,ast2500-vuart and aspeed,ast2600-vuart.
+
++  aspeed,vuart-over-pci:
++    type: boolean
++    description:
++      Enable the VUART over the BMC PCI device. Only applicable to
++      aspeed,ast2600-vuart.
++
+ required:
+   - reg
+   - interrupts
+--
+2.54.0

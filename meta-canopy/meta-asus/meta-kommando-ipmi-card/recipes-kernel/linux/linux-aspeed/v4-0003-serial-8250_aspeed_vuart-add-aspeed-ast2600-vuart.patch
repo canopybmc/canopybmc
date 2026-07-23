@@ -1,0 +1,35 @@
+From 28ec685b40a805fdfadb5d1c39fae5301f1e4bdb Mon Sep 17 00:00:00 2001
+Message-ID: <28ec685b40a805fdfadb5d1c39fae5301f1e4bdb.1783499488.git.gregoire.layet@9elements.com>
+In-Reply-To: <cover.1783499488.git.gregoire.layet@9elements.com>
+References: <cover.1783499488.git.gregoire.layet@9elements.com>
+From: =?UTF-8?q?Gr=C3=A9goire=20Layet?= <gregoire.layet@9elements.com>
+Date: Wed, 17 Jun 2026 09:46:39 +0000
+Subject: [PATCH v4 3/7] serial: 8250_aspeed_vuart: add aspeed,ast2600-vuart
+ compatible string
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Makes the driver compatible with the ast2600-vuart.
+This enables specific configuration for the AST2600.
+
+Upstream-Status: Pending
+Signed-off-by: Grégoire Layet <gregoire.layet@9elements.com>
+---
+ drivers/tty/serial/8250/8250_aspeed_vuart.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/tty/serial/8250/8250_aspeed_vuart.c b/drivers/tty/serial/8250/8250_aspeed_vuart.c
+index 26fc0464f1cc..6afa2f4057e1 100644
+--- a/drivers/tty/serial/8250/8250_aspeed_vuart.c
++++ b/drivers/tty/serial/8250/8250_aspeed_vuart.c
+@@ -560,6 +560,7 @@ static void aspeed_vuart_remove(struct platform_device *pdev)
+ static const struct of_device_id aspeed_vuart_table[] = {
+ 	{ .compatible = "aspeed,ast2400-vuart" },
+ 	{ .compatible = "aspeed,ast2500-vuart" },
++	{ .compatible = "aspeed,ast2600-vuart" },
+ 	{ },
+ };
+ MODULE_DEVICE_TABLE(of, aspeed_vuart_table);
+--
+2.54.0
