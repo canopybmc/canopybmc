@@ -1,0 +1,91 @@
+From 712244df77a86ed2bf81fc62d3710c36284ec4c9 Mon Sep 17 00:00:00 2001
+From: Oliver Brewka <oliver.brewka@9elements.com>
+Date: Sun, 14 Jun 2026 15:14:11 +0200
+Subject: [PATCH 1/6] Use CLI11 callback function for init sub
+
+Follow-up patch adds a new sub command. Using CLI11 callback function to
+have uniform code for sub command handling.
+
+Tested: Build a meta-catalina image.
+Upon boot, check the output of `systemctl status platform_init`.
+Confirmed the dummy init function for meta-catalina executed.
+
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/platform-init/+/91318/1]
+Change-Id: I71261b28ee60279c589b50a7ae5943cf3b1b9960
+Signed-off-by: Oliver Brewka <oliver.brewka@9elements.com>
+[Tan: modified to be compatible with own changes]
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ platform.cpp | 40 +++++++++++++++++++++++++++++++---------
+ 1 file changed, 31 insertions(+), 9 deletions(-)
+
+diff --git a/platform.cpp b/platform.cpp
+index 4ca3729..9ef0ee9 100644
+--- a/platform.cpp
++++ b/platform.cpp
+@@ -17,6 +17,29 @@
+ #include <string_view>
+ #include <utility>
+ 
++void init_sub_callback(std::string& platform_name, bool& success)
++{
++    const auto* it = std::ranges::find_if(
++        init_functions,
++        [&platform_name](const std::pair<std::string_view, int (*)()> val) {
++            return val.first == platform_name;
++        });
++    if (it == std::ranges::end(init_functions))
++    {
++        std::cerr << "no init function";
++        return;
++    }
++
++    int rc = it->second();
++    if (rc != EXIT_SUCCESS)
++    {
++        std::cerr << "init function failed\n";
++        return;
++    }
++
++    success = true;
++}
++
+ int main(int argc, char** argv)
+ {
+     CLI::App app("Platform init CLI");
+@@ -26,24 +49,23 @@ int main(int argc, char** argv)
+     CLI::App* init_sub =
+         app.add_subcommand("init", "Initialize the platform and daemonize");
+     std::string platform_name;
++    bool success = false;
+     init_sub
+         ->add_option("platform_name", platform_name,
+                      "Name of the platform to init")
+         ->required();
+-    app.require_subcommand();
+ 
++    init_sub->callback([&platform_name, &success]() {
++        init_sub_callback(platform_name, success);
++    });
++
++    app.require_subcommand();
+     CLI11_PARSE(app, argc, argv)
+ 
+-    const auto* it = std::ranges::find_if(
+-        init_functions,
+-        [&platform_name](const std::pair<std::string_view, int (*)()> val) {
+-            return val.first == platform_name;
+-        });
+-    if (it == std::ranges::end(init_functions))
++    if (!success)
+     {
+-        std::cerr << init_sub->help() << "\n";
+         return EXIT_FAILURE;
+     }
+ 
+-    return it->second();
++    return EXIT_SUCCESS;
+ }
+-- 
+2.53.0
+
