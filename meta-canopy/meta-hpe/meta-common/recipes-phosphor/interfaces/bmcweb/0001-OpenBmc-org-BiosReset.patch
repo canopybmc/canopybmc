@@ -1,0 +1,55 @@
+From 314043cc4d0da60aa8934c155a0514b19ebfd22a Mon Sep 17 00:00:00 2001
+From: Oliver Brewka <oliver.brewka@9elements.com>
+Date: Thu, 12 Mar 2026 02:34:29 +0100
+Subject: [PATCH] OpenBmc org BiosReset
+
+Currently the BiosReset action is only supported on openpower platforms,
+as the implementation calls into an org.openpower owned dbus service.
+
+As part of this patch series [1], a new cmos-reset service is added to
+platform-init that also should be requested via said Redfish action,
+independent of the platform.
+
+To unify, call into a xyz.openbmc_project owned service. Accordingly,
+adpapt the busname in openpower-pnor-code-mgmt [2].
+
+Tested: In order to test the openpower case, built a romulus image
+based on this patch and the patch in openpower-pnor-code-mgmt.
+Made a POST request and checked the journal that the request triggered
+the service.
+Limitation of this testing is that the dbus call errors out as expected
+with "Failed to reset bios: No route to host".
+I don't have access to an openpower platform, but if real hw testing is
+needed I could ask around on discord if someone could run the code on
+their machine.
+
+All testing for the patch series in platform-init has already been
+tested through Redfish.
+
+[1] https://gerrit.openbmc.org/c/openbmc/platform-init/+/88369
+[2] https://gerrit.openbmc.org/c/openbmc/openpower-pnor-code-mgmt/+/88228
+
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/bmcweb/+/88227]
+Change-Id: I5a52f138848063814e08b152756b8d5d8c31e267
+Signed-off-by: Oliver Brewka <oliver.brewka@9elements.com>
+---
+ redfish-core/lib/bios.hpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/redfish-core/lib/bios.hpp b/redfish-core/lib/bios.hpp
+index ddbd77cc7..281de9be7 100644
+--- a/redfish-core/lib/bios.hpp
++++ b/redfish-core/lib/bios.hpp
+@@ -115,7 +115,8 @@ inline void handleBiosResetPost(
+                 return;
+             }
+         },
+-        "org.open_power.Software.Host.Updater", "/xyz/openbmc_project/software",
++        "xyz.openbmc_project.Software.Host.Updater0",
++        "/xyz/openbmc_project/software",
+         "xyz.openbmc_project.Common.FactoryReset", "Reset");
+ }
+ 
+-- 
+2.54.0
+
