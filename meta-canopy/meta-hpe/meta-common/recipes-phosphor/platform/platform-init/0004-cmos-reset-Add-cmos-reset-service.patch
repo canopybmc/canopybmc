@@ -1,0 +1,404 @@
+From c9587458e328f5da931eb4e91e988bfda3a0f23b Mon Sep 17 00:00:00 2001
+From: Oliver Brewka <oliver.brewka@9elements.com>
+Date: Mon, 16 Mar 2026 06:22:02 +0100
+Subject: [PATCH 3/6] cmos-reset: Add cmos reset service
+
+In order to support a cmos reset / clear, add a dbus service that
+exposes the Reset method from xyz.openbmc_project.Common.FactoryReset.
+
+Each platform should define its specific cmos reset function which gets
+passed to the service.
+For that matter, the platform-init repository is a suitable place to add
+this service to, since it already provides a platform specific project
+and code structure as well as utility wrappers around i2c and gpio for
+easy implementation.
+
+Follow-up patches complete the following flow of actions:
+
+1. Check host state
+2. power off, if running
+3. set ActivationBlocksTransition interface
+4. run platform cmos reset function
+5. remove ActivationBlocksTransition interface
+6. restore initial host power state
+7. send success event log
+
+If any step fails, send a failure event log and return early.
+
+The service has been designed with Redfish in mind. A user should be
+able to trigger the reset through Bios.ResetBios action, for a) a lack
+of a better action and b) a cmos reset typically is performed to reset
+the bios.
+
+Currently on the bmcweb side this action calls into
+`org.openpower.Software.Host.Updater /xyz/openbmc_project/software
+xyz.openbmc_project.Common.FactoryReset Reset`. As part of this series,
+the busName shall be changed to
+xyz.openbmc_project.Software.Host.Updater0 [2] in an attempt to unify.
+
+Upgrading the code to be compatible with multi-host platforms in the
+future might require to change the instance path to include the specific
+host segment.
+
+The service can be started with the added cmos-reset-service sub
+command.
+
+Required recipe update [3].
+
+Tested: Code compiles.
+Build an image that configures to use the service. Run the image and
+check if the service is started correctly. Trigger the Reset method both
+manually and through Redfish and check journal output for the correct
+debug prints.
+
+[1] https://gerrit.openbmc.org/c/openbmc/bmcweb/+/88227
+[2] https://gerrit.openbmc.org/c/openbmc/openpower-pnor-code-mgmt/+/88228
+[3] https://gerrit.openbmc.org/c/openbmc/openbmc/+/88527/4
+
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/platform-init/+/88370/13]
+Change-Id: Ia385ab1ccf48b441ffcd449385350c0dec21aae5
+Signed-off-by: Oliver Brewka <oliver.brewka@9elements.com>
+[Tan: removed Catalina code, adapted to be compatible with Meson dynamic
+      rendering]
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ cmos-reset/cmos_reset.cpp                     | 62 +++++++++++++++++++
+ cmos-reset/cmos_reset.hpp                     | 42 +++++++++++++
+ ..._project.Software.Host.Updater0.service.in | 12 ++++
+ meson.build                                   | 33 +++++++++-
+ meson.options                                 |  7 +++
+ platform.cpp                                  | 41 ++++++++++++
+ platform.hpp.in                               |  8 +++
+ 7 files changed, 202 insertions(+), 3 deletions(-)
+ create mode 100644 cmos-reset/cmos_reset.cpp
+ create mode 100644 cmos-reset/cmos_reset.hpp
+ create mode 100644 cmos-reset/xyz.openbmc_project.Software.Host.Updater0.service.in
+
+diff --git a/cmos-reset/cmos_reset.cpp b/cmos-reset/cmos_reset.cpp
+new file mode 100644
+index 0000000..c8b72e2
+--- /dev/null
++++ b/cmos-reset/cmos_reset.cpp
+@@ -0,0 +1,62 @@
++// SPDX-License-Identifier: Apache-2.0
++// SPDX-FileCopyrightText: Copyright OpenBMC Authors
++
++#include "cmos_reset.hpp"
++
++#include <phosphor-logging/lg2.hpp>
++
++PHOSPHOR_LOG2_USING;
++
++namespace cmos
++{
++
++sdbusplus::async::task<> CmosReset::startReset()
++{
++    info("CMOS reset requested");
++
++    bool success = co_await doReset();
++
++    if (!success)
++    {
++        error("CMOS reset failed");
++        co_return;
++    }
++
++    info("CMOS reset successful");
++}
++
++sdbusplus::async::task<bool> CmosReset::doReset()
++{
++    if (!resetMethod)
++    {
++        error("No reset function provided for this platform");
++        co_return false;
++    }
++
++    bool success = co_await resetMethod(ctx);
++    if (!success)
++    {
++        error("CMOS reset failed");
++        co_return false;
++    }
++
++    co_return true;
++}
++
++int init_service(CmosResetMethod resetMethod)
++{
++    sdbusplus::async::context ctx;
++    sdbusplus::server::manager_t manager(ctx, softwarePath);
++
++    CmosReset service(ctx, softwarePath, resetMethod);
++
++    ctx.spawn([](sdbusplus::async::context& ctx) -> sdbusplus::async::task<> {
++        ctx.request_name(busName);
++        co_return;
++    }(ctx));
++
++    ctx.run();
++
++    return EXIT_SUCCESS;
++}
++} // namespace cmos
+diff --git a/cmos-reset/cmos_reset.hpp b/cmos-reset/cmos_reset.hpp
+new file mode 100644
+index 0000000..73eb39c
+--- /dev/null
++++ b/cmos-reset/cmos_reset.hpp
+@@ -0,0 +1,42 @@
++// SPDX-License-Identifier: Apache-2.0
++// SPDX-FileCopyrightText: Copyright OpenBMC Authors
++
++#include <sdbusplus/bus.hpp>
++#include <xyz/openbmc_project/Common/FactoryReset/aserver.hpp>
++
++namespace cmos
++{
++
++constexpr const char* softwarePath = "/xyz/openbmc_project/software";
++constexpr const char* busName = "xyz.openbmc_project.Software.Host.Updater0";
++
++using CmosResetMethod =
++    std::function<sdbusplus::async::task<bool>(sdbusplus::async::context& ctx)>;
++
++class CmosReset :
++    public sdbusplus::aserver::xyz::openbmc_project::common::FactoryReset<
++        CmosReset>
++{
++  public:
++    CmosReset(sdbusplus::async::context& ctx, const char* objPath,
++              CmosResetMethod resetMethod = nullptr) :
++        sdbusplus::aserver::xyz::openbmc_project::common::FactoryReset<
++            CmosReset>(ctx, objPath),
++        ctx(ctx), resetMethod(resetMethod)
++    {}
++
++    auto method_call(reset_t)
++    {
++        ctx.spawn(startReset());
++    };
++
++    sdbusplus::async::task<> startReset();
++    sdbusplus::async::task<bool> doReset();
++
++  private:
++    sdbusplus::async::context& ctx;
++    CmosResetMethod resetMethod;
++};
++
++int init_service(CmosResetMethod resetMethod);
++} // namespace cmos
+diff --git a/cmos-reset/xyz.openbmc_project.Software.Host.Updater0.service.in b/cmos-reset/xyz.openbmc_project.Software.Host.Updater0.service.in
+new file mode 100644
+index 0000000..c45ce3a
+--- /dev/null
++++ b/cmos-reset/xyz.openbmc_project.Software.Host.Updater0.service.in
+@@ -0,0 +1,12 @@
++[Unit]
++Description=platform cmos reset service
++Before=xyz.openbmc_project.FruDevice.service
++
++[Service]
++ExecStart=/usr/libexec/platform cmos-reset-service @PLATFORM_NAME@
++Restart=always
++Type=dbus
++BusName=xyz.openbmc_project.Software.Host.Updater0
++
++[Install]
++WantedBy=multi-user.target
+diff --git a/meson.build b/meson.build
+index 68108a2..1310b05 100644
+--- a/meson.build
++++ b/meson.build
+@@ -20,6 +20,7 @@ cli11_dep = dependency(
+ )
+ i2c_dep = meson.get_compiler('cpp').find_library('i2c')
+ 
++cmos_reset_srcs = files('cmos-reset/cmos_reset.cpp')
+ util_srcs = files('gpio.cpp', 'i2c.cpp', 'utilities.cpp')
+ 
+ platform_name = get_option('platform-name')
+@@ -51,19 +52,34 @@ platforms_map = {
+ 
+ platform_srcs = []
+ platform_entries = []
++cmos_reset_entries = []
+ foreach platform : platforms
+     src = platforms_map[platform]
+     if src['src'] not in platform_srcs
+         platform_srcs += src['src']
+     endif
+     platform_entries += 'PLATFORM("@0@", @1@)'.format(platform, src['fn'])
++    if 'cmos_reset_fn' in src
++        cmos_reset_entries += 'PLATFORM("@0@", @1@)'.format(
++            platform,
++            src['cmos_reset_fn'],
++        )
++    endif
+ endforeach
+ 
+ exe = executable(
+     'platform',
+-    ['platform.cpp'] + platform_srcs + util_srcs,
+-    dependencies: [gpiodcxx_dep, libsystemd_dep, cli11_dep, i2c_dep, sdbusplus],
+-    include_directories: ['.', 'nvidia', 'intel'],
++    ['platform.cpp'] + platform_srcs + cmos_reset_srcs + util_srcs,
++    dependencies: [
++        gpiodcxx_dep,
++        libsystemd_dep,
++        cli11_dep,
++        i2c_dep,
++        sdbusplus,
++        phosphor_logging_dep,
++        phosphor_dbus_interfaces_dep,
++    ],
++    include_directories: ['.', 'cmos-reset', 'intel', 'nvidia'],
+     install: true,
+     install_dir: get_option('libexecdir'),
+ )
+@@ -81,9 +97,20 @@ configure_file(
+ 
+ conf = configuration_data()
+ conf.set('PLATFORMS', ',\n    '.join(platform_entries))
++conf.set('CMOS_RESET_PLATFORMS', ',\n    '.join(cmos_reset_entries))
+ 
+ configure_file(
+     input: 'platform.hpp.in',
+     output: 'platform.hpp',
+     configuration: conf,
+ )
++
++configure_file(
++    input: 'cmos-reset/xyz.openbmc_project.Software.Host.Updater0.service.in',
++    output: 'xyz.openbmc_project.Software.Host.Updater0.service',
++    install_dir: systemd_system_unit_dir,
++    install: true,
++    configuration: configuration_data(
++        {'PLATFORM_NAME': platform_name},
++    ),
++)
+diff --git a/meson.options b/meson.options
+index 6e5f74d..961234e 100644
+--- a/meson.options
++++ b/meson.options
+@@ -17,3 +17,10 @@ option(
+     value: 'nvidia-gb200',
+     description: 'Platform to init (Temporary)',
+ )
++
++option(
++    'cmos-reset',
++    type: 'feature',
++    value: 'disabled',
++    description: 'Enable CMOS reset service',
++)
+diff --git a/platform.cpp b/platform.cpp
+index 9ef0ee9..ea556bc 100644
+--- a/platform.cpp
++++ b/platform.cpp
+@@ -3,6 +3,7 @@
+ 
+ #include "platform.hpp"
+ 
++#include "cmos_reset.hpp"
+ #include "gpio.hpp"
+ #include "i2c.hpp"
+ #include "utilities.hpp"
+@@ -12,6 +13,7 @@
+ 
+ #include <CLI/CLI.hpp>
+ #include <gpiod.hpp>
++#include <sdbusplus/async.hpp>
+ 
+ #include <algorithm>
+ #include <string_view>
+@@ -40,6 +42,32 @@ void init_sub_callback(std::string& platform_name, bool& success)
+     success = true;
+ }
+ 
++void cmos_reset_sub_callback(std::string& platform_name, bool& success)
++{
++    const auto* it = std::ranges::find_if(
++        cmos_reset_functions,
++        [&platform_name](
++            const std::pair<std::string_view, sdbusplus::async::task<bool> (*)(
++                                                  sdbusplus::async::context&)>
++                val) { return val.first == platform_name; });
++
++    if (it == std::ranges::end(cmos_reset_functions))
++    {
++        std::cerr << "no reset function";
++        return;
++    }
++
++    int rc = cmos::init_service(it->second);
++
++    if (rc != EXIT_SUCCESS)
++    {
++        std::cerr << "failed to initialize cmos-reset service\n";
++        return;
++    }
++
++    success = true;
++}
++
+ int main(int argc, char** argv)
+ {
+     CLI::App app("Platform init CLI");
+@@ -48,8 +76,12 @@ int main(int argc, char** argv)
+ 
+     CLI::App* init_sub =
+         app.add_subcommand("init", "Initialize the platform and daemonize");
++    CLI::App* cmos_reset_sub = app.add_subcommand(
++        "cmos-reset-service", "Start the cmos-reset service");
++
+     std::string platform_name;
+     bool success = false;
++
+     init_sub
+         ->add_option("platform_name", platform_name,
+                      "Name of the platform to init")
+@@ -59,6 +91,15 @@ int main(int argc, char** argv)
+         init_sub_callback(platform_name, success);
+     });
+ 
++    cmos_reset_sub
++        ->add_option("platform_name", platform_name,
++                     "Name of the platform to start the service on")
++        ->required();
++
++    cmos_reset_sub->callback([&platform_name, &success]() {
++        cmos_reset_sub_callback(platform_name, success);
++    });
++
+     app.require_subcommand();
+     CLI11_PARSE(app, argc, argv)
+ 
+diff --git a/platform.hpp.in b/platform.hpp.in
+index 05a1e04..8963825 100644
+--- a/platform.hpp.in
++++ b/platform.hpp.in
+@@ -6,6 +6,8 @@
+ #include "intel.hpp"
+ #include "nvidia.hpp"
+ 
++#include <sdbusplus/async.hpp>
++
+ #include <string_view>
+ 
+ #define PLATFORM(name, func) {name, func}
+@@ -13,3 +15,9 @@
+ inline constexpr std::pair<std::string_view, int (*)()> init_functions[] = {
+     @PLATFORMS@
+ };
++
++inline constexpr std::pair<std::string_view, sdbusplus::async::task<bool> (*)(
++                                                 sdbusplus::async::context&)>
++    cmos_reset_functions[] = {
++    @CMOS_RESET_PLATFORMS@
++};
+-- 
+2.53.0
+
