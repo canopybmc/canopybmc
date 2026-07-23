@@ -2,13 +2,11 @@
     {
         "Exposes": [
             {
-                "Address": "27",
+                "Address": "0x6a",
                 "Bus": "$BUS",
-                "Labels": [
-                    "temp1"
-                ],
-                "Name": "NVME-$BUS",
+                "Name": "NVME $BUS - 100 + 1 Temp",
                 "PollRate": 10,
+                "PowerState": "On",
                 "Thresholds": [
                     {
                         "Direction": "greater than",
@@ -25,22 +23,22 @@
                         "Value": 10
                     }
                 ],
-                "Type": "NVME",
-                "temp1_Name": "NVME-$BUS"
+                "Type": "NVME1000"
             }
         ],
-        "Name": "HPE NVME DRIVE $BUS",
+        "Name": "NVME $BUS - 100 + 1",
         "Probe": [
-            "xyz.openbmc_project.FruDevice({'PRODUCT_MANUFACTURER': 'Samsung'})",
-            "xyz.openbmc_project.FruDevice({'PRODUCT_MANUFACTURER': 'SK hynix'})",
-            "xyz.openbmc_project.FruDevice({'PRODUCT_MANUFACTURER': 'MICRON'})"
+            "xyz.openbmc_project.FruDevice({'ADDRESS': 83})",
+            "AND",
+            "FOUND('chassis')"
         ],
-        "Type": "NvmeDrive",
+        "Type": "NVMe",
         "xyz.openbmc_project.Inventory.Decorator.Asset": {
             "Manufacturer": "$PRODUCT_MANUFACTURER",
             "Model": "$PRODUCT_PRODUCT_NAME",
             "PartNumber": "$PRODUCT_PART_NUMBER",
             "SerialNumber": "$PRODUCT_SERIAL_NUMBER"
-        }
+        },
+        "xyz.openbmc_project.Inventory.Item.Chassis": {}
     }
 ]
