@@ -1,0 +1,202 @@
+From cb55b0e61d890fbc6e4f0ecf15d9d3acc3033cb8 Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Mon, 20 Jul 2026 22:59:37 +0200
+Subject: [PATCH] build: allow compiling selected platforms only
+
+platform-init links the init code for all platforms into the binary,
+meaning it adds code for every board regardless of which one it targets.
+
+On space-constrained systems this may not fit. A BMC with a 32MB SPI
+(e.g. the HPE ProLiant Gen11 platforms) can barely fit all apps to run
+the OpenBMC stack. Adding init code for platforms that will never run on
+the target wastes valuable storage space.
+
+Make the set of compiled-in platforms a build-time choice. A new
+'platforms' meson array selects which platforms are compiled and
+available. By default, all platforms will be selected to keep
+backwards-compatibility. The init_functions array will be auto-generated
+by meson via platform.hpp.in. If no platform is selected
+(i.e. overwriting the default to be empty), or if platform-name is not
+part of the selected platforms, an error will be thrown.
+
+Building only nvidia-gb200 instead of all platforms can shrink the
+compressed binary (stripped and splitted in squashfs.xz) by ~16 KiB:
+
+    all platforms:    155648 bytes
+    nvidia-gb200:     139264 bytes
+    saving:            16384 bytes
+
+Upstream-Status: Pending
+Change-Id: I67f15741e1d5521ba55aa3b3c04d5af5b0b1641e
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ meson.build     | 54 ++++++++++++++++++++++++++++++++++++++++++-------
+ meson.options   | 13 ++++++++++++
+ platform.cpp    | 15 +++-----------
+ platform.hpp.in | 15 ++++++++++++++
+ 4 files changed, 78 insertions(+), 19 deletions(-)
+ create mode 100644 platform.hpp.in
+
+diff --git a/meson.build b/meson.build
+index f402c48..f0ba3e7 100644
+--- a/meson.build
++++ b/meson.build
+@@ -19,14 +19,45 @@ cli11_dep = dependency(
+ )
+ i2c_dep = meson.get_compiler('cpp').find_library('i2c')
+ 
+-platform_srcs = files(
+-    'intel/acrp.cpp',
+-    'intel/jcrp.cpp',
+-    'nvidia/gb200.cpp',
+-    'nvidia/nvl32.cpp',
+-)
+ util_srcs = files('gpio.cpp', 'i2c.cpp', 'utilities.cpp')
+ 
++platform_name = get_option('platform-name')
++platforms = get_option('platforms')
++if platforms.length() == 0
++    error('at least one platform must be selected!')
++endif
++
++if platform_name not in platforms
++    error('selected platform name not selected in platforms')
++endif
++
++platforms_map = {
++    'intel-acrp': {'src': files('intel/acrp.cpp'), 'fn': 'intel::init_acrp'},
++    'intel-jcrp': {'src': files('intel/jcrp.cpp'), 'fn': 'intel::init_jcrp'},
++    'nvidia-gb200': {
++        'src': files('nvidia/gb200.cpp'),
++        'fn': 'nvidia::init_gb200_base',
++    },
++    'nvidia-gb200-with-p2020': {
++        'src': files('nvidia/gb200.cpp'),
++        'fn': 'nvidia::init_gb200_with_p2020',
++    },
++    'nvidia-nvl32': {
++        'src': files('nvidia/nvl32.cpp'),
++        'fn': 'nvidia::init_nvl32',
++    },
++}
++
++platform_srcs = []
++platform_entries = []
++foreach platform : platforms
++    src = platforms_map[platform]
++    if src['src'] not in platform_srcs
++        platform_srcs += src['src']
++    endif
++    platform_entries += 'PLATFORM("@0@", @1@)'.format(platform, src['fn'])
++endforeach
++
+ exe = executable(
+     'platform',
+     ['platform.cpp'] + platform_srcs + util_srcs,
+@@ -43,6 +74,15 @@ configure_file(
+     install_dir: systemd_system_unit_dir,
+     install: true,
+     configuration: configuration_data(
+-        {'PLATFORM_NAME': get_option('platform-name')},
++        {'PLATFORM_NAME': platform_name},
+     ),
+ )
++
++conf = configuration_data()
++conf.set('PLATFORMS', ',\n    '.join(platform_entries))
++
++configure_file(
++    input: 'platform.hpp.in',
++    output: 'platform.hpp',
++    configuration: conf,
++)
+diff --git a/meson.options b/meson.options
+index 9004923..6e5f74d 100644
+--- a/meson.options
++++ b/meson.options
+@@ -1,3 +1,16 @@
++option(
++    'platforms',
++    type: 'array',
++    choices: [
++        'intel-acrp',
++        'intel-jcrp',
++        'nvidia-gb200',
++        'nvidia-gb200-with-p2020',
++        'nvidia-nvl32',
++    ],
++    description: 'List of platforms to be included',
++)
++
+ option(
+     'platform-name',
+     type: 'string',
+diff --git a/platform.cpp b/platform.cpp
+index a90e209..4ca3729 100644
+--- a/platform.cpp
++++ b/platform.cpp
+@@ -1,10 +1,10 @@
+ // SPDX-License-Identifier: Apache-2.0
+ // SPDX-FileCopyrightText: Copyright OpenBMC Authors
+ 
++#include "platform.hpp"
++
+ #include "gpio.hpp"
+ #include "i2c.hpp"
+-#include "intel.hpp"
+-#include "nvidia.hpp"
+ #include "utilities.hpp"
+ 
+ #include <fcntl.h>
+@@ -14,18 +14,9 @@
+ #include <gpiod.hpp>
+ 
+ #include <algorithm>
+-#include <array>
+-#include <iostream>
+ #include <string_view>
+ #include <utility>
+ 
+-constexpr std::array<std::pair<std::string_view, int (*)()>, 5> init_functions{
+-    {{"intel-acrp", intel::init_acrp},
+-     {"intel-jcrp", intel::init_jcrp},
+-     {"nvidia-gb200", nvidia::init_gb200_base},
+-     {"nvidia-gb200-with-p2020", nvidia::init_gb200_with_p2020},
+-     {"nvidia-nvl32", nvidia::init_nvl32}}};
+-
+ int main(int argc, char** argv)
+ {
+     CLI::App app("Platform init CLI");
+@@ -48,7 +39,7 @@ int main(int argc, char** argv)
+         [&platform_name](const std::pair<std::string_view, int (*)()> val) {
+             return val.first == platform_name;
+         });
+-    if (it == init_functions.end())
++    if (it == std::ranges::end(init_functions))
+     {
+         std::cerr << init_sub->help() << "\n";
+         return EXIT_FAILURE;
+diff --git a/platform.hpp.in b/platform.hpp.in
+new file mode 100644
+index 0000000..05a1e04
+--- /dev/null
++++ b/platform.hpp.in
+@@ -0,0 +1,15 @@
++// SPDX-License-Identifier: Apache-2.0
++// SPDX-FileCopyrightText: Copyright OpenBMC Authors
++
++#pragma once
++
++#include "intel.hpp"
++#include "nvidia.hpp"
++
++#include <string_view>
++
++#define PLATFORM(name, func) {name, func}
++
++inline constexpr std::pair<std::string_view, int (*)()> init_functions[] = {
++    @PLATFORMS@
++};
+-- 
+2.53.0
+
