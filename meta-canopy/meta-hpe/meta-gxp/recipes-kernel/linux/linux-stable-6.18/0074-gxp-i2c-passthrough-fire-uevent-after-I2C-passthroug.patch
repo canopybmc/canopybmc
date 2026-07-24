@@ -1,4 +1,4 @@
-From 5a1e63a797d8f1db59a05497b10bcc3e625e2913 Mon Sep 17 00:00:00 2001
+From a0d8341d3d7c72a073cbf242d36d021a73944f5a Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
 Date: Tue, 10 Mar 2026 10:55:52 -0300
 Subject: [PATCH] gxp-i2c-passthrough: fire uevent after I2C passthrough enable

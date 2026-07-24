@@ -73,8 +73,6 @@ SRC_URI:append = " \
     file://0051-dt-bindings-peci-add-HPE-GXP-PECI-controller-binding.patch \
     file://0052-peci-controller-add-HPE-GXP-PECI-controller-driver.patch \
     file://0053-ARM-dts-hpe-gxp-add-PECI-controller-node.patch \
-    file://0054-peci-controller-gxp-manage-PECI-devices-via-regulato.patch \
-    file://0055-peci-controller-gxp-prevent-overlapping-transfers.patch \
     file://0056-peci-core-serialize-device-creation-with-per-control.patch \
     file://0057-peci-cpu-add-Intel-Emerald-Rapids-support.patch \
     file://0058-hwmon-peci-cputemp-add-Intel-Emerald-Rapids-support.patch \

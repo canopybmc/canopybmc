@@ -1,4 +1,4 @@
-From 725807fc042303101f4699598bb1a88ad3dc6bb1 Mon Sep 17 00:00:00 2001
+From 162902adf7731e6edd41c3f8d62fa6e0ed08c4b0 Mon Sep 17 00:00:00 2001
 From: Nick Hawkins <nick.hawkins@hpe.com>
 Date: Sun, 8 Mar 2026 00:00:00 +0000
 Subject: [PATCH] media: add GXP thumbnail video capture driver
