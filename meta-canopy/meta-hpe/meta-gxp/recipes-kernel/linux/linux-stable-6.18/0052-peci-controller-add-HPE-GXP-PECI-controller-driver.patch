@@ -1,4 +1,4 @@
-From d75581dfca7e1d9f4f960414ed79c1fafaec79ae Mon Sep 17 00:00:00 2001
+From d904bdfad3f61c56dff5c7f6ea96d1a4e173130d Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 22:01:59 +0100
 Subject: [PATCH] peci: controller: add HPE GXP PECI controller driver

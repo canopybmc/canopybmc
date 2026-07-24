@@ -1,4 +1,4 @@
-From a3d5d4373d391b464312fc0cb33c2396dbf415c4 Mon Sep 17 00:00:00 2001
+From 171414b8187acfb6e0887eca654ce2b4e1a43f49 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Mon, 20 Apr 2026 14:00:46 +0200
 Subject: [PATCH] peci: controller: gxp: prevent overlapping transfers

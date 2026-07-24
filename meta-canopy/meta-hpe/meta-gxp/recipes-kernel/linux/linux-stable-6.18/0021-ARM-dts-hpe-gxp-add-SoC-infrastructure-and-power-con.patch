@@ -1,4 +1,4 @@
-From f681d3521c19e6b5c1cf82bdc5b37b02284d165c Mon Sep 17 00:00:00 2001
+From 3a80cffa24bb6759cd25effdd89db7d39ae8e30f Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 8 Feb 2026 22:21:32 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add SoC infrastructure and power control
@@ -11,12 +11,15 @@ phandles instead of direct register regions.
 Upstream-Status: Pending
 
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Co-developed-by: Christian Walter <christian.walter@9elements.com>
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+Signed-off-by: Georg Hackel <georg.hackel@9elements.com>
 ---
  arch/arm/boot/dts/hpe/hpe-gxp.dts | 170 +++++++++++++++++++++++++++++-
  1 file changed, 166 insertions(+), 4 deletions(-)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index 14b333d8297d..7584b6a58218 100644
+index 14b333d8297d..aea8e436647e 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
 @@ -83,6 +83,169 @@ vic1: interrupt-controller@80f00000 {
@@ -95,24 +98,24 @@ index 14b333d8297d..7584b6a58218 100644
 +				"", "", "", "", "", "", "", "",
 +				"", "", "", "", "", "", "", "", "",
 +				/* 90-97: PSU installed */
-+				"psu1-installed", "psu2-installed",
-+				"psu3-installed", "psu4-installed",
-+				"psu5-installed", "psu6-installed",
-+				"psu7-installed", "psu8-installed",
++				"INST_PSU1", "INST_PSU2",
++				"INST_PSU3", "INST_PSU4",
++				"INST_PSU5", "INST_PSU6",
++				"INST_PSU7", "INST_PSU8",
 +				/* 98-99: Reserved */
 +				"", "",
 +				/* 100-107: PSU AC OK */
-+				"psu1-ac-ok", "psu2-ac-ok",
-+				"psu3-ac-ok", "psu4-ac-ok",
-+				"psu5-ac-ok", "psu6-ac-ok",
-+				"psu7-ac-ok", "psu8-ac-ok",
++				"PSU1_AC", "PSU2_AC",
++				"PSU3_AC", "PSU4_AC",
++				"PSU5_AC", "PSU6_AC",
++				"PSU7_AC", "PSU8_AC",
 +				/* 108-109: Reserved */
 +				"", "",
 +				/* 110-117: PSU DC OK */
-+				"psu1-dc-ok", "psu2-dc-ok",
-+				"psu3-dc-ok", "psu4-dc-ok",
-+				"psu5-dc-ok", "psu6-dc-ok",
-+				"psu7-dc-ok", "psu8-dc-ok";
++				"PSU1_DC", "PSU2_DC",
++				"PSU3_DC", "PSU4_DC",
++				"PSU5_DC", "PSU6_DC",
++				"PSU7_DC", "PSU8_DC";
 +		};
 +
 +		fn2: fn2@80200000 {

@@ -1,4 +1,4 @@
-From ef79709fdf925bb6fee71543ee66dd5b09f8a4ea Mon Sep 17 00:00:00 2001
+From 31e8dd86b2f397cd52fa5836eafd728b7815dd63 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 3 Feb 2026 00:46:54 +0100
 Subject: [PATCH] soc: hpe: add GXP CHIF driver
@@ -59,7 +59,7 @@ index 62994d7b35ee..5fefa0ddee15 100644
 +obj-$(CONFIG_SOC_HPE_GXP_CHIF)		+= gxp-chif.o
 diff --git a/drivers/soc/hpe/gxp-chif.c b/drivers/soc/hpe/gxp-chif.c
 new file mode 100644
-index 000000000000..8cc303256639
+index 000000000000..640eae54142d
 --- /dev/null
 +++ b/drivers/soc/hpe/gxp-chif.c
 @@ -0,0 +1,717 @@

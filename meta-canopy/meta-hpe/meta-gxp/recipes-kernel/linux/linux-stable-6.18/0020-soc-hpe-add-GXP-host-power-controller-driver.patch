@@ -1,4 +1,4 @@
-From 96db408f4b3cc4e3125e8b02a8499b7ba4c733e6 Mon Sep 17 00:00:00 2001
+From 74f03d65ff9052bbdfba4af350e33cb4e341b5fd Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 8 Feb 2026 22:21:26 +0100
 Subject: [PATCH] soc: hpe: add GXP host power controller driver
@@ -13,11 +13,14 @@ reset-out.
 Upstream-Status: Pending
 
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Co-developed-by: Tan Siewert <tan.siewert@9elements.com>
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+Signed-off-by: Georg Hackel <georg.hackel@9elements.com>
 ---
  drivers/soc/hpe/Kconfig          |  16 +
  drivers/soc/hpe/Makefile         |   1 +
- drivers/soc/hpe/gxp-power-ctrl.c | 491 +++++++++++++++++++++++++++++++
- 3 files changed, 508 insertions(+)
+ drivers/soc/hpe/gxp-power-ctrl.c | 516 +++++++++++++++++++++++++++++++
+ 3 files changed, 533 insertions(+)
  create mode 100644 drivers/soc/hpe/gxp-power-ctrl.c
 
 diff --git a/drivers/soc/hpe/Kconfig b/drivers/soc/hpe/Kconfig
@@ -56,10 +59,10 @@ index a7e25539f99d..62994d7b35ee 100644
 +obj-$(CONFIG_SOC_HPE_GXP_POWER_CTRL)	+= gxp-power-ctrl.o
 diff --git a/drivers/soc/hpe/gxp-power-ctrl.c b/drivers/soc/hpe/gxp-power-ctrl.c
 new file mode 100644
-index 000000000000..9a8c0cbc50f5
+index 000000000000..fabe671e1f57
 --- /dev/null
 +++ b/drivers/soc/hpe/gxp-power-ctrl.c
-@@ -0,0 +1,491 @@
+@@ -0,0 +1,516 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * HPE GXP host power controller driver
@@ -74,7 +77,7 @@ index 000000000000..9a8c0cbc50f5
 + * Exposed GPIO lines:
 + *   Line 0: power-button (output) - wraps FN2 VPBTN
 + *   Line 1: power-good (input) - wraps FN2 PGOOD
-+ *   Line 2: reset-out (output) - warm reset control
++ *   Line 2: reset-out (output) - warm reset via CSM SW_RESET
 + *
 + * On power-button assertion (when PGOOD is low, i.e. power-on):
 + *   1. Set flash_select to 0x5D (UEFI EV store via SPI ctrl1)
@@ -91,7 +94,12 @@ index 000000000000..9a8c0cbc50f5
 + * On probe (BMC boot):
 + *   1. Set PSU enable to 0xFF
 + *   2. Set power state to 0x08 (exit S5)
-+ *   3. Set boot_control to 0x24 (release)
++ *   3. Run prepare-boot sequence
++ *     - flash select
++ *     - SoC release
++ *     - eSPI reset
++ *     - boot control release
++ *     - shutdown reason clear
 + *
 + * Register sources:
 + *   flash_select:    XREG offset 0x119 (direct readb/writeb)
@@ -99,6 +107,8 @@ index 000000000000..9a8c0cbc50f5
 + *   boot_control:    XREG offset 0x09 (direct readb/writeb)
 + *   psu_enable:      XREG offset 0x41 (direct readb/writeb)
 + *   power_state:     XREG offset 0x4B (direct readb/writeb)
++ *   asrstat:         CSM offset 0x5C (direct writeb, SW_RESET)
++ *   asrestat:        CSM offset 0x5D (direct writeb, SW_RESET)
 + *   shutdown_reason: CSM offset 0x74 (direct writeb)
 + *   espi_oob_ctrl:   eSPI offset 0x1040 (Intel/AMD only, via regmap)
 + */
@@ -128,7 +138,7 @@ index 000000000000..9a8c0cbc50f5
 +	struct gpio_desc *pgood_gpio;
 +	struct regmap *espi_map;	/* optional, Intel/AMD only */
 +	void __iomem *xreg_base;	/* XREG register base */
-+	void __iomem *shutdown_reason_reg;
++	void __iomem *csm_base;		/* CSM register base */
 +	u16 server_id;
 +	int pgood_irq;
 +	u32 irq_mask;		/* bitmask of enabled virtual IRQs */
@@ -136,8 +146,7 @@ index 000000000000..9a8c0cbc50f5
 +
 +/*
 + * Prepare-boot sequence: configure CPLD for host boot.
-+ * Called when the power button is asserted and PGOOD is low,
-+ * or when reset-out is deasserted to release the host.
++ * Called when the power button is asserted and PGOOD is low.
 + *
 + * This replicates the register writes from HPE's proliantStart.sh and
 + * gxp-fn2.c:120-166: flash_select = 0x5D, soc_release bit 3,
@@ -170,8 +179,7 @@ index 000000000000..9a8c0cbc50f5
 +	       pctrl->xreg_base + XREG_BOOT_CONTROL);
 +
 +	/* Clear shutdown reason so fresh boot starts clean */
-+	if (pctrl->shutdown_reason_reg)
-+		writeb(0x00, pctrl->shutdown_reason_reg);
++	writeb(0x00, pctrl->csm_base + CSM_SHUTDOWN_REASON);
 +}
 +
 +/*
@@ -202,11 +210,29 @@ index 000000000000..9a8c0cbc50f5
 +}
 +
 +/*
++ * Cycle soc_release and re-arm the boot gate after a shutdown to
++ * allow the system to boot again.
++ */
++static void gxp_power_ctrl_rearm_boot_gate(struct gxp_power_ctrl *pctrl)
++{
++	u8 val;
++
++	/* SoC release: set bit 3 to release the host SoC */
++	val = readb(pctrl->xreg_base + XREG_SOC_RELEASE);
++	val |= XREG_SOC_RELEASE_BIT;
++	writeb(val, pctrl->xreg_base + XREG_SOC_RELEASE);
++
++	/* Release the boot gate */
++	writeb(XREG_BOOT_CONTROL_RELEASE,
++		pctrl->xreg_base + XREG_BOOT_CONTROL);
++}
++
++/*
 + * Initial platform configuration on BMC boot.
 + * Only runs if the host is not already powered on.
 + *
-+ * This replicates HPE's host-boot-enable script:
-+ *   PSU enable = 0xFF, exit S5 = 0x08, boot_control = 0x24
++ * Enables PSUs and exits S5 power state, then runs the full
++ * prepare-boot sequence.
 + */
 +static void gxp_power_ctrl_init_platform(struct gxp_power_ctrl *pctrl)
 +{
@@ -225,13 +251,8 @@ index 000000000000..9a8c0cbc50f5
 +	/* Exit S5 power state */
 +	writeb(0x08, pctrl->xreg_base + XREG_POWER_STATE);
 +
-+	/* Release host boot gate */
-+	writeb(XREG_BOOT_CONTROL_RELEASE,
-+	       pctrl->xreg_base + XREG_BOOT_CONTROL);
-+
-+	/* Clear shutdown reason so fresh boot starts clean */
-+	if (pctrl->shutdown_reason_reg)
-+		writeb(0x00, pctrl->shutdown_reason_reg);
++	/* Prepare CPLD for host boot */
++	gxp_power_ctrl_prepare_boot(pctrl);
 +}
 +
 +static int gxp_power_ctrl_get(struct gpio_chip *gc, unsigned int offset)
@@ -275,12 +296,19 @@ index 000000000000..9a8c0cbc50f5
 +		}
 +		break;
 +	case POWER_CTRL_RESET_OUT:
++		/*
++		 * Warm reset via CSM SW_RESET. Writing ASRESTAT bit 7
++		 * triggers a host CPU reset that keeps PGOOD high,
++		 * completing in ~1 second. x86-power-control pulses
++		 * ResetOut (assert, 500ms, deassert) so both paths
++		 * are needed.
++		 */
 +		if (value) {
-+			/* Assert: hold host in reset */
-+			gxp_power_ctrl_shutdown_ack(pctrl);
++			writeb(0x00, pctrl->csm_base + CSM_ASRSTAT);
++			writeb(CSM_ASRESTAT_SW_RESET,
++			       pctrl->csm_base + CSM_ASRESTAT);
 +		} else {
-+			/* Deassert: release host to boot */
-+			gxp_power_ctrl_prepare_boot(pctrl);
++			writeb(0x00, pctrl->csm_base + CSM_ASRESTAT);
 +		}
 +		break;
 +	default:
@@ -369,10 +397,12 @@ index 000000000000..9a8c0cbc50f5
 +
 +	pgood = gpiod_get_value(pctrl->pgood_gpio);
 +	if (pgood <= 0) {
-+		/* PGOOD fell: host powered off */
++		/* PGOOD fell: host powered off, hold boot gate */
 +		gxp_power_ctrl_shutdown_ack(pctrl);
-+		dev_info(pctrl->gc.parent,
-+			 "PGOOD deasserted, boot gate held\n");
++		/* Re-arm boot gate */
++		gxp_power_ctrl_rearm_boot_gate(pctrl);
++		dev_dbg(pctrl->gc.parent,
++			"PGOOD deasserted, boot gate re-armed\n");
 +	}
 +
 +	/* Forward event to power-ctrl-good virtual GPIO consumers */
@@ -448,24 +478,22 @@ index 000000000000..9a8c0cbc50f5
 +	}
 +
 +	/*
-+	 * Map shutdown_reason register from the CSM node.
-+	 * The shutdown reason is at offset 0x74 within the single CSM
-+	 * register region.
++	 * Map the CSM register region for SW_RESET (ASRSTAT/ASRESTAT)
++	 * and shutdown reason. Required for warm reset support.
 +	 */
 +	np = of_parse_phandle(dev->of_node, "hpe,csm", 0);
-+	if (np) {
-+		base = of_iomap(np, 0);
-+		of_node_put(np);
-+		if (base) {
-+			pctrl->shutdown_reason_reg =
-+				base + CSM_SHUTDOWN_REASON;
-+			ret = devm_add_action_or_reset(dev,
-+						       gxp_power_ctrl_iounmap,
-+						       base);
-+			if (ret)
-+				return ret;
-+		}
-+	}
++	if (!np)
++		return -ENODEV;
++	base = of_iomap(np, 0);
++	of_node_put(np);
++	if (!base)
++		return dev_err_probe(dev, -ENOMEM,
++				     "failed to map csm region\n");
++	pctrl->csm_base = base;
++
++	ret = devm_add_action_or_reset(dev, gxp_power_ctrl_iounmap, base);
++	if (ret)
++		return ret;
 +
 +	/* Get VPBTN GPIO (output to FN2) */
 +	pctrl->vpbtn_gpio = devm_gpiod_get(dev, "vpbtn", GPIOD_OUT_LOW);
@@ -517,7 +545,7 @@ index 000000000000..9a8c0cbc50f5
 +						gxp_power_ctrl_pgood_irq,
 +						IRQF_TRIGGER_RISING |
 +						IRQF_TRIGGER_FALLING |
-+						IRQF_ONESHOT,
++						IRQF_ONESHOT | IRQF_SHARED,
 +						"gxp-power-ctrl-pgood", pctrl);
 +		if (ret < 0)
 +			dev_warn(dev, "failed to request pgood irq: %d\n", ret);

@@ -1,4 +1,4 @@
-From a6d6bf9697272bf6dc5883f96d4b9ea0320003ce Mon Sep 17 00:00:00 2001
+From 06e2b15432249ac2cc64f872c5a0f284e0329c8d Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 11:18:52 +0100
 Subject: [PATCH] regulator: gxp-cpld: fire notifier events on PGOOD

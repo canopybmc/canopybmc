@@ -1,4 +1,4 @@
-From 9731c9480a209ea19c26b7bd4cb96c49c07f9deb Mon Sep 17 00:00:00 2001
+From d4d6d548d00473fe3b28689caf1720e098ea1496 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 13:08:10 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: set fan shutdown speed to 50 percent
@@ -15,7 +15,7 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 1 insertion(+)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index ad736250ea59..9b396a9c2348 100644
+index cbe8840428c2..5be8a676ff29 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
 @@ -600,6 +600,7 @@ fanctrl: fan-controller@c1000c00 {
