@@ -1,4 +1,4 @@
-From 4d29a6ef2e13fe9007aae711b684f205b809f547 Mon Sep 17 00:00:00 2001
+From 7ffbe63278327f2fd3c922d5f83dea1f01d0cca7 Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
 Date: Tue, 3 Mar 2026 13:38:22 -0300
 Subject: [PATCH] misc: amd-sbi: add SB-RMI revision 0x21 (Turin) protocol

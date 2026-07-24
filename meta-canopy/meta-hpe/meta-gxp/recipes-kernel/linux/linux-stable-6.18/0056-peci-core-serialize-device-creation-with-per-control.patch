@@ -1,4 +1,4 @@
-From 611a03c0658be7857a49024855cd054a9c41670c Mon Sep 17 00:00:00 2001
+From b86d568f64ccdac371bd0bd14abce8d1dac202a3 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sat, 14 Feb 2026 05:35:22 +0100
 Subject: [PATCH] peci: core: serialize device creation with per-controller

@@ -1,4 +1,4 @@
-From dc9905ad49b049c8a0577bf434908a72788d107b Mon Sep 17 00:00:00 2001
+From dfb85586cafabe520d7eaabaa097ee72e020704c Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Sun, 8 Mar 2026 00:00:00 +0000
 Subject: [PATCH] dt-bindings: soc: hpe: add GXP I2C passthrough binding

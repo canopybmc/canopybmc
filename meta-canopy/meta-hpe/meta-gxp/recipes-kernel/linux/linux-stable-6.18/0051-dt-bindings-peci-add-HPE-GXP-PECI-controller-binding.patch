@@ -1,4 +1,4 @@
-From 6b726bd7717c3054d2d4a453292f43ce87a84804 Mon Sep 17 00:00:00 2001
+From 06cb5ee66cc6f0bd579b4c54bd27449dc88ed9a3 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 22:00:47 +0100
 Subject: [PATCH] dt-bindings: peci: add HPE GXP PECI controller binding

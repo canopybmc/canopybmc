@@ -1,4 +1,4 @@
-From 372d04b631077266f62bace81f3d267e668a538c Mon Sep 17 00:00:00 2001
+From 94d7242c4c29c72f44c0b55d42d847c59bcb2e9a Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 15:36:17 +0100
 Subject: [PATCH] hwmon: gxp-fan-ctrl: expose fan_input reporting PWM duty
