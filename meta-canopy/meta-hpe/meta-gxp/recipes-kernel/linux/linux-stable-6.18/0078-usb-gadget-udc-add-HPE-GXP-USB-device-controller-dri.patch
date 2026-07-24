@@ -1,4 +1,4 @@
-From acc4f9c2b03ac07f8618d6cb533edfcaaa90c16f Mon Sep 17 00:00:00 2001
+From 0bf5921b2a0fedb17f3facab676772a6aaaff94f Mon Sep 17 00:00:00 2001
 From: Richard Yu <richard.yu@hpe.com>
 Date: Sun, 8 Mar 2026 00:00:00 +0000
 Subject: [PATCH] usb: gadget: udc: add HPE GXP USB device controller driver
@@ -28,8 +28,8 @@ Signed-off-by: Georg Hackel <georg.hackel@9elements.com>
 ---
  drivers/usb/gadget/udc/Kconfig   |    7 +
  drivers/usb/gadget/udc/Makefile  |    1 +
- drivers/usb/gadget/udc/gxp_udc.c | 1207 ++++++++++++++++++++++++++++++
- 3 files changed, 1215 insertions(+)
+ drivers/usb/gadget/udc/gxp_udc.c | 1217 ++++++++++++++++++++++++++++++
+ 3 files changed, 1225 insertions(+)
  create mode 100644 drivers/usb/gadget/udc/gxp_udc.c
 
 diff --git a/drivers/usb/gadget/udc/Kconfig b/drivers/usb/gadget/udc/Kconfig
@@ -64,10 +64,10 @@ index 1b9b1a4f9c57..51df0f39843d 100644
  obj-$(CONFIG_USB_ASPEED_VHUB)	+= aspeed-vhub/
 diff --git a/drivers/usb/gadget/udc/gxp_udc.c b/drivers/usb/gadget/udc/gxp_udc.c
 new file mode 100644
-index 000000000000..271b152cb3f9
+index 000000000000..cf37c9ab525a
 --- /dev/null
 +++ b/drivers/usb/gadget/udc/gxp_udc.c
-@@ -0,0 +1,1207 @@
+@@ -0,0 +1,1217 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +/* Copyright (C) 2022 Hewlett-Packard Enterprise Development Company, L.P. */
 +
@@ -156,6 +156,7 @@ index 000000000000..271b152cb3f9
 +#define GXP_UDC_CONNECT_RETRY_MS	5000
 +#define GXP_UDC_CONNECT_MAX_RETRIES	24
 +#define GXP_UDC_IRQ_MAX_ITERATIONS	100
++#define GXP_UDC_WATCHDOG_MS		10000
 +
 +static DEFINE_MUTEX(udcg_init_mutex);
 +static bool udcg_init_done;
@@ -732,8 +733,14 @@ index 000000000000..271b152cb3f9
 +
 +	evdcs = readl(drvdata->base + EVDCS);
 +	if (evdcs & EVDCS_PORTENABLESTS) {
-+		/* Port is enabled, host enumerated us — done */
++		/* Port is enabled -- stay alive as watchdog to
++		 * detect EHCI handoff (VUHC does not generate
++		 * PORTEN_CHANGE on port ownership changes).
++		 */
++		drvdata->connect_retries = 0;
 +		spin_unlock_irqrestore(&drvdata->lock, flags);
++		schedule_delayed_work(&drvdata->connect_work,
++				      msecs_to_jiffies(GXP_UDC_WATCHDOG_MS));
 +		return;
 +	}
 +
@@ -745,6 +752,9 @@ index 000000000000..271b152cb3f9
 +		return;
 +	}
 +
++	if (drvdata->connect_retries == 0)
++		dev_info(&drvdata->pdev->dev,
++			 "port disabled, restarting enumeration\n");
 +	drvdata->connect_retries++;
 +	dev_dbg(&drvdata->pdev->dev,
 +		"vdev%d: connect retry %d/%d\n",

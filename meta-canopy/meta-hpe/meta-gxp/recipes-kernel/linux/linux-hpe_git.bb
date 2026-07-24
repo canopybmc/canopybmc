@@ -93,7 +93,6 @@ SRC_URI:append = " \
     file://0076-media-add-GXP-thumbnail-video-capture-driver.patch \
     file://0077-ARM-dts-hpe-gxp-add-video-thumbnail-and-USB-UDC-node.patch \
     file://0078-usb-gadget-udc-add-HPE-GXP-USB-device-controller-dri.patch \
-    file://0079-usb-gadget-gxp-udc-add-port-watchdog-for-EHCI-handof.patch \
     file://0086-misc-ubm-add-minimal-UBM-backplane-init-driver.patch \
     file://0087-ARM-dts-hpe-gxp-enable-ramoops.patch \
     file://0088-soc-hpe-gxp-chif-expose-poll-on-char-device.patch \

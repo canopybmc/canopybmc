@@ -148,7 +148,6 @@ Every patch should contain an "Upstream-Status" tag as described in the
 - 0076 # media: add GXP thumbnail video capture driver
 - 0077 # ARM: dts: hpe-gxp: add video thumbnail and USB UDC nodes
 - 0078 # usb: gadget: udc: add HPE GXP USB device controller driver
-- 0079 # usb: gadget: gxp-udc: add port watchdog for EHCI handoff
 
 ### UBM backplane 
 
