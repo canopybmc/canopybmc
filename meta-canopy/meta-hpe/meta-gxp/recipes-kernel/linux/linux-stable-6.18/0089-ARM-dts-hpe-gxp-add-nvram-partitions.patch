@@ -1,0 +1,47 @@
+From 2187a85db03cdebeb20fc935df5fef1751db2500 Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Fri, 24 Jul 2026 01:33:41 +0200
+Subject: [PATCH] ARM: dts: hpe: gxp: add nvram partitions
+
+Add the memory-mapped host NVRAM partitions. The register and offsets
+were extracted from the vendor device-tree that is available in the HPE
+tarball.
+
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index 0646d3bf6e63..501cecfc1859 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -572,6 +572,25 @@ coretemp: coretemp@c0000130 {
+ 			reg = <0xc0000130 0x8>;
+ 		};
+ 
++		sram: sram@d0000000 {
++			compatible = "mtd-ram";
++			reg = <0xd0000000 0x80000>;
++			bank-width = <1>;
++			erase-size = <1>;
++			#address-cells = <1>;
++			#size-cells = <1>;
++
++			partition@0 {
++				label = "host-reserved";
++				reg = <0x0 0x10000>;
++			};
++
++			partition@10000 {
++				label = "nvram";
++				reg = <0x10000 0x70000>;
++			};
++		};
++
+ 		fan-keys {
+ 		compatible = "gpio-keys-polled";
+ 		poll-interval = <1000>;
+-- 
+2.54.0
+
