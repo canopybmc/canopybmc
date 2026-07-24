@@ -1,4 +1,4 @@
-From c6b8bfa5a520e63b203b0cfd9e54dd348c0060f3 Mon Sep 17 00:00:00 2001
+From 82a247205816bd635690a8a79e6507c0fe476df3 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 09:54:22 +0100
 Subject: [PATCH] peci: request: retry on unrecognized completion codes

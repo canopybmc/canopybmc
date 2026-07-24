@@ -1,4 +1,4 @@
-From 06573af9917fe9ae073ed61fd636d0a19922cc58 Mon Sep 17 00:00:00 2001
+From 9980de612d7e426f702ddca8dd54d35eb14d57a9 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 09:31:22 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add CPLD host power regulator and

@@ -1,4 +1,4 @@
-From eebeb44db0f03f6010d3bbf4d40311fadae7f3e9 Mon Sep 17 00:00:00 2001
+From 8ccbbea7753c7f20418d695d8db177db0f5660d7 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sat, 14 Feb 2026 05:52:22 +0100
 Subject: [PATCH] regulator: gxp-cpld: debounce PGOOD IRQ before notifying

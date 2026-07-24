@@ -68,8 +68,6 @@ Every patch should contain an "Upstream-Status" tag as described in the
 - 0033 # dt-bindings: regulator: add HPE GXP CPLD host power supply
 - 0034 # regulator: gxp-cpld: add HPE GXP CPLD host power supply driver
 - 0035 # dt-bindings: regulator: hpe,gxp-host-power-supply: add interrupts
-- further addition
-    - 0036 # regulator: gxp-cpld: fire notifier events on PGOOD transitions
 
 #### HWMON fan control
 

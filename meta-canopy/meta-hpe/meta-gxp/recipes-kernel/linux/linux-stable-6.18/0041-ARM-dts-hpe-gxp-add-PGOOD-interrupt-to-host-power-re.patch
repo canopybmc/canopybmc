@@ -1,4 +1,4 @@
-From 4976e576e4d41191978c1aa363f56508fa31d949 Mon Sep 17 00:00:00 2001
+From 18e809891f701b15dbd61eac0fc236cf687474ee Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 11:25:46 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add PGOOD interrupt to host power

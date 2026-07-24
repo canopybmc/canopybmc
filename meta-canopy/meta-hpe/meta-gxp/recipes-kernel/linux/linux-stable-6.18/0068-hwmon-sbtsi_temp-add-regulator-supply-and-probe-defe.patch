@@ -1,4 +1,4 @@
-From d08113b64acb6af52e9bbcb8aa5f20ddb85dfaa4 Mon Sep 17 00:00:00 2001
+From 8ceb28cb246af4776bd4af2b5de673a3d7284d8a Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
 Date: Mon, 2 Mar 2026 18:01:17 -0300
 Subject: [PATCH] hwmon: sbtsi_temp: add regulator supply and probe deferral

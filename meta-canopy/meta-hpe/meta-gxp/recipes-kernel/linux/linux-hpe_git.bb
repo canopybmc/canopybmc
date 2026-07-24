@@ -57,7 +57,6 @@ SRC_URI:append = " \
     file://0033-dt-bindings-regulator-add-HPE-GXP-CPLD-host-power-su.patch \
     file://0034-regulator-gxp-cpld-add-HPE-GXP-CPLD-host-power-suppl.patch \
     file://0035-dt-bindings-regulator-hpe-gxp-host-power-supply-add-.patch \
-    file://0036-regulator-gxp-cpld-fire-notifier-events-on-PGOOD-tra.patch \
     file://0037-dt-bindings-hwmon-gxp-fan-ctrl-replace-fn2-syscon-wi.patch \
     file://0038-hwmon-gxp-fan-ctrl-use-fan-supply-regulator-and-fix-.patch \
     file://0039-dt-bindings-soc-hpe-gxp-fn2-allow-regulator-child-no.patch \
