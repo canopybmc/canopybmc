@@ -1,7 +1,7 @@
 name: "User: Persistence Across Reboot"
 description: >-
   Verify user accounts persist across BMC power cycle. Creates a user,
-  verifies it exists, power cycles the BMC via newdutctl, then verifies
+  verifies it exists, power cycles the BMC via dutctl, then verifies
   the user still exists and can authenticate after reboot.
 
 defaults:
@@ -72,7 +72,7 @@ stages:
 
   - name: BMC Power Cycle
     steps:
-      - cmd: newdutctl
+      - cmd: dutctl
         name: Power off DUT
         parameters:
           agent: "[[attributes.Agent]]"
@@ -85,14 +85,14 @@ stages:
         parameters:
           executable: sleep
           args: ["10"]
-      - cmd: newdutctl
+      - cmd: dutctl
         name: Power on DUT
         parameters:
           agent: "[[attributes.Agent]]"
           device: "[[attributes.Device]]"
           command: power
           args: ["on"]
-      - cmd: newdutctl
+      - cmd: dutctl
         name: Wait for boot banner on serial
         options:
           timeout: 10m
