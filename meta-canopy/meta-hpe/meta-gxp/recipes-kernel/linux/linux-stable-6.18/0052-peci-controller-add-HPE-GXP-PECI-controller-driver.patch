@@ -1,4 +1,4 @@
-From 8b739144f2af863aa0cc29c0aed026cb0a2a8351 Mon Sep 17 00:00:00 2001
+From 41206623004aa08fbe63baa638f289889c76e80c Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 22:01:59 +0100
 Subject: [PATCH] peci: controller: add HPE GXP PECI controller driver
@@ -18,10 +18,10 @@ Co-developed-by: Gilbert Chen <gilbert.chen@hpe.com>
 Signed-off-by: Gilbert Chen <gilbert.chen@hpe.com>
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
- drivers/peci/controller/Kconfig    |  16 +++
+ drivers/peci/controller/Kconfig    |  16 ++
  drivers/peci/controller/Makefile   |   1 +
- drivers/peci/controller/peci-gxp.c | 193 +++++++++++++++++++++++++++++
- 3 files changed, 210 insertions(+)
+ drivers/peci/controller/peci-gxp.c | 271 +++++++++++++++++++++++++++++
+ 3 files changed, 288 insertions(+)
  create mode 100644 drivers/peci/controller/peci-gxp.c
 
 diff --git a/drivers/peci/controller/Kconfig b/drivers/peci/controller/Kconfig
@@ -63,10 +63,10 @@ index e247449bb423..1bb5505c50b5 100644
  obj-$(CONFIG_PECI_NPCM)		+= peci-npcm.o
 diff --git a/drivers/peci/controller/peci-gxp.c b/drivers/peci/controller/peci-gxp.c
 new file mode 100644
-index 000000000000..13a1e87151b0
+index 000000000000..d59008102e24
 --- /dev/null
 +++ b/drivers/peci/controller/peci-gxp.c
-@@ -0,0 +1,193 @@
+@@ -0,0 +1,271 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * HPE GXP PECI controller driver
@@ -84,6 +84,7 @@ index 000000000000..13a1e87151b0
 +#include <linux/peci.h>
 +#include <linux/platform_device.h>
 +#include <linux/regulator/consumer.h>
++#include <linux/workqueue.h>
 +
 +/* PECI registers */
 +#define GXP_PECI_CMD		0x00
@@ -110,6 +111,9 @@ index 000000000000..13a1e87151b0
 +	struct device *dev;
 +	void __iomem *base;
 +	struct regulator *peci_supply;
++	struct notifier_block reg_nb;
++	struct work_struct rescan_work;
++	struct work_struct remove_work;
 +	int irq;
 +	spinlock_t lock; /* protects completion status handling */
 +	struct completion xfer_complete;
@@ -121,8 +125,9 @@ index 000000000000..13a1e87151b0
 +{
 +	struct gxp_peci *priv = dev_get_drvdata(controller->dev.parent);
 +	unsigned long timeout = msecs_to_jiffies(GXP_PECI_CMD_TIMEOUT_MS);
++	unsigned long rem;
 +	u32 cmd;
-+	int i, ret;
++	int i;
 +
 +	if (priv->peci_supply && !regulator_is_enabled(priv->peci_supply)) {
 +		dev_dbg(priv->dev, "xfer blocked, host power off\n");
@@ -130,6 +135,24 @@ index 000000000000..13a1e87151b0
 +	}
 +
 +	spin_lock_irq(&priv->lock);
++
++	/*
++	 * Reject a new command until the previous transfer has reported
++	 * DONE. Fold in any completion status still latched in hardware
++	 * before deciding that the controller is still busy.
++	 */
++	if (!(priv->status & GXP_PECI_STAT_DONE)) {
++		priv->status = readl(priv->base + GXP_PECI_STAT);
++		if (priv->status & GXP_PECI_STAT_DONE)
++			writel(priv->status, priv->base + GXP_PECI_STAT);
++	}
++
++	if (!(priv->status & GXP_PECI_STAT_DONE)) {
++		spin_unlock_irq(&priv->lock);
++		dev_dbg(priv->dev, "controller busy, status: %#010x\n",
++			priv->status);
++		return -EBUSY;
++	}
 +	reinit_completion(&priv->xfer_complete);
 +
 +	for (i = 0; i < req->tx.len; i++)
@@ -144,12 +167,12 @@ index 000000000000..13a1e87151b0
 +	writel(cmd, priv->base + GXP_PECI_CMD);
 +	spin_unlock_irq(&priv->lock);
 +
-+	ret = wait_for_completion_interruptible_timeout(&priv->xfer_complete,
-+							timeout);
-+	if (ret < 0)
-+		return ret;
-+
-+	if (ret == 0) {
++	/*
++	 * In-flight PECI transfers cannot be cancelled. Keep waiting
++	 * until the controller reports completion or the timeout expires.
++	 */
++	rem = wait_for_completion_timeout(&priv->xfer_complete, timeout);
++	if (rem == 0) {
 +		dev_dbg(priv->dev, "timeout waiting for a response\n");
 +		return -ETIMEDOUT;
 +	}
@@ -187,6 +210,43 @@ index 000000000000..13a1e87151b0
 +	spin_unlock(&priv->lock);
 +
 +	return IRQ_HANDLED;
++}
++
++static void gxp_peci_rescan_work_fn(struct work_struct *work)
++{
++	struct gxp_peci *priv = container_of(work, struct gxp_peci,
++					     rescan_work);
++
++	peci_controller_scan_devices(priv->controller);
++}
++
++static void gxp_peci_remove_work_fn(struct work_struct *work)
++{
++	struct gxp_peci *priv = container_of(work, struct gxp_peci,
++					     remove_work);
++
++	peci_controller_remove_devices(priv->controller);
++}
++
++static int gxp_peci_reg_event(struct notifier_block *nb,
++			      unsigned long event, void *data)
++{
++	struct gxp_peci *priv = container_of(nb, struct gxp_peci, reg_nb);
++
++	if (event & REGULATOR_EVENT_ENABLE)
++		schedule_work(&priv->rescan_work);
++	else if (event & REGULATOR_EVENT_DISABLE)
++		schedule_work(&priv->remove_work);
++
++	return NOTIFY_OK;
++}
++
++static void gxp_peci_cancel_work(void *data)
++{
++	struct gxp_peci *priv = data;
++
++	cancel_work_sync(&priv->rescan_work);
++	cancel_work_sync(&priv->remove_work);
 +}
 +
 +static const struct peci_controller_ops gxp_peci_ops = {
@@ -230,6 +290,7 @@ index 000000000000..13a1e87151b0
 +
 +	init_completion(&priv->xfer_complete);
 +	spin_lock_init(&priv->lock);
++	priv->status = GXP_PECI_STAT_DONE;
 +
 +	controller = devm_peci_controller_add(priv->dev, &gxp_peci_ops);
 +	if (IS_ERR(controller))
@@ -237,6 +298,23 @@ index 000000000000..13a1e87151b0
 +				     "failed to add gxp peci controller\n");
 +
 +	priv->controller = controller;
++
++	if (priv->peci_supply) {
++		INIT_WORK(&priv->rescan_work, gxp_peci_rescan_work_fn);
++		INIT_WORK(&priv->remove_work, gxp_peci_remove_work_fn);
++
++		ret = devm_add_action_or_reset(&pdev->dev,
++					       gxp_peci_cancel_work, priv);
++		if (ret)
++			return ret;
++
++		priv->reg_nb.notifier_call = gxp_peci_reg_event;
++		ret = devm_regulator_register_notifier(priv->peci_supply,
++						       &priv->reg_nb);
++		if (ret)
++			return dev_err_probe(&pdev->dev, ret,
++					     "failed to register regulator notifier\n");
++	}
 +
 +	return 0;
 +}

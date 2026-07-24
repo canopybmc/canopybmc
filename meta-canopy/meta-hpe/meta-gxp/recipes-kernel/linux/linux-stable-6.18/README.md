@@ -98,10 +98,6 @@ Every patch should contain an "Upstream-Status" tag as described in the
 - 0052 # peci: controller: add HPE GXP PECI controller driver
 - 0053 # ARM: dts: hpe-gxp: add PECI controller node
 
-- 0054 # peci: controller: gxp: manage PECI devices via regulator events
-- 0055 # peci: controller: gxp: prevent overlapping transfers
-    - TODO: ? squash to 0052 peci: controller: add HPE GXP PECI controller driver
-
 - 0056 # peci: core: serialize device creation with per-controller mutex
 
 #### In mainline but not backported to OpenBMC/Linux

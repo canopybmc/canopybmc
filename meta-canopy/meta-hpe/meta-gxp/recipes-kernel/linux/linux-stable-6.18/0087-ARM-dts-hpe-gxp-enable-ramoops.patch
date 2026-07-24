@@ -1,4 +1,4 @@
-From 49e2a3822bd20e5dcdeb5690093f75d857df62f1 Mon Sep 17 00:00:00 2001
+From 09c72f67f2c4e4fd9a290c922c81c53b77194b60 Mon Sep 17 00:00:00 2001
 From: Tan Siewert <tan.siewert@9elements.com>
 Date: Thu, 21 May 2026 14:31:27 +0200
 Subject: [PATCH] ARM: dts: hpe: gxp: enable ramoops
