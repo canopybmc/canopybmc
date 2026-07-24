@@ -136,8 +136,6 @@ Every patch should contain an "Upstream-Status" tag as described in the
 - 0071 # dt-bindings: soc: hpe: add GXP I2C passthrough binding
 - 0072 # soc: hpe: add GXP I2C passthrough driver
 - 0073 # ARM: dts: hpe-gxp: add I2C passthrough node
-- 0074 # gxp-i2c-passthrough: fire uevent after I2C passthrough enable
-    - TODO: ? could be integrated in 0072
 
 ### KCS
 

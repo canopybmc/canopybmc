@@ -89,7 +89,6 @@ SRC_URI:append = " \
     file://0071-dt-bindings-soc-hpe-add-GXP-I2C-passthrough-binding.patch \
     file://0072-soc-hpe-add-GXP-I2C-passthrough-driver.patch \
     file://0073-ARM-dts-hpe-gxp-add-I2C-passthrough-node.patch \
-    file://0074-gxp-i2c-passthrough-fire-uevent-after-I2C-passthroug.patch \
     file://0075-ipmi-kcs_bmc_gxp-port-driver-to-Linux-v6.18.patch \
     file://0076-media-add-GXP-thumbnail-video-capture-driver.patch \
     file://0077-ARM-dts-hpe-gxp-add-video-thumbnail-and-USB-UDC-node.patch \

@@ -1,4 +1,4 @@
-From cc19136e3a4c6b483822f8e8840c2f1658e95361 Mon Sep 17 00:00:00 2001
+From b41f124349ebf217b7ded9a2c23be930fea97e44 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Sun, 8 Mar 2026 00:00:00 +0000
 Subject: [PATCH] soc: hpe: add GXP I2C passthrough driver
@@ -21,12 +21,15 @@ PGOOD -> i2c-passthrough -> sbtsi/sbrmi/spd5118.
 
 Upstream-Status: Pending
 Signed-off-by: Christian Walter <christian.walter@9elements.com>
+Co-developed-by: Pedro Maione <pedro.maione@9elements.com>
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+Signed-off-by: Georg Hackel <georg.hackel@9elements.com>
 ---
  drivers/soc/hpe/Kconfig               |  13 ++
  drivers/soc/hpe/Makefile              |   1 +
- drivers/soc/hpe/gxp-i2c-passthrough.c | 295 ++++++++++++++++++++++++++
+ drivers/soc/hpe/gxp-i2c-passthrough.c | 297 ++++++++++++++++++++++++++
  include/linux/soc/hpe/gxp-regs.h      |   3 +
- 4 files changed, 312 insertions(+)
+ 4 files changed, 314 insertions(+)
  create mode 100644 drivers/soc/hpe/gxp-i2c-passthrough.c
 
 diff --git a/drivers/soc/hpe/Kconfig b/drivers/soc/hpe/Kconfig
@@ -62,10 +65,10 @@ index 5fefa0ddee15..794a0ae91e75 100644
 +obj-$(CONFIG_SOC_HPE_GXP_I2C_PASSTHROUGH)	+= gxp-i2c-passthrough.o
 diff --git a/drivers/soc/hpe/gxp-i2c-passthrough.c b/drivers/soc/hpe/gxp-i2c-passthrough.c
 new file mode 100644
-index 000000000000..b046ac45d6fc
+index 000000000000..d3b6fd4d7b15
 --- /dev/null
 +++ b/drivers/soc/hpe/gxp-i2c-passthrough.c
-@@ -0,0 +1,295 @@
+@@ -0,0 +1,297 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * HPE GXP I2C Passthrough Controller
@@ -80,6 +83,7 @@ index 000000000000..b046ac45d6fc
 + * Copyright (C) 2026 9elements GmbH
 + */
 +
++#include <linux/kobject.h>
 +#include <linux/atomic.h>
 +#include <linux/delay.h>
 +#include <linux/device.h>
@@ -196,6 +200,7 @@ index 000000000000..b046ac45d6fc
 +	atomic_set(&pt->enabled, 1);
 +	regulator_notifier_call_chain(pt->rdev, REGULATOR_EVENT_ENABLE, NULL);
 +	bus_rescan_devices(&i2c_bus_type);
++	kobject_uevent(&pt->dev->kobj, KOBJ_CHANGE);
 +	dev_info(pt->dev, "I2C passthrough enabled\n");
 +}
 +

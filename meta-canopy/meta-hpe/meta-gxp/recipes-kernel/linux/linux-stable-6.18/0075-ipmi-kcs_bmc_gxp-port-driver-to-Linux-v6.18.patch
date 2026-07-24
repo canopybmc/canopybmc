@@ -1,4 +1,4 @@
-From 0de355e2b719ab5df01b1b6edcc1755dba7bdec2 Mon Sep 17 00:00:00 2001
+From dd28822051b4e7b0f9d4c4df2ca9d1dc2054158a Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
 Date: Wed, 11 Mar 2026 16:06:09 -0300
 Subject: [PATCH] ipmi: kcs_bmc_gxp: port driver to Linux v6.18
