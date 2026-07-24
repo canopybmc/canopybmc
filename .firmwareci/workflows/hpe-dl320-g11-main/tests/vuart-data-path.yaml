@@ -14,24 +14,6 @@ defaults:
       password: "[[attributes.BMCPassword]]"
 
 stages:
-  - name: Wait for BMC
-    steps:
-      - cmd: ping
-        name: Wait for SSH
-        options:
-          timeout: 5m
-        parameters:
-          host: "[[attributes.BMC]]"
-      - cmd: cmd
-        name: Wait for BMC services
-        transport: &local
-          proto: local
-        options:
-          timeout: 2m
-        parameters:
-          executable: sleep
-          args: ["45"]
-
   - name: VUART Kernel Driver
     steps:
       - cmd: cmd
@@ -79,7 +61,8 @@ stages:
     steps:
       - cmd: shell
         name: Send Power On via Redfish
-        transport: *local
+        transport: &local
+          proto: local
         parameters:
           command: >-
             curl -sk -u root:[[attributes.BMCPassword]]

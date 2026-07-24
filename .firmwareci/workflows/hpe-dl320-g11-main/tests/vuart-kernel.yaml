@@ -14,59 +14,7 @@ defaults:
       user: "root"
       password: "[[attributes.BMCPassword]]"
 
-pre-stage:
-  - cmd: dutctl
-    name: Power off DUT
-    parameters:
-      agent: "[[attributes.Agent]]"
-      device: "[[attributes.Device]]"
-      command: power
-      args: ["off"]
-
-  - cmd: dutctl
-    name: Emulate Flash
-    parameters:
-      agent: "[[attributes.Agent]]"
-      device: "[[attributes.Device]]"
-      command: emulate-bmc
-      args: ["[[input.firmware]]"]
-
-  - cmd: dutctl
-    name: Power on DUT
-    parameters:
-      agent: "[[attributes.Agent]]"
-      device: "[[attributes.Device]]"
-      command: power
-      args: ["on"]
-
-  - cmd: dutctl
-    name: Wait for boot banner on serial
-    options:
-      timeout: 10m
-    parameters:
-      agent: "[[attributes.Agent]]"
-      device: "[[attributes.Device]]"
-      command: serial
-      args: ["expect", "Phosphor OpenBMC"]
-
 stages:
-  - name: Wait for BMC
-    steps:
-      - cmd: ping
-        name: Wait for SSH
-        options:
-          timeout: 5m
-        parameters:
-          host: "[[attributes.BMC]]"
-      - cmd: cmd
-        name: Wait for services to settle
-        transport: *bmc_ssh
-        options:
-          timeout: 2m
-        parameters:
-          executable: sleep
-          args: ["30"]
-
   - name: Device Node
     steps:
       - cmd: cmd

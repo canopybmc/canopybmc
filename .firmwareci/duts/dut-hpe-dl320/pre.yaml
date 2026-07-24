@@ -32,3 +32,20 @@ pre-stage:
       device: "[[attributes.Device]]"
       command: serial
       args: ["expect", "Phosphor OpenBMC"]
+
+  - cmd: ping
+    name: Wait for SSH
+    options:
+      timeout: 5m
+    parameters:
+      host: "[[attributes.BMC]]"
+
+  - cmd: cmd
+    name: Wait for BMC services
+    transport: &local
+      proto: local
+    options:
+      timeout: 2m
+    parameters:
+      executable: sleep
+      args: ["45"]

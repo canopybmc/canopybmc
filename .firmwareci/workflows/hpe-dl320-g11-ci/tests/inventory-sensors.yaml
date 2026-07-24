@@ -10,27 +10,8 @@ defaults:
     proto: local
 
 stages:
-  - name: Wait for BMC and Power On Host
+  - name: Power On host
     steps:
-      - cmd: ping
-        name: Wait for SSH
-        options:
-          timeout: 5m
-        parameters:
-          host: "[[attributes.BMC]]"
-      - cmd: cmd
-        name: Wait for services to settle
-        transport: &bmc_ssh
-          proto: ssh
-          options:
-            host: "[[attributes.BMC]]"
-            user: "root"
-            password: "[[attributes.BMCPassword]]"
-        options:
-          timeout: 2m
-        parameters:
-          executable: sleep
-          args: ["45"]
       - cmd: cmd
         name: Power on host via Redfish
         transport: *local

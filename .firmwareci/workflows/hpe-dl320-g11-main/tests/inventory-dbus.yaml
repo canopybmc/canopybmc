@@ -14,22 +14,8 @@ defaults:
       password: "[[attributes.BMCPassword]]"
 
 stages:
-  - name: Wait for BMC and Power On Host
+  - name: Power On host
     steps:
-      - cmd: ping
-        name: Wait for SSH
-        options:
-          timeout: 5m
-        parameters:
-          host: "[[attributes.BMC]]"
-      - cmd: cmd
-        name: Wait for BMC services
-        transport: *bmc_ssh
-        options:
-          timeout: 2m
-        parameters:
-          executable: sleep
-          args: ["45"]
       - cmd: cmd
         name: Power on host via Redfish
         transport:
