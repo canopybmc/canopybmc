@@ -1,6 +1,6 @@
 # Example Post-Stage for a device
 post-stage:
-  - cmd: newdutctl
+  - cmd: dutctl
     name: Power off DUT
     parameters:
       agent: "[[attributes.Agent]]"

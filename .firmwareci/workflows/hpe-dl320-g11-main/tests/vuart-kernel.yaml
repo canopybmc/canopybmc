@@ -15,7 +15,7 @@ defaults:
       password: "[[attributes.BMCPassword]]"
 
 pre-stage:
-  - cmd: newdutctl
+  - cmd: dutctl
     name: Power off DUT
     parameters:
       agent: "[[attributes.Agent]]"
@@ -23,7 +23,7 @@ pre-stage:
       command: power
       args: ["off"]
 
-  - cmd: newdutctl
+  - cmd: dutctl
     name: Emulate Flash
     parameters:
       agent: "[[attributes.Agent]]"
@@ -31,7 +31,7 @@ pre-stage:
       command: emulate-bmc
       args: ["[[input.firmware]]"]
 
-  - cmd: newdutctl
+  - cmd: dutctl
     name: Power on DUT
     parameters:
       agent: "[[attributes.Agent]]"
@@ -39,7 +39,7 @@ pre-stage:
       command: power
       args: ["on"]
 
-  - cmd: newdutctl
+  - cmd: dutctl
     name: Wait for boot banner on serial
     options:
       timeout: 10m

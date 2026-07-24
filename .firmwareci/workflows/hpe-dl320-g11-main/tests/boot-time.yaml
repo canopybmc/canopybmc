@@ -5,7 +5,7 @@ description: >-
   within 25s after that. Baseline: 74s to banner, 19s to SSH (5-run avg).
 
 pre-stage:
-  - cmd: newdutctl
+  - cmd: dutctl
     name: Power off DUT
     parameters:
       agent: "[[attributes.Agent]]"
@@ -13,7 +13,7 @@ pre-stage:
       command: power
       args: ["off"]
 
-  - cmd: newdutctl
+  - cmd: dutctl
     name: Emulate Flash
     parameters:
       agent: "[[attributes.Agent]]"
@@ -21,7 +21,7 @@ pre-stage:
       command: emulate-bmc
       args: ["[[input.firmware]]"]
 
-  - cmd: newdutctl
+  - cmd: dutctl
     name: Power on DUT
     parameters:
       agent: "[[attributes.Agent]]"
@@ -29,7 +29,7 @@ pre-stage:
       command: power
       args: ["on"]
 
-  - cmd: newdutctl
+  - cmd: dutctl
     name: Boot banner within 80s
     options:
       timeout: 80s
