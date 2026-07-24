@@ -53,7 +53,7 @@ stages:
         name: Wait for first POST (SMBIOS transfer)
         transport: *bmc_ssh
         options:
-          timeout: 8m
+          timeout: 15m
         parameters:
           command: >-
             while [ ! -f /var/lib/smbios/smbios2 ] ||
@@ -100,7 +100,7 @@ stages:
         name: Wait for second POST (SMBIOS transfer)
         transport: *bmc_ssh
         options:
-          timeout: 8m
+          timeout: 15m
         parameters:
           command: >-
             while [ ! -f /var/lib/smbios/smbios2 ] ||
