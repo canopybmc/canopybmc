@@ -1,4 +1,4 @@
-From 02afe81b2cd405f5f3b37c1e4b85f0f07c511346 Mon Sep 17 00:00:00 2001
+From 0e16207c17e685b16568e3158265f0c4c6de8a81 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Sun, 8 Mar 2026 00:00:00 +0000
 Subject: [PATCH] ARM: dts: hpe-gxp: add I2C passthrough node

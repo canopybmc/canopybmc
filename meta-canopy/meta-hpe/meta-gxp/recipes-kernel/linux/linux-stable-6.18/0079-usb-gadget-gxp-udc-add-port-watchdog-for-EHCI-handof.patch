@@ -1,4 +1,4 @@
-From 7e225c50b3e392f4fb24d97b49a8f5c1bb980dfc Mon Sep 17 00:00:00 2001
+From 6056ce7f332f32464e48bc8bf0a1e657e34f54cd Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Wed, 15 Apr 2026 15:30:00 +0200
 Subject: [PATCH] usb: gadget: gxp-udc: add port watchdog for EHCI handoff
