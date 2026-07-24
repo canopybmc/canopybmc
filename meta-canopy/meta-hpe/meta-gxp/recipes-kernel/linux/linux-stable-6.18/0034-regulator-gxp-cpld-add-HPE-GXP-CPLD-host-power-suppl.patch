@@ -1,4 +1,4 @@
-From 8fb9f22be0319a49903392600afcaa0ad50825ef Mon Sep 17 00:00:00 2001
+From 0737146d7ee594ed64ecb7ad0861be69b7b9f1bf Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 09:16:58 +0100
 Subject: [PATCH] regulator: gxp-cpld: add HPE GXP CPLD host power supply

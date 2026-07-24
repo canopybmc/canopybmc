@@ -1,4 +1,4 @@
-From 0a9cf224a9b08bcd35e8393526831474afeccfe5 Mon Sep 17 00:00:00 2001
+From 8abac7268be07f7ec0e3951ff07ccad18626867d Mon Sep 17 00:00:00 2001
 From: Ivan Mikhaylov <fr0st61te@gmail.com>
 Date: Tue, 7 Oct 2025 00:53:20 +0300
 Subject: [PATCH] hwmon: (peci/dimmtemp) add Intel Emerald Rapids platform

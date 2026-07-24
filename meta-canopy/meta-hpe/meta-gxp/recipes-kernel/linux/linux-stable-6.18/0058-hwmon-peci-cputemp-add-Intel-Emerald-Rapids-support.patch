@@ -1,4 +1,4 @@
-From b126945fd829534bb57ea5dfe2f494a582261b8f Mon Sep 17 00:00:00 2001
+From a85449ef024ff20d6560c80683f9b89916076773 Mon Sep 17 00:00:00 2001
 From: Ivan Mikhaylov <fr0st61te@gmail.com>
 Date: Tue, 7 Oct 2025 00:53:21 +0300
 Subject: [PATCH] hwmon: (peci/cputemp) add Intel Emerald Rapids support

@@ -1,4 +1,4 @@
-From 2be5991e02d146ab5c35a96cc14763fdbce2eebc Mon Sep 17 00:00:00 2001
+From a651c32ff2534c711f5286f0ffc9065f18451314 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 09:25:34 +0100
 Subject: [PATCH] hwmon: gxp-fan-ctrl: use fan-supply regulator and fix sysfs

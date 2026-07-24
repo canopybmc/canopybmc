@@ -48,11 +48,6 @@ SRC_URI:append = " \
     file://0019-dt-bindings-soc-hpe-add-GXP-host-power-controller-bi.patch \
     file://0020-soc-hpe-add-GXP-host-power-controller-driver.patch \
     file://0021-ARM-dts-hpe-gxp-add-SoC-infrastructure-and-power-con.patch \
-    file://0022-soc-hpe-gxp-power-ctrl-implement-ForceRestart-as-VPB.patch \
-    file://0023-soc-hpe-gxp-power-ctrl-run-full-prepare-boot-sequenc.patch \
-    file://0024-soc-hpe-gxp-power-ctrl-use-CSM-SW_RESET-for-warm-res.patch \
-    file://0025-soc-hpe-gxp-power-ctrl-demote-PGOOD-deasserted-messa.patch \
-    file://0026-soc-hpe-gxp-power-ctrl-use-IRQF_SHARED-for-PGOOD-int.patch \
     file://0027-dt-bindings-serial-add-HPE-GXP-Virtual-UART-binding.patch \
     file://0028-serial-8250-add-HPE-GXP-Virtual-UART-driver.patch \
     file://0029-ARM-dts-hpe-gxp-add-Virtual-UART-node.patch \
@@ -71,7 +66,6 @@ SRC_URI:append = " \
     file://0042-regulator-gxp-cpld-debounce-PGOOD-IRQ-before-notifyi.patch \
     file://0043-hwmon-gxp-fan-ctrl-expose-fan_input-reporting-PWM-du.patch \
     file://0044-ARM-dts-hpe-gxp-add-gpio-keys-polled-node-for-fan-pr.patch \
-    file://0045-soc-hpe-gxp-power-ctrl-re-arm-boot-gate-after-PGOOD-.patch \
     file://0046-dt-bindings-hwmon-add-HPE-GXP-SoC-temperature-sensor.patch \
     file://0047-hwmon-gxp-coretemp-add-HPE-GXP-SoC-temperature-senso.patch \
     file://0048-ARM-dts-hpe-gxp-add-coretemp-sensor-node.patch \
@@ -92,7 +86,6 @@ SRC_URI:append = " \
     file://0063-hwmon-gxp-fan-ctrl-restore-fan-speed-on-kernel-panic.patch \
     file://0065-ARM-dts-hpe-gxp-add-mmio-mux-for-i2c-bus-mux-select-.patch \
     file://0066-hwmon-add-HPE-GXP-PSU-driver.patch \
-    file://0067-ARM-dts-hpe-gxp-rename-PSU-GPIO-lines.patch \
     file://0068-hwmon-sbtsi_temp-add-regulator-supply-and-probe-defe.patch \
     file://0069-misc-sbrmi-add-regulator-supply-support.patch \
     file://0070-misc-amd-sbi-add-SB-RMI-revision-0x21-Turin-protocol.patch \

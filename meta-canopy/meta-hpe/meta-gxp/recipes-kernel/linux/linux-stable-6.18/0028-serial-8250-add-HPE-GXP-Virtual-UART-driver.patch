@@ -1,4 +1,4 @@
-From 47c22b31acc218f42fc31b8984b925c9ec96efe1 Mon Sep 17 00:00:00 2001
+From 9e92a7732276a889479bb89e3bb62b0b070b63b1 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 10 Feb 2026 12:38:34 +0100
 Subject: [PATCH] serial: 8250: add HPE GXP Virtual UART driver

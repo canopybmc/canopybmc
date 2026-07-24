@@ -1,4 +1,4 @@
-From 412eab2550591e8c947877c8ff9f7c5470f29771 Mon Sep 17 00:00:00 2001
+From b446294d32a8a61a342a9ce8271fd5004c8051de Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 09:31:17 +0100
 Subject: [PATCH] dt-bindings: soc: hpe: gxp-fn2: allow regulator child nodes
