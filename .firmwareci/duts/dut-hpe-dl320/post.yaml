@@ -1,5 +1,17 @@
-# Example Post-Stage for a device
 post-stage:
+  # Allowed to fail
+  - cmd: shell
+    name: Power off host via Redfish
+    transport:
+      proto: local
+    parameters:
+      command: >-
+        curl -sk -u root:[[attributes.BMCPassword]]
+        -X POST -H 'Content-Type: application/json'
+        -d '{"ResetType":"ForceOff"}'
+        -o /dev/null -w '%{http_code}'
+        https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset || true
+
   - cmd: dutctl
     name: Power off DUT
     parameters:
