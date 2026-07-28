@@ -31,27 +31,46 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Matrix
-      - name: get-matrix
-        id: get-matrix
+      # Matrix / Board
+      - name: get-board
+        id: get-board
         run: |
-          matrix=$(jq -cn '[
+          board=$(jq -cn '[
             "canopy-qemu",
             "hpe-proliant-g11"
           ]')
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "board=$board" >> "$GITHUB_OUTPUT"
       - name: Check JSON validity
         run: |
-          jq . <<< '${{ steps.get-matrix.outputs.matrix }}'
+          jq . <<< '${{ steps.get-board.outputs.board }}'
 
-      # Include
+      # Matrix / Workflow
+      - name: get-workflow
+        id: get-workflow
+        run: |
+          if [[ "${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || github.ref_type == 'tag' }}" == "true" ]]; then
+            workflow=$(jq -cn '[
+              "main",
+              "ci"
+            ]')
+          else
+            workflow=$(jq -cn '[
+              "ci"
+            ]')
+          fi
+          echo "workflow=$workflow" >> "$GITHUB_OUTPUT"
+      - name: Check JSON validity
+        run: |
+          jq . <<< '${{ steps.get-workflow.outputs.workflow }}'
+
+      # Matrix / Include
       - name: get-include
         id: get-include
         run: |
           include=$(jq -cn '[
             {
               "board": "hpe-proliant-g11",
-              "fwci_workflow_name": "hpe-dl320-g11-ci",
+              "fwci_workflow_name_prefix": "hpe-dl320-g11",
               "fwci_binary_name": "obmc-phosphor-image-hpe-proliant-g11.GXP2loader-t282-t288-sgn00.static.mtd"
             }
           ]')
@@ -60,7 +79,8 @@ jobs:
         run: |
           jq . <<< '${{ steps.get-include.outputs.include }}'
     outputs:
-      matrix: ${{ steps.get-matrix.outputs.matrix }}
+      board: ${{ steps.get-board.outputs.board }}
+      workflow: ${{ steps.get-workflow.outputs.workflow }}
       include: ${{ steps.get-include.outputs.include }}
 
   build-target:
@@ -70,7 +90,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        board: ${{ fromJson(needs.get-matrix.outputs.matrix) }}
+        board: ${{ fromJson(needs.get-matrix.outputs.board) }}
         include: ${{ fromJson(needs.get-matrix.outputs.include) }}
     steps:
       - name: Checkout
@@ -94,7 +114,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        board: ${{ fromJson(needs.get-matrix.outputs.matrix) }}
+        board: ${{ fromJson(needs.get-matrix.outputs.board) }}
+        workflow: ${{ fromJson(needs.get-matrix.outputs.workflow) }}
         include: ${{ fromJson(needs.get-matrix.outputs.include) }}
     steps:
       - name: Download firmware image
@@ -106,7 +127,8 @@ jobs:
         uses: docker://firmwareci/action:v6.0
         with:
           TOKEN: ${{ secrets.FWCI_TOKEN }}
-          WORKFLOW_NAME: ${{ matrix.fwci_workflow_name || format('{0}-ci', matrix.board) }}
+          WORKFLOW_NAME: ${{ matrix.fwci_workflow_name_prefix && format('{0}-{1}', matrix.fwci_workflow_name_prefix, matrix.workflow) || format('{0}-{1}', matrix.board, matrix.workflow) }}
+          # Use `matrix.fwci_workflow_name_prefix` if defined, else fallback to `matrix.board`
           BINARIES: firmware=${{ matrix.fwci_binary_name || format('obmc-phosphor-image-{0}.static.mtd', matrix.board) }}
           GITHUB_INSTALLATION_ID: ${{ secrets.FWCI_GITHUB_INSTALLATION_ID }}
 
