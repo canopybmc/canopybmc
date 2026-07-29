@@ -18,16 +18,37 @@
 
 #include <phosphor-logging/lg2.hpp>
 #include <sdbusplus/bus.hpp>
+#include <sdbusplus/bus/match.hpp>
 
 #include <cerrno>
 #include <csignal>
 #include <cstring>
 #include <memory>
+#include <unordered_map>
+#include <utility>
 
 namespace
 {
 constexpr auto chifDevice = "/dev/chif24";
 constexpr auto dbusName = "xyz.openbmc_project.GxpChif";
+constexpr auto inventoryPathPrefix = "/xyz/openbmc_project/inventory/";
+
+std::unordered_map<uint8_t, int> loadSegmentBusMap(sdbusplus::bus_t& bus)
+{
+    auto platformId = chif::readPlatformId(bus);
+    if (!platformId)
+    {
+        return {};
+    }
+
+    auto platDefBlob = chif::extractPlatDef(platformId);
+    if (platDefBlob.empty())
+    {
+        return {};
+    }
+
+    return chif::buildSegmentBusMap(chif::parseI2cSegments(platDefBlob));
+}
 
 int onTerminate(sd_event_source* source, const struct signalfd_siginfo* /*si*/,
                 void* /*userdata*/)
@@ -112,20 +133,34 @@ int main()
     chif::BootService bootService(bus, evStorage);
     chif::BiosConfigService biosConfigService(bus, evStorage);
 
-    // Extract PlatDef from host BIOS SPI flash and build I2C segment→bus map
-    auto platDefBlob = chif::extractPlatDef();
-    auto segmentBusMap =
-        platDefBlob.empty()
-            ? std::unordered_map<uint8_t, int>{}
-            : chif::buildSegmentBusMap(chif::parseI2cSegments(platDefBlob));
-
     // Build daemon and register handlers
     chif::ChifDaemon daemon(std::move(channel));
     daemon.registerHandler(
         std::make_unique<chif::RomService>(smbiosWriter, &mdrBridge));
-    daemon.registerHandler(std::make_unique<chif::SmifService>(
-        &bus, &evStorage, std::move(segmentBusMap)));
+    auto segmentBusMap = loadSegmentBusMap(bus);
+    bool segmentMapLoaded = !segmentBusMap.empty();
+    auto smifService = std::make_unique<chif::SmifService>(
+        &bus, &evStorage, std::move(segmentBusMap));
+    auto* smif = smifService.get();
+    daemon.registerHandler(std::move(smifService));
     daemon.registerHandler(std::make_unique<chif::HealthService>());
+
+    sdbusplus::bus::match_t inventoryMatch(
+        bus,
+        sdbusplus::bus::match::rules::interfacesAdded() +
+            sdbusplus::bus::match::rules::argNpath(0, inventoryPathPrefix),
+        [&bus, smif, &segmentMapLoaded](sdbusplus::message_t&) {
+            if (segmentMapLoaded)
+            {
+                return;
+            }
+            auto map = loadSegmentBusMap(bus);
+            if (!map.empty())
+            {
+                smif->setSegmentBusMap(std::move(map));
+                segmentMapLoaded = true;
+            }
+        });
 
     sigset_t ss;
     sigemptyset(&ss);

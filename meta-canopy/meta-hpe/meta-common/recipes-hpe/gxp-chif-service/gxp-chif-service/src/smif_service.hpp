@@ -128,6 +128,8 @@ class SmifService : public ServiceHandler
         return smifServiceId;
     }
 
+    void setSegmentBusMap(std::unordered_map<uint8_t, int> segmentBusMap);
+
   private:
     // EV command handlers
     int handleGetEvByIndex(const ChifPktHeader& hdr,

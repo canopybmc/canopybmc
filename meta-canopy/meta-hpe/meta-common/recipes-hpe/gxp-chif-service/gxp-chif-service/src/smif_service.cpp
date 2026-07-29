@@ -2,13 +2,13 @@
 // Copyright (C) 2026 9elements GmbH
 #include "smif_service.hpp"
 
-#include <phosphor-logging/lg2.hpp>
-
 #include <fcntl.h>
 #include <linux/i2c-dev.h>
 #include <linux/i2c.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+
+#include <phosphor-logging/lg2.hpp>
 
 #include <algorithm>
 #include <array>
@@ -85,8 +85,16 @@ SmifService::SmifService(sdbusplus::bus_t* bus, EvStorage* evStorage,
         lg2::warning("No model in device-tree, using fallback");
     }
 
-    lg2::info("Platform serial: {SN}, product ID: {PID}", "SN",
-              boardSerial_, "PID", productId_);
+    lg2::info("Platform serial: {SN}, product ID: {PID}", "SN", boardSerial_,
+              "PID", productId_);
+}
+
+void SmifService::setSegmentBusMap(
+    std::unordered_map<uint8_t, int> segmentBusMap)
+{
+    segmentToBus_ = std::move(segmentBusMap);
+    lg2::info("I2C proxy: {CNT} segment mappings installed", "CNT",
+              segmentToBus_.size());
 }
 
 // ---------------------------------------------------------------------------

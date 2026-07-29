@@ -9,29 +9,42 @@
 #include "platdef_extract.hpp"
 
 #include "uefi_fv.hpp"
-
-#include <phosphor-logging/lg2.hpp>
+#include "utils.hpp"
 
 #include <zlib.h>
 
+#include <phosphor-logging/lg2.hpp>
+#include <xyz/openbmc_project/Inventory/Item/Board/Motherboard/common.hpp>
+
+#include <algorithm>
+#include <cstddef>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
+#include <optional>
+#include <ranges>
+#include <span>
 #include <string>
 #include <string_view>
 
 namespace chif
 {
 
+static constexpr std::string_view bundleSignature = "$PlatdefBundle1$";
+
+using Motherboard = sdbusplus::common::xyz::openbmc_project::inventory::item::
+    board::Motherboard;
+
+static constexpr auto inventoryPath = "/xyz/openbmc_project/inventory";
+static constexpr auto productIdProperty = "ProductId";
+
 // PlatDef bundle and record structures (from HPE openbmc-chif-svc platdef.h)
 #pragma pack(push, 1)
 
-// From HPE upstream platdef.h
-#define PLATDEF_BUNDLE_SIGNATURE "$PlatdefBundle1$"
-
 struct PlatDefBundleHeader
 {
-    char signature[16]; // PLATDEF_BUNDLE_SIGNATURE
+    char signature[16]; // bundleSignature
     uint32_t totalSize;
     uint16_t flags;
     uint8_t headerLength;
@@ -128,8 +141,7 @@ static_assert(sizeof(PlatDefTableData) == 112,
               "PlatDefTableData must be 112 bytes");
 static_assert(sizeof(PlatDefI2CSegment) == 32,
               "PlatDefI2CSegment must be 32 bytes");
-static_assert(sizeof(PlatDefI2CMux) == 16,
-              "PlatDefI2CMux must be 16 bytes");
+static_assert(sizeof(PlatDefI2CMux) == 16, "PlatDefI2CMux must be 16 bytes");
 static_assert(sizeof(PlatDefI2CEngineFixed) == 48,
               "PlatDefI2CEngineFixed must be 48 bytes");
 
@@ -171,40 +183,98 @@ static std::string findMtdByLabel(const std::string& label)
     return {};
 }
 
-// Decompress the PlatDef blob from the raw APML file.
-// Layout: [PlatDefBundleHeader][PlatDefTableData][zlib compressed records...]
-// Returns: [PlatDefTableData header][decompressed records]
-static std::vector<uint8_t> decompressPlatDef(const std::vector<uint8_t>& raw)
+// Locate the PlatDefTableData block that applies to the running platform.
+//
+// A single-platform APML file is just [PlatDefTableData][records...]. A bundled
+// one is a sequence of [PlatDefBundleHeader][PlatDefTableData][records...]
+// blocks, each header listing the platform IDs (CPLD board IDs) it covers and
+// terminated by an end marker, i.e. anything that is not a valid header.
+//
+// Returns the table data of the matching block, or an empty span.
+std::span<const uint8_t> selectPlatDefBundle(std::span<const uint8_t> raw,
+                                             std::optional<uint16_t> platformId)
 {
-    // The APML file starts with a PlatDefBundleHeader followed by
-    // a PlatDefTableData record. HPE skips the bundle header to reach
-    // the table data.
-    if (raw.size() < sizeof(PlatDefBundleHeader))
+    auto isBundle = [](std::span<const uint8_t> blob) {
+        return blob.size() >= sizeof(PlatDefBundleHeader) &&
+               std::memcmp(blob.data(), bundleSignature.data(),
+                           bundleSignature.size()) == 0;
+    };
+
+    if (!isBundle(raw))
     {
-        lg2::error("PlatDef: blob too small for bundle header");
-        return {};
+        return raw;
     }
 
-    if (std::memcmp(raw.data(), PLATDEF_BUNDLE_SIGNATURE,
-                    sizeof(PLATDEF_BUNDLE_SIGNATURE) - 1) != 0)
+    for (size_t offset = 0; isBundle(raw.subspan(offset));)
     {
-        lg2::error("PlatDef: invalid bundle signature");
-        return {};
+        const auto* bundle =
+            reinterpret_cast<const PlatDefBundleHeader*>(raw.data() + offset);
+
+        size_t headerBytes = static_cast<size_t>(bundle->headerLength) * 16;
+        size_t totalSize = bundle->totalSize;
+        size_t bundleSize =
+            sizeof(PlatDefBundleHeader) + bundle->count * sizeof(uint16_t);
+
+        if ((headerBytes < bundleSize) || (totalSize <= headerBytes) ||
+            (offset + totalSize > raw.size()))
+        {
+            lg2::error("PlatDef: malformed bundle header at {OFF} "
+                       "(headerLength={HLEN}, count={CNT}, totalSize={TSZ})",
+                       "OFF", lg2::hex, offset, "HLEN", bundle->headerLength,
+                       "CNT", bundle->count, "TSZ", totalSize);
+            return {};
+        }
+
+        std::span<const uint16_t> ids(
+            reinterpret_cast<const uint16_t*>(
+                raw.data() + offset + sizeof(PlatDefBundleHeader)),
+            bundle->count);
+
+        // Without a platform ID the only safe choice is a bundle that is the
+        // sole one in the blob, i.e. built for a single platform.
+        bool match =
+            platformId
+                ? std::ranges::find(ids, *platformId) != ids.end()
+                : offset == 0 && !isBundle(raw.subspan(offset + totalSize));
+
+        if (match)
+        {
+            lg2::info("PlatDef: using bundle at {OFF}, first {PID}", "OFF",
+                      lg2::hex, offset, "PID", lg2::hex,
+                      ids.empty() ? 0 : ids.front());
+            return raw.subspan(offset + headerBytes, totalSize - headerBytes);
+        }
+
+        offset += totalSize;
     }
 
-    size_t offset = sizeof(PlatDefBundleHeader);
+    if (platformId)
+    {
+        lg2::error("PlatDef: no bundle covers platform {PID}", "PID", lg2::hex,
+                   *platformId);
+    }
+    else
+    {
+        lg2::error("PlatDef: multi-platform bundle but no platform ID known");
+    }
+    return {};
+}
 
-    if (offset + sizeof(PlatDefTableData) > raw.size())
+// Decompress a PlatDef table data block.
+// Layout: [PlatDefTableData][zlib compressed records...]
+// Returns: [PlatDefTableData header][decompressed records]
+static std::vector<uint8_t> decompressPlatDef(std::span<const uint8_t> raw)
+{
+    if (raw.size() < sizeof(PlatDefTableData))
     {
         lg2::error("PlatDef: blob too small for table data header");
         return {};
     }
 
     PlatDefTableData tableHdr{};
-    std::memcpy(&tableHdr, raw.data() + offset, sizeof(tableHdr));
+    std::memcpy(&tableHdr, raw.data(), sizeof(tableHdr));
 
-    std::string_view desc(tableHdr.description,
-                          sizeof(tableHdr.description));
+    std::string_view desc(tableHdr.description, sizeof(tableHdr.description));
     if (auto nul = desc.find('\0'); nul != std::string_view::npos)
     {
         desc = desc.substr(0, nul);
@@ -221,11 +291,11 @@ static std::vector<uint8_t> decompressPlatDef(const std::vector<uint8_t>& raw)
     if (!(tableHdr.flags & tableDataFlagZLib))
     {
         lg2::info("PlatDef: not compressed, returning raw records");
-        return std::vector<uint8_t>(raw.begin() + offset, raw.end());
+        return std::vector<uint8_t>(raw.begin(), raw.end());
     }
 
     // Compressed: zlib data starts after the PlatDefTableData header
-    size_t compOffset = offset + sizeof(PlatDefTableData);
+    size_t compOffset = sizeof(PlatDefTableData);
     if (tableHdr.compressedSize < sizeof(PlatDefTableData))
     {
         lg2::error("PlatDef: invalid compressedSize {SZ}",
@@ -276,7 +346,50 @@ static constexpr EfiGuid apmlFileGuid = {
     0xC5F6001C, 0x39B4, 0x43DD,
     {0x9B, 0x9B, 0x68, 0x32, 0xF1, 0xBB, 0x4B, 0xE9}};
 
-std::vector<uint8_t> extractPlatDef()
+std::optional<uint16_t> readPlatformId(sdbusplus::bus_t& bus)
+{
+    auto subtree = getSubtree(bus, inventoryPath, 0, {Motherboard::interface});
+    if (subtree.empty())
+    {
+        lg2::warning("PlatDef: no motherboard inventory object below {PATH}",
+                     "PATH", inventoryPath);
+        return std::nullopt;
+    }
+
+    for (const auto& [path, services] : subtree)
+    {
+        for (const auto& service : std::views::keys(services))
+        {
+            auto value = getProperty<uint64_t>(
+                bus, service.c_str(), path.c_str(), Motherboard::interface,
+                productIdProperty);
+            if (!value)
+            {
+                continue;
+            }
+
+            if (*value > std::numeric_limits<uint16_t>::max())
+            {
+                lg2::warning("PlatDef: {PROP} {VAL} on {PATH} is not a "
+                             "12-bit platform ID",
+                             "PROP", productIdProperty, "VAL", *value, "PATH",
+                             path);
+                continue;
+            }
+
+            auto id = static_cast<uint16_t>(*value);
+            lg2::info("PlatDef: platform ID {PID} from {PATH}", "PID", lg2::hex,
+                      id, "PATH", path);
+            return id;
+        }
+    }
+
+    lg2::warning("PlatDef: {PROP} not readable on any motherboard object",
+                 "PROP", productIdProperty);
+    return std::nullopt;
+}
+
+std::vector<uint8_t> extractPlatDef(std::optional<uint16_t> platformId)
 {
     std::string mtdPath = findMtdByLabel("host-prime");
     if (mtdPath.empty())
@@ -310,7 +423,13 @@ std::vector<uint8_t> extractPlatDef()
         return {};
     }
 
-    return decompressPlatDef(raw);
+    auto tableData = selectPlatDefBundle(raw, platformId);
+    if (tableData.empty())
+    {
+        return {};
+    }
+
+    return decompressPlatDef(tableData);
 }
 
 // ---------------------------------------------------------------------------
