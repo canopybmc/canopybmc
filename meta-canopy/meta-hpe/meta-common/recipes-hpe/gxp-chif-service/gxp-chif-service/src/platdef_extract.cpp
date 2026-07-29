@@ -36,7 +36,7 @@ struct PlatDefBundleHeader
     uint16_t flags;
     uint8_t headerLength;
     uint8_t count;
-    uint8_t reserved[8];
+    // Platform IDs are handled separately.
 };
 
 struct PlatDefRecordHeader
@@ -120,8 +120,8 @@ struct PlatDefI2CEngineFixed
 
 #pragma pack(pop)
 
-static_assert(sizeof(PlatDefBundleHeader) == 32,
-              "PlatDefBundleHeader must be 32 bytes");
+static_assert(sizeof(PlatDefBundleHeader) == 24,
+              "PlatDefBundleHeader must be 24 bytes");
 static_assert(sizeof(PlatDefRecordHeader) == 32,
               "PlatDefRecordHeader must be 32 bytes (Gen11 layout)");
 static_assert(sizeof(PlatDefTableData) == 112,
