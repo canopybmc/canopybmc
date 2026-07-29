@@ -4,6 +4,8 @@ SRC_URI += " \
     file://kommando_ipmi_card.json \
 "
 
+PACKAGECONFIG:append = " dts-vpd"
+
 do_install:append() {
     # Remove all default configs
     # The card doesn't have any direct access to FRU

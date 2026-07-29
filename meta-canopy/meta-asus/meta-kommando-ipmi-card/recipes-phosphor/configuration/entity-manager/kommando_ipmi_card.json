@@ -98,6 +98,6 @@
         }
     ],
     "Name": "ASUS Kommando IPMI Card",
-    "Probe": "TRUE",
+    "Probe": "xyz.openbmc_project.Inventory.Decorator.Asset({'Model': 'Asus Kommando IPMI Expansion Card'})",
     "Type": "Chassis"
 }
