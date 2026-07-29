@@ -118,17 +118,41 @@ jobs:
         workflow: ${{ fromJson(needs.get-matrix.outputs.workflow) }}
         include: ${{ fromJson(needs.get-matrix.outputs.include) }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Define workflow name
+        id: workflow-name
+        run: |
+          echo "workflow_name=${{ matrix.fwci_workflow_name_prefix && format('{0}-{1}', matrix.fwci_workflow_name_prefix, matrix.workflow) || format('{0}-{1}', matrix.board, matrix.workflow) }}" >> "$GITHUB_OUTPUT"
+        # Use `matrix.fwci_workflow_name_prefix` if defined, else fallback to `matrix.board`
+
+      - name: Check if FirmwareCI workflow exists
+        id: check-workflow
+        run: |
+          if [ -d ".firmwareci/workflows/${{ steps.workflow-name.outputs.workflow_name }}" ]; then
+            echo "workflow_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "workflow_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Debug
+        run: |
+          echo "WORKFLOW_NAME = ${{ steps.workflow-name.outputs.workflow_name }}"
+          echo "WORKFLOW_EXISTS = ${{ steps.check-workflow.outputs.workflow_exists }}"
+
       - name: Download firmware image
+        if: steps.check-workflow.outputs.workflow_exists == 'true'
         uses: actions/download-artifact@v8
         with:
           name: obmc-phosphor-image-${{ matrix.board }}
 
       - name: Upload to FirmwareCI
+        if: steps.check-workflow.outputs.workflow_exists == 'true'
         uses: docker://firmwareci/action:v6.0
         with:
           TOKEN: ${{ secrets.FWCI_TOKEN }}
-          WORKFLOW_NAME: ${{ matrix.fwci_workflow_name_prefix && format('{0}-{1}', matrix.fwci_workflow_name_prefix, matrix.workflow) || format('{0}-{1}', matrix.board, matrix.workflow) }}
-          # Use `matrix.fwci_workflow_name_prefix` if defined, else fallback to `matrix.board`
+          WORKFLOW_NAME: ${{ steps.workflow-name.outputs.workflow_name }}
           BINARIES: firmware=${{ matrix.fwci_binary_name || format('obmc-phosphor-image-{0}.static.mtd', matrix.board) }}
           GITHUB_INSTALLATION_ID: ${{ secrets.FWCI_GITHUB_INSTALLATION_ID }}
 
