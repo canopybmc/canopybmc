@@ -4,11 +4,35 @@
 
 #include <arpa/inet.h>
 
+#include <xyz/openbmc_project/ObjectMapper/common.hpp>
+
 #include <algorithm>
 #include <charconv>
 
+using ObjectMapper = sdbusplus::common::xyz::openbmc_project::ObjectMapper;
+
 namespace chif
 {
+
+GetSubTreeResponse getSubtree(sdbusplus::bus_t& bus,
+                              const std::string& searchPath, int depth,
+                              const std::vector<std::string>& interfaces)
+{
+    try
+    {
+        auto m = bus.new_method_call(
+            ObjectMapper::default_service, ObjectMapper::instance_path,
+            ObjectMapper::interface, ObjectMapper::method_names::get_sub_tree);
+        m.append(searchPath, depth, interfaces);
+        GetSubTreeResponse response;
+        bus.call(m).read(response);
+        return response;
+    }
+    catch (const std::exception&)
+    {
+        return {};
+    }
+}
 
 std::optional<uint32_t> parseV4(const std::string& s)
 {

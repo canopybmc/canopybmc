@@ -6,15 +6,26 @@
 
 #include <array>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
+#include <vector>
 
 namespace chif
 {
 
 inline constexpr auto propertiesInterface = "org.freedesktop.DBus.Properties";
+
+using MapperServiceMap = std::map<std::string, std::vector<std::string>>;
+using GetSubTreeResponse =
+    std::vector<std::pair<std::string, MapperServiceMap>>;
+
+GetSubTreeResponse getSubtree(sdbusplus::bus_t& bus,
+                              const std::string& searchPath, int depth,
+                              const std::vector<std::string>& interfaces);
 
 template <typename T>
 std::optional<T> getProperty(sdbusplus::bus_t& bus, const char* service,
