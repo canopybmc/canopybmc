@@ -1,0 +1,315 @@
+name: "Host Firmware: Update"
+description: >-
+  Update the host firmware (aka BIOS) via Redfish and verify it is booting the
+  new one. For HPE some magic firmware preparation is needed beforehand.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: root
+      password: "[[attributes.BMCPassword]]"
+
+variables:
+  UpdateTarget: null
+  UpdateTargetNew: null
+  BiosVerBefore: null
+  BiosVerOld: null
+  BiosVerAfter: null
+
+stages:
+  - name: Power On host
+    steps:
+      - cmd: shell
+        name: Power on host
+        transport:
+          proto: local
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"ResetType":"On"}'
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+          expect:
+            - regex: "^(200|204)$"
+
+      - cmd: shell
+        name: Wait for BiosVersion
+        transport:
+          proto: local
+        options:
+          timeout: 10m
+        parameters:
+          command: |
+            BIOSVER="null";
+            while [ "$BIOSVER" = "null" ]; do
+              sleep 2;
+              BIOSVER=$(curl -sk --user root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system | grep BiosVersion | sed -E 's/.*"(.*)",$/\1/');
+            done;
+            echo "$BIOSVER"
+          expect:
+            - regex: \d+\.\d+
+          variable: BiosVerBefore
+
+      - cmd: cmd
+        name: Power control service active
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.Chassis.Control.Power@0.service"]
+
+  - name: Firmware update to older version 2.72
+    steps:
+      - cmd: shell
+        name: Probe update endpoint
+        options:
+          timeout: 30s
+        transport:
+          proto: local
+        parameters:
+          command: |
+            curl -sk --user root:[[attributes.BMCPassword]] \
+              https://[[attributes.BMC]]/redfish/v1/UpdateService/FirmwareInventory \
+              | grep -Eo UEFIPrimary_[0-9]+
+          expect:
+            - regex: 'UEFIPrimary_\d+'
+          variable: UpdateTarget
+
+      - cmd: redfish
+        name: Is updateable?
+        options:
+          timeout: 30s
+        transport:
+          proto: local
+        parameters:
+          host: "[[attributes.BMC]]"
+          auth:
+            user: root
+            password: "[[attributes.BMCPassword]]"
+          validate: inventory
+          inventory:
+            rules:
+              - path: /redfish/v1/UpdateService/FirmwareInventory/{{ UpdateTarget }}
+                prop: Updateable
+                op: eq
+                value: "true"
+
+      - cmd: shell
+        name: Trigger update
+        options:
+          timeout: 5m
+        transport:
+          proto: local
+        parameters:
+          command: >-
+            curl -sk --user root:[[attributes.BMCPassword]]
+            -X POST -H Content-Type:multipart/form-data
+            -F 'UpdateParameters={"Targets":["/redfish/v1/UpdateService/FirmwareInventory/{{ UpdateTarget }}"],"@Redfish.OperationApplyTime":"Immediate"};type=application/json'
+            -F 'UpdateFile=@[[storage.dl320g11_bios_update]]/[[storage.dl320g11_bios_update.old_pldm]];type=application/octet-stream'
+            https://[[attributes.BMC]]/redfish/v1/UpdateService/update-multipart
+          expect:
+            - regex: TaskStarted
+
+      - cmd: shell
+        name: Wait for update finish
+        options:
+          timeout: 15m
+        transport: *bmc_ssh
+        parameters:
+          command: |
+            journalctl -n 5 -t phosphor-bios-software-update -t power-control -f \
+              | sed -E '/UpdateSuccessful|ActivateFailed/q'
+          expect:
+            - regex: UpdateSuccessful
+
+      - cmd: shell
+        name: Wait for BiosVersion
+        transport:
+          proto: local
+        options:
+          timeout: 10m
+        parameters:
+          command: |
+            BIOSVER="null";
+            while [ "$BIOSVER" = "null" ]; do
+              sleep 2;
+              BIOSVER=$(curl -sk --user root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system | grep BiosVersion | sed -E 's/.*"(.*)",$/\1/');
+            done;
+            echo "$BIOSVER"
+          expect:
+            - regex: \d+\.\d+
+          variable: BiosVerOld
+
+  - name: Firmware update to 2.92
+    steps:
+      - cmd: shell
+        name: Power on host
+        transport:
+          proto: local
+        parameters:
+          command: >-
+            curl -sk -u root:[[attributes.BMCPassword]]
+            -X POST -H 'Content-Type: application/json'
+            -d '{"ResetType":"On"}'
+            -o /dev/null -w '%{http_code}'
+            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+          expect:
+            - regex: "^(200|204)$"
+
+      - cmd: shell
+        name: Wait for BiosVersion
+        transport:
+          proto: local
+        options:
+          timeout: 10m
+        parameters:
+          command: |
+            BIOSVER="null";
+            while [ "$BIOSVER" = "null" ]; do
+              sleep 2;
+              BIOSVER=$(curl -sk --user root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system | grep BiosVersion | sed -E 's/.*"(.*)",$/\1/');
+            done;
+            echo "$BIOSVER"
+          expect:
+            - regex: \d+\.\d+
+          variable: BiosVerNew
+
+      - cmd: cmd
+        name: Power control service active
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: systemctl
+          args: ["is-active", "xyz.openbmc_project.Chassis.Control.Power@0.service"]
+
+      - cmd: shell
+        name: Probe update endpoint
+        options:
+          timeout: 30s
+        transport:
+          proto: local
+        parameters:
+          command: |
+            curl -sk --user root:[[attributes.BMCPassword]] \
+              https://[[attributes.BMC]]/redfish/v1/UpdateService/FirmwareInventory \
+              | grep -Eo UEFIPrimary_[0-9]+
+          expect:
+            - regex: 'UEFIPrimary_\d+'
+          variable: UpdateTarget
+
+      - cmd: redfish
+        name: Is updateable?
+        options:
+          timeout: 30s
+        transport:
+          proto: local
+        parameters:
+          host: "[[attributes.BMC]]"
+          auth:
+            user: root
+            password: "[[attributes.BMCPassword]]"
+          validate: inventory
+          inventory:
+            rules:
+              - path: /redfish/v1/UpdateService/FirmwareInventory/{{ UpdateTarget }}
+                prop: Updateable
+                op: eq
+                value: "true"
+
+      - cmd: shell
+        name: Trigger update
+        options:
+          timeout: 5m
+        transport:
+          proto: local
+        parameters:
+          command: >-
+            curl -sk --user root:[[attributes.BMCPassword]]
+            -X POST -H Content-Type:multipart/form-data
+            -F 'UpdateParameters={"Targets":["/redfish/v1/UpdateService/FirmwareInventory/{{ UpdateTarget }}"],"@Redfish.OperationApplyTime":"Immediate"};type=application/json'
+            -F 'UpdateFile=@[[storage.dl320g11_bios_update]]/[[storage.dl320g11_bios_update.pldm]];type=application/octet-stream'
+            https://[[attributes.BMC]]/redfish/v1/UpdateService/update-multipart
+          expect:
+            - regex: TaskStarted
+
+      - cmd: shell
+        name: Wait for update finish
+        options:
+          timeout: 15m
+        transport: *bmc_ssh
+        parameters:
+          command: |
+            journalctl -n 5 -t phosphor-bios-software-update -t power-control -f \
+              | sed -E '/UpdateSuccessful|ActivateFailed/q'
+          expect:
+            - regex: UpdateSuccessful
+
+  - name: Confirm update
+    steps:
+      - cmd: shell
+        name: Check for updated inventory
+        options:
+          timeout: 30s
+        transport:
+          proto: local
+        parameters:
+          command: |
+            curl -sk --user root:[[attributes.BMCPassword]] \
+            https://[[attributes.BMC]]/redfish/v1/UpdateService/FirmwareInventory \
+            | grep -Eo UEFIPrimary_[0-9]+
+          expect:
+            - regex: 'UEFIPrimary_\d+'
+          variable: UpdateTargetNew
+
+      - cmd: shell
+        name: Compare target values
+        options:
+          timeout: 5s
+        transport:
+          proto: local
+        parameters:
+          command: |
+            if [ {{ UpdateTarget }} != {{ UpdateTargetNew }} ]; then
+              echo "Success";
+            fi;
+          expect:
+            - regex: Success
+
+      - cmd: shell
+        name: Wait for BiosVersion
+        transport:
+          proto: local
+        options:
+          timeout: 10m
+        parameters:
+          command: |
+            BIOSVER="null";
+            while [ "$BIOSVER" = "null" ]; do
+              sleep 2;
+              BIOSVER=$(curl -sk --user root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system | grep BiosVersion | sed -E 's/.*"(.*)",$/\1/');
+            done;
+            echo "$BIOSVER"
+          expect:
+            - regex: \d+\.\d+
+          variable: BiosVerAfter
+
+      - cmd: shell
+        name: Compare BIOS versions
+        options:
+          timeout: 5s
+        transport:
+          proto: local
+        parameters:
+          command: |
+            if [ "{{ BiosVerOld }} | bc" -lt "{{ BiosVerAfter }} | bc" ]; then
+              echo "Success";
+            fi;
+          expect:
+            - regex: Success
