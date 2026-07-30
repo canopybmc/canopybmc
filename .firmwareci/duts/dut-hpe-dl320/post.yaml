@@ -41,3 +41,13 @@ post-stage:
       agent: "[[attributes.Agent]]"
       device: "[[attributes.Device]]"
       command: power-off
+
+  - cmd: dutctl
+    name: Reload golden image to host
+    options:
+      timeout: 15m
+    parameters:
+      agent: "[[attributes.Agent]]"
+      device: "[[attributes.SysromDevice]]"
+      command: flash
+      args: ["[[storage.dl320g11_bios_update]]/[[storage.dl320g11_bios_update.golden_image]]"]

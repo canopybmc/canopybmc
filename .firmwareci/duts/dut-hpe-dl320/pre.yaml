@@ -17,6 +17,16 @@ pre-stage:
       args: ["[[input.firmware]]"]
 
   - cmd: dutctl
+    name: Emulate BIOS Flash with golden image
+    options:
+      timeout: 15m
+    parameters:
+      agent: "[[attributes.Agent]]"
+      device: "[[attributes.SysromDevice]]"
+      command: flash
+      args: ["[[storage.dl320g11_bios_update]]/[[storage.dl320g11_bios_update.golden_image]]"]
+
+  - cmd: dutctl
     name: Power on DUT
     parameters:
       agent: "[[attributes.Agent]]"
@@ -52,8 +62,7 @@ pre-stage:
 
   - cmd: cmd
     name: Wait for BMC services
-    transport: &local
-      proto: local
+    transport: *local
     options:
       timeout: 2m
     parameters:
