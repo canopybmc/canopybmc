@@ -16,6 +16,14 @@ pre-stage:
       args: ["[[input.firmware]]"]
 
   - cmd: dutctl
+    name: Emulate BIOS Flash with golden image
+    parameters:
+      agent: "[[attributes.Agent]]"
+      device: "[[attributes.Device]]"
+      command: emulate-host
+      args: ["[[storage.dl320g11_bios_update]]/[[storage.dl320g11_bios_update.golden_image]]"]
+
+  - cmd: dutctl
     name: Power on DUT
     parameters:
       agent: "[[attributes.Agent]]"
