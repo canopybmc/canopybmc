@@ -16,11 +16,33 @@ defaults:
       password: "[[attributes.BMCPassword]]"
 
 stages:
+  - name: Deploy NVRAM-specific EVs
+    steps:
+      - cmd: copy
+        name: Copy original NVRAM to DUT
+        transport: *bmc_ssh
+        parameters:
+          source: "[[storage.dl320g11_nvram]]"
+          destination: /tmp
+          recursive: true
+
+      - cmd: shell
+        name: Copy EVs to CHIF path
+        transport: *bmc_ssh
+        parameters:
+          command: "cp /tmp/[[storage.dl320g11_nvram.evs]] /var/lib/chif/evs.dat"
+
+      - cmd: shell
+        name: Restart CHIF service
+        transport: *bmc_ssh
+        parameters:
+          command: "systemctl restart xyz.openbmc_project.GxpChif.service"
+
   - name: Reboot Cycle 1
     steps:
       - cmd: shell
         name: Power on host
-        transport:
+        transport: &local
           proto: local
         parameters:
           command: >-
@@ -32,10 +54,24 @@ stages:
           expect:
             - regex: "^(200|204)$"
 
+      - cmd: shell
+        name: Wait for SMBIOS transfer (host POST complete)
+        transport: *bmc_ssh
+        options:
+          timeout: 15m
+        parameters:
+          command: >-
+            while [ ! -f /var/lib/smbios/smbios2 ] ||
+                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
+            do sleep 1; done;
+            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
+          expect:
+            - regex: "SMBIOS ready"
+
       - cmd: ping
         name: Wait for host OS
         options:
-          timeout: 10m
+          timeout: 5m
         parameters:
           host: "[[attributes.Host]]"
 
@@ -67,8 +103,7 @@ stages:
 
       - cmd: shell
         name: Reboot host via Redfish
-        transport:
-          proto: local
+        transport: *local
         parameters:
           command: >-
             curl -sk -u root:[[attributes.BMCPassword]]
@@ -79,12 +114,32 @@ stages:
           expect:
             - regex: "^(200|204)$"
 
+      - cmd: shell
+        name: Clear stale SMBIOS data
+        transport: *bmc_ssh
+        parameters:
+          command: "rm -f /var/lib/smbios/smbios2"
+
   - name: Reboot Cycle 2
     steps:
+      - cmd: shell
+        name: Wait for SMBIOS transfer
+        transport: *bmc_ssh
+        options:
+          timeout: 5m
+        parameters:
+          command: >-
+            while [ ! -f /var/lib/smbios/smbios2 ] ||
+                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
+            do sleep 1; done;
+            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
+          expect:
+            - regex: "SMBIOS ready"
+
       - cmd: ping
         name: Wait for host OS
         options:
-          timeout: 10m
+          timeout: 5m
         parameters:
           host: "[[attributes.Host]]"
 
@@ -116,8 +171,7 @@ stages:
 
       - cmd: shell
         name: Reboot host via Redfish
-        transport:
-          proto: local
+        transport: *local
         parameters:
           command: >-
             curl -sk -u root:[[attributes.BMCPassword]]
@@ -128,12 +182,32 @@ stages:
           expect:
             - regex: "^(200|204)$"
 
+      - cmd: shell
+        name: Clear stale SMBIOS data
+        transport: *bmc_ssh
+        parameters:
+          command: "rm -f /var/lib/smbios/smbios2"
+
   - name: Reboot Cycle 3
     steps:
+      - cmd: shell
+        name: Wait for SMBIOS transfer
+        transport: *bmc_ssh
+        options:
+          timeout: 5m
+        parameters:
+          command: >-
+            while [ ! -f /var/lib/smbios/smbios2 ] ||
+                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
+            do sleep 1; done;
+            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
+          expect:
+            - regex: "SMBIOS ready"
+
       - cmd: ping
         name: Wait for host OS
         options:
-          timeout: 10m
+          timeout: 5m
         parameters:
           host: "[[attributes.Host]]"
 

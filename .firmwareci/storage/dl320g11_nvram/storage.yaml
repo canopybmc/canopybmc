@@ -1,4 +1,5 @@
 name: dl320g11_nvram
 paths:
   rom: dl320g11_host_reserved_original.bin
+  evs: dl320g11_evs_original.dat
 uri: fwci://dl320g11_nvram
