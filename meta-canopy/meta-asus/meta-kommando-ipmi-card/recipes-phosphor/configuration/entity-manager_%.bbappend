@@ -2,6 +2,7 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 
 SRC_URI += " \
     file://kommando_ipmi_card.json \
+    file://0001-schemas-legacy-tempSensor-add-NTCThermistor.patch \
 "
 
 PACKAGECONFIG:append = " dts-vpd"

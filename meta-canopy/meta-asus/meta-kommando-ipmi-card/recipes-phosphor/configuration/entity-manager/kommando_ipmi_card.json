@@ -95,6 +95,69 @@
             "Index": 7,
             "Name": "Fan_7",
             "Type": "AspeedFan"
+        },
+        {
+            "Name": "Header0_Temp",
+            "PollRate": 1.0,
+            "PowerState": "Always",
+            "ThermistorAdcChannel": 0,
+            "Thresholds": [
+                {
+                    "Direction": "greater than",
+                    "Name": "upper critical",
+                    "Severity": 1,
+                    "Value": 90
+                },
+                {
+                    "Direction": "greater than",
+                    "Name": "upper non critical",
+                    "Severity": 0,
+                    "Value": 75
+                }
+            ],
+            "Type": "NTCThermistor"
+        },
+        {
+            "Name": "Header1_Temp",
+            "PollRate": 1.0,
+            "PowerState": "Always",
+            "ThermistorAdcChannel": 1,
+            "Thresholds": [
+                {
+                    "Direction": "greater than",
+                    "Name": "upper critical",
+                    "Severity": 1,
+                    "Value": 90
+                },
+                {
+                    "Direction": "greater than",
+                    "Name": "upper non critical",
+                    "Severity": 0,
+                    "Value": 75
+                }
+            ],
+            "Type": "NTCThermistor"
+        },
+        {
+            "Name": "Header2_Temp",
+            "PollRate": 1.0,
+            "PowerState": "Always",
+            "ThermistorAdcChannel": 2,
+            "Thresholds": [
+                {
+                    "Direction": "greater than",
+                    "Name": "upper critical",
+                    "Severity": 1,
+                    "Value": 90
+                },
+                {
+                    "Direction": "greater than",
+                    "Name": "upper non critical",
+                    "Severity": 0,
+                    "Value": 75
+                }
+            ],
+            "Type": "NTCThermistor"
         }
     ],
     "Name": "ASUS Kommando IPMI Card",
