@@ -1,0 +1,62 @@
+From e985d82fb5995b5cba27cbb1e5d2121b8ba8f085 Mon Sep 17 00:00:00 2001
+From: Grégoire Layet <gregoire.layet@9elements.com>
+Date: Mon, 03 Aug 2026 11:52:20 +0200
+Subject: [PATCH] schemas: legacy: tempSensor: add NTCThermistor type
+
+NTCThermistor use internal kernel driver. To match to the hwmon sysfs
+the ADC channel is used. A new "ThermistorAdcChannel" property is added.
+
+For NTCThermistor, only "NTCThermistor" is required and not I2C bus and
+address.
+
+Tested:
+./scripts/validate_configs.py OK
+
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/entity-manager/+/93099]
+Change-Id: Id28ce6fde9ac4080af4e733f19e2b462d5a276d2
+Signed-off-by: Grégoire Layet <gregoire.layet@9elements.com>
+---
+
+diff --git a/schemas/legacy.json b/schemas/legacy.json
+index a2dd53d..073ef77 100644
+--- a/schemas/legacy.json
++++ b/schemas/legacy.json
+@@ -736,6 +736,9 @@
+                 "MaxValue": {
+                     "$ref": "#/$defs/Types/MaxValue"
+                 },
++                "ThermistorAdcChannel": {
++                    "$ref": "#/$defs/Types/ThermistorAdcChannel"
++                },
+                 "Thresholds": {
+                     "$ref": "#/$defs/Types/Thresholds"
+                 },
+@@ -777,11 +780,16 @@
+                         "TMP464",
+                         "TMP468",
+                         "TMP75",
+-                        "W83773G"
++                        "W83773G",
++                        "NTCThermistor"
+                     ]
+                 }
+             },
+-            "required": ["Name", "Type", "Bus", "Address"],
++            "required": ["Name", "Type"],
++            "anyOf": [
++                { "required": ["Bus", "Address"] },
++                { "required": ["ThermistorAdcChannel"] }
++            ],
+             "type": "object"
+         },
+         "NVME1000": {
+@@ -1412,6 +1420,9 @@
+                 },
+                 "type": "array"
+             },
++            "ThermistorAdcChannel": {
++                "type": "number"
++            },
+             "Thresholds": {
+                 "items": {
+                     "properties": {

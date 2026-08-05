@@ -102,10 +102,43 @@
 		};
 	};
 
+	thermistor0 {
+		compatible = "epcos,b57891s0103";
+		io-channels = <&adc0 0>;
+		pulldown-ohm = <0>;
+		pullup-ohm = <10000>;
+		pullup-uv = <2500000>;
+		#thermal-sensor-cells = <0>;
+	};
+
+	thermistor1 {
+		compatible = "epcos,b57891s0103";
+		io-channels = <&adc0 1>;
+		pulldown-ohm = <0>;
+		pullup-ohm = <10000>;
+		pullup-uv = <2500000>;
+		#thermal-sensor-cells = <0>;
+	};
+
+	thermistor2 {
+		compatible = "epcos,b57891s0103";
+		io-channels = <&adc0 2>;
+		pulldown-ohm = <0>;
+		pullup-ohm = <10000>;
+		pullup-uv = <2500000>;
+		#thermal-sensor-cells = <0>;
+	};
+
 	memory@80000000 {
 		reg = <0x80000000 0x40000000>;
 		device_type = "memory";
 	};
+};
+
+&adc0 {
+	aspeed,int-vref-microvolt = <2500000>;
+
+	status = "okay";
 };
 
 &fmc {
