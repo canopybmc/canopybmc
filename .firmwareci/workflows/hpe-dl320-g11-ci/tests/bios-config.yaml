@@ -18,42 +18,6 @@ defaults:
       user: "root"
       password: "[[attributes.BMCPassword]]"
 
-post-stage:
-  # Allowed to fail
-  - cmd: shell
-    name: Power off host via Redfish
-    transport:
-      proto: local
-    parameters:
-      command: >-
-        curl -sk -u root:[[attributes.BMCPassword]]
-        -X POST -H 'Content-Type: application/json'
-        -d '{"ResetType":"ForceOff"}'
-        -o /dev/null -w '%{http_code}'
-        https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset || true
-
-  - cmd: copy
-    name: Copy original NVRAM to DUT
-    transport: *bmc_ssh
-    parameters:
-      source: "[[storage.dl320g11_nvram]]"
-      destination: /tmp
-      recursive: true
-
-  - cmd: shell
-    name: Flash original NVRAM to DUT
-    transport: *bmc_ssh
-    parameters:
-      command: "flashcp /tmp/[[storage.dl320g11_nvram.rom]] /dev/mtd/host-reserved"
-
-  - cmd: dutctl
-    name: Power off DUT
-    parameters:
-      agent: "[[attributes.Agent]]"
-      device: "[[attributes.Device]]"
-      command: power
-      args: ["off"]
-
 stages:
   - name: Reset NVRAM before power on
     steps:
