@@ -158,6 +158,204 @@
                 }
             ],
             "Type": "NTCThermistor"
+        },
+        {
+            "Class": "fan",
+            "FFGainCoefficient": 1.0,
+            "FFOffCoefficient": 0.0,
+            "ICoefficient": 0.0,
+            "ILimitMax": 0.0,
+            "ILimitMin": 0.0,
+            "Inputs": [
+                "Fan_0",
+                "Fan_1",
+                "Fan_2"
+            ],
+            "MissingIsAcceptable": [
+                "Fan_0",
+                "Fan_1",
+                "Fan_2"
+            ],
+            "Name": "Zone 1 Fans",
+            "OutLimitMax": 100.0,
+            "OutLimitMin": 0.0,
+            "Outputs": [
+                "Pwm 1",
+                "Pwm 2",
+                "Pwm 3"
+            ],
+            "PCoefficient": 0.0,
+            "SlewNeg": 0.0,
+            "SlewPos": 0.0,
+            "Type": "Pid",
+            "Zones": [
+                "Zone 1"
+            ]
+        },
+        {
+            "Class": "fan",
+            "FFGainCoefficient": 1.0,
+            "FFOffCoefficient": 0.0,
+            "ICoefficient": 0.0,
+            "ILimitMax": 0.0,
+            "ILimitMin": 0.0,
+            "Inputs": [
+                "Fan_3",
+                "Fan_4",
+                "Fan_5"
+            ],
+            "MissingIsAcceptable": [
+                "Fan_3",
+                "Fan_4",
+                "Fan_5"
+            ],
+            "Name": "Zone 2 Fans",
+            "OutLimitMax": 100.0,
+            "OutLimitMin": 0.0,
+            "Outputs": [
+                "Pwm 4",
+                "Pwm 5",
+                "Pwm 6"
+            ],
+            "PCoefficient": 0.0,
+            "SlewNeg": 0.0,
+            "SlewPos": 0.0,
+            "Type": "Pid",
+            "Zones": [
+                "Zone 2"
+            ]
+        },
+        {
+            "Class": "fan",
+            "FFGainCoefficient": 1.0,
+            "FFOffCoefficient": 0.0,
+            "ICoefficient": 0.0,
+            "ILimitMax": 0.0,
+            "ILimitMin": 0.0,
+            "Inputs": [
+                "Fan_6",
+                "Fan_7"
+            ],
+            "MissingIsAcceptable": [
+                "Fan_6",
+                "Fan_7"
+            ],
+            "Name": "Zone 3 Fans",
+            "OutLimitMax": 100.0,
+            "OutLimitMin": 0.0,
+            "Outputs": [
+                "Pwm 7",
+                "Pwm 8"
+            ],
+            "PCoefficient": 0.0,
+            "SlewNeg": 0.0,
+            "SlewPos": 0.0,
+            "Type": "Pid",
+            "Zones": [
+                "Zone 3"
+            ]
+        },
+        {
+            "FailSafePercent": 100.0,
+            "MinThermalOutput": 0.0,
+            "Name": "Zone 1",
+            "Type": "Pid.Zone",
+            "ZoneIndex": 1
+        },
+        {
+            "FailSafePercent": 100.0,
+            "MinThermalOutput": 0.0,
+            "Name": "Zone 2",
+            "Type": "Pid.Zone",
+            "ZoneIndex": 2
+        },
+        {
+            "FailSafePercent": 100.0,
+            "MinThermalOutput": 0.0,
+            "Name": "Zone 3",
+            "Type": "Pid.Zone",
+            "ZoneIndex": 3
+        },
+        {
+            "Class": "temp",
+            "Inputs": [
+                "Header0_Temp"
+            ],
+            "Name": "Zone 1 Temp Curve",
+            "NegativeHysteresis": 3.0,
+            "Output": [
+                20.0,
+                35.0,
+                55.0,
+                80.0,
+                100.0
+            ],
+            "PositiveHysteresis": 0.0,
+            "Reading": [
+                25.0,
+                35.0,
+                45.0,
+                55.0,
+                65.0
+            ],
+            "Type": "Stepwise",
+            "Zones": [
+                "Zone 1"
+            ]
+        },
+        {
+            "Class": "temp",
+            "Inputs": [
+                "Header1_Temp"
+            ],
+            "Name": "Zone 2 Temp Curve",
+            "NegativeHysteresis": 3.0,
+            "Output": [
+                20.0,
+                35.0,
+                55.0,
+                80.0,
+                100.0
+            ],
+            "PositiveHysteresis": 0.0,
+            "Reading": [
+                25.0,
+                35.0,
+                45.0,
+                55.0,
+                65.0
+            ],
+            "Type": "Stepwise",
+            "Zones": [
+                "Zone 2"
+            ]
+        },
+        {
+            "Class": "temp",
+            "Inputs": [
+                "Header2_Temp"
+            ],
+            "Name": "Zone 3 Temp Curve",
+            "NegativeHysteresis": 3.0,
+            "Output": [
+                20.0,
+                35.0,
+                55.0,
+                80.0,
+                100.0
+            ],
+            "PositiveHysteresis": 0.0,
+            "Reading": [
+                25.0,
+                35.0,
+                45.0,
+                55.0,
+                65.0
+            ],
+            "Type": "Stepwise",
+            "Zones": [
+                "Zone 3"
+            ]
         }
     ],
     "Name": "ASUS Kommando IPMI Card",
