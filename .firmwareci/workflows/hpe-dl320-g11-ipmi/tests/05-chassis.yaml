@@ -89,7 +89,7 @@ stages:
             -U root -P [[attributes.BMCPassword]] -C 17
             raw 0x00 0x0f
           expect:
-            - regex: '^[0-9a-f]{2} '
+            - regex: '^\s*[0-9a-f]{2} '
 
   - name: Get System Boot Options
     steps:
