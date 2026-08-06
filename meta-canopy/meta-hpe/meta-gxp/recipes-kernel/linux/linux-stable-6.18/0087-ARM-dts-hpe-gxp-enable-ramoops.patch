@@ -6,6 +6,8 @@ Subject: [PATCH] ARM: dts: hpe: gxp: enable ramoops
 Allocate 1 MiB of memory for pstore/ramoops to have logs in case of a
 kernel panic.
 
+Upstream-Status: Pending
+
 Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
 ---
  arch/arm/boot/dts/hpe/hpe-gxp.dts | 16 ++++++++++++++++
@@ -38,6 +40,3 @@ index 21ccbf5de019..0646d3bf6e63 100644
  	cpus {
  		#address-cells = <1>;
  		#size-cells = <0>;
--- 
-2.54.0
-

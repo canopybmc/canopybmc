@@ -72,6 +72,3 @@ index 031d0ab2f4cf..21ccbf5de019 100644
  		spifi1: spi@c0000280 {
  			compatible = "hpe,gxp-spifi";
  			reg = <0xc0000280 0x80>, <0xc000e000 0x100>, <0xf0000000 0x4000000>;
--- 
-2.54.0
-

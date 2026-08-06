@@ -378,6 +378,3 @@ index 61ac3adc2605..7b47eed1259f 100644
  
  /* GPI (General Purpose Input) data registers */
  #define CSM_GPIDATL		0x40	/* GPI data low [31:0] */
--- 
-2.54.0
-

@@ -451,6 +451,3 @@ index 000000000000..489d5d2f05d9
 +MODULE_AUTHOR("Jean-Marie Verdun <verdun@hpe.com>");
 +MODULE_DESCRIPTION("HPE GXP PSU driver");
 +MODULE_LICENSE("GPL");
--- 
-2.54.0
-
