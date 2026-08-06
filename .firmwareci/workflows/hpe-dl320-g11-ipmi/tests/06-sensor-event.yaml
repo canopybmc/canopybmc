@@ -46,4 +46,4 @@ stages:
             -U root -P [[attributes.BMCPassword]] -C 17
             raw 0x04 0x2f 0x01
           expect:
-            - regex: '^[0-9a-f]{2}'
+            - regex: '^\s*[0-9a-f]{2}'

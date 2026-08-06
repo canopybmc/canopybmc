@@ -65,7 +65,7 @@ stages:
             -U root -P [[attributes.BMCPassword]] -C 17
             raw 0x06 0x37
           expect:
-            - regex: '^[0-9a-f]{2}( [0-9a-f]{2}){15}$'
+            - regex: '^\s*[0-9a-f]{2}( [0-9a-f]{2}){15}\s*$'
       - cmd: shell
         name: Get Channel Auth Capabilities (0x06 0x38) - ch14 admin
         transport: *local
