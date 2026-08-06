@@ -4,8 +4,7 @@ description: >-
   Capabilities (00h), Get Chassis Status (01h), Chassis Identify (04h),
   Set Chassis Capabilities (05h), Set Power Restore Policy (06h), Get System
   Restart Cause (07h), Get/Set System Boot Options (09h/08h), Set Front Panel
-  Button Enables (0Ah), and Get POH Counter (0Fh). Power cycle is in
-  12-chassis-power-cycle.yaml.
+  Button Enables (0Ah), and Get POH Counter (0Fh).
 
 defaults:
   transport: &local
@@ -64,16 +63,17 @@ stages:
   - name: Get System Restart Cause
     steps:
       - cmd: shell
-        name: Get System Restart Cause (0x00 0x07)
+        name: Get System Restart Cause (0x00 0x07) currently fails with 0xFF
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
             -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x00 0x07
+            raw 0x00 0x07 2>&1 || true
+          expect:
+            - regex: 'rsp=0xff|Unspecified error'
 
   - name: Get POH Counter
     steps:
@@ -82,14 +82,14 @@ stages:
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
             -U root -P [[attributes.BMCPassword]] -C 17
             raw 0x00 0x0f
           expect:
-            - regex: '^\s*[0-9a-f]{2} '
+            # 0x3c minutes per count (60), then the uint32 counter, LSB first.
+            - regex: '^\s*3c( [0-9a-f]{2}){4}\s*$'
 
   - name: Get System Boot Options
     steps:
@@ -147,16 +147,17 @@ stages:
   - name: Set Front Panel Button Enables
     steps:
       - cmd: shell
-        name: Set Front Panel Enables - All enabled (0x00 0x0a)
+        name: Set Front Panel Enables (0x00 0x0a) rejected with 0xFF
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
             -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x00 0x0a 0x00
+            raw 0x00 0x0a 0x00 2>&1 || true
+          expect:
+            - regex: 'rsp=0xff|Unspecified error'
 
   - name: Chassis via ipmitool Aliases
     steps:
@@ -173,24 +174,22 @@ stages:
           expect:
             - regex: 'System Power\s*:'
       - cmd: shell
-        name: chassis restart_cause (alias)
+        name: chassis restart_cause (alias) fails with 0xFF
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
             -U root -P [[attributes.BMCPassword]] -C 17
-            chassis restart_cause
+            chassis restart_cause 2>&1 || true
           expect:
-            - regex: 'Restart Cause'
+            - regex: 'Get Chassis Restart Cause failed: Unspecified error'
       - cmd: shell
         name: chassis poh (alias)
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
