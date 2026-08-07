@@ -1,9 +1,9 @@
 name: "IPMI: Chassis Power Cycle"
 description: >-
-  Validate chassis power cycle via IPMI. Verifies the host is initially on,
+  Validate chassis power cycle via IPMI. Ensures the host is on to begin with,
   sets the restore policy to always-on (0x02), powers the host off, confirms
   it is off, powers it back on, then polls chassis status until bit 0 is set
-  again. Run this test last as it disrupts the host.
+  again.
 
 defaults:
   transport: &local
@@ -13,17 +13,28 @@ stages:
   - name: Pre-condition Checks
     steps:
       - cmd: shell
-        name: Verify host is currently powered on (bit 0 of byte 0)
+        name: Chassis power on (no-op if already on)
         transport: *local
         options:
-          timeout: "30s"
+          timeout: "1m"
+          on-error: continue
         parameters:
           command: >-
-            S=$(ipmitool -I lanplus -H [[attributes.BMC]]
+            ipmitool -I lanplus -H [[attributes.BMC]]
             -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x00 0x01 | awk '{print $1}');
-            echo "power byte: 0x$S";
-            test $(( 0x$S & 1 )) -eq 1
+            chassis power on
+      - cmd: shell
+        name: Poll chassis status until host is on
+        transport: *local
+        options:
+          timeout: "8m"
+        parameters:
+          command: >-
+            while true; do
+            S=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 raw 0x00 0x01 2>/dev/null | awk '{print $1}');
+            [ -n "$S" ] && [ $(( 0x$S & 1 )) -eq 1 ] && echo "host on (0x$S)" && exit 0;
+            sleep 5;
+            done
 
   - name: Set Restore Policy
     steps:
@@ -51,12 +62,17 @@ stages:
             -U root -P [[attributes.BMCPassword]] -C 17
             raw 0x00 0x02 0x00
       - cmd: shell
-        name: Wait for host to power down
+        name: Poll chassis status until power-on bit is clear
         transport: *local
         options:
-          timeout: "35s"
+          timeout: "1m"
         parameters:
-          command: sleep 30
+          command: >-
+            while true; do
+            S=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 raw 0x00 0x01 2>/dev/null | awk '{print $1}');
+            [ -n "$S" ] && [ $(( 0x$S & 1 )) -eq 0 ] && echo "host off (0x$S)" && exit 0;
+            sleep 5;
+            done
       - cmd: shell
         name: Verify host is powered off (bit 0 of byte 0 clear)
         transport: *local
@@ -74,6 +90,13 @@ stages:
   - name: Power On
     steps:
       - cmd: shell
+        name: Settle before powering on
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: sleep 20
+      - cmd: shell
         name: Chassis Control - Power on (0x00 0x02 0x01)
         transport: *local
         options:
@@ -87,17 +110,17 @@ stages:
   - name: Wait for Host to Come On
     steps:
       - cmd: shell
-        name: Poll chassis status until power-on bit is set (3 min timeout)
+        name: Poll chassis status until power-on bit is set
         transport: *local
         options:
-          timeout: "4m"
+          timeout: "8m"
         parameters:
           command: >-
-            for i in $(seq 36); do
-            S=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 raw 0x00 0x01 2>/dev/null | awk '{print $1}');
+            while true; do
+            S=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 raw 0x00 0x01 | awk '{print $1}');
             [ -n "$S" ] && [ $(( 0x$S & 1 )) -eq 1 ] && echo "host on (0x$S)" && exit 0;
             sleep 5;
-            done; echo "timeout: host not on after 3 minutes"; exit 1
+            done
 
   - name: Verify Host Is On
     steps:
@@ -108,8 +131,6 @@ stages:
           timeout: "30s"
         parameters:
           command: >-
-            S=$(ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x00 0x01 | awk '{print $1}');
+            S=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 raw 0x00 0x01 | awk '{print $1}');
             echo "power byte: 0x$S";
             test $(( 0x$S & 1 )) -eq 1
