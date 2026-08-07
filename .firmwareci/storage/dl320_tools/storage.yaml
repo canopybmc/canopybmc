@@ -1,0 +1,5 @@
+name: dl320_tools
+commands:
+  - "apt-get update -qq"
+  - "apt-get install -y --no-install-recommends ipmitool jq"
+uri: fwci://dl320_tools

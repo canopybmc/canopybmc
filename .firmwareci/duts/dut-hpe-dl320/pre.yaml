@@ -23,6 +23,16 @@ pre-stage:
       command: power
       args: ["on"]
 
+  - cmd: cmd
+    name: Setup Tools
+    transport: &local
+      proto: local
+    options:
+      timeout: 2m
+    parameters:
+      executable: cat
+      args: ["[[storage.dl320_tools]]/dummy.txt"]
+
   - cmd: dutctl
     name: Wait for boot banner on serial
     options:

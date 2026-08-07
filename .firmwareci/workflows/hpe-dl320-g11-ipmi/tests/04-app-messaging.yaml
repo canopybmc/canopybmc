@@ -4,9 +4,7 @@ description: >-
   Enables (2Fh), BT Interface Capabilities (36h), Get System GUID (37h),
   Get Channel Auth Capabilities (38h), Get Session Info (3Dh), Get Channel
   Access (41h), Get Channel Info (42h), Get User Access (44h), Get User Name
-  (46h), Get Channel Cipher Suites (54h), Get System Interface Capabilities
-  (57h), and Get System Info Parameters (59h). Commands that may not be
-  supported on all builds carry on-error: continue.
+  (46h), Get Channel Cipher Suites (54h), and Get System Info Parameters (59h).
 
 defaults:
   transport: &local
@@ -33,23 +31,60 @@ stages:
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
             -U root -P [[attributes.BMCPassword]] -C 17
             raw 0x06 0x36
+      # 57h is only implemented by the 'arm' ipmid OEM provider, which reports
+      # SSIF capabilities. This platform's host interface is KCS (ipmi_kcs1,
+      # channel 15) and OBMC_ORG_IPMI_OEM_PROVIDERS is empty, so the handler is
+      # never registered and ipmid rejects the command with 0xC1.
       - cmd: shell
-        name: Get System Interface Capabilities (0x06 0x57)
+        name: Get System Interface Capabilities (0x06 0x57) rejected with 0xC1
         transport: *local
         options:
           timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x06 0x57 0x00 2>&1 || true
+          expect:
+            - regex: 'rsp=0xc1|Invalid command'
+
+  - name: Wait for SMBIOS System GUID source
+    steps:
+      - cmd: shell
+        name: Power host on so BIOS pushes SMBIOS (no-op if already on)
+        transport: *local
+        options:
+          timeout: "1m"
           on-error: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
             -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x57 0x00
+            chassis power on
+      - cmd: shell
+        name: Wait until smbios-mdr publishes a non-zero System UUID
+        transport: &bmc_ssh
+          proto: ssh
+          options:
+            host: "[[attributes.BMC]]"
+            user: "root"
+            password: "[[attributes.BMCPassword]]"
+        options:
+          timeout: "8m"
+        parameters:
+          command: >-
+            until busctl get-property xyz.openbmc_project.Smbios.MDR_V2
+            /xyz/openbmc_project/inventory/system/chassis/motherboard/bios
+            xyz.openbmc_project.Common.UUID UUID 2>/dev/null
+            | grep -qiE '[1-9a-f]'; do sleep 10; done;
+            echo "System GUID source ready"
+          expect:
+            - regex: 'System GUID source ready'
 
   - name: System Identity and Authentication
     steps:
@@ -58,14 +93,14 @@ stages:
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
             -U root -P [[attributes.BMCPassword]] -C 17
             raw 0x06 0x37
           expect:
-            - regex: '^[0-9a-f]{2}( [0-9a-f]{2}){15}$'
+            - regex: '^\s*[0-9a-f]{2}( [0-9a-f]{2}){15}\s*$'
+            - regex: '[1-9a-f]'
       - cmd: shell
         name: Get Channel Auth Capabilities (0x06 0x38) - ch14 admin
         transport: *local
@@ -94,16 +129,17 @@ stages:
   - name: Channel and User Information
     steps:
       - cmd: shell
-        name: Get Channel Access (0x06 0x41) - ch1
+        name: Get Channel Access (0x06 0x41) - ch1 present volatile
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
             -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x41 0x01 0x00
+            raw 0x06 0x41 0x01 0x80
+          expect:
+            - regex: '^\s*[0-9a-f]{2} [0-9a-f]{2}\s*$'
       - cmd: shell
         name: Get Channel Info (0x06 0x42) - ch1
         transport: *local
@@ -153,12 +189,13 @@ stages:
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
             -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x59 0x00 0x00 0x00
+            raw 0x06 0x59 0x00 0x00 0x00 0x00
+          expect:
+            - regex: '^\s*11 00\s*$'
 
   - name: Messaging via ipmitool Aliases
     steps:

@@ -38,7 +38,7 @@ stages:
             -U root -P [[attributes.BMCPassword]] -C 17
             raw 0x2c 0x07 0xdc 0x01 0x40 0x01 0x01
           expect:
-            - regex: '^[0-9a-f]'
+            - regex: '^\s*[0-9a-f]'
       - cmd: shell
         name: Get Temperature Reading (0x2c 0x10) - inlet air entity
         transport: *local
@@ -99,7 +99,7 @@ stages:
             -U root -P [[attributes.BMCPassword]] -C 17
             raw 0x2c 0x03 0xdc 0x00 0x00
           expect:
-            - regex: '^[0-9a-f]{2}'
+            - regex: '^\s*[0-9a-f]{2}'
 
   - name: DCMI Configuration
     steps:

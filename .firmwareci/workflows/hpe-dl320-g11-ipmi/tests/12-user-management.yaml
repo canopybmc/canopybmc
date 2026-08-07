@@ -255,7 +255,7 @@ stages:
             -U root -P [[attributes.BMCPassword]] -C 17
             raw 0x06 0x46 0x02
           expect:
-            - regex: '^(00 ?){8}'
+            - regex: '^\s*(?:00\s+){15}00\s*$'
 
       - cmd: shell
         name: Get User Access slot 2, ch1 should have no access
@@ -385,7 +385,7 @@ stages:
             -U root -P [[attributes.BMCPassword]] -C 17
             raw 0x06 0x46 0x02
           expect:
-            - regex: '^(00 ?){8}'
+            - regex: '^\s*(?:00\s+){15}00\s*$'
 
       - cmd: shell
         name: Login as fwcigap over LAN (slot 3 user is usable)
