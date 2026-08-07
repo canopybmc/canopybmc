@@ -3,8 +3,7 @@ description: >-
   Verify SDR Repository commands (Table G-1, §33): Get SDR Repository Info
   (20h), Get SDR Repository Allocation Info (21h), Reserve SDR Repository
   (22h), Get SDR (23h, first record header), and Get SDR Repository Time
-  (28h). Allocation Info and Repository Time carry on-error: continue as they
-  are not universally implemented.
+  (28h).
 
 defaults:
   transport: &local
@@ -71,12 +70,13 @@ stages:
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
             -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0a 0x28
+            raw 0x0a 0x28 2>&1 || true
+          expect:
+            - regex: 'rsp=0xc1|Invalid command'
 
   - name: SDR Repository via ipmitool Aliases
     steps:
