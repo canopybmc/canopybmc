@@ -1,0 +1,7 @@
+name: dl320g11_bios_update
+paths:
+  pldm: U63-bios-2.92.pldm
+  old_pldm: U63-bios-2.72.pldm
+  wrong_pldm: U54-bios-2.92.pldm
+#  old_bin: U63-bios-2.50-raw.bin
+uri: fwci://dl320g11_bios_update
