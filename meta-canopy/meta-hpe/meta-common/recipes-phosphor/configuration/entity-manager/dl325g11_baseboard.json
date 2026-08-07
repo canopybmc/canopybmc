@@ -150,6 +150,17 @@
             "DeviceName": "coretemp"
         },
         {
+            "MaxValue": 2000,
+            "MinValue": 0,
+            "Name": "total_power",
+            "Sensors": [
+                "PINPUT_PSU1",
+                "PINPUT_PSU2"
+            ],
+            "Type": "Sum",
+            "Units": "Watts"
+        },
+        {
             "Class": "fan",
             "FFGainCoefficient": 1,
             "FFOffCoefficient": 0,

@@ -1,0 +1,240 @@
+From e0591f0e9ff2c21628c1fec3e9a7dcdf328fb7ae Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Fri, 7 Aug 2026 07:18:34 +0200
+Subject: [PATCH] virtualSensor: make exprtk support optional
+
+exprtk is only used for the Expression field of the static JSON
+configuration. Sensors configured over D-Bus by entity-manager select
+their calculation by interface name and never parse an expression.
+
+Add a meson feature option, enabled by default. When disabled, the exprtk
+symbol table is replaced by a map-backed stand-in and a static JSON
+configuration carrying an Expression fails to load with an error.
+
+This drops roughly 1MB of text from the stripped binary.
+
+Upstream-Status: Pending
+
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ meson.build           | 12 +++++++----
+ meson.options         |  6 ++++++
+ src/virtualSensor.cpp | 21 +++++++++++++++++++
+ src/virtualSensor.hpp | 48 +++++++++++++++++++++++++++++++++++++++++++
+ test/meson.build      |  2 ++
+ 5 files changed, 85 insertions(+), 4 deletions(-)
+
+diff --git a/meson.build b/meson.build
+index b2d4227..0061779 100644
+--- a/meson.build
++++ b/meson.build
+@@ -12,11 +12,15 @@ project(
+ )
+ 
+ cpp = meson.get_compiler('cpp')
+-if cpp.has_header('exprtk.hpp')
+-    exprtk = declare_dependency()
++if get_option('exprtk').allowed()
++    if cpp.has_header('exprtk.hpp')
++        exprtk = declare_dependency()
++    else
++        subproject('exprtk', required: false)
++        exprtk = declare_dependency(include_directories: 'subprojects/exprtk')
++    endif
+ else
+-    subproject('exprtk', required: false)
+-    exprtk = declare_dependency(include_directories: 'subprojects/exprtk')
++    exprtk = declare_dependency(compile_args: ['-DNO_EXPRTK'])
+ endif
+ 
+ subdir('src')
+diff --git a/meson.options b/meson.options
+index 0fc2767..fbf69b0 100644
+--- a/meson.options
++++ b/meson.options
+@@ -1 +1,7 @@
+ option('tests', type: 'feature', description: 'Build tests')
++option(
++    'exprtk',
++    type: 'feature',
++    value: 'enabled',
++    description: 'Support Expression-based virtual sensors from the static JSON config. Disabling drops the exprtk dependency and leaves only the D-Bus calculation types (Sum, Average, Maximum, Minimum, ModifiedMedian).',
++)
+diff --git a/src/virtualSensor.cpp b/src/virtualSensor.cpp
+index 8d12285..65ac617 100644
+--- a/src/virtualSensor.cpp
++++ b/src/virtualSensor.cpp
+@@ -15,9 +15,11 @@ PHOSPHOR_LOG2_USING_WITH_FLAGS;
+ namespace phosphor::virtual_sensor
+ {
+ 
++#ifndef NO_EXPRTK
+ FuncMaxIgnoreNaN<double> VirtualSensor::funcMaxIgnoreNaN;
+ FuncSumIgnoreNaN<double> VirtualSensor::funcSumIgnoreNaN;
+ FuncIfNan<double> VirtualSensor::funcIfNan;
++#endif
+ 
+ std::map<std::string, ValueIface::Unit> unitMap = {
+     {"temperature", ValueIface::Unit::DegreesC},
+@@ -341,6 +343,18 @@ void VirtualSensor::initVirtualSensor(const Json& sensorConfig,
+         }
+     }
+ 
++#ifdef NO_EXPRTK
++    symbols.add_constants();
++
++    if (!calculationIfaces.contains(exprStr))
++    {
++        error(
++            "Expression \"{EXPRESSION}\" requires expression support, which is "
++            "not compiled in. Use a D-Bus calculation type instead.",
++            "EXPRESSION", exprStr);
++        throw std::runtime_error("Expression support not compiled in");
++    }
++#else
+     symbols.add_constants();
+     symbols.add_package(vecopsPackage);
+     symbols.add_function("maxIgnoreNaN", funcMaxIgnoreNaN);
+@@ -365,6 +379,7 @@ void VirtualSensor::initVirtualSensor(const Json& sensorConfig,
+         }
+         throw std::runtime_error("Expression compilation failed");
+     }
++#endif
+ 
+     /* Print all parameters for debug purpose only */
+     printParams(paramMap);
+@@ -412,8 +427,10 @@ void VirtualSensor::initVirtualSensor(
+ 
+     createThresholds(thresholds, objPath, units);
+     symbols.add_constants();
++#ifndef NO_EXPRTK
+     symbols.add_package(vecopsPackage);
+     expression.register_symbol_table(symbols);
++#endif
+ 
+     createAssociation(objPath, entityPath);
+     /* Print all parameters for debug purpose only */
+@@ -477,9 +494,13 @@ void VirtualSensor::updateVirtualSensor()
+             throw std::invalid_argument("ParamName not found in symbols");
+         }
+     }
++#ifdef NO_EXPRTK
++    auto val = calculateValue(exprStr, paramMap);
++#else
+     auto val = (!calculationIfaces.contains(exprStr))
+                    ? expression.value()
+                    : calculateValue(exprStr, paramMap);
++#endif
+ 
+     /* Set sensor value to dbus interface */
+     setSensorValue(val);
+diff --git a/src/virtualSensor.hpp b/src/virtualSensor.hpp
+index 1d8ef31..a6c81e7 100644
+--- a/src/virtualSensor.hpp
++++ b/src/virtualSensor.hpp
+@@ -1,7 +1,9 @@
+ #pragma once
+ 
+ #include "dbusSensor.hpp"
++#ifndef NO_EXPRTK
+ #include "exprtkTools.hpp"
++#endif
+ #include "thresholds.hpp"
+ 
+ #include <nlohmann/json.hpp>
+@@ -18,6 +20,45 @@ namespace phosphor::virtual_sensor
+ 
+ PHOSPHOR_LOG2_USING_WITH_FLAGS;
+ 
++#ifdef NO_EXPRTK
++/** @brief Minimal stand-in for exprtk::symbol_table.
++ *
++ * Virtual sensors configured over D-Bus never evaluate an expression: the
++ * calculation is selected by interface name and performed by calculateValue().
++ * exprtk's symbol table is used only as a name -> double store on that path, so
++ * when expression support is compiled out this replaces it and drops the
++ * dependency on the exprtk headers, which cost ~1MB of text.
++ */
++class SymbolTable
++{
++  public:
++    struct Variable
++    {
++        double value = std::numeric_limits<double>::quiet_NaN();
++        double& ref()
++        {
++            return value;
++        }
++    };
++
++    void create_variable(const std::string& name)
++    {
++        vars[name];
++    }
++
++    Variable* get_variable(const std::string& name)
++    {
++        auto it = vars.find(name);
++        return (it == vars.end()) ? nullptr : &it->second;
++    }
++
++    void add_constants() {}
++
++  private:
++    std::map<std::string, Variable> vars;
++};
++#endif
++
+ using BasicVariantType =
+     std::variant<std::string, int64_t, uint64_t, double, int32_t, uint32_t,
+                  int16_t, uint16_t, uint8_t, bool, std::vector<std::string>>;
+@@ -155,12 +196,17 @@ class VirtualSensor : public ValueObject
+     std::string entityPath;
+     /** @brief Expression string for virtual sensor value calculations */
+     std::string exprStr;
++#ifdef NO_EXPRTK
++    /** @brief parameter value store, see SymbolTable */
++    SymbolTable symbols{};
++#else
+     /** @brief symbol table from exprtk */
+     exprtk::symbol_table<double> symbols{};
+     /** @brief expression from exprtk to calculate sensor value */
+     exprtk::expression<double> expression{};
+     /** @brief The vecops package so the expression can use vectors */
+     exprtk::rtl::vecops::package<double> vecopsPackage;
++#endif
+     /** @brief The maximum valid value for an input sensor **/
+     double maxValidInput = std::numeric_limits<double>::infinity();
+     /** @brief The minimum valid value for an input sensor **/
+@@ -180,9 +226,11 @@ class VirtualSensor : public ValueObject
+     /** @brief The association interface object */
+     std::unique_ptr<AssociationObject> associationIface;
+ 
++#ifndef NO_EXPRTK
+     static FuncMaxIgnoreNaN<double> funcMaxIgnoreNaN;
+     static FuncSumIgnoreNaN<double> funcSumIgnoreNaN;
+     static FuncIfNan<double> funcIfNan;
++#endif
+ 
+     /** @brief Read config from json object and initialize sensor data
+      * for each virtual sensor
+diff --git a/test/meson.build b/test/meson.build
+index 8f27ad2..1d3a366 100644
+--- a/test/meson.build
++++ b/test/meson.build
+@@ -4,6 +4,7 @@ test_inc = include_directories('.')
+ 
+ common_dep = [gtest, gmock]
+ 
++if get_option('exprtk').allowed()
+ test_exprtk_tools = executable(
+     'test_exprtk_tools',
+     'test_exprtk_tools.cpp',
+@@ -12,3 +13,4 @@ test_exprtk_tools = executable(
+ )
+ 
+ test('test_exprtk_tools', test_exprtk_tools)
++endif
+-- 
+2.39.5
+

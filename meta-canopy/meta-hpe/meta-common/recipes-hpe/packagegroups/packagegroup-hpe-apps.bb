@@ -44,6 +44,7 @@ RDEPENDS:${PN}-system = " \
         entity-manager \
         fru-synthesizer \
         gxp-chif-service \
+        phosphor-virtual-sensor \
         platform-init \
         smbios-mdr \
         udev-gxp-i2c-passthrough \
