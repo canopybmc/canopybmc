@@ -255,10 +255,6 @@ stages:
             -U root -P [[attributes.BMCPassword]] -C 17
             raw 0x06 0x46 0x02
           expect:
-            # ipmitool raw prints " %2.2x" per byte, so the line has a leading
-            # space -- ^ must allow it. All 16 name bytes must be zero: an 8-char
-            # name is null-padded to 16, so a short pattern would also match a
-            # populated slot.
             - regex: '^\s*(?:00\s+){15}00\s*$'
 
       - cmd: shell
@@ -389,10 +385,6 @@ stages:
             -U root -P [[attributes.BMCPassword]] -C 17
             raw 0x06 0x46 0x02
           expect:
-            # ipmitool raw prints " %2.2x" per byte, so the line has a leading
-            # space -- ^ must allow it. All 16 name bytes must be zero: an 8-char
-            # name is null-padded to 16, so a short pattern would also match a
-            # populated slot.
             - regex: '^\s*(?:00\s+){15}00\s*$'
 
       - cmd: shell
