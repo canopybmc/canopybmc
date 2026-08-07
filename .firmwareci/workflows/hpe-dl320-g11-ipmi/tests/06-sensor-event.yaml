@@ -1,49 +1,140 @@
 name: "IPMI: Sensor Commands (NetFn 0x04)"
 description: >-
-  Verify Sensor NetFn commands (Table G-1, §35). Sensor commands target sensor
-  number 0x01 (SDR-assigned): Get Sensor Reading (2Dh), Get Sensor Threshold
-  (27h), and Get Sensor Type (2Fh). All carry on-error: continue as sensor
-  numbers are dynamically assigned.
+  Verify Sensor NetFn commands (Table G-1, §35): Get Sensor Reading (2Dh), Get
+  Sensor Threshold (27h), and Get Sensor Type (2Fh).
+  .
+  A set of sensors is BMC-served and present with the host powered
+  off: both PSUs
+  (IINPUT/IOUTPUT/PINPUT/POUTPUT/TEMP1/VINPUT/VOUTPUT/FAN1 per PSU)
+  and the GXP SoC temperature. Those are checked first, before the
+  host is powered on. The host is then powered on, since CPU and DIMM
+  sensors only enter the SDR after the host is up.
+  .
+  Sensor numbers are assigned dynamically by dbus-sdr, so the per-sensor
+  commands resolve one from the SDR at run time rather than hardcoding it.
+  GXP_Temp is used as the anchor because it is present either way.
 
 defaults:
   transport: &local
     proto: local
 
 stages:
+  - name: Baseline Sensors (host power not required)
+    steps:
+      - cmd: shell
+        name: Poll until the SDR is populated
+        transport: *local
+        options:
+          timeout: "5m"
+        parameters:
+          command: >-
+            while true; do
+            N=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 sdr elist 2>/dev/null | wc -l);
+            [ "$N" -gt 0 ] && echo "$N sensor records" && exit 0;
+            sleep 5;
+            done
+      - cmd: shell
+        name: PSU1, PSU2 and GXP temperature are present with the host off
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            sdr elist
+          expect:
+            - regex: 'PSU1'
+            - regex: 'PSU2'
+            - regex: 'GXP_Temp'
+
   - name: Sensor Commands
     steps:
       - cmd: shell
-        name: Get Sensor Reading (0x04 0x2d) - sensor number 1
+        name: Get Sensor Reading (0x04 0x2d) - gxp temp sensor
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
         parameters:
           command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x04 0x2d 0x01
-      - cmd: shell
-        name: Get Sensor Threshold (0x04 0x27) - sensor number 1
-        transport: *local
-        options:
-          timeout: "30s"
-          on-error: continue
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x04 0x27 0x01
-      - cmd: shell
-        name: Get Sensor Type (0x04 0x2f) - sensor number 1
-        transport: *local
-        options:
-          timeout: "30s"
-          on-error: continue
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x04 0x2f 0x01
+            L=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 sdr elist 2>/dev/null);
+            N=$(echo "$L" | grep -i gxp | head -1 | awk -F'|' '{gsub(/[^0-9a-fA-F]/,"",$2); print "0x"$2}');
+            [ -z "$N" ] && N=$(echo "$L" | head -1 | awk -F'|' '{gsub(/[^0-9a-fA-F]/,"",$2); print "0x"$2}');
+            echo "sensor number: $N";
+            ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 raw 0x04 0x2d $N
           expect:
             - regex: '^\s*[0-9a-f]{2}'
+      - cmd: shell
+        name: Get Sensor Threshold (0x04 0x27) - gxp temp sensor
+        transport: *local
+        options:
+          timeout: "30s"
+          on-error: continue
+        parameters:
+          command: >-
+            L=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 sdr elist 2>/dev/null);
+            N=$(echo "$L" | grep -i gxp | head -1 | awk -F'|' '{gsub(/[^0-9a-fA-F]/,"",$2); print "0x"$2}');
+            [ -z "$N" ] && N=$(echo "$L" | head -1 | awk -F'|' '{gsub(/[^0-9a-fA-F]/,"",$2); print "0x"$2}');
+            echo "sensor number: $N";
+            ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 raw 0x04 0x27 $N
+      # Get sensor type does not function properly with dynamic-sensors
+      - cmd: shell
+        name: Get Sensor Type (0x04 0x2f) - gxp temp sensor
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            L=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 sdr elist 2>/dev/null);
+            N=$(echo "$L" | grep -i gxp | head -1 | awk -F'|' '{gsub(/[^0-9a-fA-F]/,"",$2); print "0x"$2}');
+            [ -z "$N" ] && N=$(echo "$L" | head -1 | awk -F'|' '{gsub(/[^0-9a-fA-F]/,"",$2); print "0x"$2}');
+            echo "sensor number: $N";
+            ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 raw 0x04 0x2f $N 2>&1 || true
+          expect:
+            - regex: 'rsp=0xcb|Requested sensor, data, or record not found'
+
+  - name: Power On Host
+    steps:
+      - cmd: shell
+        name: Chassis power on (no-op if already on)
+        transport: *local
+        options:
+          timeout: "1m"
+          on-error: continue
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            chassis power on
+      - cmd: shell
+        name: Poll chassis status until host is on
+        transport: *local
+        options:
+          timeout: "8m"
+        parameters:
+          command: >-
+            while true; do
+            S=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 raw 0x00 0x01 2>/dev/null | awk '{print $1}');
+            [ -n "$S" ] && [ $(( 0x$S & 1 )) -eq 1 ] && echo "host on (0x$S)" && exit 0;
+            sleep 5;
+            done
+
+  - name: Sensors With Host On
+    steps:
+      - cmd: shell
+        name: Baseline sensors still present after power on
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            N=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 sdr elist | wc -l);
+            echo "sensor records: $N";
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            sdr elist
+          expect:
+            - regex: 'PSU1'
+            - regex: 'PSU2'
+            - regex: 'GXP_Temp'
+            - regex: 'Pwm'
