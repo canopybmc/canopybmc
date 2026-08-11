@@ -113,7 +113,9 @@
                 }
             ],
             "Type": "GxpTempSensor",
-            "DeviceName": "coretemp"
+            "DeviceName": "coretemp",
+            "EntityId": "0x42",
+            "EntityInstance": 1
         },
         {
             "MaxValue": 2000,

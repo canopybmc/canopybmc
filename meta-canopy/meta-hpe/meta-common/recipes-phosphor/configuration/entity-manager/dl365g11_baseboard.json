@@ -32,7 +32,9 @@
                     "Value": 0
                 }
             ],
-            "Type": "EMC1412"
+            "Type": "EMC1412",
+            "EntityId": "0x42",
+            "EntityInstance": 2
         },
         {
             "Address": "0x4c",
@@ -203,7 +205,9 @@
                 }
             ],
             "Type": "GxpTempSensor",
-            "DeviceName": "coretemp"
+            "DeviceName": "coretemp",
+            "EntityId": "0x42",
+            "EntityInstance": 1
         },
         {
             "MaxValue": 2000,
