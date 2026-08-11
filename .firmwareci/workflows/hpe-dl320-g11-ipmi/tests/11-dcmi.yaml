@@ -1,10 +1,16 @@
 name: "IPMI: DCMI Group Extension Commands (NetFn 0x2c, Group 0xDC)"
 description: >-
   Verify DCMI 1.5 commands (group extension 0xDC). Get DCMI Capability Info,
-  Get Management Controller ID String, Get Temperature Reading, and Get Power
-  Reading are expected to work. Get DCMI Sensor Info (0x07), Get Asset Tag
-  (0x06), and Get Power Limit (0x03) carry on-error: continue as support
-  varies across firmware builds.
+  Get Management Controller ID String, Get DCMI Sensor Info, Get Temperature
+  Reading, and Get Power Reading are expected to work. Temperature commands
+  query the baseboard entity (0x42), backed by GXP Temp; this platform has no
+  inlet air sensor. Asset Tag is exercised as a set/get/restore round-trip,
+  since Get Asset Tag returns 0xC9 when no tag is configured. Get Power Limit
+  (0x03) returns 0x80 until a power cap is enabled.
+
+variables:
+  asset_tag_orig: "__unsaved__"
+  power_limit_orig: "__unsaved__"
 
 defaults:
   transport: &local
@@ -14,7 +20,7 @@ stages:
   - name: DCMI Capability Info
     steps:
       - cmd: shell
-        name: Get DCMI Capability Info (0x2c 0x01) - platform capabilities
+        name: Get DCMI Capability Info (0x2c 0x01)
         transport: *local
         options:
           timeout: "30s"
@@ -27,20 +33,19 @@ stages:
   - name: DCMI Sensor and Temperature
     steps:
       - cmd: shell
-        name: Get DCMI Sensor Info (0x2c 0x07) - temperature sensors
+        name: Get DCMI Sensor Info (0x2c 0x07)
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
             -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x2c 0x07 0xdc 0x01 0x40 0x01 0x01
+            raw 0x2c 0x07 0xdc 0x01 0x42 0x01 0x01
           expect:
-            - regex: '^\s*[0-9a-f]'
+            - regex: '^\s*dc\s+01\s+01\s+[0-9a-f]{2}\s+[0-9a-f]{2}\s*$'
       - cmd: shell
-        name: Get Temperature Reading (0x2c 0x10) - inlet air entity
+        name: Get Temperature Reading (0x2c 0x10)
         transport: *local
         options:
           timeout: "30s"
@@ -48,21 +53,12 @@ stages:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
             -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x2c 0x10 0xdc 0x01 0x40 0x01 0x00
+            raw 0x2c 0x10 0xdc 0x01 0x42 0x01 0x00
+          expect:
+            - regex: '^\s*dc\s+01\s+01\s+[0-9a-f]{2}\s+01\s*$'
 
   - name: DCMI Management Info
     steps:
-      - cmd: shell
-        name: Get Asset Tag (0x2c 0x06)
-        transport: *local
-        options:
-          timeout: "30s"
-          on-error: continue
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x2c 0x06 0xdc 0x00 0x10
       - cmd: shell
         name: Get Management Controller ID String (0x2c 0x09)
         transport: *local
@@ -74,14 +70,115 @@ stages:
             -U root -P [[attributes.BMCPassword]] -C 17
             raw 0x2c 0x09 0xdc 0x00 0x10
 
-  - name: DCMI Power
+  - name: DCMI Asset Tag Round-Trip
     steps:
       - cmd: shell
-        name: Get DCMI Power Reading (0x2c 0x02) - current system power
+        name: Save current asset tag into asset_tag_orig
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
+        parameters:
+          command: |
+            set -u
+            IPMI="ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17"
+            OUT=$($IPMI dcmi asset_tag 2>&1)
+            if printf '%s\n' "$OUT" | grep -q 'Asset tag[ ]*:'; then
+              printf '%s\n' "$OUT" \
+                | sed -n 's/^[ ]*Asset tag[ ]*:[ ]*//p' \
+                | head -1 | tr -d '\r\n'
+            elif printf '%s\n' "$OUT" | grep -q 'Parameter out of range'; then
+              printf '__empty__'
+            else
+              printf '%s\n' "$OUT"
+              echo "FAIL: could not read current asset tag"
+              exit 1
+            fi
+          variable: asset_tag_orig
+
+      - cmd: shell
+        name: Set Asset Tag (0x2c 0x08) to FWCITAG1
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x2c 0x08 0xdc 0x00 0x08
+            0x46 0x57 0x43 0x49 0x54 0x41 0x47 0x31
+          expect:
+            - regex: '^\s*dc\s+08\s*$'
+
+      - cmd: shell
+        name: Get Asset Tag (0x2c 0x06) returns the value just set
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x2c 0x06 0xdc 0x00 0x10
+          expect:
+            - regex: '^\s*dc\s+08\s+46\s+57\s+43\s+49\s+54\s+41\s+47\s+31\s*$'
+
+      - cmd: shell
+        name: dcmi asset_tag (alias) reports FWCITAG1
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            dcmi asset_tag
+          expect:
+            - regex: 'Asset tag\s*:\s*FWCITAG1'
+
+  - name: DCMI Asset Tag Restore
+    steps:
+      - cmd: shell
+        name: Restore original asset tag
+        transport: *local
+        options:
+          timeout: "60s"
+        parameters:
+          command: |
+            set -u
+            IPMI="ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17"
+            ORIG='{{ asset_tag_orig }}'
+            if [ "$ORIG" = "__unsaved__" ]; then
+              echo "asset_tag_restored=skipped"
+              exit 0
+            fi
+            [ "$ORIG" = "__empty__" ] && ORIG=""
+            LEN=$(printf '%s' "$ORIG" | wc -c)
+            echo "restoring_asset_tag=[$ORIG] len=$LEN"
+            if [ "$LEN" -eq 0 ]; then
+              $IPMI raw 0x2c 0x08 0xdc 0x00 0x00 || exit 1
+            else
+              OFF=0
+              while [ "$OFF" -lt "$LEN" ]; do
+                END=$((OFF + 16))
+                [ "$END" -gt "$LEN" ] && END=$LEN
+                N=$((END - OFF))
+                HEX=$(printf '%s' "$ORIG" | cut -c$((OFF + 1))-${END} | tr -d '\n' \
+                      | od -An -tx1 | awk '{for(i=1;i<=NF;i++) printf "0x%s ", $i}')
+                $IPMI raw 0x2c 0x08 0xdc $(printf '0x%02x' "$OFF") $(printf '0x%02x' "$N") $HEX || exit 1
+                OFF=$END
+              done
+            fi
+            echo "asset_tag_restored=ok"
+          expect:
+            - regex: 'asset_tag_restored=(ok|skipped)'
+
+  - name: DCMI Power
+    steps:
+      - cmd: shell
+        name: Get DCMI Power Reading (0x2c 0x02)
+        transport: *local
+        options:
+          timeout: "30s"
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
@@ -92,19 +189,162 @@ stages:
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
+        parameters:
+          command: |
+            set -u
+            IPMI="ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17"
+            OUT=$($IPMI raw 0x2c 0x03 0xdc 0x00 0x00 2>&1)
+            RC=$?
+            printf '%s\n' "$OUT"
+            if [ "$RC" -eq 0 ]; then
+              echo "power_limit=set"
+              exit 0
+            fi
+            if printf '%s\n' "$OUT" | grep -q 'rsp=0x80'; then
+              echo "power_limit=not_set"
+              exit 0
+            fi
+            echo "FAIL: unexpected response to Get Power Limit"
+            exit 1
+          expect:
+            - regex: 'power_limit=(set|not_set)'
+
+  - name: DCMI Power Limit Round-Trip
+    steps:
+      - cmd: shell
+        name: Save power limit state into power_limit_orig
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: |
+            set -u
+            IPMI="ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17"
+            OUT=$($IPMI raw 0x2c 0x03 0xdc 0x00 0x00 2>&1)
+            RC=$?
+            if [ "$RC" -eq 0 ]; then
+              printf 'enabled %s' "$OUT"
+            elif printf '%s\n' "$OUT" | grep -q 'rsp=0x80'; then
+              printf 'disabled'
+            else
+              printf '%s\n' "$OUT"
+              echo "FAIL: could not read current power limit"
+              exit 1
+            fi
+          variable: power_limit_orig
+          expect:
+            - regex: '^(enabled|disabled)'
+
+      - cmd: shell
+        name: Set Power Limit (0x2c 0x04) to 800W
+        transport: *local
+        options:
+          timeout: "30s"
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
             -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x2c 0x03 0xdc 0x00 0x00
+            raw 0x2c 0x04 0xdc 0x00 0x00 0x00 0x00 0x20 0x03
+            0x70 0x17 0x00 0x00 0x00 0x00 0x01 0x00
           expect:
-            - regex: '^\s*[0-9a-f]{2}'
+            - regex: '^\s*dc\s*$'
+
+      - cmd: shell
+        name: Activate Power Limit (0x2c 0x05)
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            raw 0x2c 0x05 0xdc 0x01 0x00 0x00
+          expect:
+            - regex: '^\s*dc\s*$'
+
+      - cmd: shell
+        name: Get Power Limit (0x2c 0x03) reports 800W
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: |
+            set -u
+            IPMI="ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17"
+            OUT=$($IPMI raw 0x2c 0x03 0xdc 0x00 0x00 2>&1)
+            RC=$?
+            printf '%s\n' "$OUT"
+            if [ "$RC" -ne 0 ]; then
+              echo "FAIL: Get Power Limit failed after activation"
+              exit 1
+            fi
+            B=$(printf '%s' "$OUT" | tr -s ' \n' ' ' | sed 's/^ //')
+            LO=$(echo "$B" | cut -d' ' -f5)
+            HI=$(echo "$B" | cut -d' ' -f6)
+            WATTS=$((0x$HI * 256 + 0x$LO))
+            echo "power_limit_watts=$WATTS"
+            if [ "$WATTS" -ne 800 ]; then
+              echo "FAIL: expected 800W"
+              exit 1
+            fi
+          expect:
+            - regex: 'power_limit_watts=800'
+
+      - cmd: shell
+        name: dcmi power get_limit (alias) reports 800W
+        transport: *local
+        options:
+          timeout: "30s"
+        parameters:
+          command: >-
+            ipmitool -I lanplus -H [[attributes.BMC]]
+            -U root -P [[attributes.BMCPassword]] -C 17
+            dcmi power get_limit
+          expect:
+            - regex: '800\s+Watts'
+
+  - name: DCMI Power Limit Restore
+    steps:
+      - cmd: shell
+        name: Restore original power limit state
+        transport: *local
+        options:
+          timeout: "60s"
+        parameters:
+          command: |
+            set -u
+            IPMI="ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17"
+            LINE='{{ power_limit_orig }}'
+            if [ "$LINE" = "__unsaved__" ]; then
+              echo "power_limit_restored=skipped"
+              exit 0
+            fi
+            STATE=${LINE%% *}
+            if [ "$STATE" = "enabled" ]; then
+              B=$(printf '%s' "${LINE#enabled }" | tr -s ' \n' ' ' | sed 's/^ //')
+              EXC=0x$(echo "$B" | cut -d' ' -f4)
+              L1=0x$(echo "$B" | cut -d' ' -f5)
+              L2=0x$(echo "$B" | cut -d' ' -f6)
+              C1=0x$(echo "$B" | cut -d' ' -f7)
+              C2=0x$(echo "$B" | cut -d' ' -f8)
+              C3=0x$(echo "$B" | cut -d' ' -f9)
+              C4=0x$(echo "$B" | cut -d' ' -f10)
+              S1=0x$(echo "$B" | cut -d' ' -f13)
+              S2=0x$(echo "$B" | cut -d' ' -f14)
+              $IPMI raw 0x2c 0x04 0xdc 0x00 0x00 0x00 $EXC $L1 $L2 $C1 $C2 $C3 $C4 0x00 0x00 $S1 $S2 || exit 1
+              $IPMI raw 0x2c 0x05 0xdc 0x01 0x00 0x00 || exit 1
+              echo "power_limit_restored=enabled"
+            else
+              $IPMI raw 0x2c 0x05 0xdc 0x00 0x00 0x00 || exit 1
+              echo "power_limit_restored=disabled"
+            fi
+          expect:
+            - regex: 'power_limit_restored=(enabled|disabled|skipped)'
 
   - name: DCMI Configuration
     steps:
       - cmd: shell
-        name: Get DCMI Configuration Parameters (0x2c 0x13) - power reading
+        name: Get DCMI Configuration Parameters (0x2c 0x13)
         transport: *local
         options:
           timeout: "30s"
@@ -121,7 +361,6 @@ stages:
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
@@ -134,7 +373,6 @@ stages:
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
@@ -153,17 +391,4 @@ stages:
             -U root -P [[attributes.BMCPassword]] -C 17
             dcmi get_mc_id_string
           expect:
-            - regex: 'Management Controller ID'
-      - cmd: shell
-        name: dcmi asset_tag (alias)
-        transport: *local
-        options:
-          timeout: "30s"
-          on-error: continue
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            dcmi asset_tag
-          expect:
-            - regex: 'Asset tag'
+            - regex: 'Get Management Controller Identifier String: hpe-proliant-g11'
