@@ -1,4 +1,4 @@
-From 330c0d82ef0a3122eb1d83f3af7379aeedfb49bb Mon Sep 17 00:00:00 2001
+From 1c2db28c92d9dc1d97aa50673cad7f11bbcd6be6 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 22 Jan 2026 14:57:52 +0100
 Subject: [PATCH] devicetree-vpd: add manufacturer parsing
@@ -29,6 +29,3 @@ index 8c9878b..34358eb 100644
  };
  
  bool MachineContext::keyNodeExists()
--- 
-2.52.0
-

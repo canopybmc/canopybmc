@@ -1,4 +1,4 @@
-From 3a60aa4722f0ac38f8d1019d7ffd89b008ffca7e Mon Sep 17 00:00:00 2001
+From fc180d85cc934e0b85673029ba25ed784f044ce1 Mon Sep 17 00:00:00 2001
 From: Alexander Hansen <alexander.hansen@9elements.com>
 Date: Wed, 1 Jul 2026 14:18:29 +0200
 Subject: [PATCH] schemas/firmware: allow for updating spi partition
@@ -46,15 +46,14 @@ Tested: TODO
 Change-Id: Ifd0fa059d7b4b597d860bb0f9509282f6202f372
 Signed-off-by: Alexander Hansen <alexander.hansen@9elements.com>
 ---
-Upstream-Status: Pending
  schemas/firmware.json | 5 +++++
  1 file changed, 5 insertions(+)
 
 diff --git a/schemas/firmware.json b/schemas/firmware.json
-index ba32140..52da6be 100644
+index 39fcb13..a52aacf 100644
 --- a/schemas/firmware.json
 +++ b/schemas/firmware.json
-@@ -95,6 +95,10 @@
+@@ -100,6 +100,10 @@
                      "description": "The index of the SPI device connected to that controller",
                      "type": "number"
                  },
@@ -65,7 +64,7 @@ index ba32140..52da6be 100644
                  "MuxOutputs": {
                      "$ref": "#/$defs/MuxOutputs"
                  },
-@@ -107,6 +111,7 @@
+@@ -112,6 +116,7 @@
                  "Type",
                  "SPIControllerIndex",
                  "SPIDeviceIndex",
@@ -73,6 +72,3 @@ index ba32140..52da6be 100644
                  "MuxOutputs",
                  "FirmwareInfo"
              ]
--- 
-2.54.0
-

@@ -1,7 +1,6 @@
-From 9d1b3e4fc8655791bd0b3b02a18c7465c806a561 Mon Sep 17 00:00:00 2001
+From 304ba790ecf13a0d06efe9a318a70ace927c3bbc Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Fri, 13 Feb 2026 11:33:03 +0100
-Upstream-Status: Pending
 Subject: [PATCH] devicetree-vpd-parser: add baseboard (PCA) VPD support
 
 Expose baseboard-level Vital Product Data (PCA serial number and PCA
@@ -162,6 +161,3 @@ index 3945b58..cedf22d 100644
 -    static constexpr auto nodeBasePath = "/proc/device-tree/";
 +    std::string dtBasePath;
  };
--- 
-2.53.0
-

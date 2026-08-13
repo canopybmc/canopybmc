@@ -1,6 +1,6 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From 9fe63c5ed9368f8394353bbcc3ca4226165d368e Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
-Date: Wed, 18 Jun 2026 00:00:00 +0000
+Date: Thu, 18 Jun 2026 00:00:00 +0000
 Subject: [PATCH] fru-device: load synthetic FRUs from /etc/fru
 
 fru-device already loads a single file-based "baseboard" FRU from
@@ -25,11 +25,14 @@ Upstream-Status: Inappropriate [HPE platform integration]
 
 Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
 ---
+ src/fru_device/fru_device.cpp | 54 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 54 insertions(+)
+
 diff --git a/src/fru_device/fru_device.cpp b/src/fru_device/fru_device.cpp
-index 2b73b7694..3e47c6a8c 100644
+index 27b085d..f42a359 100644
 --- a/src/fru_device/fru_device.cpp
 +++ b/src/fru_device/fru_device.cpp
-@@ -1003,6 +1003,59 @@ static bool readBaseboardFRU(std::vector<uint8_t>& baseboardFRU)
+@@ -998,6 +998,59 @@ static bool readBaseboardFRU(std::vector<uint8_t>& baseboardFRU)
      return true;
  }
  
@@ -89,13 +92,11 @@ index 2b73b7694..3e47c6a8c 100644
  bool writeFruByteData(bool is16Bit, int file, uint8_t address, uint16_t index,
                        uint8_t byteData)
  {
-@@ -1320,6 +1373,7 @@ void rescanBusses(
-                         busmap.try_emplace(0, std::make_shared<DeviceMap>());
-                     bus0.first->second->emplace(0, baseboardFRU);
-                 }
-+                loadSyntheticFRUs(busmap);
-                 for (auto devicemap : busmap)
-                 {
-                     for (auto device : *devicemap.second)
---
-2.43.0
+@@ -1229,6 +1282,7 @@ static void publishAllFrus(BusMap& busmap, FruDetails& fruDetails,
+         auto bus0 = busmap.try_emplace(0, std::make_shared<DeviceMap>());
+         bus0.first->second->emplace(0, baseboardFRU);
+     }
++    loadSyntheticFRUs(busmap);
+     for (auto devicemap : busmap)
+     {
+         for (auto device : *devicemap.second)

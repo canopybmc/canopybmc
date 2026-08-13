@@ -1,4 +1,4 @@
-From 74e4ee8cfaa5e4c919b92117ea1a075a465a4fa0 Mon Sep 17 00:00:00 2001
+From 11cb2d7ee5473af92329d05ce1a581a1f11ec0db Mon Sep 17 00:00:00 2001
 From: Tan Siewert <tan.siewert@9elements.com>
 Date: Mon, 13 Apr 2026 14:12:04 +0200
 Subject: [PATCH] entity-manager: avoid probing own D-Bus name
@@ -96,10 +96,10 @@ Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
  1 file changed, 9 insertions(+)
 
 diff --git a/src/entity_manager/perform_scan.cpp b/src/entity_manager/perform_scan.cpp
-index 4442b2f..76bb495 100644
+index 0d71256..f9548a5 100644
 --- a/src/entity_manager/perform_scan.cpp
 +++ b/src/entity_manager/perform_scan.cpp
-@@ -94,6 +94,15 @@ static void processDbusObjects(
+@@ -104,6 +104,15 @@ static void processDbusObjects(
  
          for (const auto& [busname, ifaces] : object)
          {
@@ -115,6 +115,3 @@ index 4442b2f..76bb495 100644
              for (const std::string& iface : ifaces)
              {
                  // The 3 default org.freedeskstop interfaces (Peer,
--- 
-2.53.0
-

@@ -1,4 +1,4 @@
-From d03e050a5b529ba9a4aea7be29b22ec3ac0f440b Mon Sep 17 00:00:00 2001
+From 5f1261cede1e14d9dabc4710ff468e647035b457 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 22 Jan 2026 12:43:08 +0100
 Subject: [PATCH] devicetree-vpd: add part-number parsing
@@ -31,6 +31,3 @@ index f936ceb..8c9878b 100644
  };
  
  bool MachineContext::keyNodeExists()
--- 
-2.52.0
-
