@@ -1,7 +1,7 @@
-From 5a190e960675d35eb60d775a12ecede3810e14c3 Mon Sep 17 00:00:00 2001
+From 9bb830a56e966cdb6d9f14f1292736a4a833b267 Mon Sep 17 00:00:00 2001
 From: Oliver Brewka <oliver.brewka@9elements.com>
 Date: Wed, 22 Jul 2026 15:57:48 +0200
-Subject: [PATCH 2/6] Add phosphor-logging and PDI deps
+Subject: [PATCH] Add phosphor-logging and PDI deps
 
 Follow-up patches depend on phosphor-logging and
 phosphor-dbus-interfaces. This patch adds the wrap files and declares
@@ -19,7 +19,7 @@ Signed-off-by: Oliver Brewka <oliver.brewka@9elements.com>
  create mode 100644 subprojects/phosphor-logging.wrap
 
 diff --git a/meson.build b/meson.build
-index f0ba3e7..68108a2 100644
+index 8cb43b5..326cf84 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -10,7 +10,8 @@ gpiodcxx_dep = dependency('libgpiodcxx', default_options: ['bindings=cxx'])
@@ -56,6 +56,3 @@ index 0000000..71eee8b
 +
 +[provide]
 +phosphor-logging = phosphor_logging_dep
--- 
-2.53.0
-

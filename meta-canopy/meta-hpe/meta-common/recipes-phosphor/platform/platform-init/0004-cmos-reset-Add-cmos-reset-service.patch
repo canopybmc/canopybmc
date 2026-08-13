@@ -1,7 +1,7 @@
-From c9587458e328f5da931eb4e91e988bfda3a0f23b Mon Sep 17 00:00:00 2001
+From 29a1110becfd969064fd0a8785f0f1c37c889ae4 Mon Sep 17 00:00:00 2001
 From: Oliver Brewka <oliver.brewka@9elements.com>
 Date: Mon, 16 Mar 2026 06:22:02 +0100
-Subject: [PATCH 3/6] cmos-reset: Add cmos reset service
+Subject: [PATCH] cmos-reset: Add cmos reset service
 
 In order to support a cmos reset / clear, add a dbus service that
 exposes the Reset method from xyz.openbmc_project.Common.FactoryReset.
@@ -209,7 +209,7 @@ index 0000000..c45ce3a
 +[Install]
 +WantedBy=multi-user.target
 diff --git a/meson.build b/meson.build
-index 68108a2..1310b05 100644
+index 326cf84..3a3cb0a 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -20,6 +20,7 @@ cli11_dep = dependency(
@@ -220,7 +220,7 @@ index 68108a2..1310b05 100644
  util_srcs = files('gpio.cpp', 'i2c.cpp', 'utilities.cpp')
  
  platform_name = get_option('platform-name')
-@@ -51,19 +52,34 @@ platforms_map = {
+@@ -61,19 +62,34 @@ platforms_map = {
  
  platform_srcs = []
  platform_entries = []
@@ -243,7 +243,7 @@ index 68108a2..1310b05 100644
      'platform',
 -    ['platform.cpp'] + platform_srcs + util_srcs,
 -    dependencies: [gpiodcxx_dep, libsystemd_dep, cli11_dep, i2c_dep, sdbusplus],
--    include_directories: ['.', 'nvidia', 'intel'],
+-    include_directories: ['.', 'platforms'],
 +    ['platform.cpp'] + platform_srcs + cmos_reset_srcs + util_srcs,
 +    dependencies: [
 +        gpiodcxx_dep,
@@ -254,11 +254,11 @@ index 68108a2..1310b05 100644
 +        phosphor_logging_dep,
 +        phosphor_dbus_interfaces_dep,
 +    ],
-+    include_directories: ['.', 'cmos-reset', 'intel', 'nvidia'],
++    include_directories: ['.', 'cmos-reset', 'platforms'],
      install: true,
      install_dir: get_option('libexecdir'),
  )
-@@ -81,9 +97,20 @@ configure_file(
+@@ -91,9 +107,20 @@ configure_file(
  
  conf = configuration_data()
  conf.set('PLATFORMS', ',\n    '.join(platform_entries))
@@ -280,10 +280,10 @@ index 68108a2..1310b05 100644
 +    ),
 +)
 diff --git a/meson.options b/meson.options
-index 6e5f74d..961234e 100644
+index b30ff06..00a33ee 100644
 --- a/meson.options
 +++ b/meson.options
-@@ -17,3 +17,10 @@ option(
+@@ -18,3 +18,10 @@ option(
      value: 'nvidia-gb200',
      description: 'Platform to init (Temporary)',
  )
@@ -377,28 +377,25 @@ index 9ef0ee9..ea556bc 100644
      CLI11_PARSE(app, argc, argv)
  
 diff --git a/platform.hpp.in b/platform.hpp.in
-index 05a1e04..8963825 100644
+index 8759d29..91350df 100644
 --- a/platform.hpp.in
 +++ b/platform.hpp.in
 @@ -6,6 +6,8 @@
- #include "intel.hpp"
- #include "nvidia.hpp"
+ #include "intel/platforms.hpp"
+ #include "nvidia/platforms.hpp"
  
 +#include <sdbusplus/async.hpp>
 +
  #include <string_view>
  
  #define PLATFORM(name, func) {name, func}
-@@ -13,3 +15,9 @@
- inline constexpr std::pair<std::string_view, int (*)()> init_functions[] = {
+@@ -14,3 +16,9 @@ inline constexpr auto init_functions =
+     std::to_array<std::pair<std::string_view, int (*)()>>({
      @PLATFORMS@
- };
+ });
 +
-+inline constexpr std::pair<std::string_view, sdbusplus::async::task<bool> (*)(
-+                                                 sdbusplus::async::context&)>
-+    cmos_reset_functions[] = {
++inline constexpr auto cmos_reset_functions =
++    std::to_array<std::pair<std::string_view, sdbusplus::async::task<bool> (*)(
++                                                sdbusplus::async::context&)>>({
 +    @CMOS_RESET_PLATFORMS@
-+};
--- 
-2.53.0
-
++});

@@ -1,4 +1,4 @@
-From cb55b0e61d890fbc6e4f0ecf15d9d3acc3033cb8 Mon Sep 17 00:00:00 2001
+From 94a08adfd70a9a777ffb75bfe9aef2d17d681197 Mon Sep 17 00:00:00 2001
 From: Tan Siewert <tan.siewert@9elements.com>
 Date: Mon, 20 Jul 2026 22:59:37 +0200
 Subject: [PATCH] build: allow compiling selected platforms only
@@ -30,26 +30,27 @@ Upstream-Status: Pending
 Change-Id: I67f15741e1d5521ba55aa3b3c04d5af5b0b1641e
 Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
 ---
- meson.build     | 54 ++++++++++++++++++++++++++++++++++++++++++-------
- meson.options   | 13 ++++++++++++
- platform.cpp    | 15 +++-----------
- platform.hpp.in | 15 ++++++++++++++
- 4 files changed, 78 insertions(+), 19 deletions(-)
+ meson.build     | 65 +++++++++++++++++++++++++++++++++++++++++++------
+ meson.options   | 14 +++++++++++
+ platform.cpp    | 17 +++----------
+ platform.hpp.in | 16 ++++++++++++
+ 4 files changed, 90 insertions(+), 22 deletions(-)
  create mode 100644 platform.hpp.in
 
 diff --git a/meson.build b/meson.build
-index f402c48..f0ba3e7 100644
+index 2c8d240..8cb43b5 100644
 --- a/meson.build
 +++ b/meson.build
-@@ -19,14 +19,45 @@ cli11_dep = dependency(
+@@ -19,15 +19,55 @@ cli11_dep = dependency(
  )
  i2c_dep = meson.get_compiler('cpp').find_library('i2c')
  
 -platform_srcs = files(
--    'intel/acrp.cpp',
--    'intel/jcrp.cpp',
--    'nvidia/gb200.cpp',
--    'nvidia/nvl32.cpp',
+-    'platforms/intel/acrp.cpp',
+-    'platforms/intel/jcrp.cpp',
+-    'platforms/nvidia/gb200.cpp',
+-    'platforms/nvidia/nvl32.cpp',
+-    'platforms/nvidia/vr_nvl.cpp',
 -)
  util_srcs = files('gpio.cpp', 'i2c.cpp', 'utilities.cpp')
  
@@ -64,19 +65,29 @@ index f402c48..f0ba3e7 100644
 +endif
 +
 +platforms_map = {
-+    'intel-acrp': {'src': files('intel/acrp.cpp'), 'fn': 'intel::init_acrp'},
-+    'intel-jcrp': {'src': files('intel/jcrp.cpp'), 'fn': 'intel::init_jcrp'},
++    'intel-acrp': {
++        'src': files('platforms/intel/acrp.cpp'),
++        'fn': 'intel::init_acrp',
++    },
++    'intel-jcrp': {
++        'src': files('platforms/intel/jcrp.cpp'),
++        'fn': 'intel::init_jcrp',
++    },
 +    'nvidia-gb200': {
-+        'src': files('nvidia/gb200.cpp'),
++        'src': files('platforms/nvidia/gb200.cpp'),
 +        'fn': 'nvidia::init_gb200_base',
 +    },
 +    'nvidia-gb200-with-p2020': {
-+        'src': files('nvidia/gb200.cpp'),
++        'src': files('platforms/nvidia/gb200.cpp'),
 +        'fn': 'nvidia::init_gb200_with_p2020',
 +    },
 +    'nvidia-nvl32': {
-+        'src': files('nvidia/nvl32.cpp'),
++        'src': files('platforms/nvidia/nvl32.cpp'),
 +        'fn': 'nvidia::init_nvl32',
++    },
++    'nvidia-vr-nvl': {
++        'src': files('platforms/nvidia/vr_nvl.cpp'),
++        'fn': 'nvidia::init_vr_nvl',
 +    },
 +}
 +
@@ -93,7 +104,7 @@ index f402c48..f0ba3e7 100644
  exe = executable(
      'platform',
      ['platform.cpp'] + platform_srcs + util_srcs,
-@@ -43,6 +74,15 @@ configure_file(
+@@ -44,6 +84,15 @@ configure_file(
      install_dir: systemd_system_unit_dir,
      install: true,
      configuration: configuration_data(
@@ -111,10 +122,10 @@ index f402c48..f0ba3e7 100644
 +    configuration: conf,
 +)
 diff --git a/meson.options b/meson.options
-index 9004923..6e5f74d 100644
+index 9004923..b30ff06 100644
 --- a/meson.options
 +++ b/meson.options
-@@ -1,3 +1,16 @@
+@@ -1,3 +1,17 @@
 +option(
 +    'platforms',
 +    type: 'array',
@@ -124,6 +135,7 @@ index 9004923..6e5f74d 100644
 +        'nvidia-gb200',
 +        'nvidia-gb200-with-p2020',
 +        'nvidia-nvl32',
++        'nvidia-vr-nvl',
 +    ],
 +    description: 'List of platforms to be included',
 +)
@@ -132,7 +144,7 @@ index 9004923..6e5f74d 100644
      'platform-name',
      type: 'string',
 diff --git a/platform.cpp b/platform.cpp
-index a90e209..4ca3729 100644
+index 66663cb..4ca3729 100644
 --- a/platform.cpp
 +++ b/platform.cpp
 @@ -1,10 +1,10 @@
@@ -143,12 +155,12 @@ index a90e209..4ca3729 100644
 +
  #include "gpio.hpp"
  #include "i2c.hpp"
--#include "intel.hpp"
--#include "nvidia.hpp"
+-#include "intel/platforms.hpp"
+-#include "nvidia/platforms.hpp"
  #include "utilities.hpp"
  
  #include <fcntl.h>
-@@ -14,18 +14,9 @@
+@@ -14,20 +14,9 @@
  #include <gpiod.hpp>
  
  #include <algorithm>
@@ -157,17 +169,19 @@ index a90e209..4ca3729 100644
  #include <string_view>
  #include <utility>
  
--constexpr std::array<std::pair<std::string_view, int (*)()>, 5> init_functions{
--    {{"intel-acrp", intel::init_acrp},
--     {"intel-jcrp", intel::init_jcrp},
--     {"nvidia-gb200", nvidia::init_gb200_base},
--     {"nvidia-gb200-with-p2020", nvidia::init_gb200_with_p2020},
--     {"nvidia-nvl32", nvidia::init_nvl32}}};
+-constexpr auto init_functions =
+-    std::to_array<std::pair<std::string_view, int (*)()>>(
+-        {{"intel-acrp", intel::init_acrp},
+-         {"intel-jcrp", intel::init_jcrp},
+-         {"nvidia-gb200", nvidia::init_gb200_base},
+-         {"nvidia-gb200-with-p2020", nvidia::init_gb200_with_p2020},
+-         {"nvidia-nvl32", nvidia::init_nvl32},
+-         {"nvidia-vr-nvl", nvidia::init_vr_nvl}});
 -
  int main(int argc, char** argv)
  {
      CLI::App app("Platform init CLI");
-@@ -48,7 +39,7 @@ int main(int argc, char** argv)
+@@ -50,7 +39,7 @@ int main(int argc, char** argv)
          [&platform_name](const std::pair<std::string_view, int (*)()> val) {
              return val.first == platform_name;
          });
@@ -178,25 +192,23 @@ index a90e209..4ca3729 100644
          return EXIT_FAILURE;
 diff --git a/platform.hpp.in b/platform.hpp.in
 new file mode 100644
-index 0000000..05a1e04
+index 0000000..8759d29
 --- /dev/null
 +++ b/platform.hpp.in
-@@ -0,0 +1,15 @@
+@@ -0,0 +1,16 @@
 +// SPDX-License-Identifier: Apache-2.0
 +// SPDX-FileCopyrightText: Copyright OpenBMC Authors
 +
 +#pragma once
 +
-+#include "intel.hpp"
-+#include "nvidia.hpp"
++#include "intel/platforms.hpp"
++#include "nvidia/platforms.hpp"
 +
 +#include <string_view>
 +
 +#define PLATFORM(name, func) {name, func}
 +
-+inline constexpr std::pair<std::string_view, int (*)()> init_functions[] = {
++inline constexpr auto init_functions =
++    std::to_array<std::pair<std::string_view, int (*)()>>({
 +    @PLATFORMS@
-+};
--- 
-2.53.0
-
++});

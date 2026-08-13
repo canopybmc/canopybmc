@@ -1,7 +1,7 @@
-From 712244df77a86ed2bf81fc62d3710c36284ec4c9 Mon Sep 17 00:00:00 2001
+From 68c38e233b3139c8713f6db183c96198ae408a30 Mon Sep 17 00:00:00 2001
 From: Oliver Brewka <oliver.brewka@9elements.com>
 Date: Sun, 14 Jun 2026 15:14:11 +0200
-Subject: [PATCH 1/6] Use CLI11 callback function for init sub
+Subject: [PATCH] Use CLI11 callback function for init sub
 
 Follow-up patch adds a new sub command. Using CLI11 callback function to
 have uniform code for sub command handling.
@@ -86,6 +86,3 @@ index 4ca3729..9ef0ee9 100644
 -    return it->second();
 +    return EXIT_SUCCESS;
  }
--- 
-2.53.0
-

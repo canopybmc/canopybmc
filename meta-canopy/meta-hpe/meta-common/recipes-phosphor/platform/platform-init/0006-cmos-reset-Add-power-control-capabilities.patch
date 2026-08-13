@@ -1,7 +1,7 @@
-From 8dc15541ee9684ad62bb71eaecf03ef36d7f716c Mon Sep 17 00:00:00 2001
+From 8b0feedc84bfe74e67bd0fd95fa033d271ba6751 Mon Sep 17 00:00:00 2001
 From: Oliver Brewka <oliver.brewka@9elements.com>
 Date: Tue, 17 Mar 2026 16:43:46 +0100
-Subject: [PATCH 5/6] cmos-reset: Add power control capabilities
+Subject: [PATCH] cmos-reset: Add power control capabilities
 
 Ideally the host is powered off before any reset.
 Add functionality, to check if the host is running and to do state
@@ -236,7 +236,7 @@ index 0000000..5d84149
 +};
 +}; // namespace host_power
 diff --git a/meson.build b/meson.build
-index 1310b05..0c46879 100644
+index 3a3cb0a..9a4070e 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -20,7 +20,7 @@ cli11_dep = dependency(
@@ -248,7 +248,7 @@ index 1310b05..0c46879 100644
  util_srcs = files('gpio.cpp', 'i2c.cpp', 'utilities.cpp')
  
  platform_name = get_option('platform-name')
-@@ -105,6 +105,13 @@ configure_file(
+@@ -115,6 +115,13 @@ configure_file(
      configuration: conf,
  )
  
@@ -263,10 +263,10 @@ index 1310b05..0c46879 100644
      input: 'cmos-reset/xyz.openbmc_project.Software.Host.Updater0.service.in',
      output: 'xyz.openbmc_project.Software.Host.Updater0.service',
 diff --git a/meson.options b/meson.options
-index 961234e..c0626b3 100644
+index 00a33ee..8f4ea77 100644
 --- a/meson.options
 +++ b/meson.options
-@@ -24,3 +24,10 @@ option(
+@@ -25,3 +25,10 @@ option(
      value: 'disabled',
      description: 'Enable CMOS reset service',
  )
@@ -277,6 +277,3 @@ index 961234e..c0626b3 100644
 +    value: 60,
 +    description: 'Timeout for host state transition.',
 +)
--- 
-2.53.0
-

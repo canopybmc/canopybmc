@@ -1,7 +1,7 @@
-From b2cfaf273e7b051a2e6849abff8ceb48fa1d4661 Mon Sep 17 00:00:00 2001
+From efe7961dda9c39d298f90d33840119701ddcc54b Mon Sep 17 00:00:00 2001
 From: Oliver Brewka <oliver.brewka@9elements.com>
 Date: Sun, 5 Apr 2026 22:11:26 +0200
-Subject: [PATCH 4/6] cmos-reset: Add event logs
+Subject: [PATCH] cmos-reset: Add event logs
 
 The Redfish request for a Bios.ResetBios action only initiates the
 reset and passes control to the service. A user should be able to check
@@ -148,6 +148,3 @@ index 73eb39c..23afc3b 100644
  class CmosReset :
      public sdbusplus::aserver::xyz::openbmc_project::common::FactoryReset<
          CmosReset>
--- 
-2.53.0
-

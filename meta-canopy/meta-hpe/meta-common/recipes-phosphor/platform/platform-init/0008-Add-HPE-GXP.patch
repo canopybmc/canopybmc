@@ -1,4 +1,4 @@
-From c45ac635413d63384ddb47fad88c08e1bc506334 Mon Sep 17 00:00:00 2001
+From 85c28938cf51fd88831927f037753624fb974913 Mon Sep 17 00:00:00 2001
 From: Tan Siewert <tan.siewert@9elements.com>
 Date: Thu, 23 Jul 2026 17:45:50 +0200
 Subject: [PATCH] Add HPE GXP
@@ -12,25 +12,65 @@ Upstream-Status: Pending
 Change-Id: I59dfb0491102468af8cbad22c80f544f366d0c57
 Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
 ---
- hpe/gxp.cpp     | 116 ++++++++++++++++++++++++++++++++++++++++++++++++
- hpe/hpe.hpp     |  15 +++++++
- meson.build     |   7 ++-
- meson.options   |   1 +
- platform.hpp.in |   1 +
- 5 files changed, 139 insertions(+), 1 deletion(-)
- create mode 100644 hpe/gxp.cpp
- create mode 100644 hpe/hpe.hpp
+ meson.build                 |   5 ++
+ meson.options               |   1 +
+ platform.hpp.in             |   1 +
+ platforms/hpe/gxp.cpp       | 116 ++++++++++++++++++++++++++++++++++++
+ platforms/hpe/platforms.hpp |  15 +++++
+ 5 files changed, 138 insertions(+)
+ create mode 100644 platforms/hpe/gxp.cpp
+ create mode 100644 platforms/hpe/platforms.hpp
 
-diff --git a/hpe/gxp.cpp b/hpe/gxp.cpp
+diff --git a/meson.build b/meson.build
+index 9a4070e..00e0cf1 100644
+--- a/meson.build
++++ b/meson.build
+@@ -42,6 +42,11 @@ platforms_map = {
+         'src': files('platforms/intel/jcrp.cpp'),
+         'fn': 'intel::init_jcrp',
+     },
++    'hpe-gxp': {
++        'src': files('platforms/hpe/gxp.cpp'),
++        'fn': 'hpe::init_gxp_base',
++        'cmos_reset_fn': 'hpe::gxp_cmos_reset',
++    },
+     'nvidia-gb200': {
+         'src': files('platforms/nvidia/gb200.cpp'),
+         'fn': 'nvidia::init_gb200_base',
+diff --git a/meson.options b/meson.options
+index 8f4ea77..74fbdf5 100644
+--- a/meson.options
++++ b/meson.options
+@@ -4,6 +4,7 @@ option(
+     choices: [
+         'intel-acrp',
+         'intel-jcrp',
++        'hpe-gxp',
+         'nvidia-gb200',
+         'nvidia-gb200-with-p2020',
+         'nvidia-nvl32',
+diff --git a/platform.hpp.in b/platform.hpp.in
+index 91350df..8a77910 100644
+--- a/platform.hpp.in
++++ b/platform.hpp.in
+@@ -4,6 +4,7 @@
+ #pragma once
+ 
+ #include "intel/platforms.hpp"
++#include "hpe/platforms.hpp"
+ #include "nvidia/platforms.hpp"
+ 
+ #include <sdbusplus/async.hpp>
+diff --git a/platforms/hpe/gxp.cpp b/platforms/hpe/gxp.cpp
 new file mode 100644
-index 0000000..af9bcf9
+index 0000000..65faddc
 --- /dev/null
-+++ b/hpe/gxp.cpp
++++ b/platforms/hpe/gxp.cpp
 @@ -0,0 +1,116 @@
 +// SPDX-License-Identifier: Apache-2.0
 +// SPDX-FileCopyrightText: Copyright OpenBMC Authors
 +
-+#include "hpe.hpp"
++#include "platforms.hpp"
 +#include "utilities.hpp"
 +
 +#include <systemd/sd-daemon.h>
@@ -143,11 +183,11 @@ index 0000000..af9bcf9
 +    return EXIT_SUCCESS;
 +}
 +} // namespace hpe
-diff --git a/hpe/hpe.hpp b/hpe/hpe.hpp
+diff --git a/platforms/hpe/platforms.hpp b/platforms/hpe/platforms.hpp
 new file mode 100644
 index 0000000..28fd716
 --- /dev/null
-+++ b/hpe/hpe.hpp
++++ b/platforms/hpe/platforms.hpp
 @@ -0,0 +1,15 @@
 +// SPDX-License-Identifier: Apache-2.0
 +// SPDX-FileCopyrightText: Copyright OpenBMC Authors
@@ -164,55 +204,3 @@ index 0000000..28fd716
 +sdbusplus::async::task<bool> gxp_cmos_reset(sdbusplus::async::context&);
 +
 +} // namespace hpe
-diff --git a/meson.build b/meson.build
-index 0c46879..9945dfb 100644
---- a/meson.build
-+++ b/meson.build
-@@ -34,6 +34,11 @@ if platform_name not in platforms
- endif
- 
- platforms_map = {
-+    'hpe-gxp': {
-+        'src': files('hpe/gxp.cpp'),
-+        'fn': 'hpe::init_gxp_base',
-+        'cmos_reset_fn': 'hpe::gxp_cmos_reset',
-+    },
-     'intel-acrp': {'src': files('intel/acrp.cpp'), 'fn': 'intel::init_acrp'},
-     'intel-jcrp': {'src': files('intel/jcrp.cpp'), 'fn': 'intel::init_jcrp'},
-     'nvidia-gb200': {
-@@ -79,7 +84,7 @@ exe = executable(
-         phosphor_logging_dep,
-         phosphor_dbus_interfaces_dep,
-     ],
--    include_directories: ['.', 'cmos-reset', 'intel', 'nvidia'],
-+    include_directories: ['.', 'cmos-reset', 'hpe', 'intel', 'nvidia'],
-     install: true,
-     install_dir: get_option('libexecdir'),
- )
-diff --git a/meson.options b/meson.options
-index c0626b3..e673c62 100644
---- a/meson.options
-+++ b/meson.options
-@@ -4,6 +4,7 @@ option(
-     choices: [
-         'intel-acrp',
-         'intel-jcrp',
-+        'hpe-gxp',
-         'nvidia-gb200',
-         'nvidia-gb200-with-p2020',
-         'nvidia-nvl32',
-diff --git a/platform.hpp.in b/platform.hpp.in
-index 8963825..81cd448 100644
---- a/platform.hpp.in
-+++ b/platform.hpp.in
-@@ -3,6 +3,7 @@
- 
- #pragma once
- 
-+#include "hpe.hpp"
- #include "intel.hpp"
- #include "nvidia.hpp"
- 
--- 
-2.53.0
-

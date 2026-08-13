@@ -23,3 +23,4 @@ DEPENDS:append = " \
         "
 
 SYSTEMD_SERVICE:${PN}:append = " xyz.openbmc_project.Software.Host.Updater0.service "
+
