@@ -1,7 +1,7 @@
-From 7285b68bd6c1c78ab24d081a3a422921d9a2a86b Mon Sep 17 00:00:00 2001
+From 891792a01c72a577743fcd52c40d94d9b7f0a79c Mon Sep 17 00:00:00 2001
 From: Alexander Hansen <alexander.hansen@9elements.com>
 Date: Thu, 25 Jun 2026 18:15:05 +0200
-Subject: [PATCH 1/2] bios: no not require mux GPIOs
+Subject: [PATCH] bios: no not require mux GPIOs
 
 Not every platform has their SPI flash behind a gpio Mux, we should not
 stop the update process because no lines were configured.
@@ -127,10 +127,10 @@ inventory:
 }
 ```
 
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/phosphor-bmc-code-mgmt/+/91736]
 Change-Id: I7e24011890b4e28fbe832746de877078864a41a6
 Signed-off-by: Alexander Hansen <alexander.hansen@9elements.com>
 ---
-Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/phosphor-bmc-code-mgmt/+/91736]
  bios/spi_device.cpp | 73 ++++++++++++++++++++++++++++-----------------
  1 file changed, 45 insertions(+), 28 deletions(-)
 
@@ -231,6 +231,3 @@ index b1ba4a4..cfc5f5c 100644
      co_return success;
  }
  
--- 
-2.54.0
-

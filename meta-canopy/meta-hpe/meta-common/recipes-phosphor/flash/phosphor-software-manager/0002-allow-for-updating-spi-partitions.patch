@@ -1,7 +1,7 @@
-From be589e9299c29c55d19e764b907dc2beaf8cbffe Mon Sep 17 00:00:00 2001
+From 8f2178613221d77b21638594b01e74859412d2a2 Mon Sep 17 00:00:00 2001
 From: Alexander Hansen <alexander.hansen@9elements.com>
 Date: Wed, 1 Jul 2026 15:24:18 +0200
-Subject: [PATCH 2/2] allow for updating spi partitions
+Subject: [PATCH] allow for updating spi partitions
 
 Some SPI flashes are partitioned to allow for A/B firmware updates
 without requiring multiple chips.
@@ -43,22 +43,32 @@ Adjust the code to allow for configuring the partition to be updated.
 In case no partition is configured (empty string property value), the
 update should work as before.
 
-Tested: TODO
+Tested: confirmed that the correct flash partition was chosen during the
+update process
 
+```
+root@hpe-proliant-g11:~# ps
+...
+432 root      2528 R    flashcp -v /tmp/spi-device-image-2843.bin /dev/mtd11
+
+root@hpe-proliant-g11:~# cat /sys/class/spi_master/spi1/spi1.1/mtd/mtd11/name
+host-prime
+```
+
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/phosphor-bmc-code-mgmt/+/91916]
 Change-Id: I42eaf85c925cde3d5029fb6b9165d2572ca13978
 Signed-off-by: Alexander Hansen <alexander.hansen@9elements.com>
 ---
-Upstream-Status: Pending
- bios/bios_software_manager.cpp | 23 +++++++++++++++----
+ bios/bios_software_manager.cpp | 18 +++++++++++----
  bios/spi_device.cpp            | 42 ++++++++++++++++++++++++++--------
  bios/spi_device.hpp            |  5 +++-
- 3 files changed, 56 insertions(+), 14 deletions(-)
+ 3 files changed, 51 insertions(+), 14 deletions(-)
 
 diff --git a/bios/bios_software_manager.cpp b/bios/bios_software_manager.cpp
-index c441284..d1b3c87 100644
+index 725f96a..dbb68b7 100644
 --- a/bios/bios_software_manager.cpp
 +++ b/bios/bios_software_manager.cpp
-@@ -46,6 +46,19 @@ sdbusplus::async::task<bool> BIOSSoftwareManager::initDevice(
+@@ -46,6 +46,15 @@ sdbusplus::async::task<bool> BIOSSoftwareManager::initDevice(
          co_return false;
      }
  
@@ -68,17 +78,13 @@ index c441284..d1b3c87 100644
 +
 +    if (!partition.has_value())
 +    {
-+        error("Missing property: Partition");
-+        co_return false;
++        debug("no partitions configured");
 +    }
-+
-+    // empty string means no partition configured
-+    partition = (partition == "") ? std::nullopt : partition;
 +
      enum FlashTool tool = flashToolNone;
  
-     if (config.configType == "IntelSPIFlash")
-@@ -85,15 +98,17 @@ sdbusplus::async::task<bool> BIOSSoftwareManager::initDevice(
+     if (config.configType == "IntelHostSPIFlash")
+@@ -85,15 +94,16 @@ sdbusplus::async::task<bool> BIOSSoftwareManager::initDevice(
  
      enum FlashLayout layout = flashLayoutFlat;
  
@@ -86,7 +92,7 @@ index c441284..d1b3c87 100644
 -          "INDEX2", spiDeviceIndex.value());
 +    debug("SPI device: {INDEX1}:{INDEX2}, Partition {PARTITION}", "INDEX1",
 +          spiControllerIndex.value(), "INDEX2", spiDeviceIndex.value(),
-+          "PARTITION", partition.value());
++          "PARTITION", partition.value_or("none"));
  
      std::unique_ptr<SPIDevice> spiDevice;
      try
@@ -94,9 +100,8 @@ index c441284..d1b3c87 100644
          spiDevice = std::make_unique<SPIDevice>(
 -            ctx, spiControllerIndex.value(), spiDeviceIndex.value(), dryRun,
 -            names, values, config, this, layout, tool);
-+            ctx, spiControllerIndex.value(), spiDeviceIndex.value(),
-+            partition.value(), dryRun, names, values, config, this, layout,
-+            tool);
++            ctx, spiControllerIndex.value(), spiDeviceIndex.value(), partition,
++            dryRun, names, values, config, this, layout, tool);
      }
      catch (std::exception& e)
      {
@@ -196,6 +201,3 @@ index a0b1b62..daed61a 100644
  
      // e.g. "1e631000.spi"
      std::string spiDev;
--- 
-2.54.0
-
