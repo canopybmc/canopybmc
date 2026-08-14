@@ -1,0 +1,30 @@
+post-stage:
+  # Allowed to fail
+  - cmd: shell
+    name: Power off host via Redfish
+    transport:
+      proto: local
+    parameters:
+      command: >-
+        curl -sk -u root:[[attributes.BMCPassword]]
+        -X POST -H 'Content-Type: application/json'
+        -d '{"ResetType":"ForceOff"}'
+        -o /dev/null -w '%{http_code}'
+        https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset || true
+
+  - cmd: cmd
+    name: Wait for host shutdown
+    transport: &local
+      proto: local
+    options:
+      timeout: 2m
+    parameters:
+      executable: sleep
+      args: ["30"]
+
+  - cmd: dutctl
+    name: Power off DUT
+    parameters:
+      agent: "[[attributes.Agent]]"
+      device: "[[attributes.Device]]"
+      command: power-off

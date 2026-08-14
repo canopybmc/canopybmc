@@ -1,0 +1,10 @@
+name: ASUS-Kommando-IPMI-Expansion-Card
+label: asus-kommando-card
+attributes:
+  BMC: asus-kommando-card-fwci.lab.9e.network
+  BMCPassword: 0penBmc
+  Agent: worker117.lab.9e.network:2024
+  Device: Kommando
+  Host: asus-ipmi-host.lab.9e.network
+  HostUser: oscar
+reservation-system: dutctl
