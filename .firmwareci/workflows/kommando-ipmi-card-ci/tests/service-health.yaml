@@ -1,0 +1,74 @@
+name: "Smoke: Service Health"
+description: >-
+  Verify all critical OpenBMC services are running.
+  Each step checks one systemd unit via systemctl is-active.
+
+defaults:
+  step: &systemctl_step
+    cmd: cmd
+    transport:
+      proto: ssh
+      options:
+        host: "[[attributes.BMC]]"
+        user: "root"
+        password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Critical Services Running
+    on-error: continue
+    steps:
+      - name: Hardware Discovery & Inventory
+        <<: *systemctl_step
+        parameters:
+          executable: systemctl
+          args:
+            - "is-active"
+            - "xyz.openbmc_project.EntityManager.service"
+            - "xyz.openbmc_project.FruDevice.service"
+            - "xyz.openbmc_project.gpiopresence.service"
+            - "xyz.openbmc_project.Inventory.Manager.service"
+            - "xyz.openbmc_project.LED.GroupManager.service"
+
+      - name: Sensors
+        <<: *systemctl_step
+        parameters:
+          executable: systemctl
+          args:
+            - "is-active"
+            - "xyz.openbmc_project.adcsensor.service"
+            - "xyz.openbmc_project.fansensor.service"
+            - "xyz.openbmc_project.hwmontempsensor.service"
+            - "xyz.openbmc_project.intelcpusensor.service"
+            - "xyz.openbmc_project.psusensor.service"
+
+      - name: Thermal & Power Control
+        <<: *systemctl_step
+        parameters:
+          executable: systemctl
+          args:
+            - "is-active"
+            - "phosphor-pid-control.service"
+            - "xyz.openbmc_project.Chassis.Control.Power@0.service"
+            - "xyz.openbmc_project.State.BMC.service"
+
+      - name: External Interfaces
+        <<: *systemctl_step
+        parameters:
+          executable: systemctl
+          args:
+            - "is-active"
+            - "bmcweb.service"
+            - "phosphor-ipmi-host.service"
+            - "xyz.openbmc_project.Network.service"
+            - "xyz.openbmc_project.User.Manager.service"
+
+      - name: Logging, Telemetry & Lifecycle
+        <<: *systemctl_step
+        parameters:
+          executable: systemctl
+          args:
+            - "is-active"
+            - "xyz.openbmc_project.Dump.Manager.service"
+            - "xyz.openbmc_project.Logging.service"
+            - "xyz.openbmc_project.Telemetry.service"
+            - "xyz.openbmc_project.Software.Manager.service"
