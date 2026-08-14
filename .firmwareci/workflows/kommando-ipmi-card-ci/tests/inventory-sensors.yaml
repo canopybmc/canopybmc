@@ -1,0 +1,38 @@
+name: "Inventory: Sensors"
+description: >-
+  Verify sensor count and presence of platform-universal sensors via Redfish.
+  Covers entity-manager configs and dbus-sensors for hwmontempsensor.
+  Fan PWM sensors are verified in fan-control.yaml.
+
+defaults:
+  transport: &local
+    proto: local
+
+stages:
+  - name: Sensor Counts
+    steps:
+      - cmd: cmd
+        name: Total sensor count = 19
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/ASUS_Kommando_IPMI_Card/Sensors"]
+          expect:
+            - regex: '"Members@odata.count": 19'
+
+  - name: Temperature Sensors Present
+    steps:
+      - cmd: cmd
+        name: Header Temp present
+        transport: *local
+        options:
+          timeout: 30s
+          on-error: continue
+        parameters:
+          executable: curl
+          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/ASUS_Kommando_IPMI_Card/Sensors"]
+          expect:
+            - regex: "Header[0-2]_Temp"

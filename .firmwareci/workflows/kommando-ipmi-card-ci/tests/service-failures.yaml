@@ -1,0 +1,24 @@
+name: "Smoke: Service Failures"
+description: >-
+  Verify no unexpected service failures and no crash-looping
+  critical services.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: No Unexpected Failures
+    steps:
+      - cmd: cmd
+        name: List failed units
+        transport: *bmc_ssh
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "FAILED=$(systemctl list-units --state=failed --no-pager --no-legend | grep -v 'clear-once\\|trace-enable'); if [ -n \"$FAILED\" ]; then echo \"$FAILED\"; exit 1; fi; echo '0 unexpected failures'"

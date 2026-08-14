@@ -1,0 +1,124 @@
+name: "KVM: Userspace Services"
+description: >-
+  Verify the OpenBMC KVM-over-IP userspace stack: obmc-ikvm service
+  running with correct arguments, VNC port 5900 listening, HID gadget
+  setup script installed, and USB gadget UDC binding. This is a
+  userspace test — it validates the phosphor KVM infrastructure on
+  top of the GXP video and UDC kernel drivers.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Service Status
+    steps:
+      - cmd: cmd
+        name: obmc-ikvm service is active
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: systemctl
+          args: ["is-active", "obmc-ikvm.service"]
+      - cmd: cmd
+        name: obmc-ikvm no restarts
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "RESTARTS=$(systemctl show obmc-ikvm.service -p NRestarts --value); echo \"obmc-ikvm NRestarts=$RESTARTS\"; test \"$RESTARTS\" = \"0\""
+      - cmd: cmd
+        name: obmc-ikvm process running with correct args
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "PID=$(pidof obmc-ikvm); test -n \"$PID\" && cat /proc/$PID/cmdline 2>/dev/null | tr '\\0' ' '"
+          expect:
+            - regex: "/dev/video0"
+            - regex: "/dev/hidg0"
+            - regex: "/dev/hidg1"
+
+  - name: HID Gadget Setup
+    steps:
+      - cmd: cmd
+        name: create_usbhid.sh script installed
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: test
+          args: ["-x", "/usr/bin/create_usbhid.sh"]
+      - cmd: cmd
+        name: Gadget vendor is Linux Foundation (0x1d6b)
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: cat
+          args: ["/sys/kernel/config/usb_gadget/obmc_hid/idVendor"]
+          expect:
+            - regex: "0x1d6b"
+      - cmd: cmd
+        name: Gadget product string is Virtual Keyboard and Mouse
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: cat
+          args: ["/sys/kernel/config/usb_gadget/obmc_hid/strings/0x409/product"]
+          expect:
+            - regex: "Virtual Keyboard and Mouse"
+
+  - name: VNC Port
+    steps:
+      - cmd: cmd
+        name: Port 5900 is listening
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "cat /proc/net/tcp /proc/net/tcp6 2>/dev/null"
+          expect:
+            - regex: ":170C"
+      - cmd: shell
+        name: KVM WebSocket endpoint reachable via bmcweb
+        transport:
+          proto: local
+        options:
+          timeout: 15s
+          on-error: continue
+        parameters:
+          command: >-
+            curl -sk --http1.1 --max-time 5
+            -u root:[[attributes.BMCPassword]]
+            -o /dev/null -w '%{http_code}'
+            -H 'Upgrade: websocket'
+            -H 'Connection: Upgrade'
+            -H 'Sec-WebSocket-Key: dGVzdA=='
+            -H 'Sec-WebSocket-Version: 13'
+            https://[[attributes.BMC]]/kvm/0
+            || true
+          expect:
+            - regex: "^101$"
