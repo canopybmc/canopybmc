@@ -1,0 +1,186 @@
+name: "Console: VUART Userspace"
+description: >-
+  Verify the OpenBMC host console stack: obmc-console-server on ttyVUART0,
+  obmc-console-ssh socket on port 2200, log file capture, and udev symlink.
+  This is an OpenBMC userspace test — it validates the phosphor console
+  infrastructure on top of the GXP VUART kernel driver.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Console Server
+    steps:
+      - cmd: cmd
+        name: obmc-console-server active on ttyVUART0
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: systemctl
+          args: ["is-active", "obmc-console@ttyVUART0.service"]
+      - cmd: cmd
+        name: Server process running with correct config
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "PID=$(pidof obmc-console-server); test -n \"$PID\" && cat /proc/$PID/cmdline 2>/dev/null | tr '\\0' ' '"
+          expect:
+            - regex: "ttyVUART0"
+      - cmd: cmd
+        name: Server has ttyS0 file descriptor open
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "PID=$(pidof obmc-console-server); ls -la /proc/$PID/fd/ 2>/dev/null"
+          expect:
+            - regex: "ttyS0"
+
+  - name: Console Configuration
+    steps:
+      - cmd: cmd
+        name: Server config exists with logsize
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: cat
+          args: ["/etc/obmc-console/server.ttyVUART0.conf"]
+          expect:
+            - regex: "logsize"
+      - cmd: cmd
+        name: No self-referencing local-tty in config
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "! grep -q 'local-tty' /etc/obmc-console/server.ttyVUART0.conf"
+
+  - name: Udev Symlink
+    steps:
+      - cmd: cmd
+        name: ttyVUART0 symlink created by udev rule
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "test -L /dev/ttyVUART0 && readlink /dev/ttyVUART0"
+          expect:
+            - regex: "ttyS0"
+      - cmd: cmd
+        name: udev rule installed
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: ls
+          args: ["/usr/lib/udev/rules.d/80-obmc-console-uart.rules"]
+
+  - name: Console Unix Socket
+    steps:
+      - cmd: cmd
+        name: Abstract socket obmc-console.default exists
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: cat
+          args: ["/proc/net/unix"]
+          expect:
+            - regex: "@obmc-console\\.default"
+
+  - name: Console SSH Service
+    steps:
+      - cmd: cmd
+        name: obmc-console-ssh socket listening on port 2200
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: systemctl
+          args: ["is-active", "obmc-console-ssh.socket"]
+      - cmd: cmd
+        name: Dropbear config exists
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: test
+          args: ["-f", "/etc/obmc-console/dropbear.env"]
+      - cmd: cmd
+        name: Port 2200 is listening
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: cat
+          args: ["/proc/net/tcp6"]
+          expect:
+            - regex: ":0898"
+
+  - name: Console Log File
+    steps:
+      - cmd: cmd
+        name: Log file exists at /var/log/obmc-console.log
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: test
+          args: ["-f", "/var/log/obmc-console.log"]
+      - cmd: cmd
+        name: Log file writable by console server
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: sh
+          args:
+            - "-c"
+            - "PID=$(pidof obmc-console-server); ls -la /proc/$PID/fd/ 2>/dev/null"
+          expect:
+            - regex: "obmc-console\\.log"
+
+  - name: obmc-console-client
+    steps:
+      - cmd: cmd
+        name: obmc-console-client binary installed
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+          on-error: continue
+        parameters:
+          executable: test
+          args: ["-x", "/usr/bin/obmc-console-client"]
