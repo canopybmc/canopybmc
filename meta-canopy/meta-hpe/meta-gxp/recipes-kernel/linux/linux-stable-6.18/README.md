@@ -100,7 +100,9 @@ Every patch should contain an "Upstream-Status" tag as described in the
 
 - 0056 # peci: core: serialize device creation with per-controller mutex
 
-#### In mainline & OpenBMC but not yet in Canopy
+#### Upstreamed (Mainline/OpenBMC) but not yet in Canopy
+
+Should go under the `backports` directory.
 
 - 0057 # peci: cpu: add Intel Emerald Rapids support
     - [Mainline](https://github.com/torvalds/linux/commit/906f25050add51f1a412ea37e618d8748f75e23a)
