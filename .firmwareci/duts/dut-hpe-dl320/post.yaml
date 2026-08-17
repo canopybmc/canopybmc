@@ -14,6 +14,8 @@ post-stage:
 
   - cmd: copy
     name: Copy original NVRAM to DUT
+    options:
+      on-error: continue
     transport: &bmc_ssh
       proto: ssh
       options:
@@ -27,6 +29,8 @@ post-stage:
 
   - cmd: shell
     name: Flash original NVRAM to DUT
+    options:
+      on-error: continue
     transport: *bmc_ssh
     parameters:
       command: "flashcp -v /tmp/[[storage.dl320g11_nvram.rom]] /dev/mtd/host-reserved"
