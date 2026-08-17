@@ -74,9 +74,9 @@ SRC_URI:append = " \
     file://0052-peci-controller-add-HPE-GXP-PECI-controller-driver.patch \
     file://0053-ARM-dts-hpe-gxp-add-PECI-controller-node.patch \
     file://0056-peci-core-serialize-device-creation-with-per-control.patch \
-    file://0057-peci-cpu-add-Intel-Emerald-Rapids-support.patch \
-    file://0058-hwmon-peci-cputemp-add-Intel-Emerald-Rapids-support.patch \
-    file://0059-hwmon-peci-dimmtemp-add-Intel-Emerald-Rapids-platfor.patch \
+    file://backports/0057-peci-cpu-add-Intel-Emerald-Rapids-support.patch \
+    file://backports/0058-hwmon-peci-cputemp-add-Intel-Emerald-Rapids-support.patch \
+    file://backports/0059-hwmon-peci-dimmtemp-add-Intel-Emerald-Rapids-platfor.patch \
     file://0060-dt-bindings-hwmon-gxp-fan-ctrl-add-fan-shutdown-perc.patch \
     file://0061-hwmon-gxp-fan-ctrl-restore-safe-fan-speed-on-shutdow.patch \
     file://0062-ARM-dts-hpe-gxp-set-fan-shutdown-speed-to-50-percent.patch \
