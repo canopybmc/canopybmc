@@ -104,14 +104,17 @@ Every patch should contain an "Upstream-Status" tag as described in the
 
 - 0056 # peci: core: serialize device creation with per-controller mutex
 
-#### In mainline but not backported to OpenBMC/Linux
+#### In mainline & OpenBMC but not yet in Canopy
 
 - 0057 # peci: cpu: add Intel Emerald Rapids support
     - [Mainline](https://github.com/torvalds/linux/commit/906f25050add51f1a412ea37e618d8748f75e23a)
+    - [OpenBMC](https://github.com/openbmc/linux/commit/3e8577cf510b57d7eed49410892c9e3fb063a8b6)
 - 0058 # hwmon: (peci/cputemp) add Intel Emerald Rapids support
     - [Mainline](https://github.com/torvalds/linux/commit/a45b3ae40451542e3d6b37b8fba04e280cc8efa7)
+    - [OpenBMC](https://github.com/openbmc/linux/commit/ba57dbcf37aa98d790e14f718ebd53e2850cd979)
 - 0059 # hwmon: (peci/dimmtemp) add Intel Emerald Rapids platform support
     - [Mainline](https://github.com/torvalds/linux/commit/03c5ecc276fdc696ec469ee3a784726b809ecf26)
+    - [OpenBMC](https://github.com/openbmc/linux/commit/0e1fd5bd81115c687759cb01f2d25a0197b33500)
 
 ### Fan speed on BMC reboot/shutdown/kernel panic
 
