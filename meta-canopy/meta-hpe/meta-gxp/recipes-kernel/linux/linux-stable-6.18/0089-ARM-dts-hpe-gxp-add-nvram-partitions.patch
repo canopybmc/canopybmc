@@ -1,4 +1,4 @@
-From aff85b2223ea1eac7515fd2c93ed8add84e89a2e Mon Sep 17 00:00:00 2001
+From fb93864e60ed57b5c076aa9e4dd19197bc7146f8 Mon Sep 17 00:00:00 2001
 From: Tan Siewert <tan.siewert@9elements.com>
 Date: Fri, 24 Jul 2026 01:33:41 +0200
 Subject: [PATCH] ARM: dts: hpe: gxp: add nvram partitions

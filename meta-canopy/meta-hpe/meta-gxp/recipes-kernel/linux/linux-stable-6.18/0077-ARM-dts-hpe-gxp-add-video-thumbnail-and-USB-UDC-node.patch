@@ -1,4 +1,4 @@
-From 21ef0411c2eb01a10981089392085aeb439be169 Mon Sep 17 00:00:00 2001
+From a9c7026db86d5afb66c1ab9270b563e86a12754e Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Sun, 8 Mar 2026 00:00:00 +0000
 Subject: [PATCH] ARM: dts: hpe-gxp: add video thumbnail and USB UDC nodes
