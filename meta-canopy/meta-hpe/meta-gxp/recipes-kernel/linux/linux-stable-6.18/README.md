@@ -148,9 +148,11 @@ Should go under the `backports` directory.
 
 ### KCS
 
-- 0075 # ipmi: kcs_bmc_gxp: port driver to Linux v6.18
-    - TODO: split in multiple patches (like the other additions): DT bindings, driver, dts
-    - TODO: add Signed-off-by by original (HPE) authors
+- 0074 # dt-bindings: soc: hpe: add GXP KCS Interface binding
+    - TODO: proper commit description
+- 0075 # soc: hpe: add GXP KCS interface driver
+    - TODO: proper commit description
+    - TODO: original (HPE) authors: Co-developed-by tag?
 
 ### Video capture & UDC (could/should be split)
 

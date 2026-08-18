@@ -1,105 +1,21 @@
-From 35ca2fe272da6708f92d7963138580fbb9b9766b Mon Sep 17 00:00:00 2001
+From 3b097552214ed490aad29ba9d0b976d9c6c1b71c Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
-Date: Wed, 11 Mar 2026 16:06:09 -0300
-Subject: [PATCH] ipmi: kcs_bmc_gxp: port driver to Linux v6.18
-
-Update the HPE GXP KCS BMC driver to comply with current kernel APIs
-and coding standards:
-
-- Change .remove callback return type from int to void, as required
-  since v6.11
-- Replace platform_get_resource() + devm_ioremap_resource() with
-  devm_platform_ioremap_resource(); remove now-redundant kcsResource
-  field from private struct
-- Rename DT property "kcs_chan" to "kcs-chan" to comply with DT naming
-  conventions
-- Add missing MODULE_LICENSE("GPL v2")
-- Use `gxp` instead of `hpe` for function naming.
-- Include `dt-binding` documentation
-
-No functional changes intended.
+Date: Tue, 18 Aug 2026 13:42:21 +0200
+Subject: [PATCH] soc: hpe: add GXP KCS interface driver
 
 Upstream-Status: Pending
-
+Signed-off-by: John Chung <john.chung@hpe.com>
+Signed-off-by: Jorge Cisneros <jorge.cisneros@hpe.com>
+Co-developed-by: Pedro Maione <pedro.maione@9elements.com>
 Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+Signed-off-by: Georg Hackel <georg.hackel@9elements.com>
 ---
- .../bindings/ipmi/hpe,gxp-kcs-bmc.yaml        |  63 +++++
- drivers/char/ipmi/Kconfig                     |  12 +
- drivers/char/ipmi/Makefile                    |   1 +
- drivers/char/ipmi/kcs_bmc_gxp.c               | 230 ++++++++++++++++++
- 4 files changed, 306 insertions(+)
- create mode 100644 Documentation/devicetree/bindings/ipmi/hpe,gxp-kcs-bmc.yaml
+ drivers/char/ipmi/Kconfig       |  12 ++
+ drivers/char/ipmi/Makefile      |   1 +
+ drivers/char/ipmi/kcs_bmc_gxp.c | 230 ++++++++++++++++++++++++++++++++
+ 3 files changed, 243 insertions(+)
  create mode 100644 drivers/char/ipmi/kcs_bmc_gxp.c
 
-diff --git a/Documentation/devicetree/bindings/ipmi/hpe,gxp-kcs-bmc.yaml b/Documentation/devicetree/bindings/ipmi/hpe,gxp-kcs-bmc.yaml
-new file mode 100644
-index 000000000000..892ac21bee98
---- /dev/null
-+++ b/Documentation/devicetree/bindings/ipmi/hpe,gxp-kcs-bmc.yaml
-@@ -0,0 +1,63 @@
-+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
-+%YAML 1.2
-+---
-+$id: http://devicetree.org/schemas/ipmi/hpe,gxp-kcs-bmc.yaml#
-+$schema: http://devicetree.org/meta-schemas/core.yaml#
-+
-+title: HPE GXP BMC KCS Interface
-+
-+maintainers:
-+  - John Chung <john.chung@hpe.com>
-+  - Jorge Cisneros <jorge.cisneros@hpe.com>
-+
-+description: |
-+  The HPE GXP SoC implements a Keyboard Controller Style (KCS) IPMI
-+  interface for host-to-BMC communication over the LPC bus.
-+
-+properties:
-+  compatible:
-+    const: hpe,gxp-kcs-bmc
-+
-+  reg:
-+    description: Base address and size of the KCS LPC register block.
-+    maxItems: 1
-+
-+  interrupts:
-+    maxItems: 1
-+
-+  kcs-chan:
-+    description: KCS logical channel number. Must be 1.
-+    minimum: 1
-+    maximum: 1
-+
-+  kcs-bmc-cfg:
-+    $ref: /schemas/types.yaml#/definitions/phandle
-+    description:
-+      Phandle to a syscon node that provides the regmap used to
-+      activate the KCS LPC interface.
-+
-+required:
-+  - compatible
-+  - reg
-+  - interrupts
-+  - kcs-chan
-+  - kcs-bmc-cfg
-+
-+additionalProperties: false
-+
-+examples:
-+  - |
-+    kcs_conf: kcs_conf@80fc0430 {
-+        compatible = "hpe,gxp-kcs-bmc-cfg", "simple-mfd", "syscon";
-+        reg = <0x80fc0430 0x100>;
-+    };
-+
-+    kcs_reg: kcs_reg@80fd0400 {
-+        compatible = "hpe,gxp-kcs-bmc";
-+        reg = <0x80fd0400 0x8>;
-+        interrupts = <6>;
-+        interrupt-parent = <&vic1>;
-+        kcs-chan = <1>;
-+        status = "okay";
-+        kcs-bmc-cfg = <&kcs_conf>;
-+    };
 diff --git a/drivers/char/ipmi/Kconfig b/drivers/char/ipmi/Kconfig
 index 13dd872a9502..dd5af0a79065 100644
 --- a/drivers/char/ipmi/Kconfig
