@@ -1,4 +1,4 @@
-From 0bf5921b2a0fedb17f3facab676772a6aaaff94f Mon Sep 17 00:00:00 2001
+From 268090f5b1259b5b1aea48311ac9771581b64940 Mon Sep 17 00:00:00 2001
 From: Richard Yu <richard.yu@hpe.com>
 Date: Sun, 8 Mar 2026 00:00:00 +0000
 Subject: [PATCH] usb: gadget: udc: add HPE GXP USB device controller driver

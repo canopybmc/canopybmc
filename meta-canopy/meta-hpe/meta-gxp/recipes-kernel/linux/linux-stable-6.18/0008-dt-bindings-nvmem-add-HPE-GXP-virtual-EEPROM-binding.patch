@@ -1,4 +1,4 @@
-From 769cc55cab4a4ed040dbb4ddb265f7db8c4890af Mon Sep 17 00:00:00 2001
+From 0d7acf6ddfaf8efa1b5483269f1bf68113dea5f7 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Mon, 2 Feb 2026 11:12:26 +0100
 Subject: [PATCH] dt-bindings: nvmem: add HPE GXP virtual EEPROM binding

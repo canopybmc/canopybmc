@@ -1,4 +1,4 @@
-From e8981e42e312a2e6e49586050d0d8c2f9bfd8417 Mon Sep 17 00:00:00 2001
+From 14701ece02e5317a912d74587a87a70723fbfaea Mon Sep 17 00:00:00 2001
 From: Ivan Mikhaylov <fr0st61te@gmail.com>
 Date: Tue, 7 Oct 2025 00:53:19 +0300
 Subject: [PATCH] peci: cpu: add Intel Emerald Rapids support

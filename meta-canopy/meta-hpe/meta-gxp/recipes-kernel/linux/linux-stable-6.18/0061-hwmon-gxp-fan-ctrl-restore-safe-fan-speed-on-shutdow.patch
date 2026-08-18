@@ -1,4 +1,4 @@
-From 0986a98746fe5960974b484c8fb7cc0de474040e Mon Sep 17 00:00:00 2001
+From 05a593765e90cc96e909a1401b2c14e34287e936 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 13:07:50 +0100
 Subject: [PATCH] hwmon: gxp-fan-ctrl: restore safe fan speed on shutdown and

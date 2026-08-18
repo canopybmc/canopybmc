@@ -1,4 +1,4 @@
-From 983a222be753186b5b4b1fe430093fc37ed6f276 Mon Sep 17 00:00:00 2001
+From 2ef462bf42e3ad202b2a8d6af94643ff2d1e3ab9 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Mon, 2 Feb 2026 11:12:39 +0100
 Subject: [PATCH] nvmem: add HPE GXP virtual EEPROM driver

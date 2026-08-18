@@ -1,6 +1,6 @@
-From 8fdd11fc9309ae19a4f0ffdd02da83a2895211e1 Mon Sep 17 00:00:00 2001
+From 750614063d42cfd59cab80af1a5efe271151cbea Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
-Date: Wed, 01 Jul 2026 01:45:32 +0200
+Date: Wed, 1 Jul 2026 01:45:32 +0200
 Subject: [PATCH] i2c: gxp: support SMBus block read (I2C_M_RECV_LEN)
 
 The GXP I2C controller driver advertises I2C_FUNC_SMBUS_EMUL but its
@@ -17,16 +17,18 @@ length accordingly, and keep acking so the slave clocks out the rest of
 the block (including acking the length byte itself). Also advertise
 I2C_FUNC_SMBUS_READ_BLOCK_DATA.
 
+Upstream-Status: Pending
 Assisted-by: claude:claude-opus-4-8
 Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
 ---
- drivers/i2c/busses/i2c-gxp.c | 26 ++++++++++++++++++++++---
+ drivers/i2c/busses/i2c-gxp.c | 26 +++++++++++++++++++++++---
  1 file changed, 23 insertions(+), 3 deletions(-)
 
 diff --git a/drivers/i2c/busses/i2c-gxp.c b/drivers/i2c/busses/i2c-gxp.c
+index bbb16459c74b..a96e06827c2f 100644
 --- a/drivers/i2c/busses/i2c-gxp.c
 +++ b/drivers/i2c/busses/i2c-gxp.c
-@@ -142,9 +142,11 @@
+@@ -142,9 +142,11 @@ static int gxp_i2c_master_xfer(struct i2c_adapter *adapter,
  static u32 gxp_i2c_func(struct i2c_adapter *adap)
  {
  	if (IS_ENABLED(CONFIG_I2C_SLAVE))
@@ -40,7 +42,7 @@ diff --git a/drivers/i2c/busses/i2c-gxp.c b/drivers/i2c/busses/i2c-gxp.c
  }
  
  #if IS_ENABLED(CONFIG_I2C_SLAVE)
-@@ -245,7 +247,13 @@
+@@ -245,7 +247,13 @@ static void gxp_i2c_chk_addr_ack(struct gxp_i2c_drvdata *drvdata)
  		}
  		drvdata->state = GXP_I2C_RDATA_PHASE;
  
@@ -55,7 +57,7 @@ diff --git a/drivers/i2c/busses/i2c-gxp.c b/drivers/i2c/busses/i2c-gxp.c
  			/* The last data, do not ack */
  			writeb(MASTER_EVT_CLR | RW_CMD,
  			       drvdata->base + GXP_I2CMCMD);
-@@ -284,6 +292,18 @@
+@@ -284,6 +292,18 @@ static void gxp_i2c_ack_data(struct gxp_i2c_drvdata *drvdata)
  	drvdata->buf++;
  	drvdata->buf_remaining--;
  
@@ -74,6 +76,3 @@ diff --git a/drivers/i2c/busses/i2c-gxp.c b/drivers/i2c/busses/i2c-gxp.c
  	if (drvdata->buf_remaining == 0) {
  		/* No more data, this message is completed. */
  		drvdata->msgs_remaining--;
---
-2.52.0
-

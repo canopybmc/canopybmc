@@ -1,4 +1,4 @@
-From 3bf3d1bc5f598dd51fe8992f370b53e502cbce9d Mon Sep 17 00:00:00 2001
+From 3738ec786bca94dbf808abf97719e5149ab9a5bc Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 09:13:10 +0100
 Subject: [PATCH] dt-bindings: regulator: add HPE GXP CPLD host power supply

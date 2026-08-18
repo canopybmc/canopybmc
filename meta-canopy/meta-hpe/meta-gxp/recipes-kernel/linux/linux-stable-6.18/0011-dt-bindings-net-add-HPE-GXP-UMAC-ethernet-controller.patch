@@ -1,4 +1,4 @@
-From b3619dd2793dd0fbeaceb72d3f0b18ba2eaf5f2a Mon Sep 17 00:00:00 2001
+From ef6c97a8054225382635b6ae491e9f50d7eadf5e Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 27 Jan 2026 23:48:19 +0100
 Subject: [PATCH] dt-bindings: net: add HPE GXP UMAC ethernet controller

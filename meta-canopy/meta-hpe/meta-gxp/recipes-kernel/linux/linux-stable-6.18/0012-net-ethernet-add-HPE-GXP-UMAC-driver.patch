@@ -1,4 +1,4 @@
-From 9119dcfd855d5fbb8a13fecafcf0a76eb9812abd Mon Sep 17 00:00:00 2001
+From c95d79163023528ccf960932e59c6a767bfc078b Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 27 Jan 2026 23:48:29 +0100
 Subject: [PATCH] net: ethernet: add HPE GXP UMAC driver
@@ -325,7 +325,7 @@ index 000000000000..260dc9fddff8
 +#endif
 diff --git a/drivers/net/ethernet/hpe/gxp-umac.c b/drivers/net/ethernet/hpe/gxp-umac.c
 new file mode 100644
-index 000000000000..8af492ef0d5b
+index 000000000000..014751e14f00
 --- /dev/null
 +++ b/drivers/net/ethernet/hpe/gxp-umac.c
 @@ -0,0 +1,835 @@

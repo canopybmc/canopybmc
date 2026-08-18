@@ -1,4 +1,4 @@
-From ef9ffadeffa600bcb5500ddca7098f315f47412c Mon Sep 17 00:00:00 2001
+From b64377af31636eb7ad24e660a95052534841cd27 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 13:29:20 +0100
 Subject: [PATCH] hwmon: gxp-fan-ctrl: restore fan speed on kernel panic

@@ -1,4 +1,4 @@
-From 31e8dd86b2f397cd52fa5836eafd728b7815dd63 Mon Sep 17 00:00:00 2001
+From c0e39aa081dd41daa383122169aff1a86f19a0d5 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 3 Feb 2026 00:46:54 +0100
 Subject: [PATCH] soc: hpe: add GXP CHIF driver

@@ -1,4 +1,4 @@
-From e699f2df293df97cca5243cc422d4e354e0af0a8 Mon Sep 17 00:00:00 2001
+From 58160733979d5b95fb4defb7db128096bb3307ee Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 21:53:35 +0100
 Subject: [PATCH] dt-bindings: hwmon: add HPE GXP SoC temperature sensor

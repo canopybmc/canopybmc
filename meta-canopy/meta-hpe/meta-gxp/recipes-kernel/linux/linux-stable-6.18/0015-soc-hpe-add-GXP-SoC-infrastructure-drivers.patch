@@ -1,4 +1,4 @@
-From 195a7fb9761f818b548cc8038fa37d846ed193b6 Mon Sep 17 00:00:00 2001
+From e7246b31375ec32aaeb9e0c54e91ce9a9785f619 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 8 Feb 2026 22:19:53 +0100
 Subject: [PATCH] soc: hpe: add GXP SoC infrastructure drivers
@@ -762,7 +762,7 @@ index 000000000000..1d30d05f0df8
 +#endif /* __GXP_SOCLIB_H__ */
 diff --git a/drivers/soc/hpe/gxp-xreg.c b/drivers/soc/hpe/gxp-xreg.c
 new file mode 100644
-index 000000000000..33656f77db79
+index 000000000000..709a56222bff
 --- /dev/null
 +++ b/drivers/soc/hpe/gxp-xreg.c
 @@ -0,0 +1,747 @@

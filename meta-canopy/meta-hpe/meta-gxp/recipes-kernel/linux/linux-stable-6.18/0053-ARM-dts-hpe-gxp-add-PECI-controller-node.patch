@@ -1,4 +1,4 @@
-From 15fbc61a741ac3535271508b3a05f0d79a933f26 Mon Sep 17 00:00:00 2001
+From b36eb5bfab31ad7666ecfc5f425606cd9ccef680 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 22:02:16 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add PECI controller node
@@ -15,10 +15,10 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 8 insertions(+)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index badf8c4b19e9..cbe8840428c2 100644
+index ca0d446a084c..e115c2293dc9 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-@@ -529,6 +529,14 @@ umac1: ethernet@c0005000 {
+@@ -545,6 +545,14 @@ umac1: ethernet@c0005000 {
  			nvmem-cell-names = "mac-address";
  		};
  

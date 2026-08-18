@@ -1,4 +1,4 @@
-From 5e854f4c28652684056eef9786f8f05a085bb9cc Mon Sep 17 00:00:00 2001
+From 42ef61ff2616e5e62147e07289f795821dd5a938 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 17:42:45 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add gpio-keys-polled node for fan presence
@@ -14,10 +14,10 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 54 insertions(+), 1 deletion(-)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index 9c2201c01fb3..a7add1feb614 100644
+index a9b9c7d94050..b35542d465b4 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-@@ -529,7 +529,60 @@ umac1: ethernet@c0005000 {
+@@ -545,7 +545,60 @@ umac1: ethernet@c0005000 {
  			nvmem-cell-names = "mac-address";
  		};
  

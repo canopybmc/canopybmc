@@ -1,4 +1,4 @@
-From 0e9d61f7c5c7a50e20d4133fb51b59aa89d128cc Mon Sep 17 00:00:00 2001
+From 34281bf2cd84e2a6b6cd86279265cf519262584a Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 5 Feb 2026 10:06:30 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: expand device tree for boot support
@@ -18,13 +18,19 @@ separate gxp-bmc-flash-layout.dtsi file, following the pattern used by
 Aspeed. This allows OpenBMC/Yocto recipes to override the flash layout
 without modifying the kernel base DTS.
 
+Allocate 1 MiB of memory for pstore/ramoops to have logs in case of a
+kernel panic.
+
 Upstream-Status: Pending
 
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Co-developed-by: Tan Siewert <tan.siewert@9elements.com>
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+Signed-off-by: Georg Hackel <georg.hackel@9elements.com>
 ---
  .../boot/dts/hpe/gxp-bmc-flash-layout.dtsi    |  58 ++++
- arch/arm/boot/dts/hpe/hpe-gxp.dts             | 299 ++++++++++++++----
- 2 files changed, 291 insertions(+), 66 deletions(-)
+ arch/arm/boot/dts/hpe/hpe-gxp.dts             | 315 ++++++++++++++----
+ 2 files changed, 307 insertions(+), 66 deletions(-)
  create mode 100644 arch/arm/boot/dts/hpe/gxp-bmc-flash-layout.dtsi
 
 diff --git a/arch/arm/boot/dts/hpe/gxp-bmc-flash-layout.dtsi b/arch/arm/boot/dts/hpe/gxp-bmc-flash-layout.dtsi
@@ -92,10 +98,33 @@ index 000000000000..c8a4fe40a24a
 +	};
 +};
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index 6bea75085cd0..eda3e01cfea2 100644
+index 6bea75085cd0..e5f6d21b8de9 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-@@ -54,89 +54,256 @@ iopclk: clock-1 {
+@@ -26,6 +26,22 @@ memory@40000000 {
+ 		reg = <0x40000000 0x20000000>;
+ 	};
+ 
++	reserved-memory {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		ranges;
++
++		ramoops@5fe00000 {
++			compatible = "ramoops";
++			reg = <0x5fe00000 0x100000>; /* 8 * (4 * 0x8000) */
++			record-size = <0x8000>;
++			console-size = <0x8000>;
++			ftrace-size = <0x8000>;
++			pmsg-size = <0x8000>;
++			max-reason = <3>; /* KMSG_DUMP_EMERG */
++		};
++	};
++
+ 	cpus {
+ 		#address-cells = <1>;
+ 		#size-cells = <0>;
+@@ -54,89 +70,256 @@ iopclk: clock-1 {
  		};
  	};
  
@@ -149,10 +178,8 @@ index 6bea75085cd0..eda3e01cfea2 100644
 +			interrupt-parent = <&vic0>;
 +			clock-frequency = <1846153>;
 +			reg-shift = <0>;
- 		};
- 
--		ahb@c0000000 {
--			compatible = "simple-bus";
++		};
++
 +		uartc: serial@c00000f0 {
 +			compatible = "ns16550a";
 +			reg = <0xc00000f0 0x8>;
@@ -160,8 +187,10 @@ index 6bea75085cd0..eda3e01cfea2 100644
 +			interrupt-parent = <&vic0>;
 +			clock-frequency = <1846153>;
 +			reg-shift = <0>;
-+		};
-+
+ 		};
+ 
+-		ahb@c0000000 {
+-			compatible = "simple-bus";
 +		st: timer@c0000080 {
 +			compatible = "hpe,gxp-timer";
 +			reg = <0xc0000080 0x16>;
@@ -294,12 +323,7 @@ index 6bea75085cd0..eda3e01cfea2 100644
 +			#address-cells = <1>;
 +			#size-cells = <0>;
 +		};
- 
--			usb0: usb@efe0000 {
--				compatible = "hpe,gxp-ehci", "generic-ehci";
--				reg = <0xefe0000 0x100>;
--				interrupts = <7>;
--				interrupt-parent = <&vic0>;
++
 +		i2c6: i2c@c0002600 {
 +			compatible = "hpe,gxp-i2c";
 +			reg = <0xc0002600 0x70>;
@@ -363,7 +387,12 @@ index 6bea75085cd0..eda3e01cfea2 100644
 +					compatible = "fixed-partitions";
 +					#address-cells = <1>;
 +					#size-cells = <1>;
-+
+ 
+-			usb0: usb@efe0000 {
+-				compatible = "hpe,gxp-ehci", "generic-ehci";
+-				reg = <0xefe0000 0x100>;
+-				interrupts = <7>;
+-				interrupt-parent = <&vic0>;
 +					host-master@0 {
 +						label = "uefi-master";
 +						reg = <0x0 0x2000000>;
@@ -371,6 +400,14 @@ index 6bea75085cd0..eda3e01cfea2 100644
 +				};
  			};
 +		};
++
++		spifi0: spi@c0000200 {
++			compatible = "hpe,gxp-spifi";
++			reg = <0xc0000200 0x80>, <0xc000c000 0x100>, <0xf8000000 0x8000000>;
++			interrupts = <20>;
++			interrupt-parent = <&vic0>;
++			#address-cells = <1>;
++			#size-cells = <0>;
  
 -			st: timer@80 {
 -				compatible = "hpe,gxp-timer";
@@ -379,14 +416,6 @@ index 6bea75085cd0..eda3e01cfea2 100644
 -				interrupt-parent = <&vic0>;
 -				clocks = <&iopclk>;
 -				clock-names = "iop";
-+		spifi0: spi@c0000200 {
-+			compatible = "hpe,gxp-spifi";
-+			reg = <0xc0000200 0x80>, <0xc000c000 0x100>, <0xf8000000 0x8000000>;
-+			interrupts = <20>;
-+			interrupt-parent = <&vic0>;
-+			#address-cells = <1>;
-+			#size-cells = <0>;
-+
 +			flash@0 {
 +				compatible = "jedec,spi-nor";
 +				reg = <0>;

@@ -1,4 +1,4 @@
-From 5da33280545efd713e038745a097c00e5318b76d Mon Sep 17 00:00:00 2001
+From dbb206d36f138f38b5867a6350d01b8367dde64b Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 11:18:05 +0100
 Subject: [PATCH] peci: core: export device lifecycle helpers for controller
