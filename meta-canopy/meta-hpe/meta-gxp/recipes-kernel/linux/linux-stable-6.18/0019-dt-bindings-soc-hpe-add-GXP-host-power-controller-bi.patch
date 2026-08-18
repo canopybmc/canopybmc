@@ -1,4 +1,4 @@
-From 124124aee756a1d389cd0dadb81f1bc6b7b90ebf Mon Sep 17 00:00:00 2001
+From ed08eb54d6beff867a86efb93fcb4d2aa542711a Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 8 Feb 2026 22:20:57 +0100
 Subject: [PATCH] dt-bindings: soc: hpe: add GXP host power controller binding

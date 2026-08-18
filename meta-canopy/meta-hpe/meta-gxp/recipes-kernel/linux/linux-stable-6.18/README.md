@@ -158,7 +158,3 @@ Should go under the `backports` directory.
 
 - 0086 # misc: ubm: add minimal UBM backplane init driver
 
-### ramoops
-
-- 0087 # ARM: dts: hpe: gxp: enable ramoops
-

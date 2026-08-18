@@ -1,4 +1,4 @@
-From 93dde1d9e000cae106136454a883143cc24ba09c Mon Sep 17 00:00:00 2001
+From f106b21d8e52927abd1fcf799dcf73b0851b5911 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 10 Feb 2026 12:38:40 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add Virtual UART node
@@ -15,7 +15,7 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 18 insertions(+)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index aea8e436647e..fd3304485f85 100644
+index 40f2e8432f9f..7b77be541d66 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
 @@ -14,6 +14,7 @@ aliases {
@@ -26,7 +26,7 @@ index aea8e436647e..fd3304485f85 100644
  		ethernet0 = &umac0;
  		ethernet1 = &umac1;
  	};
-@@ -273,6 +274,23 @@ uartc: serial@c00000f0 {
+@@ -289,6 +290,23 @@ uartc: serial@c00000f0 {
  			reg-shift = <0>;
  		};
  

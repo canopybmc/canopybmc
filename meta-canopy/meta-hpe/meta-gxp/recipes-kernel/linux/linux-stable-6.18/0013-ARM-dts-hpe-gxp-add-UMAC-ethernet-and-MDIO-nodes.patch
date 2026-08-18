@@ -1,4 +1,4 @@
-From a2cd87003c66fa054a8eabb5ab5eadee025e20df Mon Sep 17 00:00:00 2001
+From 5bc30387a0a4d8e388cb9f725a4120c81ce31402 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 5 Feb 2026 11:05:29 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add UMAC ethernet and MDIO nodes
@@ -21,7 +21,7 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 56 insertions(+)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index ad23b8d08bc3..14b333d8297d 100644
+index 6f86a011f59f..d1cdb46f8489 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
 @@ -14,6 +14,8 @@ aliases {
@@ -33,7 +33,7 @@ index ad23b8d08bc3..14b333d8297d 100644
  	};
  
  	chosen {
-@@ -277,6 +279,60 @@ pca_pn: pca-part-number@a0 {
+@@ -293,6 +295,60 @@ pca_pn: pca-part-number@a0 {
  			};
  		};
  

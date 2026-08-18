@@ -1,4 +1,4 @@
-From 2a0e1c4754d491eb5199b290aa914773e3739f89 Mon Sep 17 00:00:00 2001
+From 92bbbd2fa0c8dd194349981846ecdcda1428d978 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 5 Feb 2026 11:04:06 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add NVMEM virtual EEPROM with MAC address
@@ -17,10 +17,10 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 36 insertions(+)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index eda3e01cfea2..ad23b8d08bc3 100644
+index e5f6d21b8de9..6f86a011f59f 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-@@ -241,6 +241,42 @@ i2c9: i2c@c0002900 {
+@@ -257,6 +257,42 @@ i2c9: i2c@c0002900 {
  			#size-cells = <0>;
  		};
  

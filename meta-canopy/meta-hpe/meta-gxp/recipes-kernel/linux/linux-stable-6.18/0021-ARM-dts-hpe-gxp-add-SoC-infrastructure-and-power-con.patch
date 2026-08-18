@@ -1,4 +1,4 @@
-From 3a80cffa24bb6759cd25effdd89db7d39ae8e30f Mon Sep 17 00:00:00 2001
+From 1a825e1215df2f4bb60dc83d63b38e3222a0cc3d Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 8 Feb 2026 22:21:32 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add SoC infrastructure and power control
@@ -19,10 +19,10 @@ Signed-off-by: Georg Hackel <georg.hackel@9elements.com>
  1 file changed, 166 insertions(+), 4 deletions(-)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index 14b333d8297d..aea8e436647e 100644
+index d1cdb46f8489..40f2e8432f9f 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-@@ -83,6 +83,169 @@ vic1: interrupt-controller@80f00000 {
+@@ -99,6 +99,169 @@ vic1: interrupt-controller@80f00000 {
  			#interrupt-cells = <1>;
  		};
  
@@ -192,7 +192,7 @@ index 14b333d8297d..aea8e436647e 100644
  		uarta: serial@c00000e0 {
  			compatible = "ns16550a";
  			reg = <0xc00000e0 0x8>;
-@@ -335,10 +498,9 @@ umac1: ethernet@c0005000 {
+@@ -351,10 +514,9 @@ umac1: ethernet@c0005000 {
  
  		fanctrl: fan-controller@c1000c00 {
  			compatible = "hpe,gxp-fan-ctrl";

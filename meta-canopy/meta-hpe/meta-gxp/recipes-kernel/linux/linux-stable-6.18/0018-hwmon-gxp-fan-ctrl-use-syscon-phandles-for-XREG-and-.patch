@@ -1,4 +1,4 @@
-From 98f8f324544d4efde579b57db464dfa1872ff761 Mon Sep 17 00:00:00 2001
+From e92c01929ea3d4a4283db4c838c48abf12addabe Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 8 Feb 2026 22:20:50 +0100
 Subject: [PATCH] hwmon: gxp-fan-ctrl: use syscon phandles for XREG and FN2
@@ -31,7 +31,7 @@ index 2a71b6e834b0..c8a64b3563ef 100644
  	  If you say yes here you get support for GXP fan control functionality.
  
 diff --git a/drivers/hwmon/gxp-fan-ctrl.c b/drivers/hwmon/gxp-fan-ctrl.c
-index 00e057050437..0ec8818784d2 100644
+index 00e057050437..33decc881b92 100644
 --- a/drivers/hwmon/gxp-fan-ctrl.c
 +++ b/drivers/hwmon/gxp-fan-ctrl.c
 @@ -5,54 +5,54 @@

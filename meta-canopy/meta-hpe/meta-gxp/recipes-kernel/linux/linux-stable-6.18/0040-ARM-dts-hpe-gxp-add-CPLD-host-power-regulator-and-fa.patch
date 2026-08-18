@@ -1,4 +1,4 @@
-From 9980de612d7e426f702ddca8dd54d35eb14d57a9 Mon Sep 17 00:00:00 2001
+From eeea6a710fa7bb08fe63bc70a221a8c5dda98eff Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 09:31:22 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add CPLD host power regulator and
@@ -17,10 +17,10 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 6 insertions(+), 1 deletion(-)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index 64257d2d5f48..fdbf7b713610 100644
+index 8a4d7f00ea6f..5e919b5140ab 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-@@ -203,6 +203,11 @@ chif: chif {
+@@ -219,6 +219,11 @@ chif: chif {
  				interrupts = <12>;
  				interrupt-parent = <&vic1>;
  			};
@@ -32,7 +32,7 @@ index 64257d2d5f48..fdbf7b713610 100644
  		};
  
  		espi: espi@80fe0000 {
-@@ -524,7 +529,7 @@ fanctrl: fan-controller@c1000c00 {
+@@ -540,7 +545,7 @@ fanctrl: fan-controller@c1000c00 {
  			compatible = "hpe,gxp-fan-ctrl";
  			reg = <0xc1000c00 0x200>;
  			hpe,xreg = <&xreg>;

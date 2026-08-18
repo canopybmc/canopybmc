@@ -1,4 +1,4 @@
-From 66108171d0a626252de737a7b41a6276b8086791 Mon Sep 17 00:00:00 2001
+From 21ef0411c2eb01a10981089392085aeb439be169 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Sun, 8 Mar 2026 00:00:00 +0000
 Subject: [PATCH] ARM: dts: hpe-gxp: add video thumbnail and USB UDC nodes
@@ -21,10 +21,10 @@ Signed-off-by: Christian Walter <christian.walter@9elements.com>
  1 file changed, 41 insertions(+)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index 031d0ab2f4cf..21ccbf5de019 100644
+index 1f9ad626d16f..0646d3bf6e63 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-@@ -624,6 +624,47 @@ i2c_passthrough: i2c-passthrough {
+@@ -640,6 +640,47 @@ i2c_passthrough: i2c-passthrough {
  			regulator-name = "i2c-passthrough";
  		};
  

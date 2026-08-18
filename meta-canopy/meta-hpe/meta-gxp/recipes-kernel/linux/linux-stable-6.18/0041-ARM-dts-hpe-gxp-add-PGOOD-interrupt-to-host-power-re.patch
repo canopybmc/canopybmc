@@ -1,4 +1,4 @@
-From 18e809891f701b15dbd61eac0fc236cf687474ee Mon Sep 17 00:00:00 2001
+From 4c2917b356e1de1541b34fd1b34c42b5d6b4d4b2 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 11:25:46 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add PGOOD interrupt to host power
@@ -17,7 +17,7 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 4 insertions(+)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index fdbf7b713610..9c2201c01fb3 100644
+index 5e919b5140ab..a9b9c7d94050 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
 @@ -4,6 +4,9 @@
@@ -30,7 +30,7 @@ index fdbf7b713610..9c2201c01fb3 100644
  / {
  	model = "Hewlett Packard Enterprise GXP BMC";
  	compatible = "hpe,gxp";
-@@ -207,6 +210,7 @@ chif: chif {
+@@ -223,6 +226,7 @@ chif: chif {
  			host_power: regulator-host-power {
  				compatible = "hpe,gxp-host-power-supply";
  				regulator-name = "host-power";
