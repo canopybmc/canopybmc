@@ -1,0 +1,31 @@
+From 70f9645a35b6c6c1b9f29b7b2ce5bbf393b1ae59 Mon Sep 17 00:00:00 2001
+From: Christian Walter <christian.walter@9elements.com>
+Date: Tue, 18 Aug 2026 14:21:50 +0200
+Subject: [PATCH] ARM: dts: hpe-gxp: add node for GXP video thumbnail engine
+
+prerequisite for KVM-over-IP
+
+Upstream-Status: Pending
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+Signed-off-by: Georg Hackel <georg.hackel@9elements.com>
+---
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index 1f9ad626d16f..11412d2adf81 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -640,6 +640,12 @@ i2c_passthrough: i2c-passthrough {
+ 			regulator-name = "i2c-passthrough";
+ 		};
+ 
++		thumbnail: video@c0000500 {
++			compatible = "hpe,gxp-video-thumbnail";
++			reg = <0xc0000500 0x20>;
++			hpe,bits-per-pixel = <32>;
++		};
++
+ 		spifi1: spi@c0000280 {
+ 			compatible = "hpe,gxp-spifi";
+ 			reg = <0xc0000280 0x80>, <0xc000e000 0x100>, <0xf0000000 0x4000000>;
