@@ -1,4 +1,4 @@
-From 2187a85db03cdebeb20fc935df5fef1751db2500 Mon Sep 17 00:00:00 2001
+From f4e4b9f5c7ef51401dce5fe3368b80ea0b801143 Mon Sep 17 00:00:00 2001
 From: Tan Siewert <tan.siewert@9elements.com>
 Date: Fri, 24 Jul 2026 01:33:41 +0200
 Subject: [PATCH] ARM: dts: hpe: gxp: add nvram partitions
@@ -7,6 +7,7 @@ Add the memory-mapped host NVRAM partitions. The register and offsets
 were extracted from the vendor device-tree that is available in the HPE
 tarball.
 
+Upstream-Status: Pending
 Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
 ---
  arch/arm/boot/dts/hpe/hpe-gxp.dts | 19 +++++++++++++++++++
@@ -42,6 +43,3 @@ index 0646d3bf6e63..501cecfc1859 100644
  		fan-keys {
  		compatible = "gpio-keys-polled";
  		poll-interval = <1000>;
--- 
-2.54.0
-

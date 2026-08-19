@@ -1,4 +1,4 @@
-From 791794f2a838c8c719cf5d2c5ef6fbeb12e513b3 Mon Sep 17 00:00:00 2001
+From d7c51e9eeb8677ef564913b1206efe0cf28ac268 Mon Sep 17 00:00:00 2001
 From: Tan Siewert <tan.siewert@9elements.com>
 Date: Tue, 7 Jul 2026 11:02:50 +0200
 Subject: [PATCH] soc: hpe: gxp-chif: expose poll on char device
@@ -10,6 +10,8 @@ isn't set. That flag is only set by the blocking read() path, so gating
 the wakeup on it meant a process waiting via poll()/select()/epoll() was
 registered on the wait queue by poll_wait() but never woken, and would
 block indefinitely even though packets had arrived.
+
+Upstream-Status: Pending
 
 Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
 ---
@@ -69,6 +71,3 @@ index 640eae54142d..db67bd8951ea 100644
  				wake_up_interruptible(&drvdata->wait[i]);
  		}
  	}
--- 
-2.54.0
-

@@ -1,0 +1,67 @@
+From b82b3e13920b363283c4a5ee63982edb006da3dd Mon Sep 17 00:00:00 2001
+From: Christian Walter <christian.walter@9elements.com>
+Date: Tue, 18 Aug 2026 14:28:30 +0200
+Subject: [PATCH] ARM: dts: hpe-gxp: add USB UDC nodes
+
+required for KVM-over-IP functionality:
+
+- UDC group controller (udcg) syscon at 0x80400800
+- Three USB device controller instances (udc0-udc2)
+
+UDC allocation follows HPE convention:
+  udc0: HID gadget (keyboard + mouse for KVM)
+  udc2: reserved for virtual NIC (ECM)
+
+Upstream-Status: Pending
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
+Signed-off-by: Georg Hackel <georg.hackel@9elements.com>
+---
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 35 +++++++++++++++++++++++++++++++
+ 1 file changed, 35 insertions(+)
+
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index 11412d2adf81..0646d3bf6e63 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -646,6 +646,41 @@ thumbnail: video@c0000500 {
+ 			hpe,bits-per-pixel = <32>;
+ 		};
+ 
++		udcg: syscon@80400800 {
++			compatible = "hpe,gxp-udcg", "syscon";
++			reg = <0x80400800 0x200>;
++		};
++
++		udc0: usb@80401000 {
++			compatible = "hpe,gxp-udc";
++			reg = <0x80401000 0x1000>;
++			interrupts = <13>;
++			interrupt-parent = <&vic1>;
++			hpe,vdev-num = <0>;
++			hpe,num-flex-endpoints = <4>;
++			hpe,udcg = <&udcg>;
++		};
++
++		udc1: usb@80402000 {
++			compatible = "hpe,gxp-udc";
++			reg = <0x80402000 0x1000>;
++			interrupts = <13>;
++			interrupt-parent = <&vic1>;
++			hpe,vdev-num = <1>;
++			hpe,num-flex-endpoints = <4>;
++			hpe,udcg = <&udcg>;
++		};
++
++		udc2: usb@80403000 {
++			compatible = "hpe,gxp-udc";
++			reg = <0x80403000 0x1000>;
++			interrupts = <13>;
++			interrupt-parent = <&vic1>;
++			hpe,vdev-num = <2>;
++			hpe,num-flex-endpoints = <4>;
++			hpe,udcg = <&udcg>;
++		};
++
+ 		spifi1: spi@c0000280 {
+ 			compatible = "hpe,gxp-spifi";
+ 			reg = <0xc0000280 0x80>, <0xc000e000 0x100>, <0xf0000000 0x4000000>;

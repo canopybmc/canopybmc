@@ -1,4 +1,4 @@
-From 7d8ed267fc8749ce1a7bcaa1a4d8f55c62840e73 Mon Sep 17 00:00:00 2001
+From 1ab790e3aaa2f76e5059b67c6a3610e00e8beab5 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Fri, 24 Apr 2026 16:00:00 +0200
 Subject: [PATCH] misc: ubm: add minimal UBM backplane init driver
@@ -23,6 +23,8 @@ Gen11 device tree overlays.
 
 Tested: Cold boot on HPE ProLiant DL380 Gen11 -- NVMe drives visible in
 BIOS after applying the init command during early POST.
+
+Upstream-Status: Pending
 
 Signed-off-by: Christian Walter <christian.walter@9elements.com>
 ---
@@ -227,6 +229,3 @@ index 000000000000..bce484b900f2
 +
 +MODULE_AUTHOR("Christian Walter <christian.walter@9elements.com>");
 +MODULE_DESCRIPTION("UBM backplane controller init driver");
--- 
-2.54.0
-
