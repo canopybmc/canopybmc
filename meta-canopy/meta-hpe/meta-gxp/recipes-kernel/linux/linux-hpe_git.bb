@@ -91,9 +91,12 @@ SRC_URI:append = " \
     file://0073-ARM-dts-hpe-gxp-add-I2C-passthrough-node.patch \
     file://0074-dt-bindings-soc-hpe-add-GXP-KCS-Interface-binding.patch \
     file://0075-soc-hpe-add-GXP-KCS-interface-driver.patch \
-    file://0076-media-add-GXP-thumbnail-video-capture-driver.patch \
-    file://0077-ARM-dts-hpe-gxp-add-video-thumbnail-and-USB-UDC-node.patch \
-    file://0078-usb-gadget-udc-add-HPE-GXP-USB-device-controller-dri.patch \
+    file://0076-dt-bindings-media-add-HPE-GXP-Thumbnail-Video-Captur.patch \
+    file://0077-media-add-GXP-thumbnail-video-capture-driver.patch \
+    file://0078-ARM-dts-hpe-gxp-add-node-for-GXP-video-thumbnail-eng.patch \
+    file://0079-dt-bindings-usb-add-HPE-USB-Device-Controllers-bindi.patch \
+    file://0080-usb-gadget-udc-add-HPE-GXP-USB-device-controller-dri.patch \
+    file://0081-ARM-dts-hpe-gxp-add-USB-UDC-nodes.patch \
     file://0086-misc-ubm-add-minimal-UBM-backplane-init-driver.patch \
     file://0088-soc-hpe-gxp-chif-expose-poll-on-char-device.patch \
     file://0089-ARM-dts-hpe-gxp-add-nvram-partitions.patch \

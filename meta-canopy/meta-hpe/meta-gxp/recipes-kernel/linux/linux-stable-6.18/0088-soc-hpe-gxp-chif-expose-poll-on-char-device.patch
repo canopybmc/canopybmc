@@ -1,4 +1,4 @@
-From 527b11847ab200df6cbb63ca048cb8e6ca619dab Mon Sep 17 00:00:00 2001
+From d7c51e9eeb8677ef564913b1206efe0cf28ac268 Mon Sep 17 00:00:00 2001
 From: Tan Siewert <tan.siewert@9elements.com>
 Date: Tue, 7 Jul 2026 11:02:50 +0200
 Subject: [PATCH] soc: hpe: gxp-chif: expose poll on char device
