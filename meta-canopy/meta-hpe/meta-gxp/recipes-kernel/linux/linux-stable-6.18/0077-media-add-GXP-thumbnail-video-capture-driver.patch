@@ -1,4 +1,4 @@
-From eb90d7e0cc430f609e6e0f8e61967da71edc11e0 Mon Sep 17 00:00:00 2001
+From 195a459bc87093b15616ef67ddb108516935eb0e Mon Sep 17 00:00:00 2001
 From: Nick Hawkins <nick.hawkins@hpe.com>
 Date: Sun, 8 Mar 2026 00:00:00 +0000
 Subject: [PATCH] media: add GXP thumbnail video capture driver
@@ -20,6 +20,7 @@ Key design decisions:
 
 Upstream-Status: Pending
 Signed-off-by: Nick Hawkins <nick.hawkins@hpe.com>
+Signed-off-by: Christian Walter <christian.walter@9elements.com>
 ---
  drivers/media/platform/Kconfig                |   1 +
  drivers/media/platform/Makefile               |   1 +

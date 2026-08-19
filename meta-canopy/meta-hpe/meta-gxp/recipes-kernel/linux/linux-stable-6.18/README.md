@@ -150,11 +150,17 @@ Should go under the `backports` directory.
     - TODO: proper commit description
     - TODO: original (HPE) authors: Co-developed-by tag?
 
-### Video capture & UDC (could/should be split)
+### Video capture engine
 
-- 0076 # media: add GXP thumbnail video capture driver
-- 0077 # ARM: dts: hpe-gxp: add video thumbnail and USB UDC nodes
-- 0078 # usb: gadget: udc: add HPE GXP USB device controller driver
+- 0076 # dt-bindings: media: add HPE GXP Thumbnail Video Capture
+- 0077 # media: add GXP thumbnail video capture driver
+- 0078 # ARM: dts: hpe-gxp: add node for GXP video thumbnail engine
+
+### UDC (gadget)
+
+- 0079 # dt-bindings: usb: add HPE USB Device Controllers binding
+- 0080 # usb: gadget: udc: add HPE GXP USB device controller driver
+- 0081 # ARM: dts: hpe-gxp: add USB UDC nodes
 
 ### UBM backplane 
 
