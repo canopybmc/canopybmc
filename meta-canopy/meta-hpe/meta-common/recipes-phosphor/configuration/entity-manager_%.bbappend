@@ -1,23 +1,12 @@
 FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 
-SRC_URI += "file://0001-devicetree-vpd-add-part-number-parsing.patch"
-SRC_URI += "file://0002-devicetree-vpd-add-manufacturer-parsing.patch"
-SRC_URI += "file://0005-schemas-firmware-allow-for-updating-spi-partition.patch"
-ERROR_QA:remove = "patch-status"
+SRC_URI:append = " \
+    file://0001-devicetree-vpd-parser-expose-part-number-and-manufac.patch \
+    file://0002-schemas-firmware-allow-for-updating-spi-partition.patch \
+    file://0003-fru-device-load-synthetic-FRUs-from-etc-fru.patch \
+"
 
-# Enable devicetree VPD parser for platform identification
-PACKAGECONFIG:append = " dts-vpd"
-
-# Baseboard (PCA) VPD support for devicetree-vpd-parser
-SRC_URI += "file://0001-devicetree-vpd-parser-add-baseboard-PCA-VPD-support.patch"
-
-# Let fru-device publish multiple synthetic (non-EEPROM) FRUs from /etc/fru,
-# so baseboard/CPU/DIMM FRU (sourced from device-tree VPD + host SMBIOS by the
-# fru-synthesizer service) are served over IPMI via xyz.openbmc_project.FruDevice.
-SRC_URI += "file://0007-fru-device-load-synthetic-FRUs-from-etc-fru.patch"
-
-# HPE ProLiant Gen11 baseboard configurations
-SRC_URI += " \
+SRC_URI:append = " \
     file://blacklist.json \
     file://dl110g11_baseboard.json \
     file://dl145g11_baseboard.json \
@@ -35,6 +24,8 @@ SRC_URI += " \
     file://hpe_drv.json \
     file://hpe_ubm.json \
 "
+
+PACKAGECONFIG:append = " dts-vpd"
 
 do_install:append() {
     install -D ${UNPACKDIR}/blacklist.json ${D}${datadir}/${BPN}/blacklist.json
@@ -67,3 +58,4 @@ do_install:append() {
     install -D ${UNPACKDIR}/hpe_drv.json ${D}${datadir}/${BPN}/configurations/hpe/hpe_drv.json
     install -D ${UNPACKDIR}/hpe_ubm.json ${D}${datadir}/${BPN}/configurations/hpe/hpe_ubm.json
 }
+

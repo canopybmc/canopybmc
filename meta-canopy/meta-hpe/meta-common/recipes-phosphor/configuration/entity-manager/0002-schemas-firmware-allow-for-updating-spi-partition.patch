@@ -1,4 +1,4 @@
-From fc180d85cc934e0b85673029ba25ed784f044ce1 Mon Sep 17 00:00:00 2001
+From 66a90cb6f530f815e5f6f9dc54dd55d311957271 Mon Sep 17 00:00:00 2001
 From: Alexander Hansen <alexander.hansen@9elements.com>
 Date: Wed, 1 Jul 2026 14:18:29 +0200
 Subject: [PATCH] schemas/firmware: allow for updating spi partition
@@ -41,19 +41,19 @@ host-second
 
 Adjust the schema to allow for configuring the partition to be updated.
 
-Tested: TODO
+Tested: checked that the configuration is exposed correctly and picked
+up by the code updater. Completed an update on hpe-proliant-g11.
 
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/entity-manager/+/91915]
 Change-Id: Ifd0fa059d7b4b597d860bb0f9509282f6202f372
 Signed-off-by: Alexander Hansen <alexander.hansen@9elements.com>
 ---
- schemas/firmware.json | 5 +++++
- 1 file changed, 5 insertions(+)
 
 diff --git a/schemas/firmware.json b/schemas/firmware.json
-index 39fcb13..a52aacf 100644
+index ba32140..5848fc7 100644
 --- a/schemas/firmware.json
 +++ b/schemas/firmware.json
-@@ -100,6 +100,10 @@
+@@ -95,6 +95,10 @@
                      "description": "The index of the SPI device connected to that controller",
                      "type": "number"
                  },
@@ -64,11 +64,3 @@ index 39fcb13..a52aacf 100644
                  "MuxOutputs": {
                      "$ref": "#/$defs/MuxOutputs"
                  },
-@@ -112,6 +116,7 @@
-                 "Type",
-                 "SPIControllerIndex",
-                 "SPIDeviceIndex",
-+                "Partition",
-                 "MuxOutputs",
-                 "FirmwareInfo"
-             ]
