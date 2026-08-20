@@ -24,28 +24,6 @@ variables:
   UpdateTriggerOutput: null
 
 stages:
-  - name: Prepare NVRAM # TODO this shouldn't be needed, investigate
-    steps:
-      - cmd: copy
-        name: Copy original NVRAM to DUT
-        transport: *bmc_ssh
-        parameters:
-          source: "[[storage.dl320g11_nvram]]"
-          destination: /tmp
-          recursive: true
-
-      - cmd: shell
-        name: Copy EVs to CHIF path
-        transport: *bmc_ssh
-        parameters:
-          command: "cp /tmp/[[storage.dl320g11_nvram.evs]] /var/lib/chif/evs.dat"
-
-      - cmd: shell
-        name: Restart CHIF service
-        transport: *bmc_ssh
-        parameters:
-          command: "systemctl restart xyz.openbmc_project.GxpChif.service"
-
   - name: Host on, OS Booting
     steps:
       - cmd: shell
