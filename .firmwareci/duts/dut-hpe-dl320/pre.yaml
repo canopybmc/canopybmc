@@ -58,12 +58,15 @@ pre-stage:
     parameters:
       host: "[[attributes.BMC]]"
 
-  - cmd: cmd
-    name: Wait for BMC services
-    transport: &local
-      proto: local
+  - cmd: shell
+    name: Wait for BMC ready
+    transport: &bmc_ssh
+      proto: ssh
+      options:
+        host: "[[attributes.BMC]]"
+        user: root
+        password: "[[attributes.BMCPassword]]"
     options:
       timeout: 2m
     parameters:
-      executable: sleep
-      args: ["45"]
+      command: "journalctl -t phosphor-bmc-state-manager -f | grep -m 1 BMC_READY"
