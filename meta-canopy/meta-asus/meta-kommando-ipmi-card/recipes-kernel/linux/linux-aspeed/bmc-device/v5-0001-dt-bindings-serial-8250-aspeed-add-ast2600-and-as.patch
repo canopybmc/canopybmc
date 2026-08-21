@@ -1,0 +1,113 @@
+From 52d5bce1cf8ec3ff0b27e7313655cf7ffa2236b5 Mon Sep 17 00:00:00 2001
+Message-ID: <52d5bce1cf8ec3ff0b27e7313655cf7ffa2236b5.1785833794.git.gregoire.layet@9elements.com>
+In-Reply-To: <cover.1785833794.git.gregoire.layet@9elements.com>
+References: <cover.1785833794.git.gregoire.layet@9elements.com>
+From: =?UTF-8?q?Gr=C3=A9goire=20Layet?= <gregoire.layet@9elements.com>
+Date: Wed, 17 Jun 2026 10:45:53 +0200
+Subject: [PATCH v5 1/6] dt-bindings: serial: 8250: aspeed: add ast2600 and
+ aspeed,vuart-over-pci
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The ASPEED AST2600 has 2 Virtual UARTs accessible over PCI.
+The ASPEED AST2600 can be used as a PCI device.
+2 Virtual UART can be exposed to the host via this PCI device.
+These are 8250-compatible register sets and can be used to have UART
+communication between the PCI BMC and the host.
+
+This boolean can be set to specify if a VUART is used over PCI. A VUART
+over PCI needs a syscon phandle. The syscon gives a regmap to the SCU,
+which is used to set the enable bits of the PCI device.
+On the aspeed's chips, the clocks phandle already points at the SCU node.
+But deriving the regmap from the clock provider would misuse the clocks
+binding. An explicit syscon phandle states the dependency directly.
+
+Upstream-Status: Submitted [Lore, https://lore.kernel.org/all/52d5bce1cf8ec3ff0b27e7313655cf7ffa2236b5.1785932211.git.gregoire.layet@9elements.com/]
+Signed-off-by: Grégoire Layet <gregoire.layet@9elements.com>
+---
+ .../devicetree/bindings/serial/8250.yaml      | 42 ++++++++++++++++++-
+ 1 file changed, 40 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/serial/8250.yaml b/Documentation/devicetree/bindings/serial/8250.yaml
+index bb7b9c87a807..8dd4b7af0c0d 100644
+--- a/Documentation/devicetree/bindings/serial/8250.yaml
++++ b/Documentation/devicetree/bindings/serial/8250.yaml
+@@ -18,12 +18,34 @@ allOf:
+             - aspeed,lpc-io-reg
+         - required:
+             - aspeed,lpc-interrupts
++    then:
++      properties:
++        compatible:
++          contains:
++            enum:
++              - aspeed,ast2500-vuart
++              - aspeed,ast2600-vuart
++  - if:
++      anyOf:
+         - required:
+             - aspeed,sirq-polarity-sense
+     then:
+       properties:
+         compatible:
+           const: aspeed,ast2500-vuart
++  - if:
++      required:
++        - aspeed,vuart-over-pci
++    then:
++      required:
++        - aspeed,scu-syscon
++      properties:
++        compatible:
++          contains:
++            const: aspeed,ast2600-vuart
++    else:
++      properties:
++        aspeed,scu-syscon: false
+   - if:
+       properties:
+         compatible:
+@@ -106,6 +128,9 @@ properties:
+       - const: ns16850
+       - const: aspeed,ast2400-vuart
+       - const: aspeed,ast2500-vuart
++      - items:
++          - const: aspeed,ast2600-vuart
++          - const: aspeed,ast2500-vuart
+       - const: intel,xscale-uart
+       - const: mrvl,pxa-uart
+       - const: nuvoton,wpcm450-uart
+@@ -297,7 +322,8 @@ properties:
+     $ref: /schemas/types.yaml#/definitions/uint32-array
+     maxItems: 1
+     description: |
+-      The VUART LPC address.  Only applicable to aspeed,ast2500-vuart.
++      The VUART LPC address.  Only applicable to aspeed,ast2500-vuart and
++      aspeed,ast2600-vuart.
+
+   aspeed,lpc-interrupts:
+     $ref: /schemas/types.yaml#/definitions/uint32-array
+@@ -306,7 +332,19 @@ properties:
+     description: |
+       A 2-cell property describing the VUART SIRQ number and SIRQ
+       polarity (IRQ_TYPE_LEVEL_LOW or IRQ_TYPE_LEVEL_HIGH).  Only
+-      applicable to aspeed,ast2500-vuart.
++      applicable to aspeed,ast2500-vuart and aspeed,ast2600-vuart.
++
++  aspeed,vuart-over-pci:
++    type: boolean
++    description:
++      Enable the VUART over the BMC PCI device. Only applicable to
++      aspeed,ast2600-vuart.
++
++  aspeed,scu-syscon:
++    $ref: /schemas/types.yaml#/definitions/phandle
++    description:
++      Phandle to the SCU syscon, used to enable the VUART over the BMC PCI
++      device. Only applicable to aspeed,ast2600-vuart.
+
+ required:
+   - reg
+--
+2.54.0

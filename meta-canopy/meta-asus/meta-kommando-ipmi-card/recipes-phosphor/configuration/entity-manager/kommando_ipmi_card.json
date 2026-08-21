@@ -1,0 +1,364 @@
+{
+    "Exposes": [
+        {
+            "Connector": {
+                "Name": "Fan connector 0",
+                "Pwm": 0,
+                "Tachs": [
+                    0
+                ]
+            },
+            "Index": 0,
+            "Name": "Fan_0",
+            "Type": "AspeedFan"
+        },
+        {
+            "Connector": {
+                "Name": "Fan connector 1",
+                "Pwm": 1,
+                "Tachs": [
+                    1
+                ]
+            },
+            "Index": 1,
+            "Name": "Fan_1",
+            "Type": "AspeedFan"
+        },
+        {
+            "Connector": {
+                "Name": "Fan connector 2",
+                "Pwm": 2,
+                "Tachs": [
+                    2
+                ]
+            },
+            "Index": 2,
+            "Name": "Fan_2",
+            "Type": "AspeedFan"
+        },
+        {
+            "Connector": {
+                "Name": "Fan connector 3",
+                "Pwm": 3,
+                "Tachs": [
+                    3
+                ]
+            },
+            "Index": 3,
+            "Name": "Fan_3",
+            "Type": "AspeedFan"
+        },
+        {
+            "Connector": {
+                "Name": "Fan connector 4",
+                "Pwm": 4,
+                "Tachs": [
+                    4
+                ]
+            },
+            "Index": 4,
+            "Name": "Fan_4",
+            "Type": "AspeedFan"
+        },
+        {
+            "Connector": {
+                "Name": "Fan connector 5",
+                "Pwm": 5,
+                "Tachs": [
+                    5
+                ]
+            },
+            "Index": 5,
+            "Name": "Fan_5",
+            "Type": "AspeedFan"
+        },
+        {
+            "Connector": {
+                "Name": "Fan connector 6",
+                "Pwm": 6,
+                "Tachs": [
+                    6
+                ]
+            },
+            "Index": 6,
+            "Name": "Fan_6",
+            "Type": "AspeedFan"
+        },
+        {
+            "Connector": {
+                "Name": "Fan connector 7",
+                "Pwm": 7,
+                "Tachs": [
+                    7
+                ]
+            },
+            "Index": 7,
+            "Name": "Fan_7",
+            "Type": "AspeedFan"
+        },
+        {
+            "Name": "Header0_Temp",
+            "PollRate": 1.0,
+            "PowerState": "Always",
+            "ThermistorAdcChannel": 0,
+            "Thresholds": [
+                {
+                    "Direction": "greater than",
+                    "Name": "upper critical",
+                    "Severity": 1,
+                    "Value": 90
+                },
+                {
+                    "Direction": "greater than",
+                    "Name": "upper non critical",
+                    "Severity": 0,
+                    "Value": 75
+                }
+            ],
+            "Type": "NTCThermistor"
+        },
+        {
+            "Name": "Header1_Temp",
+            "PollRate": 1.0,
+            "PowerState": "Always",
+            "ThermistorAdcChannel": 1,
+            "Thresholds": [
+                {
+                    "Direction": "greater than",
+                    "Name": "upper critical",
+                    "Severity": 1,
+                    "Value": 90
+                },
+                {
+                    "Direction": "greater than",
+                    "Name": "upper non critical",
+                    "Severity": 0,
+                    "Value": 75
+                }
+            ],
+            "Type": "NTCThermistor"
+        },
+        {
+            "Name": "Header2_Temp",
+            "PollRate": 1.0,
+            "PowerState": "Always",
+            "ThermistorAdcChannel": 2,
+            "Thresholds": [
+                {
+                    "Direction": "greater than",
+                    "Name": "upper critical",
+                    "Severity": 1,
+                    "Value": 90
+                },
+                {
+                    "Direction": "greater than",
+                    "Name": "upper non critical",
+                    "Severity": 0,
+                    "Value": 75
+                }
+            ],
+            "Type": "NTCThermistor"
+        },
+        {
+            "Class": "fan",
+            "FFGainCoefficient": 1.0,
+            "FFOffCoefficient": 0.0,
+            "ICoefficient": 0.0,
+            "ILimitMax": 0.0,
+            "ILimitMin": 0.0,
+            "Inputs": [
+                "Fan_0",
+                "Fan_1",
+                "Fan_2"
+            ],
+            "MissingIsAcceptable": [
+                "Fan_0",
+                "Fan_1",
+                "Fan_2"
+            ],
+            "Name": "Zone 1 Fans",
+            "OutLimitMax": 100.0,
+            "OutLimitMin": 0.0,
+            "Outputs": [
+                "Pwm 1",
+                "Pwm 2",
+                "Pwm 3"
+            ],
+            "PCoefficient": 0.0,
+            "SlewNeg": 0.0,
+            "SlewPos": 0.0,
+            "Type": "Pid",
+            "Zones": [
+                "Zone 1"
+            ]
+        },
+        {
+            "Class": "fan",
+            "FFGainCoefficient": 1.0,
+            "FFOffCoefficient": 0.0,
+            "ICoefficient": 0.0,
+            "ILimitMax": 0.0,
+            "ILimitMin": 0.0,
+            "Inputs": [
+                "Fan_3",
+                "Fan_4",
+                "Fan_5"
+            ],
+            "MissingIsAcceptable": [
+                "Fan_3",
+                "Fan_4",
+                "Fan_5"
+            ],
+            "Name": "Zone 2 Fans",
+            "OutLimitMax": 100.0,
+            "OutLimitMin": 0.0,
+            "Outputs": [
+                "Pwm 4",
+                "Pwm 5",
+                "Pwm 6"
+            ],
+            "PCoefficient": 0.0,
+            "SlewNeg": 0.0,
+            "SlewPos": 0.0,
+            "Type": "Pid",
+            "Zones": [
+                "Zone 2"
+            ]
+        },
+        {
+            "Class": "fan",
+            "FFGainCoefficient": 1.0,
+            "FFOffCoefficient": 0.0,
+            "ICoefficient": 0.0,
+            "ILimitMax": 0.0,
+            "ILimitMin": 0.0,
+            "Inputs": [
+                "Fan_6",
+                "Fan_7"
+            ],
+            "MissingIsAcceptable": [
+                "Fan_6",
+                "Fan_7"
+            ],
+            "Name": "Zone 3 Fans",
+            "OutLimitMax": 100.0,
+            "OutLimitMin": 0.0,
+            "Outputs": [
+                "Pwm 7",
+                "Pwm 8"
+            ],
+            "PCoefficient": 0.0,
+            "SlewNeg": 0.0,
+            "SlewPos": 0.0,
+            "Type": "Pid",
+            "Zones": [
+                "Zone 3"
+            ]
+        },
+        {
+            "FailSafePercent": 100.0,
+            "MinThermalOutput": 0.0,
+            "Name": "Zone 1",
+            "Type": "Pid.Zone",
+            "ZoneIndex": 1
+        },
+        {
+            "FailSafePercent": 100.0,
+            "MinThermalOutput": 0.0,
+            "Name": "Zone 2",
+            "Type": "Pid.Zone",
+            "ZoneIndex": 2
+        },
+        {
+            "FailSafePercent": 100.0,
+            "MinThermalOutput": 0.0,
+            "Name": "Zone 3",
+            "Type": "Pid.Zone",
+            "ZoneIndex": 3
+        },
+        {
+            "Class": "temp",
+            "Inputs": [
+                "Header0_Temp"
+            ],
+            "Name": "Zone 1 Temp Curve",
+            "NegativeHysteresis": 3.0,
+            "Output": [
+                20.0,
+                35.0,
+                55.0,
+                80.0,
+                100.0
+            ],
+            "PositiveHysteresis": 0.0,
+            "Reading": [
+                25.0,
+                35.0,
+                45.0,
+                55.0,
+                65.0
+            ],
+            "Type": "Stepwise",
+            "Zones": [
+                "Zone 1"
+            ]
+        },
+        {
+            "Class": "temp",
+            "Inputs": [
+                "Header1_Temp"
+            ],
+            "Name": "Zone 2 Temp Curve",
+            "NegativeHysteresis": 3.0,
+            "Output": [
+                20.0,
+                35.0,
+                55.0,
+                80.0,
+                100.0
+            ],
+            "PositiveHysteresis": 0.0,
+            "Reading": [
+                25.0,
+                35.0,
+                45.0,
+                55.0,
+                65.0
+            ],
+            "Type": "Stepwise",
+            "Zones": [
+                "Zone 2"
+            ]
+        },
+        {
+            "Class": "temp",
+            "Inputs": [
+                "Header2_Temp"
+            ],
+            "Name": "Zone 3 Temp Curve",
+            "NegativeHysteresis": 3.0,
+            "Output": [
+                20.0,
+                35.0,
+                55.0,
+                80.0,
+                100.0
+            ],
+            "PositiveHysteresis": 0.0,
+            "Reading": [
+                25.0,
+                35.0,
+                45.0,
+                55.0,
+                65.0
+            ],
+            "Type": "Stepwise",
+            "Zones": [
+                "Zone 3"
+            ]
+        }
+    ],
+    "Name": "ASUS Kommando IPMI Card",
+    "Probe": "xyz.openbmc_project.Inventory.Decorator.Asset({'Model': 'Asus Kommando IPMI Expansion Card'})",
+    "Type": "Chassis"
+}
