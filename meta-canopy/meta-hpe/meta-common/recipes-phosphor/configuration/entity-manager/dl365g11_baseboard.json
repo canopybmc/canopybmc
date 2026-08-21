@@ -936,7 +936,7 @@
             "SPIControllerIndex": 1,
             "SPIDeviceIndex": 1,
             "Partition": "host-second",
-            "Type": "SPIFlash"
+            "Type": "HostSPIFlash"
         }
     ],
     "Name": "chassis",
