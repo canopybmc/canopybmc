@@ -25,7 +25,7 @@ SRC_URI:append = " \
     file://hpe_ubm.json \
 "
 
-PACKAGECONFIG:append = " dts-vpd"
+PACKAGECONFIG:append = " dts-vpd validate-json"
 
 do_install:append() {
     install -D ${UNPACKDIR}/blacklist.json ${D}${datadir}/${BPN}/blacklist.json
