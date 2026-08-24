@@ -33,19 +33,15 @@
                 }
             ],
             "Type": "EMC1412",
-            "EntityId": "0x42",
+            "EntityId": 42,
             "EntityInstance": 2
         },
         {
             "Address": "0x4c",
             "Bus": 43,
-            "CpuID": 1,
-            "DtsCritOffset": -2,
             "Name": "CPU 1",
             "PowerState": "On",
             "PresenceGpioName": "CPU1_PRSNT",
-            "PresenceGpioPolarity": "High",
-            "TempScaleFactor": 0.001,
             "Thresholds": [
                 {
                     "Direction": "greater than",
@@ -67,13 +63,9 @@
         {
             "Address": "0x48",
             "Bus": 42,
-            "CpuID": 2,
-            "DtsCritOffset": -2,
             "Name": "CPU 2",
             "PowerState": "On",
             "PresenceGpioName": "CPU2_PRSNT",
-            "PresenceGpioPolarity": "High",
-            "TempScaleFactor": 0.001,
             "Thresholds": [
                 {
                     "Direction": "greater than",
@@ -94,88 +86,110 @@
         },
         {
             "Connector": {
-                "Fail": "fan1-fail",
-                "Inst": "fan1-installed",
                 "Name": "Fan Connector 1",
-                "Pwm": 0
+                "Pwm": 0,
+                "Tachs": []
             },
-            "Name": "Fan 1",
-            "Type": "HPEFan",
             "Index": 0,
-            "TachInput": false
+            "Name": "Fan 1",
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan1-installed",
+                "Polarity": "High"
+            },
+            "Type": "HPEFan"
         },
         {
             "Connector": {
-                "Fail": "fan2-fail",
-                "Inst": "fan2-installed",
                 "Name": "Fan Connector 2",
-                "Pwm": 1
+                "Pwm": 1,
+                "Tachs": []
             },
-            "Name": "Fan 2",
-            "Type": "HPEFan",
             "Index": 1,
-            "TachInput": false
+            "Name": "Fan 2",
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan2-installed",
+                "Polarity": "High"
+            },
+            "Type": "HPEFan"
         },
         {
             "Connector": {
-                "Fail": "fan3-fail",
-                "Inst": "fan3-installed",
                 "Name": "Fan Connector 3",
-                "Pwm": 2
+                "Pwm": 2,
+                "Tachs": []
             },
-            "Name": "Fan 3",
-            "Type": "HPEFan",
-            "Index": 2,
-            "TachInput": false
-        },
-        {
-            "Connector": {
-                "Fail": "fan4-fail",
-                "Inst": "fan4-installed",
-                "Name": "Fan Connector 4",
-                "Pwm": 3
-            },
-            "Name": "Fan 4",
-            "Type": "HPEFan",
             "Index": 3,
-            "TachInput": false
+            "Name": "Fan 3",
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan3-installed",
+                "Polarity": "High"
+            },
+            "Type": "HPEFan"
         },
         {
             "Connector": {
-                "Fail": "fan5-fail",
-                "Inst": "fan5-installed",
+                "Name": "Fan Connector 4",
+                "Pwm": 3,
+                "Tachs": []
+            },
+            "Index": 3,
+            "Name": "Fan 4",
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan4-installed",
+                "Polarity": "High"
+            },
+            "Type": "HPEFan"
+        },
+        {
+            "Connector": {
                 "Name": "Fan Connector 5",
-                "Pwm": 4
+                "Pwm": 4,
+                "Tachs": []
             },
-            "Name": "Fan 5",
-            "Type": "HPEFan",
             "Index": 4,
-            "TachInput": false
+            "Name": "Fan 5",
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan5-installed",
+                "Polarity": "High"
+            },
+            "Type": "HPEFan"
         },
         {
             "Connector": {
-                "Fail": "fan6-fail",
-                "Inst": "fan6-installed",
                 "Name": "Fan Connector 6",
-                "Pwm": 5
+                "Pwm": 5,
+                "Tachs": []
             },
-            "Name": "Fan 6",
-            "Type": "HPEFan",
             "Index": 5,
-            "TachInput": false
+            "Name": "Fan 6",
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan6-installed",
+                "Polarity": "High"
+            },
+            "Type": "HPEFan"
         },
         {
             "Connector": {
-                "Fail": "fan7-fail",
-                "Inst": "fan7-installed",
                 "Name": "Fan Connector 7",
-                "Pwm": 6
+                "Pwm": 6,
+                "Tachs": []
             },
-            "Name": "Fan 7",
-            "Type": "HPEFan",
             "Index": 6,
-            "TachInput": false
+            "Name": "Fan 7",
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan7-installed",
+                "Polarity": "High"
+            },
+            "Type": "HPEFan"
         },
+
         {
             "Name": "GXP Temp",
             "Thresholds": [
@@ -206,7 +220,7 @@
             ],
             "Type": "GxpTempSensor",
             "DeviceName": "coretemp",
-            "EntityId": "0x42",
+            "EntityId": 42,
             "EntityInstance": 1
         },
         {
@@ -939,25 +953,12 @@
             "Type": "HostSPIFlash"
         }
     ],
-    "Name": "chassis",
+    "Name": "HPE ProLiant DL365 Gen11",
     "Probe": "xyz.openbmc_project.Inventory.Decorator.Asset({'Model': 'HPE ProLiant DL365 Gen11'})",
     "Type": "Chassis",
     "xyz.openbmc_project.Inventory.Decorator.Asset": {
         "Manufacturer": "$Manufacturer",
         "Model": "$Model",
-        "PartNumber": "$PartNumber",
-        "SerialNumber": "$SerialNumber"
-    },
-    "xyz.openbmc_project.Inventory.Decorator.AssetTag": {
-        "AssetTag": "HPE-OBMC-001"
-    },
-    "xyz.openbmc_project.Inventory.Item": {
-        "PrettyName": "ProLiant DL365 Gen11"
-    },
-    "xyz.openbmc_project.Inventory.Item.Board.Motherboard": {
-        "ProductId": "0x245"
-    },
-    "xyz.openbmc_project.Inventory.Item.System": {
         "PartNumber": "$PartNumber",
         "SerialNumber": "$SerialNumber"
     }
