@@ -12,7 +12,7 @@
 		"Probe": [
 			"xyz.openbmc_project.FruDevice({'ADDRESS': 87, 'PRODUCT_MANUFACTURER': 'HPE'})",
 			"AND",
-			"FOUND('chassis')"
+			"FOUND('HPE ProLiant [DR]L\\d+(a)? Gen11')"
 		],
 		"Type": "Board",
 		"xyz.openbmc_project.Inventory.Decorator.Asset": {

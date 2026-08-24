@@ -2,87 +2,108 @@
     "Exposes": [
         {
             "Connector": {
-                "Fail": "fan1-fail",
-                "Inst": "fan1-installed",
                 "Name": "Fan Connector 1",
-                "Pwm": 0
+                "Pwm": 0,
+                "Tachs": []
             },
-            "Name": "Fan 1",
-            "Type": "HPEFan",
             "Index": 0,
-            "TachInput": false
+            "Name": "Fan 1",
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan1-installed",
+                "Polarity": "High"
+            },
+            "Type": "HPEFan"
         },
         {
             "Connector": {
-                "Fail": "fan2-fail",
-                "Inst": "fan2-installed",
                 "Name": "Fan Connector 2",
-                "Pwm": 1
+                "Pwm": 1,
+                "Tachs": []
             },
-            "Name": "Fan 2",
-            "Type": "HPEFan",
             "Index": 1,
-            "TachInput": false
+            "Name": "Fan 2",
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan2-installed",
+                "Polarity": "High"
+            },
+            "Type": "HPEFan"
         },
         {
             "Connector": {
-                "Fail": "fan3-fail",
-                "Inst": "fan3-installed",
                 "Name": "Fan Connector 3",
-                "Pwm": 2
+                "Pwm": 2,
+                "Tachs": []
             },
-            "Name": "Fan 3",
-            "Type": "HPEFan",
-            "Index": 2,
-            "TachInput": false
-        },
-        {
-            "Connector": {
-                "Fail": "fan4-fail",
-                "Inst": "fan4-installed",
-                "Name": "Fan Connector 4",
-                "Pwm": 3
-            },
-            "Name": "Fan 4",
-            "Type": "HPEFan",
             "Index": 3,
-            "TachInput": false
+            "Name": "Fan 3",
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan3-installed",
+                "Polarity": "High"
+            },
+            "Type": "HPEFan"
         },
         {
             "Connector": {
-                "Fail": "fan5-fail",
-                "Inst": "fan5-installed",
+                "Name": "Fan Connector 4",
+                "Pwm": 3,
+                "Tachs": []
+            },
+            "Index": 3,
+            "Name": "Fan 4",
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan4-installed",
+                "Polarity": "High"
+            },
+            "Type": "HPEFan"
+        },
+        {
+            "Connector": {
                 "Name": "Fan Connector 5",
-                "Pwm": 4
+                "Pwm": 4,
+                "Tachs": []
             },
-            "Name": "Fan 5",
-            "Type": "HPEFan",
             "Index": 4,
-            "TachInput": false
+            "Name": "Fan 5",
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan5-installed",
+                "Polarity": "High"
+            },
+            "Type": "HPEFan"
         },
         {
             "Connector": {
-                "Fail": "fan6-fail",
-                "Inst": "fan6-installed",
                 "Name": "Fan Connector 6",
-                "Pwm": 5
+                "Pwm": 5,
+                "Tachs": []
             },
-            "Name": "Fan 6",
-            "Type": "HPEFan",
             "Index": 5,
-            "TachInput": false
+            "Name": "Fan 6",
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan6-installed",
+                "Polarity": "High"
+            },
+            "Type": "HPEFan"
         },
         {
             "Connector": {
-                "Fail": "fan7-fail",
-                "Inst": "fan7-installed",
                 "Name": "Fan Connector 7",
-                "Pwm": 6
+                "Pwm": 6,
+                "Tachs": []
             },
-            "Name": "Fan 7",
-            "Type": "HPEFan",
             "Index": 6,
-            "TachInput": false
+            "Name": "Fan 7",
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan7-installed",
+                "Polarity": "High"
+            },
+            "Type": "HPEFan"
         },
         {
             "Name": "GXP Temp",
@@ -114,7 +135,7 @@
             ],
             "Type": "GxpTempSensor",
             "DeviceName": "coretemp",
-            "EntityId": "0x42",
+            "EntityId": 42,
             "EntityInstance": 1
         },
         {
@@ -228,7 +249,6 @@
         {
             "Address": "0x4f",
             "Bus": 1,
-            "CpuID": 1,
             "CurrScaleFactor": 1,
             "InScaleFactor": 1,
             "Labels": [
@@ -261,10 +281,9 @@
                 "iout4",
                 "iout5"
             ],
-            "Name": "CPU 1",
+            "Name": "CPU",
             "PowerScaleFactor": 1000,
             "PowerState": "On",
-            "TempScaleFactor": 1,
             "Thresholds": [
                 {
                     "Direction": "less than",
@@ -553,33 +572,23 @@
             "iout3_Name": "S0_DIMM_VR1_Curr",
             "iout4_Name": "S0_DIMM_VR2_Curr",
             "iout5_Name": "S0_RCA_VRD_Curr",
-            "power1_AddAssoc": "false",
             "power1_Name": "S0_Core_VRD_Pwr",
-            "power2_AddAssoc": "false",
             "power2_Name": "S0_SOC_VRD_Pwr",
             "power3_Name": "S0_DIMM_VR1_Pwr",
             "power4_Name": "S0_DIMM_VR2_Pwr",
             "power5_Name": "S0_RCA_VR_Pwr",
-            "temp10_AddAssoc": "false",
             "temp10_Name": "S0_DIMM_CH5_Temp",
-            "temp11_AddAssoc": "false",
             "temp11_Name": "S0_DIMM_CH6_Temp",
-            "temp12_AddAssoc": "false",
             "temp12_Name": "S0_DIMM_CH7_Temp",
             "temp13_Name": "S0_RCA_VR_Temp",
             "temp1_Name": "S0_SOC_Temp",
             "temp2_Name": "S0_SOC_VRD_Temp",
             "temp3_Name": "S0_DIMM_VRD_Temp",
             "temp4_Name": "S0_Core_VRD_Temp",
-            "temp5_AddAssoc": "false",
             "temp5_Name": "S0_DIMM_CH0_Temp",
-            "temp6_AddAssoc": "false",
             "temp6_Name": "S0_DIMM_CH1_Temp",
-            "temp7_AddAssoc": "false",
             "temp7_Name": "S0_DIMM_CH2_Temp",
-            "temp8_AddAssoc": "false",
             "temp8_Name": "S0_DIMM_CH3_Temp",
-            "temp9_AddAssoc": "false",
             "temp9_Name": "S0_DIMM_CH4_Temp",
             "vout0_Name": "S0_CPU_VCORE",
             "vout1_Name": "S0_SOC_Volt",
@@ -598,7 +607,7 @@
             "Type": "Port"
         }
     ],
-    "Name": "chassis",
+    "Name": "HPE ProLiant RL300 Gen11",
     "Probe": "xyz.openbmc_project.Inventory.Decorator.Asset({'Model': 'HPE ProLiant RL300 Gen11'})",
     "Type": "Chassis",
     "xyz.openbmc_project.Inventory.Decorator.Asset": {
@@ -607,21 +616,7 @@
         "PartNumber": "$PartNumber",
         "SerialNumber": "$SerialNumber"
     },
-    "xyz.openbmc_project.Inventory.Decorator.AssetTag": {
-        "AssetTag": "HPE-OBMC-001"
-    },
-    "xyz.openbmc_project.Inventory.Decorator.Ipmi": {
-        "EntityId": "0x07",
-        "EntityInstance": 1
-    },
     "xyz.openbmc_project.Inventory.Item": {
         "PrettyName": "ProLiant RL300 Gen11"
-    },
-    "xyz.openbmc_project.Inventory.Item.Board.Motherboard": {
-        "ProductId": "0x250"
-    },
-    "xyz.openbmc_project.Inventory.Item.System": {
-        "PartNumber": "$PartNumber",
-        "SerialNumber": "$SerialNumber"
     }
 }
