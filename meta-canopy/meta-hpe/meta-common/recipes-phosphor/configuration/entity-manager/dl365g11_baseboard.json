@@ -38,7 +38,7 @@
         },
         {
             "Address": "0x4c",
-            "Bus": 43,
+            "Bus": 16,
             "Name": "CPU 1",
             "PowerState": "On",
             "PresenceGpioName": "CPU1_PRSNT",
@@ -62,7 +62,7 @@
         },
         {
             "Address": "0x48",
-            "Bus": 42,
+            "Bus": 17,
             "Name": "CPU 2",
             "PowerState": "On",
             "PresenceGpioName": "CPU2_PRSNT",
@@ -427,7 +427,7 @@
         },
         {
             "Address": "0x50",
-            "Bus": 47,
+            "Bus": 36,
             "Name": "P1 DIMM 0",
             "PowerState": "On",
             "Thresholds": [
@@ -448,7 +448,7 @@
         },
         {
             "Address": "0x51",
-            "Bus": 47,
+            "Bus": 36,
             "Name": "P1 DIMM 1",
             "PowerState": "On",
             "Thresholds": [
@@ -469,7 +469,7 @@
         },
         {
             "Address": "0x52",
-            "Bus": 47,
+            "Bus": 36,
             "Name": "P1 DIMM 2",
             "PowerState": "On",
             "Thresholds": [
@@ -490,7 +490,7 @@
         },
         {
             "Address": "0x53",
-            "Bus": 47,
+            "Bus": 36,
             "Name": "P1 DIMM 3",
             "PowerState": "On",
             "Thresholds": [
@@ -511,7 +511,7 @@
         },
         {
             "Address": "0x54",
-            "Bus": 47,
+            "Bus": 36,
             "Name": "P1 DIMM 4",
             "PowerState": "On",
             "Thresholds": [
@@ -532,7 +532,7 @@
         },
         {
             "Address": "0x55",
-            "Bus": 47,
+            "Bus": 36,
             "Name": "P1 DIMM 5",
             "PowerState": "On",
             "Thresholds": [
@@ -553,7 +553,7 @@
         },
         {
             "Address": "0x50",
-            "Bus": 46,
+            "Bus": 37,
             "Name": "P1 DIMM 6",
             "PowerState": "On",
             "Thresholds": [
@@ -574,7 +574,7 @@
         },
         {
             "Address": "0x51",
-            "Bus": 46,
+            "Bus": 37,
             "Name": "P1 DIMM 7",
             "PowerState": "On",
             "Thresholds": [
@@ -595,7 +595,7 @@
         },
         {
             "Address": "0x52",
-            "Bus": 46,
+            "Bus": 37,
             "Name": "P1 DIMM 8",
             "PowerState": "On",
             "Thresholds": [
@@ -616,7 +616,7 @@
         },
         {
             "Address": "0x53",
-            "Bus": 46,
+            "Bus": 37,
             "Name": "P1 DIMM 9",
             "PowerState": "On",
             "Thresholds": [
@@ -637,7 +637,7 @@
         },
         {
             "Address": "0x54",
-            "Bus": 46,
+            "Bus": 37,
             "Name": "P1 DIMM 10",
             "PowerState": "On",
             "Thresholds": [
@@ -658,7 +658,7 @@
         },
         {
             "Address": "0x55",
-            "Bus": 46,
+            "Bus": 37,
             "Name": "P1 DIMM 11",
             "PowerState": "On",
             "Thresholds": [
@@ -679,7 +679,7 @@
         },
         {
             "Address": "0x50",
-            "Bus": 45,
+            "Bus": 38,
             "Name": "P2 DIMM 0",
             "PowerState": "On",
             "Thresholds": [
@@ -700,7 +700,7 @@
         },
         {
             "Address": "0x51",
-            "Bus": 45,
+            "Bus": 38,
             "Name": "P2 DIMM 1",
             "PowerState": "On",
             "Thresholds": [
@@ -721,7 +721,7 @@
         },
         {
             "Address": "0x52",
-            "Bus": 45,
+            "Bus": 38,
             "Name": "P2 DIMM 2",
             "PowerState": "On",
             "Thresholds": [
@@ -742,7 +742,7 @@
         },
         {
             "Address": "0x53",
-            "Bus": 45,
+            "Bus": 38,
             "Name": "P2 DIMM 3",
             "PowerState": "On",
             "Thresholds": [
@@ -763,7 +763,7 @@
         },
         {
             "Address": "0x54",
-            "Bus": 45,
+            "Bus": 38,
             "Name": "P2 DIMM 4",
             "PowerState": "On",
             "Thresholds": [
@@ -784,7 +784,7 @@
         },
         {
             "Address": "0x55",
-            "Bus": 45,
+            "Bus": 38,
             "Name": "P2 DIMM 5",
             "PowerState": "On",
             "Thresholds": [
@@ -805,7 +805,7 @@
         },
         {
             "Address": "0x50",
-            "Bus": 44,
+            "Bus": 39,
             "Name": "P2 DIMM 6",
             "PowerState": "On",
             "Thresholds": [
@@ -826,7 +826,7 @@
         },
         {
             "Address": "0x51",
-            "Bus": 44,
+            "Bus": 39,
             "Name": "P2 DIMM 7",
             "PowerState": "On",
             "Thresholds": [
@@ -847,7 +847,7 @@
         },
         {
             "Address": "0x52",
-            "Bus": 44,
+            "Bus": 39,
             "Name": "P2 DIMM 8",
             "PowerState": "On",
             "Thresholds": [
@@ -868,7 +868,7 @@
         },
         {
             "Address": "0x53",
-            "Bus": 44,
+            "Bus": 39,
             "Name": "P2 DIMM 9",
             "PowerState": "On",
             "Thresholds": [
@@ -889,7 +889,7 @@
         },
         {
             "Address": "0x54",
-            "Bus": 44,
+            "Bus": 39,
             "Name": "P2 DIMM 10",
             "PowerState": "On",
             "Thresholds": [
@@ -910,7 +910,7 @@
         },
         {
             "Address": "0x55",
-            "Bus": 44,
+            "Bus": 39,
             "Name": "P2 DIMM 11",
             "PowerState": "On",
             "Thresholds": [
