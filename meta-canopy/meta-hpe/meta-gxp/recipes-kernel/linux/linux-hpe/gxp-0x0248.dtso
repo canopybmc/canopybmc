@@ -3,6 +3,36 @@
 &{/} {
 	model = "HPE ProLiant DL110 Gen11";
 	compatible = "hpe,gxp-dl110gen11", "hpe,gxp";
+
+	aliases {
+		/* i2cmux@7 */
+		i2c40 = "/ahb@80000000/i2cmux@7/i2c7@1";
+		i2c41 = "/ahb@80000000/i2cmux@7/i2c7@2";
+
+		/* i2cmux@3 */
+		i2c48 = "/ahb@80000000/i2cmux@3/i2c3@1";
+		i2c49 = "/ahb@80000000/i2cmux@3/i2c3@2";
+		i2c50 = "/ahb@80000000/i2cmux@3/i2c3@3";
+		i2c51 = "/ahb@80000000/i2cmux@3/i2c3@4";
+		i2c52 = "/ahb@80000000/i2cmux@3/i2c3@5";
+		i2c53 = "/ahb@80000000/i2cmux@3/i2c3@6";
+		i2c54 = "/ahb@80000000/i2cmux@3/i2c3@7";
+		i2c55 = "/ahb@80000000/i2cmux@3/i2c3@8";
+		i2c56 = "/ahb@80000000/i2cmux@3/i2c3@9";
+		i2c57 = "/ahb@80000000/i2cmux@3/i2c3@a";
+		i2c58 = "/ahb@80000000/i2cmux@3/i2c3@b";
+		i2c59 = "/ahb@80000000/i2cmux@3/i2c3@c";
+		i2c60 = "/ahb@80000000/i2cmux@3/i2c3@d";
+		i2c61 = "/ahb@80000000/i2cmux@3/i2c3@e";
+		i2c62 = "/ahb@80000000/i2cmux@3/i2c3@f";
+		i2c63 = "/ahb@80000000/i2cmux@3/i2c3@10";
+		i2c64 = "/ahb@80000000/i2cmux@3/i2c3@11";
+		i2c65 = "/ahb@80000000/i2cmux@3/i2c3@12";
+		i2c68 = "/ahb@80000000/i2cmux@3/i2c3@15";
+		i2c69 = "/ahb@80000000/i2cmux@3/i2c3@16";
+		i2c70 = "/ahb@80000000/i2cmux@3/i2c3@17";
+		i2c71 = "/ahb@80000000/i2cmux@3/i2c3@18";
+	};
 };
 &{/ahb@80000000} {
 	kcs_conf: kcs_conf@80fc0430 {

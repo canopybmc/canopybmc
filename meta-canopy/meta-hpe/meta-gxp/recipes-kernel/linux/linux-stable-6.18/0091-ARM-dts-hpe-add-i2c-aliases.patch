@@ -1,0 +1,44 @@
+From 4aec2769027cc65600c7cbe76cbe873e968316a4 Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Tue, 25 Aug 2026 17:02:38 +0200
+Subject: [PATCH] ARM: dts: hpe: add i2c aliases
+
+Add aliases for the I2C buses to avoid dynamic numbering.
+
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+index 501cecfc1859..eb09435f244c 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+@@ -14,12 +14,22 @@ / {
+ 	#size-cells = <1>;
+ 
+ 	aliases {
++		i2c0 = &i2c0;
++		i2c1 = &i2c1;
++		i2c2 = &i2c2;
++		i2c3 = &i2c3;
++		i2c4 = &i2c4;
++		i2c5 = &i2c5;
++		i2c6 = &i2c6;
++		i2c7 = &i2c7;
++		i2c8 = &i2c8;
++		i2c9 = &i2c9;
++		ethernet0 = &umac0;
++		ethernet1 = &umac1;
+ 		serial0 = &uarta;
+ 		serial1 = &uartb;
+ 		serial2 = &uartc;
+ 		serial3 = &vuart;
+-		ethernet0 = &umac0;
+-		ethernet1 = &umac1;
+ 	};
+ 
+ 	chosen {
+-- 
+2.55.0
+

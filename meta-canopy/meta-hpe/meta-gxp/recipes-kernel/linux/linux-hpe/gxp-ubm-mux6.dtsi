@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-	i2cmux@6 {
+	ubm_mux6: i2cmux@6 {
 		compatible = "i2c-mux";
 		i2c-parent = <&i2c6>;
 		mux-controls = <&i2c_mux_ctrl 6>;

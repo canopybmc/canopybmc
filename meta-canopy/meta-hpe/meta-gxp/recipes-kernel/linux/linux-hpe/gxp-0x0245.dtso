@@ -3,6 +3,80 @@
 &{/} {
 	model = "HPE ProLiant DL365 Gen11";
 	compatible = "hpe,gxp-dl365gen11", "hpe,gxp";
+
+	aliases {
+		/* i2cmux@1 */
+		i2c16 = "/ahb@80000000/i2cmux@1/i2c1@1";
+		i2c17 = "/ahb@80000000/i2cmux@1/i2c1@2";
+		i2c20 = "/ahb@80000000/i2cmux@1/i2c1@5";
+		i2c21 = "/ahb@80000000/i2cmux@1/i2c1@6";
+		i2c24 = "/ahb@80000000/i2cmux@1/i2c1@9";
+		i2c25 = "/ahb@80000000/i2cmux@1/i2c1@a";
+
+		/* i2cmux@0 */
+		i2c32 = "/ahb@80000000/i2cmux@0/i2c0@1";
+		i2c33 = "/ahb@80000000/i2cmux@0/i2c0@2";
+		i2c34 = "/ahb@80000000/i2cmux@0/i2c0@3";
+		i2c35 = "/ahb@80000000/i2cmux@0/i2c0@4";
+		i2c36 = "/ahb@80000000/i2cmux@0/i2c0@5";
+		i2c37 = "/ahb@80000000/i2cmux@0/i2c0@6";
+		i2c38 = "/ahb@80000000/i2cmux@0/i2c0@7";
+		i2c39 = "/ahb@80000000/i2cmux@0/i2c0@8";
+
+		/* i2cmux@7 */
+		i2c40 = "/ahb@80000000/i2cmux@7/i2c7@1";
+		i2c41 = "/ahb@80000000/i2cmux@7/i2c7@2";
+		i2c42 = "/ahb@80000000/i2cmux@7/i2c7@3";
+		i2c44 = "/ahb@80000000/i2cmux@7/i2c7@5";
+		i2c45 = "/ahb@80000000/i2cmux@7/i2c7@6";
+
+		/* i2cmux@3 */
+		i2c48 = "/ahb@80000000/i2cmux@3/i2c3@1";
+		i2c49 = "/ahb@80000000/i2cmux@3/i2c3@2";
+		i2c50 = "/ahb@80000000/i2cmux@3/i2c3@3";
+		i2c51 = "/ahb@80000000/i2cmux@3/i2c3@4";
+		i2c52 = "/ahb@80000000/i2cmux@3/i2c3@5";
+		i2c53 = "/ahb@80000000/i2cmux@3/i2c3@6";
+		i2c54 = "/ahb@80000000/i2cmux@3/i2c3@7";
+		i2c55 = "/ahb@80000000/i2cmux@3/i2c3@8";
+		i2c56 = "/ahb@80000000/i2cmux@3/i2c3@9";
+		i2c57 = "/ahb@80000000/i2cmux@3/i2c3@a";
+		i2c58 = "/ahb@80000000/i2cmux@3/i2c3@b";
+		i2c59 = "/ahb@80000000/i2cmux@3/i2c3@c";
+		i2c60 = "/ahb@80000000/i2cmux@3/i2c3@d";
+		i2c61 = "/ahb@80000000/i2cmux@3/i2c3@e";
+		i2c62 = "/ahb@80000000/i2cmux@3/i2c3@f";
+		i2c63 = "/ahb@80000000/i2cmux@3/i2c3@10";
+		i2c64 = "/ahb@80000000/i2cmux@3/i2c3@11";
+		i2c65 = "/ahb@80000000/i2cmux@3/i2c3@12";
+		i2c68 = "/ahb@80000000/i2cmux@3/i2c3@15";
+		i2c69 = "/ahb@80000000/i2cmux@3/i2c3@16";
+		i2c70 = "/ahb@80000000/i2cmux@3/i2c3@17";
+		i2c71 = "/ahb@80000000/i2cmux@3/i2c3@18";
+
+		/* i2cmux@4 */
+		i2c80 = "/ahb@80000000/i2cmux@4/i2c4@1";
+		i2c81 = "/ahb@80000000/i2cmux@4/i2c4@2";
+		i2c82 = "/ahb@80000000/i2cmux@4/i2c4@3";
+		i2c83 = "/ahb@80000000/i2cmux@4/i2c4@4";
+		i2c84 = "/ahb@80000000/i2cmux@4/i2c4@5";
+		i2c85 = "/ahb@80000000/i2cmux@4/i2c4@6";
+		i2c86 = "/ahb@80000000/i2cmux@4/i2c4@7";
+		i2c87 = "/ahb@80000000/i2cmux@4/i2c4@8";
+		i2c88 = "/ahb@80000000/i2cmux@4/i2c4@9";
+		i2c90 = "/ahb@80000000/i2cmux@4/i2c4@b";
+		i2c91 = "/ahb@80000000/i2cmux@4/i2c4@c";
+
+		/* i2cmux@6 */
+		i2c112 = "/ahb@80000000/i2cmux@6/i2c6@1";
+		i2c113 = "/ahb@80000000/i2cmux@6/i2c6@2";
+		i2c114 = "/ahb@80000000/i2cmux@6/i2c6@3";
+		i2c115 = "/ahb@80000000/i2cmux@6/i2c6@4";
+		i2c122 = "/ahb@80000000/i2cmux@6/i2c6@b";
+		i2c123 = "/ahb@80000000/i2cmux@6/i2c6@c";
+		i2c124 = "/ahb@80000000/i2cmux@6/i2c6@d";
+		i2c125 = "/ahb@80000000/i2cmux@6/i2c6@e";
+	};
 };
 &{/ahb@80000000} {
 	cpu: cpu@800000b8 {
@@ -35,6 +109,26 @@
 		mux-controls = <&i2c_mux_ctrl 0>;
 		#address-cells = <1>;
 		#size-cells = <0>;
+		i2c0@1 {
+			reg = <1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+		i2c0@2 {
+			reg = <2>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+		i2c0@3 {
+			reg = <3>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+		i2c0@4 {
+			reg = <4>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
 		i2c0@5 {
 			reg = <5>;
 			#address-cells = <1>;
@@ -192,6 +286,26 @@
 				sbtsi-supply = <&i2c_passthrough>;
 			};
 		};
+		i2c1@5 {
+			reg = <5>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+		i2c1@6 {
+			reg = <6>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+		i2c1@9 {
+			reg = <9>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+		i2c1@a {
+			reg = <10>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
 	};
 	/include/ "gxp-ubm-mux3.dtsi"
 	/include/ "gxp-ubm-mux4.dtsi"
@@ -221,9 +335,52 @@
 				reg = <0x59>;
 			};
 		};
+		i2c7@3 {
+			reg = <3>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+		i2c7@5 {
+			reg = <5>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+		i2c7@6 {
+			reg = <6>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
 	};
 	syspower: syspower {
 		compatible = "hpe,gxp-power";
 		psu_phandle = <&psu1>, <&psu2>;
+	};
+};
+
+&ubm_mux4 {
+	i2c4@1 {
+		reg = <1>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+	i2c4@2 {
+		reg = <2>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+	i2c4@9 {
+		reg = <9>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+	i2c4@b {
+		reg = <11>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+	i2c4@c {
+		reg = <12>;
+		#address-cells = <1>;
+		#size-cells = <0>;
 	};
 };
