@@ -22,7 +22,7 @@ When reading the user data file, sample the identity before parsing
 rather than after.  Recording it afterwards may cause the update to be
 skipped if a write landed during a read.
 
-Upstream-Status: Pending
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/phosphor-host-ipmid/+/93943]
 
 Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
 ---
