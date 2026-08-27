@@ -8,6 +8,7 @@ Every patch should contain an "Upstream-Status" tag as described in the
 - 0001 # spi: gxp: fix out-of-bounds access in memory-mapped read
 - 0002 # spi: gxp: support addressed reads with dummy cycles
 - 0003 # i2c: gxp: fix use of error pointer on syscon lookup failure
+- 0090 # i2c: gxp: support SMBus block read (I2C_M_RECV_LEN)
 - 0004 # mtd: spi-nor: macronix: allow MX66L51235F probe without SFDP
 
 ## Changes to upstream
@@ -18,6 +19,7 @@ Every patch should contain an "Upstream-Status" tag as described in the
 ## Additions
 
 - 0007 # ARM: dts: hpe-gxp: expand device tree for boot support
+- 0089 # ARM: dts: hpe: gxp: add nvram partitions
 
 ### virtual EEPROM
 
