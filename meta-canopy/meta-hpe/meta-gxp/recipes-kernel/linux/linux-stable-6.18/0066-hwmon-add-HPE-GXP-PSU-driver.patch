@@ -1,4 +1,4 @@
-From 454428f4557aed694f29def902faa347e0ac1019 Mon Sep 17 00:00:00 2001
+From 8c6c6ba40d127d4c0132d2229c105504afd3d302 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Tue, 17 Feb 2026 22:00:46 +0100
 Subject: [PATCH] hwmon: add HPE GXP PSU driver

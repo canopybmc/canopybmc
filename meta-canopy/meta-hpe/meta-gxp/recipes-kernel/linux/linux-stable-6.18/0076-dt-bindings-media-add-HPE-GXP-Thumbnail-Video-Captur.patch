@@ -1,4 +1,4 @@
-From fbfac2b49a00cb79b66f28578a2415b60cd01191 Mon Sep 17 00:00:00 2001
+From e7c6a580acab563c1d71fe9ebc3126b9ed0e6558 Mon Sep 17 00:00:00 2001
 From: Georg Hackel <georg.hackel@9elements.com>
 Date: Wed, 19 Aug 2026 16:30:48 +0200
 Subject: [PATCH] dt-bindings: media: add HPE GXP Thumbnail Video Capture

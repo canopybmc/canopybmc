@@ -1,4 +1,4 @@
-From 3d4a79c0748a009293ff024bba510a3cc7223a7b Mon Sep 17 00:00:00 2001
+From 8948189f1ea2f8c904c414784af4382459a96bf1 Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
 Date: Tue, 18 Aug 2026 13:36:54 +0200
 Subject: [PATCH] dt-bindings: soc: hpe: add GXP KCS Interface binding

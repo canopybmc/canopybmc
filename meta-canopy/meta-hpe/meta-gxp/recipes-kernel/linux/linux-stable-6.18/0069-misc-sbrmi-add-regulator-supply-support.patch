@@ -1,4 +1,4 @@
-From 2d5911befaa70a6fb0f38aa41d0ba29531ed7e5b Mon Sep 17 00:00:00 2001
+From e4e8ca2a555ecdf5724be13c65a3bd7175b64f42 Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
 Date: Mon, 2 Mar 2026 19:36:34 -0300
 Subject: [PATCH] misc: sbrmi: add regulator supply support

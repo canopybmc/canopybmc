@@ -1,4 +1,4 @@
-From 1ab790e3aaa2f76e5059b67c6a3610e00e8beab5 Mon Sep 17 00:00:00 2001
+From b1f6302fb8ca56e48f67d6d4b34ad7144bc3f4f4 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Fri, 24 Apr 2026 16:00:00 +0200
 Subject: [PATCH] misc: ubm: add minimal UBM backplane init driver

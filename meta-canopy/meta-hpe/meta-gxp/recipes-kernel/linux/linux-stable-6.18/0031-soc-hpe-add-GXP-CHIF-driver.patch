@@ -1,4 +1,4 @@
-From c0e39aa081dd41daa383122169aff1a86f19a0d5 Mon Sep 17 00:00:00 2001
+From 51a5e78a211610ce5c4dfd0d1bc90bd87640b904 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 3 Feb 2026 00:46:54 +0100
 Subject: [PATCH] soc: hpe: add GXP CHIF driver
@@ -19,12 +19,14 @@ Upstream-Status: Pending
 Co-developed-by: Gilbert Chen <gilbert.chen@hpe.com>
 Signed-off-by: Gilbert Chen <gilbert.chen@hpe.com>
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Co-developed-by: Tan Siewert <tan.siewert@9elements.com>
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
 Signed-off-by: Georg Hackel <georg.hackel@9elements.com>
 ---
  drivers/soc/hpe/Kconfig    |  12 +
  drivers/soc/hpe/Makefile   |   1 +
- drivers/soc/hpe/gxp-chif.c | 717 +++++++++++++++++++++++++++++++++++++
- 3 files changed, 730 insertions(+)
+ drivers/soc/hpe/gxp-chif.c | 734 +++++++++++++++++++++++++++++++++++++
+ 3 files changed, 747 insertions(+)
  create mode 100644 drivers/soc/hpe/gxp-chif.c
 
 diff --git a/drivers/soc/hpe/Kconfig b/drivers/soc/hpe/Kconfig
@@ -59,10 +61,10 @@ index 62994d7b35ee..5fefa0ddee15 100644
 +obj-$(CONFIG_SOC_HPE_GXP_CHIF)		+= gxp-chif.o
 diff --git a/drivers/soc/hpe/gxp-chif.c b/drivers/soc/hpe/gxp-chif.c
 new file mode 100644
-index 000000000000..640eae54142d
+index 000000000000..db67bd8951ea
 --- /dev/null
 +++ b/drivers/soc/hpe/gxp-chif.c
-@@ -0,0 +1,717 @@
+@@ -0,0 +1,734 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * HPE GXP Channel Interface (CHIF) driver
@@ -83,6 +85,7 @@ index 000000000000..640eae54142d
 +#include <linux/mod_devicetable.h>
 +#include <linux/module.h>
 +#include <linux/platform_device.h>
++#include <linux/poll.h>
 +#include <linux/regmap.h>
 +#include <linux/sched/signal.h>
 +#include <linux/uaccess.h>
@@ -306,6 +309,22 @@ index 000000000000..640eae54142d
 +	return 0;
 +}
 +
++static __poll_t chif_poll(struct file *file, struct poll_table_struct *wait)
++{
++	struct chif_drvdata *drvdata = file->private_data;
++	unsigned int channel = iminor(file_inode(file));
++	__poll_t mask = EPOLLOUT | EPOLLWRNORM; /* chif is always writable */
++
++	if (channel != CHANNEL_SHAREMEM)
++		return EPOLLERR;
++
++	poll_wait(file, &drvdata->wait[channel], wait);
++	if (drvdata->chif24_queue.size > 0)
++		mask |= EPOLLIN | EPOLLRDNORM;
++
++	return mask;
++}
++
 +static ssize_t chif_read(struct file *file, char __user *buf, size_t count,
 +			 loff_t *f_pos)
 +{
@@ -464,6 +483,7 @@ index 000000000000..640eae54142d
 +	.read = chif_read,
 +	.write = chif_write,
 +	.release = chif_release,
++	.poll = chif_poll,
 +};
 +
 +static int compare_seq(u32 a, u32 b)
@@ -575,8 +595,7 @@ index 000000000000..640eae54142d
 +			if (active_ccb(drvdata, i) < 0)
 +				continue;
 +
-+			if (consume_packet(drvdata, i) > 0 &&
-+			    drvdata->waiting[i])
++			if (consume_packet(drvdata, i) > 0)
 +				wake_up_interruptible(&drvdata->wait[i]);
 +		}
 +	}

@@ -1,4 +1,4 @@
-From f18d2a0a739d0ff8a62f5cd80a638617e8d69813 Mon Sep 17 00:00:00 2001
+From 25a995e49e9ea068e4fe63890107e4741f765008 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Sun, 8 Mar 2026 00:00:00 +0000
 Subject: [PATCH] soc: hpe: add GXP I2C passthrough driver

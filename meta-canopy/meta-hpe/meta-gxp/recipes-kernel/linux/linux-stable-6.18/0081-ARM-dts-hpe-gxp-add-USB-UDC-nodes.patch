@@ -1,4 +1,4 @@
-From b82b3e13920b363283c4a5ee63982edb006da3dd Mon Sep 17 00:00:00 2001
+From 80b08b0620a1ddecdf081e9228dc63ca1dc15309 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Tue, 18 Aug 2026 14:28:30 +0200
 Subject: [PATCH] ARM: dts: hpe-gxp: add USB UDC nodes

@@ -1,4 +1,4 @@
-From 42ef61ff2616e5e62147e07289f795821dd5a938 Mon Sep 17 00:00:00 2001
+From 7ac3375b09846c3899f07a04e766a3c65777d093 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 17:42:45 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add gpio-keys-polled node for fan presence

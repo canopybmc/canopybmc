@@ -1,4 +1,4 @@
-From b36eb5bfab31ad7666ecfc5f425606cd9ccef680 Mon Sep 17 00:00:00 2001
+From d28ab0fed4481466c1da8eadb53837e849f8520f Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 22:02:16 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add PECI controller node

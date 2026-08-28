@@ -1,4 +1,4 @@
-From 051c3a4f76d44b3281e4eb41c198b19288172532 Mon Sep 17 00:00:00 2001
+From c57017697ce14b0513a4197a93c1fe1e1f97973d Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 13:05:52 +0100
 Subject: [PATCH] dt-bindings: hwmon: gxp-fan-ctrl: add fan-shutdown-percent

@@ -1,4 +1,4 @@
-From 3b097552214ed490aad29ba9d0b976d9c6c1b71c Mon Sep 17 00:00:00 2001
+From f2a8378012c6c0e4bc923fb3905d2ba64e0f6bdf Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
 Date: Tue, 18 Aug 2026 13:42:21 +0200
 Subject: [PATCH] soc: hpe: add GXP KCS interface driver

@@ -1,4 +1,4 @@
-From acd406ac80bc6f81f74c79326bd52c7dd7328b5b Mon Sep 17 00:00:00 2001
+From 68e0664333f04fdb1bc2490a885acf0759b88d2f Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 11:17:40 +0100
 Subject: [PATCH] dt-bindings: regulator: hpe,gxp-host-power-supply: add

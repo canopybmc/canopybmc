@@ -1,4 +1,4 @@
-From 1d59a3396e0361d2dcb0f82317c7c50f4fba8ecc Mon Sep 17 00:00:00 2001
+From e2423f62513defcc3b5b370a955b3866cb7c10f1 Mon Sep 17 00:00:00 2001
 From: Georg Hackel <georg.hackel@9elements.com>
 Date: Wed, 19 Aug 2026 16:36:25 +0200
 Subject: [PATCH] dt-bindings: usb: add HPE USB Device Controllers binding
