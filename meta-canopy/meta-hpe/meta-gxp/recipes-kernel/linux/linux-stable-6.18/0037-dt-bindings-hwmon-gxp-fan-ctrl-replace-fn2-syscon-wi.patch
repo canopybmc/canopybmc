@@ -1,4 +1,4 @@
-From e90750432dc1c9a3fdc884cce918c309b6c77651 Mon Sep 17 00:00:00 2001
+From 7261e52290415d8f3ec2a8d793c0aaaa84c6ddf7 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 09:18:10 +0100
 Subject: [PATCH] dt-bindings: hwmon: gxp-fan-ctrl: replace fn2 syscon with

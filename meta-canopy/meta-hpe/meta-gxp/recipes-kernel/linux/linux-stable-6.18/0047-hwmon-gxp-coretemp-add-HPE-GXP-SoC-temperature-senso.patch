@@ -1,4 +1,4 @@
-From 3fd5038c81f7cb306f1537fdfc599c84a41c59b2 Mon Sep 17 00:00:00 2001
+From 32c49b25dbae38a962548ba619cb5fa74f8743e4 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 21:53:52 +0100
 Subject: [PATCH] hwmon: gxp-coretemp: add HPE GXP SoC temperature sensor

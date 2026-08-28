@@ -1,4 +1,4 @@
-From 19544bd56f9a96364d4993828d3cb6ea18085435 Mon Sep 17 00:00:00 2001
+From f1f2306d1f17d0d182c115b3597db156a2894cee Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Thu, 12 Feb 2026 21:59:42 +0100
 Subject: [PATCH] ARM: dts: hpe-gxp: add coretemp sensor node

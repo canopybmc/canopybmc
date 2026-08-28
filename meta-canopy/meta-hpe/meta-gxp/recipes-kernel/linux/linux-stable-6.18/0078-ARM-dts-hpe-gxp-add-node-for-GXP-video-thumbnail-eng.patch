@@ -1,4 +1,4 @@
-From 70f9645a35b6c6c1b9f29b7b2ce5bbf393b1ae59 Mon Sep 17 00:00:00 2001
+From d25e08ed2fd1874c640ac911ad9eb00ea6613681 Mon Sep 17 00:00:00 2001
 From: Christian Walter <christian.walter@9elements.com>
 Date: Tue, 18 Aug 2026 14:21:50 +0200
 Subject: [PATCH] ARM: dts: hpe-gxp: add node for GXP video thumbnail engine

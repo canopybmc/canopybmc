@@ -1,4 +1,4 @@
-From 944fcbd5eef4e00a190a60df58c9677c0a2d864c Mon Sep 17 00:00:00 2001
+From 50fc48159f6ecd48e7a648f341babecbce48dc58 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Tue, 3 Feb 2026 00:46:22 +0100
 Subject: [PATCH] dt-bindings: soc: hpe: add GXP CHIF binding

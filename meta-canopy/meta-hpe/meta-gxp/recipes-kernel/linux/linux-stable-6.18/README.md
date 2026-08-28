@@ -62,7 +62,6 @@ Every patch should contain an "Upstream-Status" tag as described in the
 
 - 0030 # dt-bindings: soc: hpe: add GXP CHIF binding
 - 0031 # soc: hpe: add GXP CHIF driver
-    - 0088 # soc: hpe: gxp-chif: expose poll on char device
 - 0032 # ARM: dts: hpe-gxp: add CHIF node
 
 ### CPLD host power supply

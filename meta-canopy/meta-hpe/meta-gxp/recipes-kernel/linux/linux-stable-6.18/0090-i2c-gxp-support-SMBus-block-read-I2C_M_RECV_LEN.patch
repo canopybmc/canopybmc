@@ -1,4 +1,4 @@
-From 35352ebaa055ff47010864911243d36a24d8129f Mon Sep 17 00:00:00 2001
+From 481dbc9a53cb0c07d1773f44f33838af940eb8a7 Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
 Date: Wed, 1 Jul 2026 01:45:32 +0200
 Subject: [PATCH] i2c: gxp: support SMBus block read (I2C_M_RECV_LEN)

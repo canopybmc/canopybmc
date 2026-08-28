@@ -98,7 +98,6 @@ SRC_URI:append = " \
     file://0080-usb-gadget-udc-add-HPE-GXP-USB-device-controller-dri.patch \
     file://0081-ARM-dts-hpe-gxp-add-USB-UDC-nodes.patch \
     file://0086-misc-ubm-add-minimal-UBM-backplane-init-driver.patch \
-    file://0088-soc-hpe-gxp-chif-expose-poll-on-char-device.patch \
     file://0089-ARM-dts-hpe-gxp-add-nvram-partitions.patch \
     file://0090-i2c-gxp-support-SMBus-block-read-I2C_M_RECV_LEN.patch \
     "
