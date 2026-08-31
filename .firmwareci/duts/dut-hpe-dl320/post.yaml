@@ -42,3 +42,11 @@ post-stage:
       device: "[[attributes.Device]]"
       command: power
       args: ["off"]
+
+  - cmd: dutctl
+    name: Reload golden image to host
+    parameters:
+      agent: "[[attributes.Agent]]"
+      device: "[[attributes.Device]]"
+      command: emulate-host
+      args: ["[[storage.dl320g11_bios_update]]/[[storage.dl320g11_bios_update.golden_image]]"]
