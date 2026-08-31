@@ -12,8 +12,8 @@
                 "Type": "Port"
             },
             {
-                "Address": "$ADDRESS",
-                "Bus": "$BUS",
+                "Address": 88,
+                "Bus": 11,
                 "CurrScaleFactor": 64,
                 "InScaleFactor": 32,
                 "Labels": [
@@ -26,15 +26,9 @@
                     "in0",
                     "in1"
                 ],
-                "Name": "PSU_$ADDRESS - 87",
+                "Name": "PSU_1",
                 "PollRate": 10,
                 "PowerScaleFactor": 1,
-                "PresenceGpio": [
-                    {
-                        "Name": "INST_PSU$ADDRESS - 87",
-                        "Polarity": "Low"
-                    }
-                ],
                 "TempScaleFactor": 64,
                 "Thresholds": [
                     {
@@ -137,18 +131,174 @@
                     }
                 ],
                 "Type": "gxp_psu",
-                "curr1_Name": "IINPUT_PSU$ADDRESS - 87",
-                "curr2_Name": "IOUTPUT_PSU$ADDRESS - 87",
-                "fan1_Name": "FAN1_PSU$ADDRESS - 87",
-                "in0_Name": "VINPUT_PSU$ADDRESS - 87",
-                "in1_Name": "VOUTPUT_PSU$ADDRESS - 87",
-                "power1_Name": "PINPUT_PSU$ADDRESS - 87",
-                "power2_Name": "POUTPUT_PSU$ADDRESS - 87",
-                "temp1_Name": "TEMP1_PSU$ADDRESS - 87"
+                "curr1_Name": "IINPUT_PSU1",
+                "curr2_Name": "IOUTPUT_PSU1",
+                "fan1_Name": "FAN1_PSU1",
+                "in0_Name": "VINPUT_PSU1",
+                "in1_Name": "VOUTPUT_PSU1",
+                "power1_Name": "PINPUT_PSU1",
+                "power2_Name": "POUTPUT_PSU1",
+                "temp1_Name": "TEMP1_PSU1"
             }
         ],
-        "Name": "HPE POWER SUPPLY $ADDRESS - 87",
-        "Probe": "xyz.openbmc_project.FruDevice({'PRODUCT_PRODUCT_NAME': 'HPE POWER SUPPLY*'})",
+        "Name": "HPE POWER SUPPLY 1",
+        "Probe": "xyz.openbmc_project.FruDevice({'PRODUCT_PRODUCT_NAME': 'HPE POWER SUPPLY*', 'ADDRESS': 88})",
+        "Type": "PowerSupply",
+        "xyz.openbmc_project.Inventory.Decorator.Asset": {
+            "Manufacturer": "$PRODUCT_MANUFACTURER",
+            "Model": "$BOARD_PART_NUMBER",
+            "PartNumber": "$PRODUCT_PART_NUMBER",
+            "SerialNumber": "$PRODUCT_SERIAL_NUMBER",
+            "SparePartNumber": "$PRODUCT_PART_NUMBER"
+        },
+        "xyz.openbmc_project.Inventory.Decorator.Revision": {
+            "Version": "$PRODUCT_VERSION"
+        }
+    },
+    {
+        "Exposes": [
+            {
+                "Name": "GenericPowerPort",
+                "PortType": "powering",
+                "Type": "Port"
+            },
+            {
+                "Name": "GenericContainPort",
+                "PortType": "contained_by",
+                "Type": "Port"
+            },
+            {
+                "Address": 89,
+                "Bus": 10,
+                "CurrScaleFactor": 64,
+                "InScaleFactor": 32,
+                "Labels": [
+                    "temp1",
+                    "fan1",
+                    "power1",
+                    "power2",
+                    "curr1",
+                    "curr2",
+                    "in0",
+                    "in1"
+                ],
+                "Name": "PSU_2",
+                "PollRate": 10,
+                "PowerScaleFactor": 1,
+                "TempScaleFactor": 64,
+                "Thresholds": [
+                    {
+                        "Direction": "greater than",
+                        "Label": "in0",
+                        "Name": "upper critical",
+                        "Severity": 1,
+                        "Value": 240
+                    },
+                    {
+                        "Direction": "less than",
+                        "Label": "in0",
+                        "Name": "lower critical",
+                        "Severity": 1,
+                        "Value": 90
+                    },
+                    {
+                        "Direction": "greater than",
+                        "Label": "curr2",
+                        "Name": "upper critical",
+                        "Severity": 1,
+                        "Value": 66.7
+                    },
+                    {
+                        "Direction": "greater than",
+                        "Label": "curr2",
+                        "Name": "upper non critical",
+                        "Severity": 0,
+                        "Value": 60
+                    },
+                    {
+                        "Direction": "greater than",
+                        "Label": "power2",
+                        "Name": "upper critical",
+                        "Severity": 1,
+                        "Value": 800
+                    },
+                    {
+                        "Direction": "greater than",
+                        "Label": "power2",
+                        "Name": "upper non critical",
+                        "Severity": 0,
+                        "Value": 720
+                    },
+                    {
+                        "Direction": "greater than",
+                        "Label": "in1",
+                        "Name": "upper critical",
+                        "Severity": 1,
+                        "Value": 14
+                    },
+                    {
+                        "Direction": "less than",
+                        "Label": "in1",
+                        "Name": "lower non critical",
+                        "Severity": 0,
+                        "Value": 11.5
+                    },
+                    {
+                        "Direction": "less than",
+                        "Label": "in1",
+                        "Name": "lower critical",
+                        "Severity": 1,
+                        "Value": 11
+                    },
+                    {
+                        "Direction": "greater than",
+                        "Label": "temp1",
+                        "Name": "upper critical",
+                        "Severity": 1,
+                        "Value": 80
+                    },
+                    {
+                        "Direction": "greater than",
+                        "Label": "temp1",
+                        "Name": "upper non critical",
+                        "Severity": 0,
+                        "Value": 75
+                    },
+                    {
+                        "Direction": "less than",
+                        "Label": "temp1",
+                        "Name": "lower non critical",
+                        "Severity": 0,
+                        "Value": 5
+                    },
+                    {
+                        "Direction": "less than",
+                        "Label": "temp1",
+                        "Name": "lower critical",
+                        "Severity": 1,
+                        "Value": 0
+                    },
+                    {
+                        "Direction": "greater than",
+                        "Label": "fan1",
+                        "Name": "upper critical",
+                        "Severity": 1,
+                        "Value": 20300
+                    }
+                ],
+                "Type": "gxp_psu",
+                "curr1_Name": "IINPUT_PSU2",
+                "curr2_Name": "IOUTPUT_PSU2",
+                "fan1_Name": "FAN1_PSU2",
+                "in0_Name": "VINPUT_PSU2",
+                "in1_Name": "VOUTPUT_PSU2",
+                "power1_Name": "PINPUT_PSU2",
+                "power2_Name": "POUTPUT_PSU2",
+                "temp1_Name": "TEMP1_PSU2"
+            }
+        ],
+        "Name": "HPE POWER SUPPLY 2",
+        "Probe": "xyz.openbmc_project.FruDevice({'PRODUCT_PRODUCT_NAME': 'HPE POWER SUPPLY*', 'ADDRESS': 89})",
         "Type": "PowerSupply",
         "xyz.openbmc_project.Inventory.Decorator.Asset": {
             "Manufacturer": "$PRODUCT_MANUFACTURER",
