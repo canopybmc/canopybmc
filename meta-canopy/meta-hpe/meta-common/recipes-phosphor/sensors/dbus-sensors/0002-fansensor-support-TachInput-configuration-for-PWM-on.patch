@@ -1,4 +1,4 @@
-From 90c463b34d4825c703b2969dbb9895048677ce35 Mon Sep 17 00:00:00 2001
+From 7be026291ac48952371d786b5730c94c18326e82 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 15 Feb 2026 13:16:07 +0100
 Subject: [PATCH] fansensor: support TachInput configuration for PWM-only fans
