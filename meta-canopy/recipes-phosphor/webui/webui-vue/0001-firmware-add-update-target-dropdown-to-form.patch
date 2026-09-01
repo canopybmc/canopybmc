@@ -1,4 +1,4 @@
-From 7afec83a5361a12ffca9e81b76df326bfcf22d5a Mon Sep 17 00:00:00 2001
+From 35277ff10da6fe1d5d0fcebe0139bcdcaea4d00b Mon Sep 17 00:00:00 2001
 From: Tan Siewert <tan.siewert@9elements.com>
 Date: Wed, 24 Jun 2026 23:57:45 +0200
 Subject: [PATCH] firmware: add update target dropdown to form
@@ -28,51 +28,57 @@ Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/webui-v
 Change-Id: I94063a2fff689c7c2e2625c625c250dac757ce5b
 Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
 ---
- src/locales/en-US.json                        |  1 +
- src/locales/ka-GE.json                        |  1 +
- src/locales/ru-RU.json                        |  1 +
+ src/locales/en-US.json                        |  3 +-
+ src/locales/ka-GE.json                        |  3 +-
+ src/locales/ru-RU.json                        |  3 +-
  src/store/modules/Operations/FirmwareStore.js | 22 ++++++++++
- .../Firmware/FirmwareFormUpdate.vue           | 43 +++++++++++++++++++
- 5 files changed, 68 insertions(+)
+ .../Firmware/FirmwareFormUpdate.vue           | 41 +++++++++++++++++++
+ 5 files changed, 69 insertions(+), 3 deletions(-)
 
 diff --git a/src/locales/en-US.json b/src/locales/en-US.json
-index b4e1df0..4ee32c7 100644
+index 99f4bd8b6..9a4f83f4d 100644
 --- a/src/locales/en-US.json
 +++ b/src/locales/en-US.json
-@@ -365,6 +365,7 @@
-                 "fileSource": "File source",
+@@ -351,7 +351,8 @@
+         "form": {
+             "updateFirmware": {
                  "imageFile": "Image file",
-                 "startUpdate": "Start update",
-+                "updateTarget": "Update target",
-                 "workstation": "Workstation"
+-                "startUpdate": "Start update"
++                "startUpdate": "Start update",
++                "updateTarget": "Update target"
              }
          },
+         "modal": {
 diff --git a/src/locales/ka-GE.json b/src/locales/ka-GE.json
-index 20cc17d..cfa48bc 100644
+index 5ada54f16..d21170ab1 100644
 --- a/src/locales/ka-GE.json
 +++ b/src/locales/ka-GE.json
-@@ -365,6 +365,7 @@
-                 "fileSource": "ფაილის წყარო",
+@@ -351,7 +351,8 @@
+         "form": {
+             "updateFirmware": {
                  "imageFile": "ასლის ფაილი",
-                 "startUpdate": "განახლების დაწყება",
-+                "updateTarget": "განახლების სამიზნე",
-                 "workstation": "სამუშაო სადგური"
+-                "startUpdate": "განახლების დაწყება"
++                "startUpdate": "განახლების დაწყება",
++                "updateTarget": "განახლების სამიზნე"
              }
          },
+         "modal": {
 diff --git a/src/locales/ru-RU.json b/src/locales/ru-RU.json
-index 663ebce..ee14ff5 100644
+index e9b049462..8229beb64 100644
 --- a/src/locales/ru-RU.json
 +++ b/src/locales/ru-RU.json
-@@ -365,6 +365,7 @@
-                 "fileSource": "Источник файла",
+@@ -351,7 +351,8 @@
+         "form": {
+             "updateFirmware": {
                  "imageFile": "Файл образа",
-                 "startUpdate": "Начать обновление",
-+                "updateTarget": "Объект обновления",
-                 "workstation": "Рабочая станция"
+-                "startUpdate": "Начать обновление"
++                "startUpdate": "Начать обновление",
++                "updateTarget": "Объект обновления"
              }
          },
+         "modal": {
 diff --git a/src/store/modules/Operations/FirmwareStore.js b/src/store/modules/Operations/FirmwareStore.js
-index 07ce606..3e2a082 100644
+index 07ce60624..3e2a08258 100644
 --- a/src/store/modules/Operations/FirmwareStore.js
 +++ b/src/store/modules/Operations/FirmwareStore.js
 @@ -11,6 +11,7 @@ const FirmwareStore = {
@@ -136,7 +142,7 @@ index 07ce606..3e2a082 100644
          .catch((error) => {
            console.log(error);
 diff --git a/src/views/Operations/Firmware/FirmwareFormUpdate.vue b/src/views/Operations/Firmware/FirmwareFormUpdate.vue
-index 30aca15..0212c70 100644
+index 30aca159b..cf98f02cb 100644
 --- a/src/views/Operations/Firmware/FirmwareFormUpdate.vue
 +++ b/src/views/Operations/Firmware/FirmwareFormUpdate.vue
 @@ -2,6 +2,21 @@
@@ -161,11 +167,11 @@ index 30aca15..0212c70 100644
          <!-- Workstation Upload -->
          <b-form-group
            :label="$t('pageFirmware.form.updateFirmware.imageFile')"
-@@ -75,10 +90,36 @@ export default {
+@@ -75,10 +90,34 @@ export default {
        loading,
        showUpdateModal: false,
        file: null,
-+      selectedTarget: null,
++      userSelectedTarget: null,
        isServerPowerOffRequired:
          import.meta.env.VITE_SERVER_OFF_REQUIRED === 'true',
      };
@@ -181,28 +187,26 @@ index 30aca15..0212c70 100644
 +        }),
 +      );
 +    },
-+    defaultUpdateTarget() {
-+      return this.$store.getters['firmware/defaultUpdateTarget'];
-+    },
-+  },
-+  watch: {
-+    defaultUpdateTarget: {
-+      immediate: true,
-+      handler(newVal) {
-+        if (newVal && this.selectedTarget === null) {
-+          this.selectedTarget = newVal;
-+        }
++    selectedTarget: {
++      get() {
++        return (
++          this.userSelectedTarget ??
++          this.$store.getters['firmware/defaultUpdateTarget']
++        );
++      },
++      set(value) {
++        this.userSelectedTarget = value;
 +      },
 +    },
 +  },
    validations() {
      return {
        file: {
-@@ -109,9 +150,11 @@ export default {
+@@ -109,9 +148,11 @@ export default {
        this.dispatchWorkstationUpload(timerId);
      },
      dispatchWorkstationUpload(timerId) {
-+      const targets = this.selectedTarget ? [this.selectedTarget] : undefined;
++      const targets = this.selectedTarget ? [this.selectedTarget] : null;
        this.$store
          .dispatch('firmware/uploadFirmware', {
            image: this.file,
@@ -211,5 +215,5 @@ index 30aca15..0212c70 100644
          .catch(({ message }) => {
            this.endLoader();
 -- 
-2.53.0
+2.55.0
 
