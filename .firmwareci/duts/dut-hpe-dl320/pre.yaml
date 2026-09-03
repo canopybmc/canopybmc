@@ -4,15 +4,16 @@ pre-stage:
     parameters:
       agent: "[[attributes.Agent]]"
       device: "[[attributes.Device]]"
-      command: power
-      args: ["off"]
+      command: power-off
 
   - cmd: dutctl
     name: Emulate Flash
+    options:
+      timeout: 15m
     parameters:
       agent: "[[attributes.Agent]]"
       device: "[[attributes.Device]]"
-      command: emulate-bmc
+      command: flash
       args: ["[[input.firmware]]"]
 
   - cmd: dutctl
@@ -20,8 +21,7 @@ pre-stage:
     parameters:
       agent: "[[attributes.Agent]]"
       device: "[[attributes.Device]]"
-      command: power
-      args: ["on"]
+      command: power-on
 
   - cmd: cmd
     name: Setup Tools
