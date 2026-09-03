@@ -40,5 +40,4 @@ post-stage:
     parameters:
       agent: "[[attributes.Agent]]"
       device: "[[attributes.Device]]"
-      command: power
-      args: ["off"]
+      command: power-off
