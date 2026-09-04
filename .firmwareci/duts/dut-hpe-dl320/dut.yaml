@@ -1,10 +1,10 @@
 name: HPE-DL320
 label: hpe-dl320
 attributes:
-  BMC: dl320g11-bmc-fwci.lab.9e.network
+  BMC: bmc.demo.firmware-ci.com
   BMCPassword: 0penBmc
-  Agent: worker102.lab.9e.network:1024
-  Device: dl320
-  Host: dl320g11-1.lab.9e.network
+  Agent: worker108.demo.firmware-ci.com:1024
+  Device: hpe-dl320-bmc
+  Host: host.demo.firmware-ci.com
   HostUser: oscar
 reservation-system: dutctl
