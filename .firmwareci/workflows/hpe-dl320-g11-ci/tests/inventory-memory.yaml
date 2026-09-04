@@ -132,7 +132,7 @@ stages:
           expect:
             - regex: '"PartNumber": "HMCG88AGBRA619N"'
       - cmd: cmd
-        name: dimm2 SerialNumber is E3712D7D
+        name: dimm2 SerialNumber is E3712D56
         transport: *local
         options:
           timeout: 30s
@@ -141,7 +141,7 @@ stages:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm2"]
           expect:
-            - regex: '"SerialNumber": "E3712D7D"'
+            - regex: '"SerialNumber": "E3712D56"'
 
   - name: DIMM9 Attributes
     steps:
@@ -190,7 +190,7 @@ stages:
           expect:
             - regex: '"PartNumber": "HMCG88AGBRA619N"'
       - cmd: cmd
-        name: dimm9 SerialNumber is E3712D3E
+        name: dimm9 SerialNumber is E3712D81
         transport: *local
         options:
           timeout: 30s
@@ -199,7 +199,7 @@ stages:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm9"]
           expect:
-            - regex: '"SerialNumber": "E3712D3E"'
+            - regex: '"SerialNumber": "E3712D81"'
 
   - name: System Memory Summary
     steps:
