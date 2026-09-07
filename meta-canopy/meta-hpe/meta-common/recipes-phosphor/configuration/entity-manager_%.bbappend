@@ -4,6 +4,7 @@ SRC_URI:append = " \
     file://0001-devicetree-vpd-parser-expose-part-number-and-manufac.patch \
     file://0002-schemas-firmware-allow-for-updating-spi-partition.patch \
     file://0003-fru-device-load-synthetic-FRUs-from-etc-fru.patch \
+    file://0004-schemas-add-custom-schema-attributes.patch \
 "
 
 SRC_URI:append = " \
