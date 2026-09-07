@@ -20,6 +20,9 @@ defaults:
       password: "[[attributes.BMCPassword]]"
 
 variables:
+  UpdateEndpointPrefix: UEFIPrimary
+  BiosVersionBefore: 2.72 # golden image version, should be lower then update
+  BiosVersionUpdate: 2.92 # needs to correspond to the one uploaded to storage
   UpdateTarget: null
   UpdateTriggerOutput: null
 
@@ -77,9 +80,9 @@ stages:
               - path: /redfish/v1/Systems/system
                 prop: BiosVersion
                 op: matches
-                value: \d+\.\d+
+                value: "{{ BiosVersionBefore }}"
 
-  - name: Firmware update to 2.92
+  - name: "Firmware update to newer version"
     steps:
       - cmd: shell
         name: Get update endpoint
@@ -90,9 +93,9 @@ stages:
           command: |
             curl -sk --user root:[[attributes.BMCPassword]] \
               https://[[attributes.BMC]]/redfish/v1/UpdateService/FirmwareInventory \
-              | grep -Eo UEFIPrimary_[0-9]+
+              | grep -Eo {{ UpdateEndpointPrefix }}_[0-9]+
           expect:
-            - regex: 'UEFIPrimary_\d+'
+            - regex: '{{ UpdateEndpointPrefix }}_\d+'
           variable: UpdateTarget
 
       - cmd: redfish
@@ -170,12 +173,12 @@ stages:
           command: |
             NEWTARGET=$(curl -sk --user root:[[attributes.BMCPassword]] \
             https://[[attributes.BMC]]/redfish/v1/UpdateService/FirmwareInventory \
-            | grep -Eo "UEFIPrimary_[0-9]+")
+            | grep -Eo "{{ UpdateEndpointPrefix }}_[0-9]+")
             if [ "{{ UpdateTarget }}" != "$NEWTARGET" ]; then
               echo "$NEWTARGET";
             fi;
           expect:
-            - regex: 'UEFIPrimary_\d+'
+            - regex: '{{ UpdateEndpointPrefix }}_\d+'
 
       - cmd: ping
         name: Wait for host OS
@@ -200,5 +203,5 @@ stages:
             rules:
               - path: /redfish/v1/Systems/system
                 prop: BiosVersion
-                op: matches
-                value: 2\.92
+                op: eq
+                value: '{{ BiosVersionUpdate }}'
