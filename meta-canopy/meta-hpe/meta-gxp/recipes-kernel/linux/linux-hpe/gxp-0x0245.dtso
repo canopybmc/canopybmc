@@ -39,117 +39,21 @@
 			reg = <5>;
 			#address-cells = <1>;
 			#size-cells = <0>;
-			ddr5hub@50 {
-				compatible = "jedec,spd5118";
-				reg = <0x50>;
-			};
-			ddr5hub@51 {
-				compatible = "jedec,spd5118";
-				reg = <0x51>;
-			};
-			ddr5hub@52 {
-				compatible = "jedec,spd5118";
-				reg = <0x52>;
-			};
-			ddr5hub@53 {
-				compatible = "jedec,spd5118";
-				reg = <0x53>;
-			};
-			ddr5hub@54 {
-				compatible = "jedec,spd5118";
-				reg = <0x54>;
-			};
-			ddr5hub@55 {
-				compatible = "jedec,spd5118";
-				reg = <0x55>;
-			};
 		};
 		i2c0@6 {
 			reg = <6>;
 			#address-cells = <1>;
 			#size-cells = <0>;
-			ddr5hub@50 {
-				compatible = "jedec,spd5118";
-				reg = <0x50>;
-			};
-			ddr5hub@51 {
-				compatible = "jedec,spd5118";
-				reg = <0x51>;
-			};
-			ddr5hub@52 {
-				compatible = "jedec,spd5118";
-				reg = <0x52>;
-			};
-			ddr5hub@53 {
-				compatible = "jedec,spd5118";
-				reg = <0x53>;
-			};
-			ddr5hub@54 {
-				compatible = "jedec,spd5118";
-				reg = <0x54>;
-			};
-			ddr5hub@55 {
-				compatible = "jedec,spd5118";
-				reg = <0x55>;
-			};
 		};
 		i2c0@7 {
 			reg = <7>;
 			#address-cells = <1>;
 			#size-cells = <0>;
-			ddr5hub@50 {
-				compatible = "jedec,spd5118";
-				reg = <0x50>;
-			};
-			ddr5hub@51 {
-				compatible = "jedec,spd5118";
-				reg = <0x51>;
-			};
-			ddr5hub@52 {
-				compatible = "jedec,spd5118";
-				reg = <0x52>;
-			};
-			ddr5hub@53 {
-				compatible = "jedec,spd5118";
-				reg = <0x53>;
-			};
-			ddr5hub@54 {
-				compatible = "jedec,spd5118";
-				reg = <0x54>;
-			};
-			ddr5hub@55 {
-				compatible = "jedec,spd5118";
-				reg = <0x55>;
-			};
 		};
 		i2c0@8 {
 			reg = <8>;
 			#address-cells = <1>;
 			#size-cells = <0>;
-			ddr5hub@50 {
-				compatible = "jedec,spd5118";
-				reg = <0x50>;
-			};
-			ddr5hub@51 {
-				compatible = "jedec,spd5118";
-				reg = <0x51>;
-			};
-			ddr5hub@52 {
-				compatible = "jedec,spd5118";
-				reg = <0x52>;
-			};
-			ddr5hub@53 {
-				compatible = "jedec,spd5118";
-				reg = <0x53>;
-			};
-			ddr5hub@54 {
-				compatible = "jedec,spd5118";
-				reg = <0x54>;
-			};
-			ddr5hub@55 {
-				compatible = "jedec,spd5118";
-				reg = <0x55>;
-			};
 		};
 	};
 	i2cmux@1 {
