@@ -4,6 +4,7 @@ SRC_URI:append = " \
     file://0001-devicetree-vpd-parser-expose-part-number-and-manufac.patch \
     file://0002-schemas-firmware-allow-for-updating-spi-partition.patch \
     file://0003-fru-device-load-synthetic-FRUs-from-etc-fru.patch \
+    file://0004-utils-allow-specifying-a-devicetree-path-as-i2c-bus.patch \
 "
 
 SRC_URI:append = " \
@@ -58,4 +59,3 @@ do_install:append() {
     install -D ${UNPACKDIR}/hpe_drv.json ${D}${datadir}/${BPN}/configurations/hpe/hpe_drv.json
     install -D ${UNPACKDIR}/hpe_ubm.json ${D}${datadir}/${BPN}/configurations/hpe/hpe_ubm.json
 }
-
