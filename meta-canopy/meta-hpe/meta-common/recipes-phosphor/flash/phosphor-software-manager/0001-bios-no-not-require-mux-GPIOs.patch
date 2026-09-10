@@ -1,4 +1,4 @@
-From 891792a01c72a577743fcd52c40d94d9b7f0a79c Mon Sep 17 00:00:00 2001
+From 5f3fd3b28add6a21a55ef7aa856f85e3eda485df Mon Sep 17 00:00:00 2001
 From: Alexander Hansen <alexander.hansen@9elements.com>
 Date: Thu, 25 Jun 2026 18:15:05 +0200
 Subject: [PATCH] bios: no not require mux GPIOs
@@ -131,14 +131,14 @@ Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/phospho
 Change-Id: I7e24011890b4e28fbe832746de877078864a41a6
 Signed-off-by: Alexander Hansen <alexander.hansen@9elements.com>
 ---
- bios/spi_device.cpp | 73 ++++++++++++++++++++++++++++-----------------
+ spi-flash/spi_device.cpp | 73 +++++++++++++++++++++++++---------------
  1 file changed, 45 insertions(+), 28 deletions(-)
 
-diff --git a/bios/spi_device.cpp b/bios/spi_device.cpp
-index b1ba4a4..cfc5f5c 100644
---- a/bios/spi_device.cpp
-+++ b/bios/spi_device.cpp
-@@ -233,47 +233,64 @@ sdbusplus::async::task<bool> SPIDevice::writeSPIFlash(const uint8_t* image,
+diff --git a/spi-flash/spi_device.cpp b/spi-flash/spi_device.cpp
+index 7ae6e70a..f5910a09 100644
+--- a/spi-flash/spi_device.cpp
++++ b/spi-flash/spi_device.cpp
+@@ -226,47 +226,64 @@ sdbusplus::async::task<bool> SPIDevice::writeSPIFlash(const uint8_t* image,
      }
      else
      {
@@ -231,3 +231,6 @@ index b1ba4a4..cfc5f5c 100644
      co_return success;
  }
  
+-- 
+2.55.0
+

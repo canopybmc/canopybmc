@@ -1,4 +1,4 @@
-From 66c06b6da94986da043d52407c2e01d23a255897 Mon Sep 17 00:00:00 2001
+From 948d98d6f0f8f61376dbf008376cef38d876854f Mon Sep 17 00:00:00 2001
 From: Willy Tu <wltu@google.com>
 Date: Tue, 24 Mar 2026 15:14:33 +0000
 Subject: [PATCH] reduce image size by moving to Multi-call Binary
@@ -471,7 +471,7 @@ index 5213534..1daf320 100644
 -
 +dbus_sensors_cpp_args += ['-DCABLEMONITOR']
 diff --git a/src/exit-air/ExitAirTempSensor.cpp b/src/exit-air/ExitAirTempSensor.cpp
-index 0cb8d24..7a490c3 100644
+index c8df571..e216c52 100644
 --- a/src/exit-air/ExitAirTempSensor.cpp
 +++ b/src/exit-air/ExitAirTempSensor.cpp
 @@ -916,7 +916,7 @@ void createSensor(sdbusplus::asio::object_server& objectServer,
@@ -636,10 +636,10 @@ index 1de6634..0f7bf8d 100644
 +)
 +dbus_sensors_cpp_args += ['-DFAN']
 diff --git a/src/hwmon-temp/HwmonTempMain.cpp b/src/hwmon-temp/HwmonTempMain.cpp
-index df2bc54..3b021ec 100644
+index 87f1b38..0c05f0e 100644
 --- a/src/hwmon-temp/HwmonTempMain.cpp
 +++ b/src/hwmon-temp/HwmonTempMain.cpp
-@@ -596,7 +596,7 @@ static void powerStateChanged(
+@@ -598,7 +598,7 @@ static void powerStateChanged(
      }
  }
  
@@ -648,7 +648,7 @@ index df2bc54..3b021ec 100644
  {
      boost::asio::io_context io;
      auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
-@@ -663,4 +663,5 @@ int main()
+@@ -665,4 +665,5 @@ int main()
      matches.emplace_back(std::move(ifaceRemovedMatch));
  
      io.run();
@@ -707,10 +707,10 @@ index 28ea7df..815d977 100644
 +
 +int intelCPUSensorMain();
 diff --git a/src/intel-cpu/IntelCPUSensorMain.cpp b/src/intel-cpu/IntelCPUSensorMain.cpp
-index 15680eb..f3857ae 100644
+index 815ca32..02d4cf2 100644
 --- a/src/intel-cpu/IntelCPUSensorMain.cpp
 +++ b/src/intel-cpu/IntelCPUSensorMain.cpp
-@@ -791,7 +791,7 @@ bool getCpuConfig(const std::shared_ptr<sdbusplus::asio::connection>& systemBus,
+@@ -795,7 +795,7 @@ bool getCpuConfig(const std::shared_ptr<sdbusplus::asio::connection>& systemBus,
      return false;
  }
  
@@ -903,10 +903,10 @@ index 2f743f8..21b2f58 100644
 +)
 +dbus_sensors_cpp_args += ['-DIPMB']
 diff --git a/src/leakdetector/LeakDetectionManager.cpp b/src/leakdetector/LeakDetectionManager.cpp
-index 3470c3e..9e8171a 100644
+index 6502155..d242331 100644
 --- a/src/leakdetector/LeakDetectionManager.cpp
 +++ b/src/leakdetector/LeakDetectionManager.cpp
-@@ -143,9 +143,7 @@ auto DetectionManager::getDetectorConfig(sdbusplus::object_path objectPath)
+@@ -144,9 +144,7 @@ auto DetectionManager::getDetectorConfig(sdbusplus::object_path objectPath)
      co_return config;
  }
  
@@ -917,7 +917,7 @@ index 3470c3e..9e8171a 100644
  {
      constexpr auto path = leak::DetectorIntf::namespace_path::value;
      constexpr auto serviceName = "xyz.openbmc_project.leakdetector";
-@@ -160,3 +158,5 @@ int main()
+@@ -161,3 +159,5 @@ int main()
      ctx.run();
      return 0;
  }
@@ -976,7 +976,7 @@ index d2fdfaa..998ec2d 100644
 +)
 +dbus_sensors_cpp_args += ['-DLEAKDETECTOR']
 diff --git a/src/mctp/MCTPReactor.hpp b/src/mctp/MCTPReactor.hpp
-index 5f07a7a..92868fd 100644
+index c9f1f9f..03f4d15 100644
 --- a/src/mctp/MCTPReactor.hpp
 +++ b/src/mctp/MCTPReactor.hpp
 @@ -108,3 +108,5 @@ class MCTPReactor : public std::enable_shared_from_this<MCTPReactor>
@@ -986,7 +986,7 @@ index 5f07a7a..92868fd 100644
 +
 +int mctpReactorMain();
 diff --git a/src/mctp/MCTPReactorMain.cpp b/src/mctp/MCTPReactorMain.cpp
-index ba1bbf8..9ac0d44 100644
+index e415214..756edf0 100644
 --- a/src/mctp/MCTPReactorMain.cpp
 +++ b/src/mctp/MCTPReactorMain.cpp
 @@ -185,7 +185,7 @@ static void exitReactor(boost::asio::io_context* io, sdbusplus::message_t& msg)
@@ -1160,12 +1160,12 @@ index 5a942b7..18908ea 100644
  #include <boost/asio/error.hpp>
  #include <boost/asio/generic/datagram_protocol.hpp>
 diff --git a/src/nvidia-gpu/NvidiaGpuSensorMain.cpp b/src/nvidia-gpu/NvidiaGpuSensorMain.cpp
-index f45f03e..3cc7842 100644
+index d919c21..9a7d9e1 100644
 --- a/src/nvidia-gpu/NvidiaGpuSensorMain.cpp
 +++ b/src/nvidia-gpu/NvidiaGpuSensorMain.cpp
-@@ -49,7 +49,7 @@ void configTimerExpiryCallback(
-                   dbusConnection, mctpRequester);
- }
+@@ -33,7 +33,7 @@
+ // changes (which normally fire several at once) into one rescan.
+ constexpr std::chrono::seconds configSettleInterval{1};
  
 -int main()
 +int nvidiaGpuSensorMain()
@@ -1183,10 +1183,10 @@ index d5e0924..41ebe85 100644
 +
 +int nvidiaGpuSensorMain();
 diff --git a/src/nvidia-gpu/meson.build b/src/nvidia-gpu/meson.build
-index e39ec97..d8e2c1e 100644
+index 418ef2c..2f48777 100644
 --- a/src/nvidia-gpu/meson.build
 +++ b/src/nvidia-gpu/meson.build
-@@ -39,12 +39,21 @@ endif
+@@ -41,12 +41,21 @@ endif
  gpusensor_include_dir = include_directories('.', is_system: true)
  sensor_include_dir = include_directories('../..')
  
@@ -1222,7 +1222,7 @@ index 6508be9..cca546f 100644
 +
 +int nvmeSensorMain();
 diff --git a/src/nvme/NVMeSensorMain.cpp b/src/nvme/NVMeSensorMain.cpp
-index f4e2e49..82e8c7f 100644
+index 7d2204d..8728d6a 100644
 --- a/src/nvme/NVMeSensorMain.cpp
 +++ b/src/nvme/NVMeSensorMain.cpp
 @@ -282,7 +282,7 @@ static void interfaceRemoved(sdbusplus::message_t& message, NVMEMap& contexts)
@@ -1280,10 +1280,10 @@ index b84e1ee..e442bf5 100644
 +
 +int psuSensorMain();
 diff --git a/src/psu/PSUSensorMain.cpp b/src/psu/PSUSensorMain.cpp
-index 8c3faa3..23b6e10 100644
+index 798b16a..9d0c596 100644
 --- a/src/psu/PSUSensorMain.cpp
 +++ b/src/psu/PSUSensorMain.cpp
-@@ -1254,7 +1254,7 @@ static void powerStateChanged(
+@@ -1256,7 +1256,7 @@ static void powerStateChanged(
      }
  }
  
@@ -1292,7 +1292,7 @@ index 8c3faa3..23b6e10 100644
  {
      boost::asio::io_context io;
      auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
-@@ -1368,4 +1368,5 @@ int main()
+@@ -1370,4 +1370,5 @@ int main()
  
      setupManufacturingModeMatch(*systemBus);
      io.run();
