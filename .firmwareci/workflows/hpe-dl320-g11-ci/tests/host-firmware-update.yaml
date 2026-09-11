@@ -44,6 +44,16 @@ stages:
             - regex: "^(200|204)$"
 
       - cmd: shell
+        name: Host system DC gets powered on (systemd-journal)
+        options:
+          timeout: 20s
+        transport: *bmc_ssh
+        parameters:
+          command: |
+            journalctl -t power-control -f \
+              | awk '{print} /Host system DC power is on/{exit}'
+
+      - cmd: shell
         name: Wait for SMBIOS transfer (host POST complete)
         transport: *bmc_ssh
         options:
