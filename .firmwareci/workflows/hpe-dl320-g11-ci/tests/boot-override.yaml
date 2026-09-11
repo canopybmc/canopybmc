@@ -78,26 +78,28 @@ stages:
           timeout: 20m # NVRAM reset can take ages
         parameters:
           command: >-
+            full=$(journalctl -k --no-pager | grep -c 'push: queue is full');
             while [ ! -f /var/lib/smbios/smbios2 ] ||
                   [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
-            do sleep 1; done;
+            do
+              now=$(journalctl -k --no-pager | grep -c 'push: queue is full');
+              if [ "$now" -gt "$full" ]; then
+                echo "CHIF push queue full ($full -> $now): restarting CHIF";
+                systemctl restart xyz.openbmc_project.GxpChif.service;
+                full=$now;
+              fi;
+              sleep 5;
+            done;
             echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
           expect:
             - regex: "SMBIOS ready"
 
-      # TODO: Fix static sleep, poll until OSStage or BootProgress work
-      # This is somewhat of a workaround for now to get the system boot into
-      # the OS at least once. Neither OSStage nor BootProgress work because the
-      # post-complete line is not asserting, and the BootProgress interface is
-      # not implemented by any software yet.
-      - cmd: cmd
-        name: Wait for the boot to be finished
-        transport: *bmc_ssh
+      - cmd: ping
+        name: Wait for host OS
         options:
-          timeout: 3m
+          timeout: 5m
         parameters:
-          executable: sleep
-          args: ["90"]
+          host: "[[attributes.Host]]"
 
   - name: Boot EVs and override test
     on-error: continue
@@ -179,9 +181,18 @@ stages:
           timeout: 15m
         parameters:
           command: >-
+            full=$(journalctl -k --no-pager | grep -c 'push: queue is full');
             while [ ! -f /var/lib/smbios/smbios2 ] ||
                   [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
-            do sleep 1; done;
+            do
+              now=$(journalctl -k --no-pager | grep -c 'push: queue is full');
+              if [ "$now" -gt "$full" ]; then
+                echo "CHIF push queue full ($full -> $now): restarting CHIF";
+                systemctl restart xyz.openbmc_project.GxpChif.service;
+                full=$now;
+              fi;
+              sleep 5;
+            done;
             echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
           expect:
             - regex: "SMBIOS ready"
