@@ -57,13 +57,21 @@ stages:
         name: Wait for SMBIOS transfer (host POST complete)
         transport: *bmc_ssh
         options:
-          timeout: 10m
+          timeout: 12m
         parameters:
-          command: >-
+          command: |
+            full=$(journalctl -k --no-pager | grep -c 'push: queue is full');
             while [ ! -f /var/lib/smbios/smbios2 ] ||
                   [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
-            do sleep 1; done;
-            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
+            do
+              now=$(journalctl -k --no-pager | grep -c 'push: queue is full');
+              if [ "$now" -gt "$full" ]; then
+                echo "CHIF push queue full ($full -> $now): restarting CHIF";
+                systemctl restart xyz.openbmc_project.GxpChif.service;
+                full=$now;
+              fi;
+              sleep 5;
+            done; echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
           expect:
             - regex: "SMBIOS ready"
 
