@@ -71,13 +71,34 @@ pre-stage:
     parameters:
       command: "journalctl -t phosphor-bmc-state-manager -f | grep -m 1 BMC_READY"
 
+  - cmd: shell
+    name: Power off host to reset NVRAM/EVs to known good state
+    transport: *local
+    parameters:
+      command: >-
+        curl -sk -u root:[[attributes.BMCPassword]]
+        -X POST -H 'Content-Type: application/json'
+        -d '{"ResetType":"ForceOff"}'
+        -o /dev/null -w '%{http_code}'
+        https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+
+# TODO get power state via dbusctl or Redfish. expected: off, might take some seconds
+
   - cmd: copy
-    name: Copy original NVRAM to DUT
+    name: Copy original NVRAM + EVs to DUT
     transport: *bmc_ssh
     parameters:
       source: "[[storage.dl320g11_nvram]]"
       destination: /tmp
       recursive: true
+
+  - cmd: shell
+    name: Flash original NVRAM to DUT
+    options:
+      on-error: continue
+    transport: *bmc_ssh
+    parameters:
+      command: "flashcp -v /tmp/[[storage.dl320g11_nvram.rom]] /dev/mtd/host-reserved"
 
   - cmd: shell
     name: Copy EVs to CHIF path
