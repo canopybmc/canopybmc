@@ -21,14 +21,40 @@ defaults:
 
 variables:
   UpdateEndpointPrefix: UEFIPrimary
-  BiosVersionBefore: 2.72 # golden image version, should be lower then update
-  BiosVersionUpdate: 2.92 # needs to correspond to the one uploaded to storage
+  BiosVersionBefore: null
+  BiosVersionUpdate: null
   UpdateTarget: null
   UpdateTriggerOutput: null
 
 stages:
   - name: Host on, OS Booting
     steps:
+      - cmd: shell
+        name: Extract BiosVersionBefore from golden image
+        transport:
+          proto: local
+        parameters:
+          shell: "/bin/bash"
+          command: |
+            strings [[storage.dl320g11_bios_update]]/[[storage.dl320g11_bios_update.golden_image]] \
+              | grep -Po "(?<=^U63 v)[0-9]\.[0-9]+$" | tail -1
+          expect:
+            - regex: '[0-9]\.[0-9]+'
+          variable: BiosVersionBefore
+
+      - cmd: shell
+        name: Extract BiosVersionUpdate from PLDM package
+        transport:
+          proto: local
+        parameters:
+          shell: "/bin/bash"
+          command: |
+            strings [[storage.dl320g11_bios_update]]/[[storage.dl320g11_bios_update.pldm]] \
+              | grep -Po "(?<=^U63 v)[0-9]\.[0-9]+$"
+          expect:
+            - regex: '[0-9]\.[0-9]+'
+          variable: BiosVersionUpdate
+
       - cmd: shell
         name: Power on host
         transport: &local
@@ -78,7 +104,7 @@ stages:
       - cmd: ping
         name: Wait for host OS
         options:
-          timeout: 3m
+          timeout: 5m
         parameters:
           host: "[[attributes.Host]]"
 
