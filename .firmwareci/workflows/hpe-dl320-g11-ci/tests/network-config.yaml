@@ -74,7 +74,7 @@ stages:
         name: Wait for SMBIOS transfer (host POST complete)
         transport: *bmc_ssh
         options:
-          timeout: 15m
+          timeout: 20m
         parameters:
           command: >-
             while [ ! -f /var/lib/smbios/smbios2 ] ||
