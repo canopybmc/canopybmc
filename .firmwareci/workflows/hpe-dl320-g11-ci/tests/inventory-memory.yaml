@@ -28,7 +28,7 @@ stages:
             user: "root"
             password: "[[attributes.BMCPassword]]"
         options:
-          timeout: 15m
+          timeout: 20m
         parameters:
           command: >-
             while [ ! -f /var/lib/smbios/smbios2 ] ||
