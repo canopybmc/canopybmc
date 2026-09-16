@@ -1,0 +1,231 @@
+From 8ea3c1471715a553d0bf11f1d6e15ffc0b2bd42b Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Tue, 8 Sep 2026 18:08:42 +0200
+Subject: [PATCH] utils: allow specifying a devicetree path as i2c bus
+
+As an i2c-mux child adapter gets numbered dynamically unless the
+devicetree explicitly aliases it, any changes that causes a
+renumbering can stale the configurations that name those adapters by
+number.
+
+This patch allows "Bus" to name the adapter by its devicetree node
+path, making it stay correct across renumbering. The resolution
+happens during scan, so every consumer reading it will see the plain
+bus number instead of a string.
+
+Tested: on HPE ProLiant DL365 G11
+
+After host power on and i2c-passthrough is enable,
+
+```
+root@hpe-proliant-g11:~# readlink -f /sys/bus/i2c/devices/i2c-49/of_node
+/sys/firmware/devicetree/base/ahb@80000000/i2cmux@1/i2c1@1
+root@hpe-proliant-g11:~# readlink -f /sys/bus/i2c/devices/i2c-53/of_node
+/sys/firmware/devicetree/base/ahb@80000000/i2cmux@0/i2c0@5
+```
+
+With EM config using:
+
+```
+ "Address": "0x4c",
+ "Bus": "i2cmux@1/i2c1@1",
+ "CpuID": 1,
+ "Name": "CPU 1",
+ "PowerState": "On",
+```
+
+```
+ "Address": "0x50",
+ "Bus": "i2cmux@0/i2c0@5",
+ "Name": "P1 DIMM 0",
+ "PowerState": "On",
+```
+
+CPU 1 and P1 DIMM 0 correctly resolves to `t 49` and `t 53`, respectively.
+
+```
+root@hpe-proliant-g11:~# busctl get-property xyz.openbmc_project.EntityManager /xyz/openbmc_project/inventory/system/chassis/chassis/CPU_1 xyz.openbmc_project.Configurati
+on.SBTSI Bus
+t 49
+root@hpe-proliant-g11:~# busctl get-property xyz.openbmc_project.EntityManager /xyz/openbmc_project/inventory/system/chassis/chassis/P1_DIMM_0 xyz.openbmc_project.Configuration.SPD5118 Bus
+t 53
+```
+
+So sensors work correctly:
+
+```
+busctl -l tree xyz.openbmc_project.HwmonTempSensor
+`- /xyz
+  `- /xyz/openbmc_project
+    `- /xyz/openbmc_project/sensors
+      `- /xyz/openbmc_project/sensors/temperature
+        |- /xyz/openbmc_project/sensors/temperature/CPU_1
+        |- /xyz/openbmc_project/sensors/temperature/GXP_Temp
+        |- /xyz/openbmc_project/sensors/temperature/P1_DIMM_0
+        `- /xyz/openbmc_project/sensors/temperature/P1_DIMM_6
+ ```
+
+Upstream-Status: Pending
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ src/entity_manager/perform_scan.cpp | 23 ++++++++++
+ src/utils.cpp                       | 65 +++++++++++++++++++++++++++++
+ src/utils.hpp                       | 11 +++++
+ 3 files changed, 99 insertions(+)
+
+diff --git a/src/entity_manager/perform_scan.cpp b/src/entity_manager/perform_scan.cpp
+index 31c9edd98..fcba264ae 100644
+--- a/src/entity_manager/perform_scan.cpp
++++ b/src/entity_manager/perform_scan.cpp
+@@ -16,6 +16,7 @@
+ #include <flat_map>
+ #include <flat_set>
+ #include <list>
++#include <optional>
+ 
+ struct DBusInterfaceInstance
+ {
+@@ -465,6 +466,26 @@ static std::string generateDeviceName(
+     }
+     return *ret;
+ }
++
++static void resolveDevicetreeBus(const std::string& key, nlohmann::json& value)
++{
++    if (key != "Bus" || !value.is_string())
++    {
++        return;
++    }
++
++    const std::string& dtPath = value.get_ref<const std::string&>();
++    const std::optional<size_t> bus = i2cBusFromDevicetreePath(dtPath);
++    if (!bus.has_value())
++    {
++        lg2::warning("No i2c adapter matches devicetree path '{PATH}'", "PATH",
++                     dtPath);
++        return;
++    }
++
++    value = *bus;
++}
++
+ static void applyTemplateAndExposeActions(
+     const std::string& recordName, const DBusObject& dbusObject,
+     size_t foundDeviceIdx, const std::optional<std::string>& replaceStr,
+@@ -481,6 +502,8 @@ static void applyTemplateAndExposeActions(
+         em_utils::templateCharReplace(value, dbusObject, foundDeviceIdx,
+                                       replaceStr);
+ 
++        resolveDevicetreeBus(key, value);
++
+         applyExposeActions(systemConfiguration, recordName, *exposeObj, key,
+                            value);
+     }
+diff --git a/src/utils.cpp b/src/utils.cpp
+index db476f328..424d624b5 100644
+--- a/src/utils.cpp
++++ b/src/utils.cpp
+@@ -108,6 +108,71 @@ bool getI2cDevicePaths(const fs::path& dirPath,
+     return true;
+ }
+ 
++static bool endsWithPathComponents(std::string_view path,
++                                   std::string_view suffix)
++{
++    while (path.ends_with('/'))
++    {
++        path.remove_suffix(1);
++    }
++    while (suffix.ends_with('/'))
++    {
++        suffix.remove_suffix(1);
++    }
++
++    if (suffix.empty() || suffix.size() > path.size())
++    {
++        return false;
++    }
++    if (!path.ends_with(suffix))
++    {
++        return false;
++    }
++
++    return suffix.size() == path.size() ||
++           path[path.size() - suffix.size() - 1] == '/';
++}
++
++std::optional<size_t> i2cBusFromDevicetreePath(std::string_view dtPath,
++                                               const fs::path& i2cDevicesDir)
++{
++    std::flat_map<size_t, fs::path> busPaths;
++    if (!getI2cDevicePaths(i2cDevicesDir, busPaths))
++    {
++        return std::nullopt;
++    }
++
++    std::optional<size_t> match;
++    size_t matchCount = 0;
++
++    for (const auto& [bus, path] : busPaths)
++    {
++        std::error_code ec;
++        const fs::path ofNode = fs::canonical(path / "of_node", ec);
++        if (ec)
++        {
++            // This adapter did not come from the devicetree.
++            continue;
++        }
++
++        if (endsWithPathComponents(ofNode.native(), dtPath))
++        {
++            match = bus;
++            matchCount++;
++        }
++    }
++
++    if (matchCount > 1)
++    {
++        lg2::error(
++            "Devicetree path '{PATH}' names {COUNT} i2c adapters, ignoring it",
++            "PATH", dtPath, "COUNT", matchCount);
++        return std::nullopt;
++    }
++
++    return match;
++}
++
+ /// \brief JSON/DBus matching Callable for std::variant (visitor)
+ ///
+ /// Default match JSON/DBus match implementation
+diff --git a/src/utils.hpp b/src/utils.hpp
+index 35825f4fe..103c4e426 100644
+--- a/src/utils.hpp
++++ b/src/utils.hpp
+@@ -10,6 +10,8 @@
+ #include <charconv>
+ #include <filesystem>
+ #include <flat_map>
++#include <optional>
++#include <string_view>
+ 
+ using DBusValueVariant =
+     std::variant<std::string, int64_t, uint64_t, double, int32_t, uint32_t,
+@@ -32,6 +34,15 @@ bool findFiles(const std::vector<std::filesystem::path>& dirPaths,
+ bool getI2cDevicePaths(const std::filesystem::path& dirPath,
+                        std::flat_map<size_t, std::filesystem::path>& busPaths);
+ 
++/// \brief Resolve an i2c bus number from a devicetree node path
++/// \param dtPath the device tree node path that names the adapter
++/// \param i2cDevicesDir the directory to scan
++/// \return the adapter number if only one match, or nullopt if no
++///         adapter or more than one matches
++std::optional<size_t> i2cBusFromDevicetreePath(
++    std::string_view dtPath,
++    const std::filesystem::path& i2cDevicesDir = "/sys/bus/i2c/devices");
++
+ struct DBusInternalError final : public sdbusplus::exception_t
+ {
+     const char* name() const noexcept override
+-- 
+2.39.5
+
