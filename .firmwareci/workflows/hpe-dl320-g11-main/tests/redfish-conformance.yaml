@@ -1,0 +1,52 @@
+name: "Redfish: DMTF Conformance"
+description: >-
+  Run the DMTF Redfish reference validators against the BMC.
+  Service-Validator crawls the service tree and asserts schema conformance.
+  Protocol-Validator exercises DSP0266 protocol behavior (authentication,
+  headers, methods, error responses). Reports parse into per-check results.
+  Long-running — service crawl can take 20-30 minutes on a populated BMC.
+
+defaults:
+  transport: &local
+    proto: local
+
+stages:
+  - name: Wait for BMC
+    steps:
+      - cmd: ping
+        name: Wait for SSH
+        options:
+          timeout: 5m
+        parameters:
+          host: "[[attributes.BMC]]"
+      - cmd: sleep
+        name: Wait for services to settle
+        parameters:
+          duration: 45s
+
+  - name: DMTF Validators
+    steps:
+      - cmd: redfish
+        name: Schema conformance (Redfish-Service-Validator)
+        transport: *local
+        options:
+          timeout: 30m
+          on-error: continue
+        parameters:
+          host: "[[attributes.BMC]]"
+          auth:
+            user: root
+            password: "[[attributes.BMCPassword]]"
+          validate: service
+      - cmd: redfish
+        name: Protocol conformance (Redfish-Protocol-Validator)
+        transport: *local
+        options:
+          timeout: 20m
+          on-error: continue
+        parameters:
+          host: "[[attributes.BMC]]"
+          auth:
+            user: root
+            password: "[[attributes.BMCPassword]]"
+          validate: protocol

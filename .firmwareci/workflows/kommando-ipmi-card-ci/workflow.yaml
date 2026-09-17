@@ -1,3 +1,0 @@
-name: kommando-ipmi-card-ci
-description: OpenBMC CI tests for ASUS IPMI Expansion Card - codename Kommando
-runs-on: asus-kommando-card

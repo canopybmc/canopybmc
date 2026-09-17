@@ -60,8 +60,7 @@ stages:
         parameters:
           agent: "[[attributes.Agent]]"
           device: "[[attributes.Device]]"
-          command: power
-          args: ["off"]
+          command: power-off
       - cmd: cmd
         name: Wait for BMC to power down
         transport: *local
@@ -73,8 +72,7 @@ stages:
         parameters:
           agent: "[[attributes.Agent]]"
           device: "[[attributes.Device]]"
-          command: power
-          args: ["on"]
+          command: power-on
       - cmd: dutctl
         name: Wait for boot banner on serial
         options:
