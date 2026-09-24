@@ -11,6 +11,8 @@ customized OpenBMC build environment for supported server platforms.
 ## Supported Boards
 
 - `hpe-proliant-g11`
+- `ast2700dcscm`
+- `ast2700a1dcscm`
 
 ## Quick Start Guide
 
@@ -46,3 +48,4 @@ for more information.
 ## Board-Specific Information
 
 - [HPE ProLiant Gen11](doc/board-hpe_proliant_gen11.md)
+- [ASPEED AST2700 DC-SCM](doc/board-aspeed_ast2700_dcscm.md)

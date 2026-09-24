@@ -1,0 +1,5 @@
+Build target:
+    obmc-phosphor-image: OpenBMC Phosphor userspace and Web UI
+
+DC-SCM machines: ast2700dcscm, ast2700a1dcscm.
+See doc/board-aspeed_ast2700_dcscm.md.

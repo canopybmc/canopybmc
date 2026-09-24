@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+#include "ast2700-dcscm.dts"
+
+/ {
+	model = "Canopy AST2700 DC-SCM";
+};
+
+&espi0 {
+	status = "disabled";
+};

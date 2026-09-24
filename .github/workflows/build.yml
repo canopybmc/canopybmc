@@ -38,7 +38,9 @@ jobs:
           board=$(jq -cn '[
             "canopy-qemu",
             "hpe-proliant-g11",
-            "kommando-ipmi-card"
+            "kommando-ipmi-card",
+            "ast2700dcscm",
+            "ast2700a1dcscm"
           ]')
           echo "board=$board" >> "$GITHUB_OUTPUT"
       - name: Check JSON validity

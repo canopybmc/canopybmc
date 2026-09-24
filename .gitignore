@@ -3,3 +3,7 @@ customrc
 *.sw?
 .repo/
 .vscode/
+
+# debugging
+reference/
+/.ast2700-notes.md

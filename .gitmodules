@@ -1,3 +1,7 @@
 [submodule "openbmc"]
 	path = openbmc
 	url = git@github.com:openbmc/openbmc.git
+[submodule "vendor/meta-zephyr"]
+	path = vendor/meta-zephyr
+	url = https://git.yoctoproject.org/meta-zephyr
+	branch = wrynose

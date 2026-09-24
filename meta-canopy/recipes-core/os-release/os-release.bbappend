@@ -1,5 +1,4 @@
-# COREBASE points at the openbmc submodule
-OS_RELEASE_ROOTPATH = "${COREBASE}/.."
+OS_RELEASE_ROOTPATH := "${THISDIR}/../../.."
 
 def run_git(d, cmd):
     try:
