@@ -5,7 +5,6 @@
 				"Address": "0x6a",
 				"Bus": "$BUS",
 				"Name": "NVME $index Temp",
-				"PollRate": 10,
 				"PowerState": "On",
 				"Thresholds": [
 					{
@@ -30,7 +29,7 @@
 		"Probe": [
 			"xyz.openbmc_project.FruDevice({'ADDRESS': 83})",
 			"AND",
-			"FOUND('chassis')"
+			"FOUND('HPE ProLiant [DR]L\\d+(a)? Gen11')"
 		],
 		"Type": "NVMe",
 		"xyz.openbmc_project.Inventory.Decorator.Asset": {

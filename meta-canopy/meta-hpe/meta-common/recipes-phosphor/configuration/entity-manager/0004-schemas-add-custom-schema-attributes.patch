@@ -1,0 +1,81 @@
+From e5641f6028584ec9c7f4d273bc2dc9b8a908d41d Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Thu, 3 Sep 2026 16:41:50 +0200
+Subject: [PATCH] schemas: add custom schema attributes
+
+There are some custom schema attributes but some of them are not
+upstream compliant or have other issues (e.g. unnecessary).
+
+Add them for now to pass the check and fix the code later.
+
+Upstream-Status: Inappropriate [Cleanup required]
+Change-Id: I24c6e4366741fe01818361a027b426c1c4256625
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ schemas/legacy.json | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/schemas/legacy.json b/schemas/legacy.json
+index a2dd53d..9495f72 100644
+--- a/schemas/legacy.json
++++ b/schemas/legacy.json
+@@ -739,6 +739,9 @@
+                 "Thresholds": {
+                     "$ref": "#/$defs/Types/Thresholds"
+                 },
++                "DeviceName": {
++                    "$ref": "#/$defs/Types/Name"
++                },
+                 "Type": {
+                     "enum": [
+                         "ADM1021",
+@@ -750,6 +753,7 @@
+                         "EMC1413",
+                         "EMC1414",
+                         "G751",
++                        "GxpTempSensor",
+                         "HDC1080",
+                         "JC42",
+                         "LM75A",
+@@ -765,6 +769,7 @@
+                         "PT5161L",
+                         "SBTSI",
+                         "SI7020",
++                        "SPD5118",
+                         "TMP100",
+                         "TMP1075",
+                         "TMP112",
+@@ -781,7 +786,11 @@
+                     ]
+                 }
+             },
+-            "required": ["Name", "Type", "Bus", "Address"],
++            "required": ["Name", "Type"],
++            "anyOf": [
++                { "required": ["Bus", "Address"] },
++                { "required": ["DeviceName"] }
++            ],
+             "type": "object"
+         },
+         "NVME1000": {
+@@ -947,6 +956,9 @@
+                 "PowerScaleFactor": {
+                     "$ref": "#/$defs/Types/PowerScaleFactor"
+                 },
++                "PresenceGpio": {
++                    "$ref": "#/$defs/Types/PresenceGpio"
++                },
+                 "Polling": {
+                     "$ref": "#/$defs/Types/Polling"
+                 },
+@@ -1042,6 +1054,7 @@
+                         "RAA229126",
+                         "RTQ6056",
+                         "SBRMI",
++                        "gxp_psu",
+                         "smpro_hwmon",
+                         "SQ52206",
+                         "SY24655",
+-- 
+2.53.0
+

@@ -35,7 +35,6 @@
                         "Polarity": "Low"
                     }
                 ],
-                "TempScaleFactor": 64,
                 "Thresholds": [
                     {
                         "Direction": "greater than",
