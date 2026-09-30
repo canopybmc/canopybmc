@@ -30,17 +30,12 @@ PACKAGECONFIG:append = " dts-vpd"
 
 do_install:append() {
     install -D ${UNPACKDIR}/blacklist.json ${D}${datadir}/${BPN}/blacklist.json
-    # Remove all default configs except for some vendors like NIC,
-    # OCP and NVMes.
-    # This saves us ~3 MiB in rofs.
+    # Remove all default configs except for HPE ones.
+    # This saves us valuable space in rofs.
     find ${D}${datadir}/${BPN}/configurations \
         -mindepth 1 -maxdepth 1 \
         -type d \
-        -not -name "broadcomm" \
         -not -name "hpe" \
-        -not -name "intel" \
-        -not -name "micron" \
-        -not -name "ocp" \
         -exec rm -rf {} +
 
     install -D ${UNPACKDIR}/dl110g11_baseboard.json ${D}${datadir}/${BPN}/configurations/hpe/dl110g11_baseboard.json
