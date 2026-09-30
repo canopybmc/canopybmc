@@ -1,0 +1,63 @@
+From 95993efcb8632b67f39e3da3b211debd536fbcf2 Mon Sep 17 00:00:00 2001
+From: Georg Hackel <georg.hackel@9elements.com>
+Date: Tue, 8 Sep 2026 12:16:26 +0200
+Subject: [PATCH] mappertool: make inclusion optional
+
+due to size constraints we like to disable its inclusion
+
+Upstream-Status: Pending
+Signed-off-by: Georg Hackel <georg.hackel@9elements.com>
+---
+ meson.build   | 22 ++++++++++++----------
+ meson.options |  8 ++++++++
+ 2 files changed, 20 insertions(+), 10 deletions(-)
+
+diff --git a/meson.build b/meson.build
+index f4e797744d63..1b04cfef30eb 100644
+--- a/meson.build
++++ b/meson.build
+@@ -139,16 +139,18 @@ executable(
+     install: true,
+ )
+ 
+-executable(
+-    'mappertool',
+-    'src/mappertool.cpp',
+-    dependencies: [
+-        cli11,
+-        sdbusplus,
+-    ],
+-    implicit_include_directories: false,
+-    install: true,
+-)
++if get_option('mappertool').allowed()
++    executable(
++        'mappertool',
++        'src/mappertool.cpp',
++        dependencies: [
++            cli11,
++            sdbusplus,
++        ],
++        implicit_include_directories: false,
++        install: true,
++    )
++endif
+ 
+ mapperx = executable(
+     'mapperx',
+diff --git a/meson.options b/meson.options
+index 109c40ea3f80..18f406cc1ff6 100644
+--- a/meson.options
++++ b/meson.options
+@@ -6,3 +6,11 @@ option(
+     value: 'enabled',
+     description: 'Build phosphor-unit-failure-monitor',
+ )
++
++option(
++    'mappertool',
++    type: 'feature',
++    value: 'enabled',
++    description: 'Include mappertool for d-bus association inspection',
++)
++
