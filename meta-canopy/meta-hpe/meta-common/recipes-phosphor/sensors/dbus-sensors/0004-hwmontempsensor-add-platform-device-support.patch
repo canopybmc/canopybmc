@@ -1,4 +1,4 @@
-From c9c348d0c90ee03eb29165d1bbecd1ada021c599 Mon Sep 17 00:00:00 2001
+From 624741654098d491475a82a285735dc500e602d5 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 13 Feb 2026 16:33:04 +0100
 Subject: [PATCH] hwmontempsensor: add platform device support

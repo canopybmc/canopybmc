@@ -1,4 +1,4 @@
-From 83884de18c81f5f8e70e6c15227d842416d9577e Mon Sep 17 00:00:00 2001
+From 14b5909cd6875fec8d345ac5d10e9010fa6f2962 Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Sun, 15 Feb 2026 13:17:26 +0100
 Subject: [PATCH] fansensor: add fan fault monitoring via hwmon fault attribute
