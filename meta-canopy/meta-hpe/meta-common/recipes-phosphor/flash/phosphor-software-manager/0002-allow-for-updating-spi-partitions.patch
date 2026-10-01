@@ -1,7 +1,7 @@
-From 00ef0a7bb80adfdf76b33cf975fb5c4a63b5634c Mon Sep 17 00:00:00 2001
+From d53997122c938669bbc1c69889c680bcac496e4e Mon Sep 17 00:00:00 2001
 From: Alexander Hansen <alexander.hansen@9elements.com>
 Date: Wed, 1 Jul 2026 15:24:18 +0200
-Subject: [PATCH] allow for updating spi partitions
+Subject: [PATCH 2/2] allow for updating spi partitions
 
 Some SPI flashes are partitioned to allow for A/B firmware updates
 without requiring multiple chips.
@@ -69,7 +69,7 @@ Signed-off-by: Alexander Hansen <alexander.hansen@9elements.com>
  7 files changed, 63 insertions(+), 18 deletions(-)
 
 diff --git a/spi-flash/bios/bios_device.cpp b/spi-flash/bios/bios_device.cpp
-index f46e6d33..04132a7e 100644
+index f46e6d3..04132a7 100644
 --- a/spi-flash/bios/bios_device.cpp
 +++ b/spi-flash/bios/bios_device.cpp
 @@ -30,11 +30,12 @@ enum FlashTool getBiosFlashTool(const std::string& configType)
@@ -89,7 +89,7 @@ index f46e6d33..04132a7e 100644
      versionWatch(ctx, biosVersionDirPath, *this)
  {
 diff --git a/spi-flash/bios/bios_device.hpp b/spi-flash/bios/bios_device.hpp
-index f3c661f9..91ad8e57 100644
+index f3c661f..91ad8e5 100644
 --- a/spi-flash/bios/bios_device.hpp
 +++ b/spi-flash/bios/bios_device.hpp
 @@ -3,6 +3,8 @@
@@ -112,7 +112,7 @@ index f3c661f9..91ad8e57 100644
                 const std::vector<bool>& gpioValuesIn, SoftwareConfig& config,
                 SoftwareManager* parent);
 diff --git a/spi-flash/spi_device.cpp b/spi-flash/spi_device.cpp
-index f5910a09..150e0cf8 100644
+index 1d671ea..7036d78 100644
 --- a/spi-flash/spi_device.cpp
 +++ b/spi-flash/spi_device.cpp
 @@ -56,18 +56,18 @@ static std::optional<std::string> getSPIDevAddr(uint64_t spiControllerIndex)
@@ -141,7 +141,7 @@ index f5910a09..150e0cf8 100644
  {
      auto optAddr = getSPIDevAddr(spiControllerIndex);
  
-@@ -461,6 +461,20 @@ sdbusplus::async::task<bool> SPIDevice::writeSPIFlashDefault(
+@@ -468,6 +468,20 @@ sdbusplus::async::task<bool> SPIDevice::writeSPIFlashDefault(
      co_return true;
  }
  
@@ -162,7 +162,7 @@ index f5910a09..150e0cf8 100644
  std::optional<std::string> SPIDevice::getMTDDevicePath() const
  {
      const std::string spiPath =
-@@ -478,7 +492,17 @@ std::optional<std::string> SPIDevice::getMTDDevicePath() const
+@@ -485,7 +499,17 @@ std::optional<std::string> SPIDevice::getMTDDevicePath() const
      {
          const std::string mtdName = entry.path().filename().string();
  
@@ -182,7 +182,7 @@ index f5910a09..150e0cf8 100644
              return "/dev/" + mtdName;
          }
 diff --git a/spi-flash/spi_device.hpp b/spi-flash/spi_device.hpp
-index f7778663..774045e0 100644
+index f777866..774045e 100644
 --- a/spi-flash/spi_device.hpp
 +++ b/spi-flash/spi_device.hpp
 @@ -35,7 +35,8 @@ class SPIDevice : public Device
@@ -205,7 +205,7 @@ index f7778663..774045e0 100644
      // e.g. "1e631000.spi"
      std::string spiDev;
 diff --git a/spi-flash/spi_factory.cpp b/spi-flash/spi_factory.cpp
-index 0a0dca3c..49aa507a 100644
+index 0a0dca3..49aa507 100644
 --- a/spi-flash/spi_factory.cpp
 +++ b/spi-flash/spi_factory.cpp
 @@ -2,6 +2,8 @@
@@ -239,7 +239,7 @@ index 0a0dca3c..49aa507a 100644
          catch (const std::exception& e)
          {
 diff --git a/spi-flash/spi_factory.hpp b/spi-flash/spi_factory.hpp
-index 8ad4418a..0e51c837 100644
+index 8ad4418..0e51c83 100644
 --- a/spi-flash/spi_factory.hpp
 +++ b/spi-flash/spi_factory.hpp
 @@ -6,6 +6,7 @@
@@ -261,10 +261,10 @@ index 8ad4418a..0e51c837 100644
          SoftwareConfig& config, SoftwareManager* parent);
  
 diff --git a/spi-flash/spi_software_manager.cpp b/spi-flash/spi_software_manager.cpp
-index 5e655a74..be059d82 100644
+index 8e1709b..eec5f7a 100644
 --- a/spi-flash/spi_software_manager.cpp
 +++ b/spi-flash/spi_software_manager.cpp
-@@ -45,6 +45,15 @@ sdbusplus::async::task<bool> SPISoftwareManager::initDevice(
+@@ -47,6 +47,15 @@ sdbusplus::async::task<bool> SPISoftwareManager::initDevice(
          co_return false;
      }
  
@@ -280,7 +280,7 @@ index 5e655a74..be059d82 100644
      const std::string configIfaceMux = configIface + ".MuxOutputs";
  
      std::vector<std::string> names;
-@@ -76,7 +85,7 @@ sdbusplus::async::task<bool> SPISoftwareManager::initDevice(
+@@ -78,7 +87,7 @@ sdbusplus::async::task<bool> SPISoftwareManager::initDevice(
  
      auto spiDevice = SPIFactory::instance().create(
          chipType, ctx, spiControllerIndex.value(), spiDeviceIndex.value(),
