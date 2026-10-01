@@ -1,4 +1,4 @@
-From 112b278a1af1f36d750f2955394a602ec184c8c2 Mon Sep 17 00:00:00 2001
+From c760f519c3fb0057eab17013d32ceea0ad78867a Mon Sep 17 00:00:00 2001
 From: Canopy BMC <canopy@canopybmc.com>
 Date: Fri, 13 Feb 2026 12:00:00 +0000
 Subject: [PATCH] psusensor: add gxp_psu to sensorTypes whitelist

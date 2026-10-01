@@ -1,4 +1,4 @@
-From 948d98d6f0f8f61376dbf008376cef38d876854f Mon Sep 17 00:00:00 2001
+From 7398d6b0e24d8f24fc65521c45cbd492c986a660 Mon Sep 17 00:00:00 2001
 From: Willy Tu <wltu@google.com>
 Date: Tue, 24 Mar 2026 15:14:33 +0000
 Subject: [PATCH] reduce image size by moving to Multi-call Binary
@@ -1160,7 +1160,7 @@ index 5a942b7..18908ea 100644
  #include <boost/asio/error.hpp>
  #include <boost/asio/generic/datagram_protocol.hpp>
 diff --git a/src/nvidia-gpu/NvidiaGpuSensorMain.cpp b/src/nvidia-gpu/NvidiaGpuSensorMain.cpp
-index d919c21..9a7d9e1 100644
+index 17cd36e..163d5f1 100644
 --- a/src/nvidia-gpu/NvidiaGpuSensorMain.cpp
 +++ b/src/nvidia-gpu/NvidiaGpuSensorMain.cpp
 @@ -33,7 +33,7 @@
@@ -1183,10 +1183,10 @@ index d5e0924..41ebe85 100644
 +
 +int nvidiaGpuSensorMain();
 diff --git a/src/nvidia-gpu/meson.build b/src/nvidia-gpu/meson.build
-index 418ef2c..2f48777 100644
+index 340c8d5..af91747 100644
 --- a/src/nvidia-gpu/meson.build
 +++ b/src/nvidia-gpu/meson.build
-@@ -41,12 +41,21 @@ endif
+@@ -43,12 +43,21 @@ endif
  gpusensor_include_dir = include_directories('.', is_system: true)
  sensor_include_dir = include_directories('../..')
  
