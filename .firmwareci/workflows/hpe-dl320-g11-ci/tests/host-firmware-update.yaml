@@ -202,7 +202,7 @@ stages:
         transport: *bmc_ssh
         parameters:
           command: |
-            journalctl -n 5 -t phosphor-bios-software-update -t power-control -f \
+            journalctl -n 5 -t phosphor-spi-flash-software-update -t power-control -f \
               | awk '{print} /UpdateSuccessful|ActivateFailed|UpdateNotApplicable/{exit}'
           expect:
             - regex: UpdateSuccessful
