@@ -1,4 +1,4 @@
-From 9fe63c5ed9368f8394353bbcc3ca4226165d368e Mon Sep 17 00:00:00 2001
+From a5c222b476c0d12b63976d178791ca62b58e8032 Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
 Date: Thu, 18 Jun 2026 00:00:00 +0000
 Subject: [PATCH] fru-device: load synthetic FRUs from /etc/fru
@@ -29,11 +29,11 @@ Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
  1 file changed, 54 insertions(+)
 
 diff --git a/src/fru_device/fru_device.cpp b/src/fru_device/fru_device.cpp
-index 27b085d..f42a359 100644
+index 529a6be..3bc1f55 100644
 --- a/src/fru_device/fru_device.cpp
 +++ b/src/fru_device/fru_device.cpp
-@@ -998,6 +998,59 @@ static bool readBaseboardFRU(std::vector<uint8_t>& baseboardFRU)
-     return true;
+@@ -1207,6 +1207,59 @@ static void clearDBusInterfacesForBus(
+     }
  }
  
 +// Load additional synthetic (non-EEPROM) FRUs from /etc/fru. Files must be
@@ -89,14 +89,17 @@ index 27b085d..f42a359 100644
 +    }
 +}
 +
- bool writeFruByteData(bool is16Bit, int file, uint8_t address, uint16_t index,
-                       uint8_t byteData)
- {
-@@ -1229,6 +1282,7 @@ static void publishAllFrus(BusMap& busmap, FruDetails& fruDetails,
-         auto bus0 = busmap.try_emplace(0, std::make_shared<DeviceMap>());
-         bus0.first->second->emplace(0, baseboardFRU);
+ static void publishFruOnBusAddress(
+     std::vector<uint8_t>& device, uint16_t busNum, uint8_t address,
+     FruDetails& fruDetails, sdbusplus::asio::object_server& objServer)
+@@ -1315,6 +1368,7 @@ static void publishAllFrus(BusMap& busmap, FruDetails& fruDetails,
+         }
      }
+ 
 +    loadSyntheticFRUs(busmap);
-     for (auto devicemap : busmap)
-     {
-         for (auto device : *devicemap.second)
+     // make sure baseboard fru rescan happens
+     publishFrusOnBus(busmap, baseboardFruBus, fruDetails, objServer);
+ 
+-- 
+2.55.0
+
