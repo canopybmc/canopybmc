@@ -1,7 +1,6 @@
 FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 
 SRC_URI:append = " \
-    file://0001-devicetree-vpd-parser-expose-part-number-and-manufac.patch \
     file://0002-schemas-firmware-allow-for-updating-spi-partition.patch \
     file://0003-fru-device-load-synthetic-FRUs-from-etc-fru.patch \
     file://0004-utils-allow-specifying-a-devicetree-path-as-i2c-bus.patch \
