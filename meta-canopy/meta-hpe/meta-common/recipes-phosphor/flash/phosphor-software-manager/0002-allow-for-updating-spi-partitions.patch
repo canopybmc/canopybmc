@@ -1,7 +1,7 @@
-From d53997122c938669bbc1c69889c680bcac496e4e Mon Sep 17 00:00:00 2001
+From 7875ff150a5410d282a43a3f3af838bca10178c4 Mon Sep 17 00:00:00 2001
 From: Alexander Hansen <alexander.hansen@9elements.com>
 Date: Wed, 1 Jul 2026 15:24:18 +0200
-Subject: [PATCH 2/2] allow for updating spi partitions
+Subject: [PATCH] allow for updating spi partitions
 
 Some SPI flashes are partitioned to allow for A/B firmware updates
 without requiring multiple chips.
@@ -58,15 +58,17 @@ host-prime
 Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/phosphor-bmc-code-mgmt/+/91916]
 Change-Id: I42eaf85c925cde3d5029fb6b9165d2572ca13978
 Signed-off-by: Alexander Hansen <alexander.hansen@9elements.com>
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
 ---
  spi-flash/bios/bios_device.cpp     |  7 +++---
  spi-flash/bios/bios_device.hpp     |  5 +++-
+ spi-flash/e810/e810_device.cpp     |  2 +-
  spi-flash/spi_device.cpp           | 40 ++++++++++++++++++++++++------
  spi-flash/spi_device.hpp           |  5 +++-
  spi-flash/spi_factory.cpp          |  9 ++++---
  spi-flash/spi_factory.hpp          |  4 ++-
  spi-flash/spi_software_manager.cpp | 11 +++++++-
- 7 files changed, 63 insertions(+), 18 deletions(-)
+ 8 files changed, 64 insertions(+), 19 deletions(-)
 
 diff --git a/spi-flash/bios/bios_device.cpp b/spi-flash/bios/bios_device.cpp
 index f46e6d3..04132a7 100644
@@ -111,6 +113,19 @@ index f3c661f..91ad8e5 100644
                 const std::vector<std::string>& gpioLinesIn,
                 const std::vector<bool>& gpioValuesIn, SoftwareConfig& config,
                 SoftwareManager* parent);
+diff --git a/spi-flash/e810/e810_device.cpp b/spi-flash/e810/e810_device.cpp
+index b219eaf..4eaddfe 100644
+--- a/spi-flash/e810/e810_device.cpp
++++ b/spi-flash/e810/e810_device.cpp
+@@ -22,7 +22,7 @@ E810Device::E810Device(sdbusplus::async::context& ctx,
+                        const std::vector<std::string>& inGpioLines,
+                        const std::vector<bool>& inGpioValues,
+                        SoftwareConfig& inConfig, SoftwareManager* inParent) :
+-    SPIDevice(ctx, inSpiControllerIndex, inSpiDeviceIndex, inDryRun,
++    SPIDevice(ctx, inSpiControllerIndex, inSpiDeviceIndex, "", inDryRun,
+               inGpioLines, inGpioValues, inConfig, inParent, flashLayoutFlat,
+               flashToolFlashcp),
+     transport(ctx)
 diff --git a/spi-flash/spi_device.cpp b/spi-flash/spi_device.cpp
 index 1d671ea..7036d78 100644
 --- a/spi-flash/spi_device.cpp
@@ -205,19 +220,19 @@ index f777866..774045e 100644
      // e.g. "1e631000.spi"
      std::string spiDev;
 diff --git a/spi-flash/spi_factory.cpp b/spi-flash/spi_factory.cpp
-index 0a0dca3..49aa507 100644
+index 7d69646..2c660ea 100644
 --- a/spi-flash/spi_factory.cpp
 +++ b/spi-flash/spi_factory.cpp
-@@ -2,6 +2,8 @@
- 
+@@ -3,6 +3,8 @@
  #include "bios/bios_device.hpp"
+ #include "e810/e810_device.hpp"
  
 +#include <optional>
 +
  namespace phosphor::software::manager
  {
  
-@@ -13,7 +15,8 @@ SPIFactory& SPIFactory::instance()
+@@ -14,7 +16,8 @@ SPIFactory& SPIFactory::instance()
  
  std::unique_ptr<SPIDevice> SPIFactory::create(
      const std::string& chipType, sdbusplus::async::context& ctx,
@@ -227,8 +242,8 @@ index 0a0dca3..49aa507 100644
      const std::vector<std::string>& names, const std::vector<bool>& values,
      SoftwareConfig& config, SoftwareManager* parent)
  {
-@@ -23,8 +26,8 @@ std::unique_ptr<SPIDevice> SPIFactory::create(
-         try
+@@ -24,8 +27,8 @@ std::unique_ptr<SPIDevice> SPIFactory::create(
+             chipType == getSpiTypeStr(spiChip::HOST_BIOS))
          {
              return std::make_unique<BIOSDevice>(
 -                ctx, spiControllerIndex, spiDeviceIndex, dryRun, names, values,
@@ -236,10 +251,10 @@ index 0a0dca3..49aa507 100644
 +                ctx, spiControllerIndex, spiDeviceIndex, partition, dryRun,
 +                names, values, config, parent);
          }
-         catch (const std::exception& e)
-         {
+ 
+         if (chipType == getSpiTypeStr(spiChip::INTEL_E810_NIC))
 diff --git a/spi-flash/spi_factory.hpp b/spi-flash/spi_factory.hpp
-index 8ad4418..0e51c83 100644
+index aa9037f..e4b145d 100644
 --- a/spi-flash/spi_factory.hpp
 +++ b/spi-flash/spi_factory.hpp
 @@ -6,6 +6,7 @@
@@ -250,7 +265,7 @@ index 8ad4418..0e51c83 100644
  #include <string>
  #include <unordered_map>
  #include <vector>
-@@ -50,7 +51,8 @@ class SPIFactory
+@@ -53,7 +54,8 @@ class SPIFactory
  
      static std::unique_ptr<SPIDevice> create(
          const std::string& chipType, sdbusplus::async::context& ctx,
@@ -289,6 +304,3 @@ index 8e1709b..eec5f7a 100644
  
      if (spiDevice == nullptr)
      {
--- 
-2.55.0
-
