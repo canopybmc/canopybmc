@@ -1,0 +1,20 @@
+[Unit]
+Description=BMC health checks for the hardware watchdog
+After=multi-user.target
+StartLimitIntervalSec=2h
+StartLimitBurst=3
+StartLimitAction=reboot
+
+[Service]
+Type=notify
+NotifyAccess=all
+ExecStart=/usr/sbin/bmc-health
+ExecStopPost=/usr/sbin/bmc-health --record-failure
+TimeoutStartSec=15min
+WatchdogSec=15min
+WatchdogSignal=SIGTERM
+Restart=on-failure
+RestartSec=1min
+
+[Install]
+WantedBy=multi-user.target

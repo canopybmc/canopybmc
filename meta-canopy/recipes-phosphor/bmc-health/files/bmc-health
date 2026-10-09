@@ -1,0 +1,74 @@
+#!/bin/sh
+# Run the BMC health checks and pet the systemd service watchdog only while
+# all of them pass. systemd escalates to a BMC reboot when the pets stop; see
+# bmc-health.service.
+
+INTERVAL=120
+CHECK_TIMEOUT=30
+MAX_FAILURES_PER_DAY=6
+CHECK_DIRS="/usr/libexec/bmc-health /etc/bmc-health.d"
+STATE=/var/lib/bmc-health/failures
+
+recent_failures() {
+    now=$(date +%s)
+    [ -r "$STATE" ] || return 0
+    while read -r t; do
+        [ $((now - t)) -lt 86400 ] && echo "$t"
+    done < "$STATE"
+}
+
+if [ "$1" = "--record-failure" ]; then
+    case "$SERVICE_RESULT" in
+        watchdog|timeout) ;;
+        *) exit 0 ;;
+    esac
+    mkdir -p "$(dirname "$STATE")"
+    { recent_failures; date +%s; } > "$STATE.new" && mv "$STATE.new" "$STATE"
+    exit 0
+fi
+
+run_check() {
+    "$1" &
+    pid=$!
+    (sleep "$CHECK_TIMEOUT" && kill -KILL "$pid" 2>/dev/null) &
+    watcher=$!
+    wait "$pid"
+    rc=$?
+    kill "$watcher" 2>/dev/null
+    return "$rc"
+}
+
+[ "$(cat /proc/sys/vm/panic_on_oom)" != 0 ] ||
+    echo "<4>vm.panic_on_oom is 0, an out-of-memory BMC will not reboot"
+[ "$(cat /proc/sys/kernel/panic)" != 0 ] ||
+    echo "<4>kernel.panic is 0, a panicking BMC will not reboot"
+grep -qx ramoops /sys/module/pstore/parameters/backend 2>/dev/null ||
+    echo "<4>No ramoops pstore backend, panics leave no log for the next boot"
+
+monitor_only=
+if [ "$(recent_failures | wc -l)" -ge "$MAX_FAILURES_PER_DAY" ]; then
+    monitor_only=1
+    echo "Health checks failed too often in the last 24h, reporting only"
+fi
+
+while :; do
+    failed=
+    for dir in $CHECK_DIRS; do
+        for check in "$dir"/*; do
+            [ -f "$check" ] && [ -x "$check" ] || continue
+            run_check "$check" || failed="$failed ${check##*/}"
+        done
+    done
+
+    if [ -z "$failed" ]; then
+        systemd-notify READY=1 WATCHDOG=1 "STATUS=Healthy"
+    else
+        echo "Health check failed:$failed"
+        if [ -n "$monitor_only" ]; then
+            systemd-notify READY=1 WATCHDOG=1 "STATUS=Failing (monitor only):$failed"
+        else
+            systemd-notify "STATUS=Failing:$failed"
+        fi
+    fi
+    sleep "$INTERVAL"
+done

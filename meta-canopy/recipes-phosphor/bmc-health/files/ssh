@@ -1,0 +1,15 @@
+#!/bin/sh
+# Fail when sshd no longer completes a key exchange on localhost. The check
+# offers no credentials, so a healthy sshd answers with "Permission denied".
+
+out=$(ssh -F /dev/null -o BatchMode=yes -o ConnectTimeout=10 \
+    -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -o PreferredAuthentications=none -o LogLevel=ERROR \
+    root@127.0.0.1 true 2>&1)
+
+case "$out" in
+    *"Permission denied"*) exit 0 ;;
+esac
+
+echo "ssh to localhost failed: $out" >&2
+exit 1
