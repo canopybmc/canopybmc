@@ -1,4 +1,4 @@
-From 3eca5c8bc774c99668bfe2eb05aca942c45ff047 Mon Sep 17 00:00:00 2001
+From 3cda4744c3c861bf076d236d1ad96e33f95c10ba Mon Sep 17 00:00:00 2001
 From: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 Date: Fri, 23 Jan 2026 01:08:02 +0100
 Subject: [PATCH] net: add HPE GXP UMAC ethernet driver
@@ -7,6 +7,7 @@ Add ethernet driver for the UMAC controller found on HPE GXP SoCs.
 This controller is connected to an external Marvell 88E1415 PHY via an
 SGMII interface.
 
+Upstream-Status: Pending
 Co-developed-by: Jean-Marie Verdun <verdun@hpe.com>
 Signed-off-by: Jean-Marie Verdun <verdun@hpe.com>
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
@@ -24,23 +25,23 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  create mode 100644 drivers/net/gxp_umac.h
 
 diff --git a/MAINTAINERS b/MAINTAINERS
-index ae11c0a4464..c96ae0bde66 100644
+index 910c5b81aa8..26d1b546b30 100644
 --- a/MAINTAINERS
 +++ b/MAINTAINERS
-@@ -344,6 +344,8 @@ F:	board/hpe/
+@@ -343,6 +343,8 @@ F:	board/hpe/
  F:	configs/gxp_defconfig
  F:	doc/device-tree-bindings/spi/hpe,gxp-spi.yaml
  F:	drivers/misc/gxp_eeprom.c
 +F:	drivers/net/gxp_umac.c
 +F:	drivers/net/gxp_umac.h
+ F:	drivers/sysinfo/gxp.c
  F:	drivers/timer/gxp-timer.c
  F:	drivers/spi/gxp_spi.c
- 
 diff --git a/arch/arm/dts/hpe-gxp-u-boot.dtsi b/arch/arm/dts/hpe-gxp-u-boot.dtsi
-index 7e9d9a171a4..6cb6a631497 100644
+index 63a1a11fed2..31f898f09f4 100644
 --- a/arch/arm/dts/hpe-gxp-u-boot.dtsi
 +++ b/arch/arm/dts/hpe-gxp-u-boot.dtsi
-@@ -28,3 +28,27 @@
+@@ -23,3 +23,27 @@
  		};
  	};
  };
@@ -69,10 +70,10 @@ index 7e9d9a171a4..6cb6a631497 100644
 +	bootph-all;
 +};
 diff --git a/arch/arm/dts/hpe-gxp.dtsi b/arch/arm/dts/hpe-gxp.dtsi
-index fa174bdc582..a517108c1a7 100644
+index 66ddbd924f7..9e13e941ff0 100644
 --- a/arch/arm/dts/hpe-gxp.dtsi
 +++ b/arch/arm/dts/hpe-gxp.dtsi
-@@ -154,6 +154,48 @@
+@@ -163,6 +163,48 @@
  				interrupts = <6>;
  				interrupt-parent = <&vic0>;
  			};
@@ -122,10 +123,10 @@ index fa174bdc582..a517108c1a7 100644
  	};
  };
 diff --git a/configs/gxp_defconfig b/configs/gxp_defconfig
-index ea732b09bd7..59c1e8c2cd2 100644
+index fd59fc8e50e..adc596330e6 100644
 --- a/configs/gxp_defconfig
 +++ b/configs/gxp_defconfig
-@@ -39,6 +39,13 @@ CONFIG_CMD_FAT=y
+@@ -40,6 +40,13 @@ CONFIG_CMD_FAT=y
  CONFIG_ENV_IS_IN_SPI_FLASH=y
  CONFIG_ENV_REDUNDANT=y
  CONFIG_NETCONSOLE=y
@@ -140,10 +141,10 @@ index ea732b09bd7..59c1e8c2cd2 100644
  CONFIG_NVMEM=y
  CONFIG_GXP_EEPROM=y
 diff --git a/drivers/net/Kconfig b/drivers/net/Kconfig
-index 544e302d600..f408a47e310 100644
+index faa08e9ebba..045b9cc4178 100644
 --- a/drivers/net/Kconfig
 +++ b/drivers/net/Kconfig
-@@ -840,6 +840,15 @@ config GMAC_ROCKCHIP
+@@ -861,6 +861,15 @@ config GMAC_ROCKCHIP
  	  This driver provides Rockchip SoCs network support based on the
  	  Synopsys Designware driver.
  
@@ -160,10 +161,10 @@ index 544e302d600..f408a47e310 100644
  	bool "Renesas Ethernet Switch support"
  	depends on DM_ETH && (R8A779F0 || R8A78000)
 diff --git a/drivers/net/Makefile b/drivers/net/Makefile
-index a3c3420898c..6beaa99b4e7 100644
+index 4c1f4094ab2..f22872a8ae8 100644
 --- a/drivers/net/Makefile
 +++ b/drivers/net/Makefile
-@@ -53,6 +53,7 @@ obj-$(CONFIG_FSL_PFE) += pfe_eth/
+@@ -55,6 +55,7 @@ obj-$(CONFIG_FSL_PFE) += pfe_eth/
  obj-$(CONFIG_FTGMAC100) += ftgmac100.o
  obj-$(CONFIG_FTMAC100) += ftmac100.o
  obj-$(CONFIG_GMAC_ROCKCHIP) += gmac_rockchip.o
@@ -906,5 +907,5 @@ index 00000000000..48f1a650f0d
 +
 +#endif /* _GXP_UMAC_H_ */
 -- 
-2.52.0
+2.53.0
 
