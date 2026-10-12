@@ -1,4 +1,4 @@
-From 9ecb2e08eb03ef768df20ee592623cae6d34e029 Mon Sep 17 00:00:00 2001
+From 0fd930215d4d2fdfccce9d2bcecfc04b90164dcc Mon Sep 17 00:00:00 2001
 From: Alexander Hansen <alexander.hansen@9elements.com>
 Date: Thu, 25 Jun 2026 18:15:05 +0200
 Subject: [PATCH] bios: no not require mux GPIOs
@@ -135,7 +135,7 @@ Signed-off-by: Alexander Hansen <alexander.hansen@9elements.com>
  1 file changed, 45 insertions(+), 29 deletions(-)
 
 diff --git a/spi-flash/spi_device.cpp b/spi-flash/spi_device.cpp
-index 95be797..1d671ea 100644
+index 03a31dd..a416475 100644
 --- a/spi-flash/spi_device.cpp
 +++ b/spi-flash/spi_device.cpp
 @@ -226,44 +226,55 @@ sdbusplus::async::task<bool> SPIDevice::writeSPIFlash(const uint8_t* image,
