@@ -1,6 +1,9 @@
 ---
 blank_issues_enabled: false
 contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/canopybmc/canopybmc/security/policy
+    about: Please report vulnerabilities privately, see the security policy
   - name: Questions and discussions
     url: https://github.com/canopybmc/canopybmc/discussions
     about: Ask questions about building or using CanopyBMC
