@@ -1,0 +1,27 @@
+---
+# Checks that every commit of a pull request carries a Signed-off-by line,
+# see https://developercertificate.org and CONTRIBUTING.md.
+
+name: DCO
+
+on:
+  pull_request: {}
+
+permissions:
+  contents: read
+
+jobs:
+  dco:
+    name: DCO
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Signed-off-by
+        uses: KineticCafe/actions-dco@v3.2.0
+        with:
+          # Commits of these bots don't need a sign-off: Dependabot can't sign
+          # off, canopybmc-bot (update-openbmc) and github-actions
+          # (release-prepare) are our own automation.
+          config: |
+            [bot]
+            policy = "allowlist"
+            allow = ["dependabot[bot]", "canopybmc-bot[bot]", "github-actions[bot]"]
