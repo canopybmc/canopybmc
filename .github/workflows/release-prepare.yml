@@ -93,3 +93,7 @@ jobs:
           body: "Prepare for next release"
           assignees: "${{ github.actor }}"
           reviewers: "${{ github.actor }}"
+          labels: |
+            github_actions
+            target/all
+            topic/docs
