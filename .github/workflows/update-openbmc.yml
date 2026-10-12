@@ -53,10 +53,14 @@ jobs:
           git log -1 --pretty=%B origin/rebase/openbmc >> "$BODY_FILE"
           echo '```' >> "$BODY_FILE"
 
+          LABELS="github_actions,target/all,release/rolling,topic/build"
+
           gh pr create \
             --head rebase/openbmc \
             --title "openbmc: update ref" \
             --body-file "$BODY_FILE" \
+            --label "$LABELS" \
           || gh pr edit rebase/openbmc \
             --title "openbmc: update ref" \
-            --body-file "$BODY_FILE"
+            --body-file "$BODY_FILE" \
+            --add-label "$LABELS"
