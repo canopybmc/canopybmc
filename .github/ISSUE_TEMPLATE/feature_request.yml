@@ -1,0 +1,51 @@
+---
+name: Feature request
+description: Suggest a new feature or an improvement
+labels: ["type/feature", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Labels are pre-filled from your answers by a bot and confirmed by a
+        maintainer during triage.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A short description of the feature.
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Which problem does this solve, and for whom?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+
+  - type: input
+    id: target
+    attributes:
+      label: Target machine
+      description: |
+        The machine name as used with `source setup <machine>`, separated by
+        commas, or `all`. Leave empty if it doesn't matter.
+
+  - type: input
+    id: components
+    attributes:
+      label: Affected components
+      description: Services or components involved, separated by commas, if known.
+      placeholder: bmcweb, entity-manager, dbus-sensors
