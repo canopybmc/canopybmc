@@ -1,4 +1,4 @@
-From a5c222b476c0d12b63976d178791ca62b58e8032 Mon Sep 17 00:00:00 2001
+From a5262dd2012df9e93dd35398c61d31b9bb2d3de7 Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
 Date: Thu, 18 Jun 2026 00:00:00 +0000
 Subject: [PATCH] fru-device: load synthetic FRUs from /etc/fru
@@ -29,10 +29,10 @@ Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
  1 file changed, 54 insertions(+)
 
 diff --git a/src/fru_device/fru_device.cpp b/src/fru_device/fru_device.cpp
-index 529a6be..3bc1f55 100644
+index 87f3fe4..3eba15b 100644
 --- a/src/fru_device/fru_device.cpp
 +++ b/src/fru_device/fru_device.cpp
-@@ -1207,6 +1207,59 @@ static void clearDBusInterfacesForBus(
+@@ -1219,6 +1219,59 @@ static void clearDBusInterfacesForBus(
      }
  }
  
@@ -91,15 +91,12 @@ index 529a6be..3bc1f55 100644
 +
  static void publishFruOnBusAddress(
      std::vector<uint8_t>& device, uint16_t busNum, uint8_t address,
-     FruDetails& fruDetails, sdbusplus::asio::object_server& objServer)
-@@ -1315,6 +1368,7 @@ static void publishAllFrus(BusMap& busmap, FruDetails& fruDetails,
+     FruDetails& fruDetails, PendingRemoveList& pendingRemove,
+@@ -1360,6 +1413,7 @@ static void publishAllFrus(BusMap& busmap, FruDetails& fruDetails,
          }
      }
  
 +    loadSyntheticFRUs(busmap);
      // make sure baseboard fru rescan happens
-     publishFrusOnBus(busmap, baseboardFruBus, fruDetails, objServer);
- 
--- 
-2.55.0
-
+     publishFrusOnBus(busmap, baseboardFruBus, fruDetails, pendingRemove,
+                      pendingAdd);

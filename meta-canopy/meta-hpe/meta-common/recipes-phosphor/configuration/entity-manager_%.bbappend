@@ -53,3 +53,4 @@ do_install:append() {
     install -D ${UNPACKDIR}/hpe_drv.json ${D}${datadir}/${BPN}/configurations/hpe/hpe_drv.json
     install -D ${UNPACKDIR}/hpe_ubm.json ${D}${datadir}/${BPN}/configurations/hpe/hpe_ubm.json
 }
+

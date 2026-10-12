@@ -1,4 +1,4 @@
-From 66a90cb6f530f815e5f6f9dc54dd55d311957271 Mon Sep 17 00:00:00 2001
+From 3f6ec1a8001d4fc7b39adcc372e65b13e9680802 Mon Sep 17 00:00:00 2001
 From: Alexander Hansen <alexander.hansen@9elements.com>
 Date: Wed, 1 Jul 2026 14:18:29 +0200
 Subject: [PATCH] schemas/firmware: allow for updating spi partition
@@ -48,12 +48,14 @@ Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/entity-
 Change-Id: Ifd0fa059d7b4b597d860bb0f9509282f6202f372
 Signed-off-by: Alexander Hansen <alexander.hansen@9elements.com>
 ---
+ schemas/firmware.json | 4 ++++
+ 1 file changed, 4 insertions(+)
 
 diff --git a/schemas/firmware.json b/schemas/firmware.json
-index ba32140..5848fc7 100644
+index c921811..58d0a24 100644
 --- a/schemas/firmware.json
 +++ b/schemas/firmware.json
-@@ -95,6 +95,10 @@
+@@ -102,6 +102,10 @@
                      "description": "The index of the SPI device connected to that controller",
                      "type": "number"
                  },
