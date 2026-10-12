@@ -1,0 +1,6 @@
+---
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and discussions
+    url: https://github.com/canopybmc/canopybmc/discussions
+    about: Ask questions about building or using CanopyBMC
