@@ -63,7 +63,7 @@ stages:
   - name: Get System Restart Cause
     steps:
       - cmd: shell
-        name: Get System Restart Cause (0x00 0x07) currently fails with 0xFF
+        name: Get System Restart Cause (0x00 0x07)
         transport: *local
         options:
           timeout: "30s"
@@ -71,9 +71,9 @@ stages:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
             -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x00 0x07 2>&1 || true
+            raw 0x00 0x07
           expect:
-            - regex: 'rsp=0xff|Unspecified error'
+            - regex: '^\s*[0-9a-f]{2} [0-9a-f]{2}'
 
   - name: Get POH Counter
     steps:
@@ -174,7 +174,7 @@ stages:
           expect:
             - regex: 'System Power\s*:'
       - cmd: shell
-        name: chassis restart_cause (alias) fails with 0xFF
+        name: chassis restart_cause (alias)
         transport: *local
         options:
           timeout: "30s"
@@ -182,9 +182,9 @@ stages:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
             -U root -P [[attributes.BMCPassword]] -C 17
-            chassis restart_cause 2>&1 || true
+            chassis restart_cause
           expect:
-            - regex: 'Get Chassis Restart Cause failed: Unspecified error'
+            - regex: 'System restart cause:'
       - cmd: shell
         name: chassis poh (alias)
         transport: *local

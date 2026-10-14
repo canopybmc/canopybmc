@@ -40,6 +40,8 @@ stages:
             ipmitool -I lanplus -H [[attributes.BMC]]
             -U root -P [[attributes.BMCPassword]] -C 17
             raw 0x06 0x04
+          expect:
+            - regex: '^\s*55 00'
 
   - name: ACPI Power State (unsupported on this platform)
     steps:
@@ -145,7 +147,7 @@ stages:
           expect:
             - regex: 'System GUID'
       - cmd: shell
-        name: mc selftest is not implemented
+        name: mc selftest passes
         transport: *local
         options:
           timeout: "30s"
@@ -154,6 +156,6 @@ stages:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
             -U root -P [[attributes.BMCPassword]] -C 17
-            mc selftest || exit 0
+            mc selftest
           expect:
-            - regex: '^Selftest: not implemented$'
+            - regex: '^Selftest: passed$'
