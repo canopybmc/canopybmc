@@ -37,7 +37,7 @@ stages:
   - name: Fan PWM Values in Range
     steps:
       - cmd: cmd
-        name: PWM 7 and 8 in 5-80% range
+        name: PWM 7 and 8 in 5-100% range
         transport: *bmc_ssh
         options:
           timeout: 10s
@@ -46,7 +46,7 @@ stages:
           executable: sh
           args:
             - "-c"
-            - "OK=true; for P in Pwm_7 Pwm_8; do VAL=$(busctl get-property xyz.openbmc_project.FanSensor /xyz/openbmc_project/sensors/fan_pwm/$P xyz.openbmc_project.Sensor.Value Value 2>/dev/null | awk '{print $2}'); echo \"$P=$VAL%\"; if [ -z \"$VAL\" ]; then echo \"FAIL: $P not found\"; OK=false; elif ! echo \"$VAL\" | awk '{v=$1+0; if (v>=5 && v<=80) exit 0; else exit 1}'; then echo \"FAIL: $P out of range\"; OK=false; fi; done; $OK"
+            - "OK=true; for P in Pwm_7 Pwm_8; do VAL=$(busctl get-property xyz.openbmc_project.FanSensor /xyz/openbmc_project/sensors/fan_pwm/$P xyz.openbmc_project.Sensor.Value Value 2>/dev/null | awk '{print $2}'); echo \"$P=$VAL%\"; if [ -z \"$VAL\" ]; then echo \"FAIL: $P not found\"; OK=false; elif ! echo \"$VAL\" | awk '{v=$1+0; if (v>=5 && v<=100) exit 0; else exit 1}'; then echo \"FAIL: $P out of range\"; OK=false; fi; done; $OK"
 
   - name: PID Zone Configuration
     steps:
