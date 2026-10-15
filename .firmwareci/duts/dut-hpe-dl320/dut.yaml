@@ -7,4 +7,7 @@ attributes:
   Device: dl320
   Host: dl320g11-1.lab.9e.network
   HostUser: oscar
+  # DIMM serials differ per board; inventory-memory checks them.
+  Dimm2SerialNumber: E3712D7D
+  Dimm9SerialNumber: E3712D3E
 reservation-system: dutctl

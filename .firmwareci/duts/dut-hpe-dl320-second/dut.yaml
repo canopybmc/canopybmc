@@ -1,0 +1,16 @@
+name: HPE-DL320-Second
+# Same label as HPE-DL320, so the hpe-dl320 workflows run on whichever board
+# is free. worker108 offers the same power/emulate-*/serial commands as
+# worker102, which keeps pre.yaml, post.yaml and the tests shared.
+label: hpe-dl320
+attributes:
+  BMC: hpe-dl320-g11-bmc.dut.lab.bs.9e.network
+  BMCPassword: 0penBmc
+  Agent: worker108.dut.lab.bs.9e.network:2024
+  Device: dl320
+  Host: hpe-dl320-g11-host.dut.lab.bs.9e.network
+  HostUser: root
+  # DIMM serials differ per board; inventory-memory checks them.
+  Dimm2SerialNumber: E3712D56
+  Dimm9SerialNumber: E3712D81
+reservation-system: dutctl
