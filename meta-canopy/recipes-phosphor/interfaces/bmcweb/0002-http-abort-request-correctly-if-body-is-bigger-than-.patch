@@ -1,0 +1,360 @@
+From 837e2ace6bd82d3eb1cbdd1bb2d97512928a7256 Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Fri, 16 Oct 2026 15:11:02 +0200
+Subject: [PATCH] http: abort request correctly if body is bigger than allowed
+
+Upstream-Status: Pending
+Change-Id: I59a17a843297899dc1c9dbaf17c66f3e28d57348
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ http/http2_connection.hpp           |  68 ++++++++++--
+ http/nghttp2_adapters.hpp           |  11 ++
+ test/http/http2_connection_test.cpp | 154 ++++++++++++++++++++++++++++
+ 3 files changed, 225 insertions(+), 8 deletions(-)
+
+diff --git a/http/http2_connection.hpp b/http/http2_connection.hpp
+index 4470699d..010f1abc 100644
+--- a/http/http2_connection.hpp
++++ b/http/http2_connection.hpp
+@@ -24,9 +24,11 @@
+ #include <boost/asio/ssl/error.hpp>
+ #include <boost/asio/ssl/stream.hpp>
+ #include <boost/beast/core/error.hpp>
++#include <boost/beast/http/error.hpp>
+ #include <boost/beast/http/field.hpp>
+ #include <boost/beast/http/fields.hpp>
+ #include <boost/beast/http/message.hpp>
++#include <boost/beast/http/status.hpp>
+ #include <boost/beast/http/verb.hpp>
+ #include <boost/optional/optional.hpp>
+ #include <boost/system/error_code.hpp>
+@@ -57,6 +59,7 @@ struct Http2StreamData
+     std::string accept;
+     std::string acceptEnc;
+     boost::optional<uint64_t> contentLength;
++    bool bodyRejected = false;
+     Response res;
+     std::optional<bmcweb::HttpBody::writer> writer;
+ };
+@@ -174,6 +177,7 @@ class HTTP2Connection :
+         {
+             BMCWEB_LOG_ERROR("Empty file, setting EOF");
+             *dataFlags |= NGHTTP2_DATA_FLAG_EOF;
++            self.abortRejectedRequestBody(streamId, stream);
+             return 0;
+         }
+ 
+@@ -200,10 +204,28 @@ class HTTP2Connection :
+         {
+             BMCWEB_LOG_DEBUG("Setting EOF flag");
+             *dataFlags |= NGHTTP2_DATA_FLAG_EOF;
++            self.abortRejectedRequestBody(streamId, stream);
+         }
+         return static_cast<ssize_t>(copied);
+     }
+ 
++    // Once the error response for a rejected request body is complete, ask
++    // the client to stop sending the remainder of the body (RFC 9113).
++    void abortRejectedRequestBody(int32_t streamId,
++                                  const Http2StreamData& stream)
++    {
++        if (!stream.bodyRejected || ngSession.isStreamRemoteClosed(streamId))
++        {
++            return;
++        }
++        int rv = ngSession.submitRstStream(streamId, NGHTTP2_NO_ERROR);
++        if (rv != 0)
++        {
++            BMCWEB_LOG_ERROR("Failed to submit RST_STREAM: {}",
++                             nghttp2_strerror(rv));
++        }
++    }
++
+     nghttp2_nv headerFromStringViews(std::string_view name,
+                                      std::string_view value, uint8_t flags)
+     {
+@@ -305,6 +327,10 @@ class HTTP2Connection :
+             close();
+             return -1;
+         }
++        if (it->second.bodyRejected)
++        {
++            return 0;
++        }
+         auto& reqReader = it->second.reqReader;
+         if (reqReader)
+         {
+@@ -371,30 +397,56 @@ class HTTP2Connection :
+             return -1;
+         }
+ 
+-        std::optional<bmcweb::HttpBody::reader>& reqReader =
+-            thisStream->second.reqReader;
++        Http2StreamData& stream = thisStream->second;
++        if (stream.bodyRejected)
++        {
++            return 0;
++        }
++
++        std::optional<bmcweb::HttpBody::reader>& reqReader = stream.reqReader;
+         if (!reqReader)
+         {
+-            Request::Body& req = thisStream->second.req->req;
++            Request::Body& req = stream.req->req;
+             reqReader.emplace(req.base(), req.body());
+             boost::beast::error_code initEc;
+-            reqReader->init(thisStream->second.contentLength, initEc);
++            reqReader->init(stream.contentLength, initEc);
+             if (initEc)
+             {
+-                BMCWEB_LOG_CRITICAL("Failed to initialize payload");
+-                return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
++                BMCWEB_LOG_ERROR("Failed to initialize payload: {}",
++                                 initEc.message());
++                return rejectRequestBody(streamId, stream, initEc);
+             }
+         }
+         boost::beast::error_code ec;
+         reqReader->put(boost::asio::const_buffer(data, len), ec);
+         if (ec)
+         {
+-            BMCWEB_LOG_CRITICAL("Failed to write payload");
+-            return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
++            BMCWEB_LOG_ERROR("Failed to write payload: {}", ec.message());
++            return rejectRequestBody(streamId, stream, ec);
+         }
+         return 0;
+     }
+ 
++    // nghttp2 ignores non-fatal errors returned from the data chunk callback,
++    // so the stream has to be failed explicitly.
++    int rejectRequestBody(int32_t streamId, Http2StreamData& stream,
++                          const boost::beast::error_code& ec)
++    {
++        stream.bodyRejected = true;
++        stream.reqReader.reset();
++
++        Response res;
++        if (ec == boost::beast::http::error::body_limit)
++        {
++            res.result(boost::beast::http::status::payload_too_large);
++        }
++        else
++        {
++            res.result(boost::beast::http::status::bad_request);
++        }
++        return sendResponse(res, streamId);
++    }
++
+     static int onDataChunkRecvStatic(
+         nghttp2_session* /* session */, uint8_t flags, int32_t streamId,
+         const uint8_t* data, size_t len, void* userData)
+diff --git a/http/nghttp2_adapters.hpp b/http/nghttp2_adapters.hpp
+index 15bde7c6..cde8642c 100644
+--- a/http/nghttp2_adapters.hpp
++++ b/http/nghttp2_adapters.hpp
+@@ -173,6 +173,17 @@ struct nghttp2_session
+                                        headers.size(), dataPrd);
+     }
+ 
++    int submitRstStream(int32_t streamId, uint32_t errorCode)
++    {
++        return nghttp2_submit_rst_stream(ptr, NGHTTP2_FLAG_NONE, streamId,
++                                         errorCode);
++    }
++
++    bool isStreamRemoteClosed(int32_t streamId)
++    {
++        return nghttp2_session_get_stream_remote_close(ptr, streamId) != 0;
++    }
++
+     int setLocalWindowSize(uint8_t flags, int32_t stream_id, int32_t windowSize)
+     {
+         return nghttp2_session_set_local_window_size(ptr, flags, stream_id,
+diff --git a/test/http/http2_connection_test.cpp b/test/http/http2_connection_test.cpp
+index 40b28398..3af6d417 100644
+--- a/test/http/http2_connection_test.cpp
++++ b/test/http/http2_connection_test.cpp
+@@ -1,5 +1,7 @@
+ // SPDX-License-Identifier: Apache-2.0
+ // SPDX-FileCopyrightText: Copyright OpenBMC Authors
++#include "bmcweb_config.h"
++
+ #include "async_resp.hpp"
+ #include "http/http2_connection.hpp"
+ #include "http/http_request.hpp"
+@@ -18,13 +20,18 @@
+ #include <boost/asio/steady_timer.hpp>
+ #include <boost/asio/write.hpp>
+ #include <boost/beast/http/field.hpp>
++#include <boost/beast/http/status.hpp>
++#include <boost/endian/buffers.hpp>
+ 
+ #include <array>
+ #include <bit>
+ #include <cstddef>
+ #include <cstdint>
++#include <cstring>
+ #include <functional>
++#include <initializer_list>
+ #include <memory>
++#include <optional>
+ #include <string>
+ #include <string_view>
+ #include <utility>
+@@ -205,5 +212,152 @@ TEST(http_connection, RequestPropogates)
+     EXPECT_EQ(outStr, expectedPostfix);
+ }
+ 
++struct RejectingHandler
++{
++    bool called = false;
++    void handle(const std::shared_ptr<Request>& /*req*/,
++                const std::shared_ptr<bmcweb::AsyncResp>& /*asyncResp*/)
++    {
++        called = true;
++    }
++};
++
++struct FrameHeader
++{
++    boost::endian::big_uint24_buf_t length;
++    uint8_t type;
++    uint8_t flags;
++    boost::endian::big_uint32_buf_t streamId;
++};
++
++std::string makeFrame(uint8_t type, uint8_t flags, uint32_t streamId,
++                      std::string_view payload)
++{
++    FrameHeader hdr{
++        .length = boost::endian::big_uint24_buf_t(
++            static_cast<uint32_t>(payload.size())),
++        .type = type,
++        .flags = flags,
++        .streamId = boost::endian::big_uint32_buf_t(streamId),
++    };
++    std::string frame(std::bit_cast<const char*>(&hdr), sizeof(hdr));
++    frame += payload;
++    return frame;
++}
++
++std::string encodeHeaders(
++    std::initializer_list<std::pair<std::string_view, std::string_view>>
++        headers)
++{
++    std::string block;
++    for (const auto& [name, value] : headers)
++    {
++        block += '\0';
++        block += static_cast<char>(name.size());
++        block += name;
++        block += static_cast<char>(value.size());
++        block += value;
++    }
++    return block;
++}
++
++struct RejectResult
++{
++    bool handlerCalled = false;
++    std::string status;
++    std::optional<uint32_t> rstErrorCode;
++};
++
++RejectResult postToServer(std::string_view contentType,
++                          std::string_view contentLength, std::string_view body,
++                          bool endStream)
++{
++    std::string request = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
++    request += makeFrame(NGHTTP2_SETTINGS, NGHTTP2_FLAG_NONE, 0, "");
++    request += makeFrame(
++        NGHTTP2_HEADERS, NGHTTP2_FLAG_END_HEADERS, 1,
++        encodeHeaders({{":method", "POST"},
++                       {":scheme", "http"},
++                       {":authority", "localhost"},
++                       {":path", "/redfish/v1/UpdateService/update"},
++                       {"content-type", contentType},
++                       {"content-length", contentLength}}));
++    request += makeFrame(
++        NGHTTP2_DATA, endStream ? NGHTTP2_FLAG_END_STREAM : NGHTTP2_FLAG_NONE,
++        1, body);
++
++    boost::asio::io_context io;
++    TestStream stream(io);
++    TestStream out(io);
++    stream.connect(out);
++    boost::asio::write(out, boost::asio::buffer(request));
++
++    RejectingHandler handler;
++    std::function<std::string()> date(getDateStr);
++    boost::asio::ssl::context sslCtx(boost::asio::ssl::context::tls_server);
++    auto conn = std::make_shared<HTTP2Connection<TestStream, RejectingHandler>>(
++        boost::asio::ssl::stream<TestStream>(std::move(stream), sslCtx),
++        &handler, date, HttpType::HTTP, nullptr, boost::asio::ip::address());
++    conn->start();
++    io.poll();
++
++    RejectResult result;
++    result.handlerCalled = handler.called;
++
++    std::string_view frames(out.str());
++    while (frames.size() >= sizeof(FrameHeader))
++    {
++        FrameHeader hdr{};
++        std::memcpy(&hdr, frames.data(), sizeof(hdr));
++        uint8_t type = hdr.type;
++        std::string_view payload =
++            frames.substr(sizeof(hdr), hdr.length.value());
++        frames.remove_prefix(sizeof(hdr) + payload.size());
++
++        if (type == NGHTTP2_HEADERS)
++        {
++            std::vector<std::pair<std::string, std::string>> headers;
++            unpackHeaders(payload, headers);
++            for (const auto& [name, value] : headers)
++            {
++                if (name == ":status")
++                {
++                    result.status = value;
++                }
++            }
++        }
++        else if (type == NGHTTP2_RST_STREAM &&
++                 payload.size() == sizeof(boost::endian::big_uint32_buf_t))
++        {
++            boost::endian::big_uint32_buf_t errorCode;
++            std::memcpy(&errorCode, payload.data(), sizeof(errorCode));
++            result.rstErrorCode = errorCode.value();
++        }
++    }
++    return result;
++}
++
++TEST(http_connection, RejectsBodyOverLimitEarly)
++{
++    std::string length =
++        std::to_string((1024UL * 1024UL * BMCWEB_HTTP_BODY_LIMIT) + 1);
++    RejectResult result =
++        postToServer("application/octet-stream", length, "firstchunk", false);
++
++    EXPECT_FALSE(result.handlerCalled);
++    EXPECT_EQ(result.status, "413");
++    EXPECT_EQ(result.rstErrorCode, NGHTTP2_NO_ERROR);
++}
++
++TEST(http_connection, RejectsMalformedMultipart)
++{
++    RejectResult result = postToServer("multipart/form-data; boundary=abc",
++                                       "13", "not multipart", true);
++
++    EXPECT_FALSE(result.handlerCalled);
++    EXPECT_EQ(result.status, "400");
++    EXPECT_FALSE(result.rstErrorCode);
++}
++
+ } // namespace
+ } // namespace crow
+-- 
+2.53.0
+
