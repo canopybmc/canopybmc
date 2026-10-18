@@ -20,5 +20,7 @@ HPE_GXP_LOADER_MODELS[GXP2loader-t26x-sgn00] = "\
   rl300-g11 \
 "
 
+EXTRA_IMAGECMD:squashfs-xz ?= " -b 1M -Xbcj armthumb"
+
 require conf/machine/include/gxp.inc
 require conf/machine/include/obmc-bsp-common.inc
