@@ -1,4 +1,4 @@
-From 8d45c6eb95c9226368690780f8f5a544544db573 Mon Sep 17 00:00:00 2001
+From 2202c452803de82a927c6e57c709c6a054d2356f Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
 Date: Thu, 9 Jul 2026 20:14:28 +0200
 Subject: [PATCH] apphandler: fall back to ObjectMapper when settings UUID is
@@ -30,10 +30,10 @@ Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
  1 file changed, 28 insertions(+), 3 deletions(-)
 
 diff --git a/apphandler.cpp b/apphandler.cpp
-index ddc15612..f5e15af2 100644
+index 2c1c622..fb52fc7 100644
 --- a/apphandler.cpp
 +++ b/apphandler.cpp
-@@ -866,12 +866,37 @@ auto ipmiAppGetSystemGuid(ipmi::Context::ptr& ctx)
+@@ -959,12 +959,37 @@ auto ipmiAppGetSystemGuid(ipmi::Context::ptr& ctx)
          ctx, uuidService, uuidObject, uuidInterface, uuidProperty, rfc4122Uuid);
      if (ec.value())
      {
@@ -74,6 +74,3 @@ index ddc15612..f5e15af2 100644
      }
      std::array<uint8_t, 16> uuid;
      try
--- 
-2.39.5
-
