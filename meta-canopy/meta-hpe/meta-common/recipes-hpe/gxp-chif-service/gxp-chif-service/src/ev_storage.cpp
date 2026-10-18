@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 
 namespace chif
@@ -229,13 +230,21 @@ bool EvStorage::saveAndNotify(std::string_view name)
 
 bool EvStorage::save()
 {
-    auto tmpPath = std::filesystem::path(std::tmpnam(nullptr));
+    std::string filePath =
+        (std::filesystem::path("/tmp") / "ev_XXXXXX").string();
+    int fd = mkstemp(filePath.data());
+    if (fd == -1)
+    {
+        lg2::error("EV storage: Failed to create temporary file {PATH}", "PATH",
+                   filePath);
+        return false;
+    }
+    close(fd);
 
-    std::ofstream file(tmpPath, std::ios::binary | std::ios::trunc);
+    std::ofstream file(filePath, std::ios::binary | std::ios::trunc);
     if (!file)
     {
-        lg2::error("EV storage: failed to create {PATH}", "PATH",
-                   tmpPath.string());
+        lg2::error("EV storage: failed to open {PATH}", "PATH", filePath);
         return false;
     }
 
@@ -266,8 +275,8 @@ bool EvStorage::save()
     if (!file.good())
     {
         lg2::error("EV storage: write failed for {PATH}", "PATH",
-                   tmpPath.string());
-        std::filesystem::remove(tmpPath);
+                   filePath);
+        std::filesystem::remove(filePath);
         return false;
     }
     file.close();
@@ -275,8 +284,8 @@ bool EvStorage::save()
     // Copy from tmpfs to rwfs (cross-device rename is not possible)
     std::error_code ec;
     std::filesystem::copy_file(
-        tmpPath, path_, std::filesystem::copy_options::overwrite_existing, ec);
-    std::filesystem::remove(tmpPath);
+        filePath, path_, std::filesystem::copy_options::overwrite_existing, ec);
+    std::filesystem::remove(filePath);
     if (ec)
     {
         lg2::error("EV storage: copy to {PATH} failed: {ERR}", "PATH",
