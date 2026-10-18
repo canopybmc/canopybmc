@@ -1,4 +1,4 @@
-From 68c38e233b3139c8713f6db183c96198ae408a30 Mon Sep 17 00:00:00 2001
+From 56028900e40bf0c7d514f067baaef55b82302205 Mon Sep 17 00:00:00 2001
 From: Oliver Brewka <oliver.brewka@9elements.com>
 Date: Sun, 14 Jun 2026 15:14:11 +0200
 Subject: [PATCH] Use CLI11 callback function for init sub

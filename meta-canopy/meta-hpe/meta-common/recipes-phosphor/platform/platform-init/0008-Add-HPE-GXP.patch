@@ -1,4 +1,4 @@
-From 85c28938cf51fd88831927f037753624fb974913 Mon Sep 17 00:00:00 2001
+From f8a4ee43c495eacacaeaeab0e6e7bf52c6ac1673 Mon Sep 17 00:00:00 2001
 From: Tan Siewert <tan.siewert@9elements.com>
 Date: Thu, 23 Jul 2026 17:45:50 +0200
 Subject: [PATCH] Add HPE GXP
@@ -22,12 +22,12 @@ Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
  create mode 100644 platforms/hpe/platforms.hpp
 
 diff --git a/meson.build b/meson.build
-index 9a4070e..00e0cf1 100644
+index 24d01ae..56f3fa2 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -42,6 +42,11 @@ platforms_map = {
-         'src': files('platforms/intel/jcrp.cpp'),
-         'fn': 'intel::init_jcrp',
+         'src': files('platforms/intel/jncrp.cpp'),
+         'fn': 'intel::init_jncrp',
      },
 +    'hpe-gxp': {
 +        'src': files('platforms/hpe/gxp.cpp'),
@@ -38,13 +38,13 @@ index 9a4070e..00e0cf1 100644
          'src': files('platforms/nvidia/gb200.cpp'),
          'fn': 'nvidia::init_gb200_base',
 diff --git a/meson.options b/meson.options
-index 8f4ea77..74fbdf5 100644
+index 5baa1b8..9fec786 100644
 --- a/meson.options
 +++ b/meson.options
 @@ -4,6 +4,7 @@ option(
      choices: [
-         'intel-acrp',
-         'intel-jcrp',
+         'intel-avcrp',
+         'intel-jncrp',
 +        'hpe-gxp',
          'nvidia-gb200',
          'nvidia-gb200-with-p2020',

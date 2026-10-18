@@ -1,4 +1,4 @@
-From efe7961dda9c39d298f90d33840119701ddcc54b Mon Sep 17 00:00:00 2001
+From b964e11bda6a444a1fc96d5a50c1f17e3b7aff6d Mon Sep 17 00:00:00 2001
 From: Oliver Brewka <oliver.brewka@9elements.com>
 Date: Sun, 5 Apr 2026 22:11:26 +0200
 Subject: [PATCH] cmos-reset: Add event logs

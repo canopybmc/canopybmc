@@ -1,7 +1,11 @@
-From 7398d6b0e24d8f24fc65521c45cbd492c986a660 Mon Sep 17 00:00:00 2001
+From 78d190885bbf16c1e9ca0ffbacdc0d7fb3c0ea6c Mon Sep 17 00:00:00 2001
 From: Willy Tu <wltu@google.com>
 Date: Tue, 24 Mar 2026 15:14:33 +0000
 Subject: [PATCH] reduce image size by moving to Multi-call Binary
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -353,7 +357,7 @@ index 618c43f..154ff3b 100644
 +
 +int adcSensorMain();
 diff --git a/src/adc/ADCSensorMain.cpp b/src/adc/ADCSensorMain.cpp
-index 81312c7..a8dd19f 100644
+index 74c2798..0c5debd 100644
 --- a/src/adc/ADCSensorMain.cpp
 +++ b/src/adc/ADCSensorMain.cpp
 @@ -313,7 +313,7 @@ void createSensors(
@@ -471,10 +475,10 @@ index 5213534..1daf320 100644
 -
 +dbus_sensors_cpp_args += ['-DCABLEMONITOR']
 diff --git a/src/exit-air/ExitAirTempSensor.cpp b/src/exit-air/ExitAirTempSensor.cpp
-index c8df571..e216c52 100644
+index 921e780..6db2d64 100644
 --- a/src/exit-air/ExitAirTempSensor.cpp
 +++ b/src/exit-air/ExitAirTempSensor.cpp
-@@ -916,7 +916,7 @@ void createSensor(sdbusplus::asio::object_server& objectServer,
+@@ -914,7 +914,7 @@ void createSensor(sdbusplus::asio::object_server& objectServer,
      getter->getConfiguration(monitorTypes);
  }
  
@@ -582,7 +586,7 @@ index de8de23..a6f1950 100644
 +)
 +dbus_sensors_cpp_args += ['-DEXTERNAL']
 diff --git a/src/fan/FanMain.cpp b/src/fan/FanMain.cpp
-index ac14147..5168389 100644
+index a978661..8e6691e 100644
 --- a/src/fan/FanMain.cpp
 +++ b/src/fan/FanMain.cpp
 @@ -650,7 +650,7 @@ void createSensors(
@@ -707,7 +711,7 @@ index 28ea7df..815d977 100644
 +
 +int intelCPUSensorMain();
 diff --git a/src/intel-cpu/IntelCPUSensorMain.cpp b/src/intel-cpu/IntelCPUSensorMain.cpp
-index 815ca32..02d4cf2 100644
+index 0fd5c6e..65ceee9 100644
 --- a/src/intel-cpu/IntelCPUSensorMain.cpp
 +++ b/src/intel-cpu/IntelCPUSensorMain.cpp
 @@ -795,7 +795,7 @@ bool getCpuConfig(const std::shared_ptr<sdbusplus::asio::connection>& systemBus,
@@ -759,7 +763,7 @@ index b02b903..cf29c38 100644
 +
 +int intrusionSensorMain();
 diff --git a/src/intrusion/IntrusionSensorMain.cpp b/src/intrusion/IntrusionSensorMain.cpp
-index a2c2031..17e55e7 100644
+index 6899c00..cb67a88 100644
 --- a/src/intrusion/IntrusionSensorMain.cpp
 +++ b/src/intrusion/IntrusionSensorMain.cpp
 @@ -455,7 +455,7 @@ static bool initializeLanStatus(
@@ -986,10 +990,10 @@ index c9f1f9f..03f4d15 100644
 +
 +int mctpReactorMain();
 diff --git a/src/mctp/MCTPReactorMain.cpp b/src/mctp/MCTPReactorMain.cpp
-index e415214..756edf0 100644
+index 9b7f930..a42e9e6 100644
 --- a/src/mctp/MCTPReactorMain.cpp
 +++ b/src/mctp/MCTPReactorMain.cpp
-@@ -185,7 +185,7 @@ static void exitReactor(boost::asio::io_context* io, sdbusplus::message_t& msg)
+@@ -192,7 +192,7 @@ static void exitReactor(boost::asio::io_context* io, sdbusplus::message_t& msg)
      io->stop();
  }
  
@@ -1160,12 +1164,12 @@ index 5a942b7..18908ea 100644
  #include <boost/asio/error.hpp>
  #include <boost/asio/generic/datagram_protocol.hpp>
 diff --git a/src/nvidia-gpu/NvidiaGpuSensorMain.cpp b/src/nvidia-gpu/NvidiaGpuSensorMain.cpp
-index 17cd36e..163d5f1 100644
+index 052b38b..20cd1da 100644
 --- a/src/nvidia-gpu/NvidiaGpuSensorMain.cpp
 +++ b/src/nvidia-gpu/NvidiaGpuSensorMain.cpp
-@@ -33,7 +33,7 @@
- // changes (which normally fire several at once) into one rescan.
- constexpr std::chrono::seconds configSettleInterval{1};
+@@ -25,7 +25,7 @@
+ #include <string>
+ #include <string_view>
  
 -int main()
 +int nvidiaGpuSensorMain()
@@ -1337,7 +1341,7 @@ index abcdfe8..401b2b6 100644
 +dbus_sensors_cpp_args += ['-DPSU']
  
 diff --git a/src/smbpbi/SmbpbiSensor.cpp b/src/smbpbi/SmbpbiSensor.cpp
-index ff293ab..ca30226 100644
+index 3d97b74..e472274 100644
 --- a/src/smbpbi/SmbpbiSensor.cpp
 +++ b/src/smbpbi/SmbpbiSensor.cpp
 @@ -45,7 +45,8 @@ constexpr const char* configInterface =

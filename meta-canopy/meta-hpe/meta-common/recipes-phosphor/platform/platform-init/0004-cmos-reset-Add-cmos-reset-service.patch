@@ -1,4 +1,4 @@
-From 29a1110becfd969064fd0a8785f0f1c37c889ae4 Mon Sep 17 00:00:00 2001
+From 85177e7e72d8ff7613b4148d64e4e120dc483546 Mon Sep 17 00:00:00 2001
 From: Oliver Brewka <oliver.brewka@9elements.com>
 Date: Mon, 16 Mar 2026 06:22:02 +0100
 Subject: [PATCH] cmos-reset: Add cmos reset service
@@ -209,7 +209,7 @@ index 0000000..c45ce3a
 +[Install]
 +WantedBy=multi-user.target
 diff --git a/meson.build b/meson.build
-index 326cf84..3a3cb0a 100644
+index 7848f3f..d3ffdef 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -20,6 +20,7 @@ cli11_dep = dependency(
@@ -280,7 +280,7 @@ index 326cf84..3a3cb0a 100644
 +    ),
 +)
 diff --git a/meson.options b/meson.options
-index b30ff06..00a33ee 100644
+index d3fc8a4..3d72bef 100644
 --- a/meson.options
 +++ b/meson.options
 @@ -18,3 +18,10 @@ option(
