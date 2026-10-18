@@ -1,4 +1,4 @@
-From 126903da4a865c6c327b75e5f6ba2a2a192087b2 Mon Sep 17 00:00:00 2001
+From 572a1d6ea7a85341519bbe4580982e60b8b60da1 Mon Sep 17 00:00:00 2001
 From: Oliver Brewka <oliver.brewka@9elements.com>
 Date: Tue, 17 Mar 2026 18:16:09 +0100
 Subject: [PATCH] cmos-reset: Add ActivationBlocksTransition

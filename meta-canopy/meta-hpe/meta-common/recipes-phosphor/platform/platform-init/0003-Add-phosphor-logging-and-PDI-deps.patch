@@ -1,4 +1,4 @@
-From 9bb830a56e966cdb6d9f14f1292736a4a833b267 Mon Sep 17 00:00:00 2001
+From a017428851cd15d78fc0f17bda86e6eea5674617 Mon Sep 17 00:00:00 2001
 From: Oliver Brewka <oliver.brewka@9elements.com>
 Date: Wed, 22 Jul 2026 15:57:48 +0200
 Subject: [PATCH] Add phosphor-logging and PDI deps
@@ -19,7 +19,7 @@ Signed-off-by: Oliver Brewka <oliver.brewka@9elements.com>
  create mode 100644 subprojects/phosphor-logging.wrap
 
 diff --git a/meson.build b/meson.build
-index 8cb43b5..326cf84 100644
+index 05f67d5..7848f3f 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -10,7 +10,8 @@ gpiodcxx_dep = dependency('libgpiodcxx', default_options: ['bindings=cxx'])

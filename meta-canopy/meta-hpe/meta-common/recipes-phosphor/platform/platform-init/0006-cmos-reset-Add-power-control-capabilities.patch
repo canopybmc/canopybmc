@@ -1,4 +1,4 @@
-From 8b0feedc84bfe74e67bd0fd95fa033d271ba6751 Mon Sep 17 00:00:00 2001
+From 746ce479c3b23eebb39133f86a6bff9646083a35 Mon Sep 17 00:00:00 2001
 From: Oliver Brewka <oliver.brewka@9elements.com>
 Date: Tue, 17 Mar 2026 16:43:46 +0100
 Subject: [PATCH] cmos-reset: Add power control capabilities
@@ -236,7 +236,7 @@ index 0000000..5d84149
 +};
 +}; // namespace host_power
 diff --git a/meson.build b/meson.build
-index 3a3cb0a..9a4070e 100644
+index d3ffdef..24d01ae 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -20,7 +20,7 @@ cli11_dep = dependency(
@@ -263,7 +263,7 @@ index 3a3cb0a..9a4070e 100644
      input: 'cmos-reset/xyz.openbmc_project.Software.Host.Updater0.service.in',
      output: 'xyz.openbmc_project.Software.Host.Updater0.service',
 diff --git a/meson.options b/meson.options
-index 00a33ee..8f4ea77 100644
+index 3d72bef..5baa1b8 100644
 --- a/meson.options
 +++ b/meson.options
 @@ -25,3 +25,10 @@ option(
