@@ -1,4 +1,4 @@
-From dfe235fdd9f6e6e7eeb436e11b4f4fbe2a59fa31 Mon Sep 17 00:00:00 2001
+From c9737ab1a8cb16f2c14a995a2c26e080b99fd862 Mon Sep 17 00:00:00 2001
 From: Alexander Hansen <alexander.hansen@9elements.com>
 Date: Wed, 1 Jul 2026 15:24:18 +0200
 Subject: [PATCH] allow for updating spi partitions
@@ -71,7 +71,7 @@ Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
  8 files changed, 64 insertions(+), 19 deletions(-)
 
 diff --git a/spi-flash/bios/bios_device.cpp b/spi-flash/bios/bios_device.cpp
-index d1475f2..b456abd 100644
+index d1475f23a449..b456abd63271 100644
 --- a/spi-flash/bios/bios_device.cpp
 +++ b/spi-flash/bios/bios_device.cpp
 @@ -30,11 +30,12 @@ enum FlashTool getBiosFlashTool(const std::string& configType)
@@ -91,7 +91,7 @@ index d1475f2..b456abd 100644
      versionWatch(ctx, biosVersionDirPath, *this)
  {
 diff --git a/spi-flash/bios/bios_device.hpp b/spi-flash/bios/bios_device.hpp
-index 5d4c80a..a4db62d 100644
+index 5d4c80a63700..a4db62d0bee6 100644
 --- a/spi-flash/bios/bios_device.hpp
 +++ b/spi-flash/bios/bios_device.hpp
 @@ -3,6 +3,8 @@
@@ -114,7 +114,7 @@ index 5d4c80a..a4db62d 100644
                 const std::vector<bool>& gpioValuesIn, SoftwareConfig& config,
                 SoftwareManager* parent);
 diff --git a/spi-flash/e810/e810_device.cpp b/spi-flash/e810/e810_device.cpp
-index b219eaf..4eaddfe 100644
+index b219eaff7d23..4eaddfe3af95 100644
 --- a/spi-flash/e810/e810_device.cpp
 +++ b/spi-flash/e810/e810_device.cpp
 @@ -22,7 +22,7 @@ E810Device::E810Device(sdbusplus::async::context& ctx,
@@ -127,7 +127,7 @@ index b219eaf..4eaddfe 100644
                flashToolFlashcp),
      transport(ctx)
 diff --git a/spi-flash/spi_device.cpp b/spi-flash/spi_device.cpp
-index a416475..da63e17 100644
+index 0bed38cfc04b..6d504d3b0470 100644
 --- a/spi-flash/spi_device.cpp
 +++ b/spi-flash/spi_device.cpp
 @@ -56,18 +56,18 @@ static std::optional<std::string> getSPIDevAddr(uint64_t spiControllerIndex)
@@ -156,7 +156,7 @@ index a416475..da63e17 100644
  {
      auto optAddr = getSPIDevAddr(spiControllerIndex);
  
-@@ -468,6 +468,20 @@ sdbusplus::async::task<bool> SPIDevice::writeSPIFlashDefault(
+@@ -466,6 +466,20 @@ sdbusplus::async::task<bool> SPIDevice::writeSPIFlashDefault(
      co_return true;
  }
  
@@ -177,7 +177,7 @@ index a416475..da63e17 100644
  std::optional<std::string> SPIDevice::getMTDDevicePath() const
  {
      const std::string spiPath =
-@@ -485,7 +499,17 @@ std::optional<std::string> SPIDevice::getMTDDevicePath() const
+@@ -483,7 +497,17 @@ std::optional<std::string> SPIDevice::getMTDDevicePath() const
      {
          const std::string mtdName = entry.path().filename().string();
  
@@ -197,7 +197,7 @@ index a416475..da63e17 100644
              return "/dev/" + mtdName;
          }
 diff --git a/spi-flash/spi_device.hpp b/spi-flash/spi_device.hpp
-index f777866..774045e 100644
+index f77786633bec..774045e0d895 100644
 --- a/spi-flash/spi_device.hpp
 +++ b/spi-flash/spi_device.hpp
 @@ -35,7 +35,8 @@ class SPIDevice : public Device
@@ -220,7 +220,7 @@ index f777866..774045e 100644
      // e.g. "1e631000.spi"
      std::string spiDev;
 diff --git a/spi-flash/spi_factory.cpp b/spi-flash/spi_factory.cpp
-index 7d69646..2c660ea 100644
+index 7d69646022fb..2c660ea52ba3 100644
 --- a/spi-flash/spi_factory.cpp
 +++ b/spi-flash/spi_factory.cpp
 @@ -3,6 +3,8 @@
@@ -254,7 +254,7 @@ index 7d69646..2c660ea 100644
  
          if (chipType == getSpiTypeStr(spiChip::INTEL_E810_NIC))
 diff --git a/spi-flash/spi_factory.hpp b/spi-flash/spi_factory.hpp
-index aa9037f..e4b145d 100644
+index aa9037fc0f37..e4b145d27068 100644
 --- a/spi-flash/spi_factory.hpp
 +++ b/spi-flash/spi_factory.hpp
 @@ -6,6 +6,7 @@
@@ -276,7 +276,7 @@ index aa9037f..e4b145d 100644
          SoftwareConfig& config, SoftwareManager* parent);
  
 diff --git a/spi-flash/spi_software_manager.cpp b/spi-flash/spi_software_manager.cpp
-index 8e1709b..eec5f7a 100644
+index 8e1709b061d0..eec5f7aac5e0 100644
 --- a/spi-flash/spi_software_manager.cpp
 +++ b/spi-flash/spi_software_manager.cpp
 @@ -47,6 +47,15 @@ sdbusplus::async::task<bool> SPISoftwareManager::initDevice(
