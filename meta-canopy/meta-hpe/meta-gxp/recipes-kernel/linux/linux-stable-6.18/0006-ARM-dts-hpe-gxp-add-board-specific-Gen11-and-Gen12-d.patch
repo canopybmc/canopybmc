@@ -1,0 +1,2954 @@
+From a24994ee525571a7500610731cdb548bee573c21 Mon Sep 17 00:00:00 2001
+From: Michal Gorlas <michal.gorlas@9elements.com>
+Date: Tue, 27 Oct 2026 20:43:55 +0100
+Subject: [PATCH 05/72] ARM: dts: hpe-gxp: add board specific Gen11 and Gen12
+ device trees
+
+This probably needs to be split into few commits. Also another todo:
+not sure for now how to handle gxp-ubm-muxN. It also needs a signoff
+of someone from HPE (note to self, look at the overlays in the
+downstream fork)
+
+Signed-off-by: Michal Gorlas <michal.gorlas@9elements.com>
+
+Upstream-Status: Pending
+---
+ arch/arm/boot/dts/hpe/Makefile                |  18 +-
+ arch/arm/boot/dts/hpe/gxp-ubm-mux3.dtsi       | 869 ++++++++++++++++++
+ arch/arm/boot/dts/hpe/gxp-ubm-mux4.dtsi       | 245 +++++
+ arch/arm/boot/dts/hpe/gxp-ubm-mux6.dtsi       | 323 +++++++
+ arch/arm/boot/dts/hpe/hpe-bmc-dl110gen11.dts  |  57 ++
+ arch/arm/boot/dts/hpe/hpe-bmc-dl145gen11.dts  | 133 +++
+ arch/arm/boot/dts/hpe/hpe-bmc-dl320gen11.dts  |  57 ++
+ .../boot/dts/hpe/hpe-bmc-dl320gen11plus.dts   |  58 ++
+ arch/arm/boot/dts/hpe/hpe-bmc-dl320gen12.dts  |  43 +
+ arch/arm/boot/dts/hpe/hpe-bmc-dl325gen11.dts  | 137 +++
+ .../boot/dts/hpe/hpe-bmc-dl340gen11plus.dts   |  58 ++
+ arch/arm/boot/dts/hpe/hpe-bmc-dl340gen12.dts  |  43 +
+ arch/arm/boot/dts/hpe/hpe-bmc-dl345gen11.dts  | 137 +++
+ arch/arm/boot/dts/hpe/hpe-bmc-dl360gen11.dts  |  59 ++
+ arch/arm/boot/dts/hpe/hpe-bmc-dl365gen11.dts  | 138 +++
+ arch/arm/boot/dts/hpe/hpe-bmc-dl380agen11.dts |  57 ++
+ arch/arm/boot/dts/hpe/hpe-bmc-dl380gen11.dts  |  58 ++
+ arch/arm/boot/dts/hpe/hpe-bmc-dl385gen11.dts  | 136 +++
+ arch/arm/boot/dts/hpe/hpe-bmc-dl560gen11.dts  |  57 ++
+ arch/arm/boot/dts/hpe/hpe-bmc-rl300gen11.dts  |  63 ++
+ arch/arm/boot/dts/hpe/hpe-gxp.dtsi            |  16 +
+ 21 files changed, 2761 insertions(+), 1 deletion(-)
+ create mode 100644 arch/arm/boot/dts/hpe/gxp-ubm-mux3.dtsi
+ create mode 100644 arch/arm/boot/dts/hpe/gxp-ubm-mux4.dtsi
+ create mode 100644 arch/arm/boot/dts/hpe/gxp-ubm-mux6.dtsi
+ create mode 100644 arch/arm/boot/dts/hpe/hpe-bmc-dl110gen11.dts
+ create mode 100644 arch/arm/boot/dts/hpe/hpe-bmc-dl145gen11.dts
+ create mode 100644 arch/arm/boot/dts/hpe/hpe-bmc-dl320gen11.dts
+ create mode 100644 arch/arm/boot/dts/hpe/hpe-bmc-dl320gen11plus.dts
+ create mode 100644 arch/arm/boot/dts/hpe/hpe-bmc-dl320gen12.dts
+ create mode 100644 arch/arm/boot/dts/hpe/hpe-bmc-dl325gen11.dts
+ create mode 100644 arch/arm/boot/dts/hpe/hpe-bmc-dl340gen11plus.dts
+ create mode 100644 arch/arm/boot/dts/hpe/hpe-bmc-dl340gen12.dts
+ create mode 100644 arch/arm/boot/dts/hpe/hpe-bmc-dl345gen11.dts
+ create mode 100644 arch/arm/boot/dts/hpe/hpe-bmc-dl360gen11.dts
+ create mode 100644 arch/arm/boot/dts/hpe/hpe-bmc-dl365gen11.dts
+ create mode 100644 arch/arm/boot/dts/hpe/hpe-bmc-dl380agen11.dts
+ create mode 100644 arch/arm/boot/dts/hpe/hpe-bmc-dl380gen11.dts
+ create mode 100644 arch/arm/boot/dts/hpe/hpe-bmc-dl385gen11.dts
+ create mode 100644 arch/arm/boot/dts/hpe/hpe-bmc-dl560gen11.dts
+ create mode 100644 arch/arm/boot/dts/hpe/hpe-bmc-rl300gen11.dts
+
+diff --git a/arch/arm/boot/dts/hpe/Makefile b/arch/arm/boot/dts/hpe/Makefile
+index e175b1732cdb..52eb68a3ea51 100644
+--- a/arch/arm/boot/dts/hpe/Makefile
++++ b/arch/arm/boot/dts/hpe/Makefile
+@@ -1,3 +1,19 @@
+ # SPDX-License-Identifier: GPL-2.0
+ dtb-$(CONFIG_ARCH_HPE_GXP) += \
+-	hpe-bmc-dl360gen10.dtb
++	hpe-bmc-dl360gen10.dtb \
++	hpe-bmc-dl360gen11.dtb \
++    hpe-bmc-dl380gen11.dtb \
++    hpe-bmc-dl560gen11.dtb \
++    hpe-bmc-dl385gen11.dtb \
++    hpe-bmc-dl325gen11.dtb \
++    hpe-bmc-dl365gen11.dtb \
++    hpe-bmc-dl345gen11.dtb \
++    hpe-bmc-dl110gen11.dtb \
++    hpe-bmc-dl320gen11.dtb \
++    hpe-bmc-dl380agen11.dtb \
++    hpe-bmc-rl300gen11.dtb \
++    hpe-bmc-dl340gen11plus.dtb \
++    hpe-bmc-dl320gen11plus.dtb \
++    hpe-bmc-dl320gen12.dtb \
++    hpe-bmc-dl145gen11.dtb \
++    hpe-bmc-dl340gen12.dtb
+diff --git a/arch/arm/boot/dts/hpe/gxp-ubm-mux3.dtsi b/arch/arm/boot/dts/hpe/gxp-ubm-mux3.dtsi
+new file mode 100644
+index 000000000000..fdc1c5377ce2
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/gxp-ubm-mux3.dtsi
+@@ -0,0 +1,869 @@
++// SPDX-License-Identifier: GPL-2.0-only
++
++&{/ahb@80000000} {
++	i2cmux@3 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c3>;
++		mux-controls = <&i2c_mux_ctrl 3>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		i2c3@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@3 {
++			reg = <3>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@4 {
++			reg = <4>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@5 {
++			reg = <5>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@6 {
++			reg = <6>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@7 {
++			reg = <7>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@8 {
++			reg = <8>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@9 {
++			reg = <9>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@a {
++			reg = <0x0a>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@b {
++			reg = <0x0b>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@c {
++			reg = <0x0c>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@d {
++			reg = <0x0d>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@e {
++			reg = <0x0e>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@f {
++			reg = <0x0f>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@10 {
++			reg = <0x10>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@11 {
++			reg = <0x11>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@12 {
++			reg = <0x12>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@15 {
++			reg = <0x15>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@16 {
++			reg = <0x16>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@17 {
++			reg = <0x17>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c3@18 {
++			reg = <0x18>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/gxp-ubm-mux4.dtsi b/arch/arm/boot/dts/hpe/gxp-ubm-mux4.dtsi
+new file mode 100644
+index 000000000000..2c35c7b8bb66
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/gxp-ubm-mux4.dtsi
+@@ -0,0 +1,245 @@
++// SPDX-License-Identifier: GPL-2.0-only
++
++&{/ahb@80000000} {
++	i2cmux@4 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c4>;
++		mux-controls = <&i2c_mux_ctrl 4>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		i2c4@3 {
++			reg = <3>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c4@4 {
++			reg = <4>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c4@5 {
++			reg = <5>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c4@6 {
++			reg = <6>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c4@7 {
++			reg = <7>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c4@8 {
++			reg = <8>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/gxp-ubm-mux6.dtsi b/arch/arm/boot/dts/hpe/gxp-ubm-mux6.dtsi
+new file mode 100644
+index 000000000000..9eb65d668612
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/gxp-ubm-mux6.dtsi
+@@ -0,0 +1,323 @@
++// SPDX-License-Identifier: GPL-2.0-only
++
++&{/ahb@80000000} {
++	i2cmux@6 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c6>;
++		mux-controls = <&i2c_mux_ctrl 6>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		i2c6@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c6@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c6@3 {
++			reg = <3>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c6@4 {
++			reg = <4>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c6@b {
++			reg = <0x0b>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c6@c {
++			reg = <0x0c>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c6@d {
++			reg = <0x0d>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++
++		i2c6@e {
++			reg = <0x0e>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			piceeprom@57 {
++				compatible = "atmel,24c02";
++				reg = <0x57>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			ubm@40 {
++				compatible = "ubm4";
++				reg = <0x40>;
++				vcc-supply = <&i2c_passthrough>;
++			};
++
++			switch@72 {
++				compatible = "nxp,pca9543";
++				reg = <0x72>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++				vdd-supply = <&i2c_passthrough>;
++				i2c-mux-idle-disconnect;
++
++				i2c@0 {
++					reg = <0>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++
++				i2c@1 {
++					reg = <1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++				};
++			};
++		};
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/hpe-bmc-dl110gen11.dts b/arch/arm/boot/dts/hpe/hpe-bmc-dl110gen11.dts
+new file mode 100644
+index 000000000000..2cfcda957f79
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/hpe-bmc-dl110gen11.dts
+@@ -0,0 +1,57 @@
++/dts-v1/;
++
++#include "hpe-gxp.dtsi"
++#include "gxp-ubm-mux3.dtsi"
++
++/ {
++	model = "HPE ProLiant DL110 Gen11";
++	compatible = "hpe,gxp-dl110gen11", "hpe,gxp";
++};
++
++&{/ahb@80000000} {
++	kcs_conf: kcs_conf@80fc0430 {
++		compatible = "hpe,gxp-kcs-bmc-cfg", "simple-mfd", "syscon";
++		reg = <0x80fc0430 0x100>;
++	};
++
++	kcs_reg: kcs_reg@80fd0400 {
++		compatible = "hpe,gxp-kcs-bmc";
++		reg = <0x80fd0400 0x8>;
++		interrupts = <6>;
++		interrupt-parent = <&vic1>;
++		kcs-chan = <1>;
++		status = "okay";
++		kcs-bmc-cfg = <&kcs_conf>;
++	};
++
++	i2cmux@7 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c7>;
++		mux-controls = <&i2c_mux_ctrl 7>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c7@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu1: psu@58 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x58>;
++			};
++		};
++		i2c7@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu2: psu@59 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x59>;
++			};
++		};
++	};
++
++	syspower: syspower {
++		compatible = "hpe,gxp-power";
++		psu_phandle = <&psu1>, <&psu2>;
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/hpe-bmc-dl145gen11.dts b/arch/arm/boot/dts/hpe/hpe-bmc-dl145gen11.dts
+new file mode 100644
+index 000000000000..f77dd6c227b7
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/hpe-bmc-dl145gen11.dts
+@@ -0,0 +1,133 @@
++/dts-v1/;
++
++#include "hpe-gxp.dtsi"
++#include "gxp-ubm-mux3.dtsi"
++#include "gxp-ubm-mux4.dtsi"
++
++/ {
++	model = "HPE ProLiant DL145 Gen11";
++	compatible = "hpe,gxp-dl145gen11", "hpe,gxp";
++};
++
++&{/ahb@80000000} {
++	cpu: cpu@800000b8 {
++		compatible = "hpe,gxp-cpu", "simple-mfd", "syscon";
++		reg = <0x800000b8 0x2>;
++		#gpio-cells = <2>;
++		gpio-line-names =
++		"CPU1_PRSNT", "CPU2_PRSNT", "CPU3_PRSNT", "CPU4_PRSNT", "", "", "","",
++		"", "", "", "", "", "", "", "";
++	};
++
++	kcs_conf: kcs_conf@80fc0430 {
++		compatible = "hpe,gxp-kcs-bmc-cfg", "simple-mfd", "syscon";
++		reg = <0x80fc0430 0x100>;
++	};
++
++	kcs_reg: kcs_reg@80fd0400 {
++		compatible = "hpe,gxp-kcs-bmc";
++		reg = <0x80fd0400 0x8>;
++		interrupts = <6>;
++		interrupt-parent = <&vic1>;
++		kcs-chan = <1>;
++		status = "okay";
++		kcs-bmc-cfg = <&kcs_conf>;
++	};
++
++	i2cmux@0 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c0>;
++		mux-controls = <&i2c_mux_ctrl 0>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c0@5 {
++			reg = <5>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++		i2c0@6 {
++			reg = <6>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++		i2c0@7 {
++			reg = <7>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++		i2c0@8 {
++			reg = <8>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++	};
++
++	i2cmux@1 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c1>;
++		mux-controls = <&i2c_mux_ctrl 1>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c1@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			cpu-monitor = <1>;
++			sbrmi@3c {
++				compatible = "amd,sbrmi";
++				dimm-count = <12>;
++				reg = <0x3c>;
++			};
++			sbtsi@4c {
++				compatible = "amd,sbtsi";
++				reg = <0x4c>;
++			};
++		};
++		i2c1@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			cpu-monitor = <2>;
++			sbrmi@38 {
++				compatible = "amd,sbrmi";
++				dimm-count = <12>;
++				reg = <0x38>;
++			};
++			sbtsi@48 {
++				compatible = "amd,sbtsi";
++				reg = <0x48>;
++			};
++		};
++	};
++
++	i2cmux@7 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c7>;
++		mux-controls = <&i2c_mux_ctrl 7>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c7@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu1: psu@58 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x58>;
++			};
++		};
++		i2c7@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu2: psu@59 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x59>;
++			};
++		};
++	};
++
++	syspower: syspower {
++		compatible = "hpe,gxp-power";
++		psu_phandle = <&psu1>, <&psu2>;
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/hpe-bmc-dl320gen11.dts b/arch/arm/boot/dts/hpe/hpe-bmc-dl320gen11.dts
+new file mode 100644
+index 000000000000..9fb36b5d12bc
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/hpe-bmc-dl320gen11.dts
+@@ -0,0 +1,57 @@
++/dts-v1/;
++
++#include "hpe-gxp.dtsi"
++#include "gxp-ubm-mux3.dtsi"
++
++/ {
++	model = "HPE ProLiant DL320 Gen11";
++	compatible = "hpe,gxp-dl320gen11", "hpe,gxp";
++};
++
++&{/ahb@80000000} {
++	kcs_conf: kcs_conf@80fc0430 {
++		compatible = "hpe,gxp-kcs-bmc-cfg", "simple-mfd", "syscon";
++		reg = <0x80fc0430 0x100>;
++	};
++
++	kcs_reg: kcs_reg@80fd0400 {
++		compatible = "hpe,gxp-kcs-bmc";
++		reg = <0x80fd0400 0x8>;
++		interrupts = <6>;
++		interrupt-parent = <&vic1>;
++		kcs-chan = <1>;
++		status = "okay";
++		kcs-bmc-cfg = <&kcs_conf>;
++	};
++
++	i2cmux@7 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c7>;
++		mux-controls = <&i2c_mux_ctrl 7>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c7@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu1: psu@58 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x58>;
++			};
++		};
++		i2c7@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu2: psu@59 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x59>;
++			};
++		};
++	};
++
++	syspower: syspower {
++		compatible = "hpe,gxp-power";
++		psu_phandle = <&psu1>, <&psu2>;
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/hpe-bmc-dl320gen11plus.dts b/arch/arm/boot/dts/hpe/hpe-bmc-dl320gen11plus.dts
+new file mode 100644
+index 000000000000..b9c390577a36
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/hpe-bmc-dl320gen11plus.dts
+@@ -0,0 +1,58 @@
++// SPDX-License-Identifier: GPL-2.0
++/dts-v1/;
++
++#include "hpe-gxp.dtsi"
++#include "gxp-ubm-mux3.dtsi"
++
++/ {
++	model = "HPE ProLiant DL320 Gen11 Plus";
++	compatible = "hpe,gxp-dl320gen11plus", "hpe,gxp";
++};
++
++&{/ahb@80000000} {
++	kcs_conf: kcs_conf@80fc0430 {
++		compatible = "hpe,gxp-kcs-bmc-cfg", "simple-mfd", "syscon";
++		reg = <0x80fc0430 0x100>;
++	};
++
++	kcs_reg: kcs_reg@80fd0400 {
++		compatible = "hpe,gxp-kcs-bmc";
++		reg = <0x80fd0400 0x8>;
++		interrupts = <6>;
++		interrupt-parent = <&vic1>;
++		kcs-chan = <1>;
++		status = "okay";
++		kcs-bmc-cfg = <&kcs_conf>;
++	};
++
++	i2cmux@7 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c7>;
++		mux-controls = <&i2c_mux_ctrl 7>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c7@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu1: psu@58 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x58>;
++			};
++		};
++		i2c7@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu2: psu@59 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x59>;
++			};
++		};
++	};
++
++	syspower: syspower {
++		compatible = "hpe,gxp-power";
++		psu_phandle = <&psu1>, <&psu2>;
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/hpe-bmc-dl320gen12.dts b/arch/arm/boot/dts/hpe/hpe-bmc-dl320gen12.dts
+new file mode 100644
+index 000000000000..8a76e6fa6eef
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/hpe-bmc-dl320gen12.dts
+@@ -0,0 +1,43 @@
++// SPDX-License-Identifier: GPL-2.0
++/dts-v1/;
++
++#include "hpe-gxp.dtsi"
++#include "gxp-ubm-mux3.dtsi"
++
++/ {
++	model = "HPE ProLiant DL320 Gen12";
++	compatible = "hpe,gxp-dl320gen12", "hpe,gxp";
++};
++
++&{/ahb@80000000} {
++	i2cmux@7 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c7>;
++		mux-controls = <&i2c_mux_ctrl 7>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c7@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu1: psu@58 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x58>;
++			};
++		};
++		i2c7@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu2: psu@59 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x59>;
++			};
++		};
++	};
++
++	syspower: syspower {
++		compatible = "hpe,gxp-power";
++		psu_phandle = <&psu1>, <&psu2>;
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/hpe-bmc-dl325gen11.dts b/arch/arm/boot/dts/hpe/hpe-bmc-dl325gen11.dts
+new file mode 100644
+index 000000000000..3fb4c36ef775
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/hpe-bmc-dl325gen11.dts
+@@ -0,0 +1,137 @@
++/dts-v1/;
++
++#include "hpe-gxp.dtsi"
++#include "gxp-ubm-mux3.dtsi"
++#include "gxp-ubm-mux4.dtsi"
++
++/ {
++	model = "HPE ProLiant DL325 Gen11";
++	compatible = "hpe,gxp-dl325gen11", "hpe,gxp";
++};
++
++&{/ahb@80000000} {
++	cpu: cpu@800000b8 {
++		compatible = "hpe,gxp-cpu", "simple-mfd", "syscon";
++		reg = <0x800000b8 0x2>;
++		#gpio-cells = <2>;
++		gpio-line-names =
++		"CPU1_PRSNT", "CPU2_PRSNT", "CPU3_PRSNT", "CPU4_PRSNT", "", "", "","",
++		"", "", "", "", "", "", "", "";
++	};
++
++	kcs_conf: kcs_conf@80fc0430 {
++		compatible = "hpe,gxp-kcs-bmc-cfg", "simple-mfd", "syscon";
++		reg = <0x80fc0430 0x100>;
++	};
++
++	kcs_reg: kcs_reg@80fd0400 {
++		compatible = "hpe,gxp-kcs-bmc";
++		reg = <0x80fd0400 0x8>;
++		interrupts = <6>;
++		interrupt-parent = <&vic1>;
++		kcs-chan = <1>;
++		status = "okay";
++		kcs-bmc-cfg = <&kcs_conf>;
++	};
++
++	i2cmux@0 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c0>;
++		mux-controls = <&i2c_mux_ctrl 0>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c0@5 {
++			reg = <5>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++		i2c0@6 {
++			reg = <6>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++		i2c0@7 {
++			reg = <7>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++		i2c0@8 {
++			reg = <8>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++	};
++
++	i2cmux@1 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c1>;
++		mux-controls = <&i2c_mux_ctrl 1>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c1@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			cpu-monitor = <1>;
++			sbrmi@3c {
++				compatible = "amd,sbrmi";
++				dimm-count = <12>;
++				reg = <0x3c>;
++				sbrmi-supply = <&i2c_passthrough>;
++			};
++			sbtsi@4c {
++				compatible = "amd,sbtsi";
++				reg = <0x4c>;
++				sbtsi-supply = <&i2c_passthrough>;
++			};
++		};
++		i2c1@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			cpu-monitor = <2>;
++			sbrmi@38 {
++				compatible = "amd,sbrmi";
++				dimm-count = <12>;
++				reg = <0x38>;
++				sbrmi-supply = <&i2c_passthrough>;
++			};
++			sbtsi@48 {
++				compatible = "amd,sbtsi";
++				reg = <0x48>;
++				sbtsi-supply = <&i2c_passthrough>;
++			};
++		};
++	};
++
++	i2cmux@7 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c7>;
++		mux-controls = <&i2c_mux_ctrl 7>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c7@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu1: psu@58 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x58>;
++			};
++		};
++		i2c7@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu2: psu@59 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x59>;
++			};
++		};
++	};
++
++	syspower: syspower {
++		compatible = "hpe,gxp-power";
++		psu_phandle = <&psu1>, <&psu2>;
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/hpe-bmc-dl340gen11plus.dts b/arch/arm/boot/dts/hpe/hpe-bmc-dl340gen11plus.dts
+new file mode 100644
+index 000000000000..6de5fdb8ffa6
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/hpe-bmc-dl340gen11plus.dts
+@@ -0,0 +1,58 @@
++// SPDX-License-Identifier: GPL-2.0
++/dts-v1/;
++
++#include "hpe-gxp.dtsi"
++#include "gxp-ubm-mux3.dtsi"
++
++/ {
++	model = "HPE ProLiant DL340 Gen11 Plus";
++	compatible = "hpe,gxp-dl340gen11plus", "hpe,gxp";
++};
++
++&{/ahb@80000000} {
++	kcs_conf: kcs_conf@80fc0430 {
++		compatible = "hpe,gxp-kcs-bmc-cfg", "simple-mfd", "syscon";
++		reg = <0x80fc0430 0x100>;
++	};
++
++	kcs_reg: kcs_reg@80fd0400 {
++		compatible = "hpe,gxp-kcs-bmc";
++		reg = <0x80fd0400 0x8>;
++		interrupts = <6>;
++		interrupt-parent = <&vic1>;
++		kcs-chan = <1>;
++		status = "okay";
++		kcs-bmc-cfg = <&kcs_conf>;
++	};
++
++	i2cmux@7 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c7>;
++		mux-controls = <&i2c_mux_ctrl 7>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c7@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu1: psu@58 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x58>;
++			};
++		};
++		i2c7@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu2: psu@59 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x59>;
++			};
++		};
++	};
++
++	syspower: syspower {
++		compatible = "hpe,gxp-power";
++		psu_phandle = <&psu1>, <&psu2>;
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/hpe-bmc-dl340gen12.dts b/arch/arm/boot/dts/hpe/hpe-bmc-dl340gen12.dts
+new file mode 100644
+index 000000000000..f079bb8433a4
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/hpe-bmc-dl340gen12.dts
+@@ -0,0 +1,43 @@
++// SPDX-License-Identifier: GPL-2.0
++/dts-v1/;
++
++#include "hpe-gxp.dtsi"
++#include "gxp-ubm-mux3.dtsi"
++
++/ {
++	model = "HPE ProLiant DL340 Gen12";
++	compatible = "hpe,gxp-dl340gen12", "hpe,gxp";
++};
++
++&{/ahb@80000000} {
++	i2cmux@7 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c7>;
++		mux-controls = <&i2c_mux_ctrl 7>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c7@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu1: psu@58 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x58>;
++			};
++		};
++		i2c7@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu2: psu@59 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x59>;
++			};
++		};
++	};
++
++	syspower: syspower {
++		compatible = "hpe,gxp-power";
++		psu_phandle = <&psu1>, <&psu2>;
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/hpe-bmc-dl345gen11.dts b/arch/arm/boot/dts/hpe/hpe-bmc-dl345gen11.dts
+new file mode 100644
+index 000000000000..ae610673e96f
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/hpe-bmc-dl345gen11.dts
+@@ -0,0 +1,137 @@
++/dts-v1/;
++
++#include "hpe-gxp.dtsi"
++#include "gxp-ubm-mux3.dtsi"
++#include "gxp-ubm-mux4.dtsi"
++
++/ {
++	model = "HPE ProLiant DL345 Gen11";
++	compatible = "hpe,gxp-dl345gen11", "hpe,gxp";
++};
++
++&{/ahb@80000000} {
++	cpu: cpu@800000b8 {
++		compatible = "hpe,gxp-cpu", "simple-mfd", "syscon";
++		reg = <0x800000b8 0x2>;
++		#gpio-cells = <2>;
++		gpio-line-names =
++		"CPU1_PRSNT", "CPU2_PRSNT", "CPU3_PRSNT", "CPU4_PRSNT", "", "", "","",
++		"", "", "", "", "", "", "", "";
++	};
++
++	kcs_conf: kcs_conf@80fc0430 {
++		compatible = "hpe,gxp-kcs-bmc-cfg", "simple-mfd", "syscon";
++		reg = <0x80fc0430 0x100>;
++	};
++
++	kcs_reg: kcs_reg@80fd0400 {
++		compatible = "hpe,gxp-kcs-bmc";
++		reg = <0x80fd0400 0x8>;
++		interrupts = <6>;
++		interrupt-parent = <&vic1>;
++		kcs-chan = <1>;
++		status = "okay";
++		kcs-bmc-cfg = <&kcs_conf>;
++	};
++
++	i2cmux@0 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c0>;
++		mux-controls = <&i2c_mux_ctrl 0>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c0@5 {
++			reg = <5>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++		i2c0@6 {
++			reg = <6>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++		i2c0@7 {
++			reg = <7>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++		i2c0@8 {
++			reg = <8>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++	};
++
++	i2cmux@1 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c1>;
++		mux-controls = <&i2c_mux_ctrl 1>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c1@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			cpu-monitor = <1>;
++			sbrmi@3c {
++				compatible = "amd,sbrmi";
++				dimm-count = <12>;
++				reg = <0x3c>;
++				sbrmi-supply = <&i2c_passthrough>;
++			};
++			sbtsi@4c {
++				compatible = "amd,sbtsi";
++				reg = <0x4c>;
++				sbtsi-supply = <&i2c_passthrough>;
++			};
++		};
++		i2c1@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			cpu-monitor = <2>;
++			sbrmi@38 {
++				compatible = "amd,sbrmi";
++				dimm-count = <12>;
++				reg = <0x38>;
++				sbrmi-supply = <&i2c_passthrough>;
++			};
++			sbtsi@48 {
++				compatible = "amd,sbtsi";
++				reg = <0x48>;
++				sbtsi-supply = <&i2c_passthrough>;
++			};
++		};
++	};
++
++	i2cmux@7 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c7>;
++		mux-controls = <&i2c_mux_ctrl 7>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c7@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu1: psu@58 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x58>;
++			};
++		};
++		i2c7@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu2: psu@59 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x59>;
++			};
++		};
++	};
++
++	syspower: syspower {
++		compatible = "hpe,gxp-power";
++		psu_phandle = <&psu1>, <&psu2>;
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/hpe-bmc-dl360gen11.dts b/arch/arm/boot/dts/hpe/hpe-bmc-dl360gen11.dts
+new file mode 100644
+index 000000000000..d1cf7bcd51cc
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/hpe-bmc-dl360gen11.dts
+@@ -0,0 +1,59 @@
++/dts-v1/;
++
++#include "hpe-gxp.dtsi"
++#include "gxp-ubm-mux3.dtsi"
++#include "gxp-ubm-mux4.dtsi"
++#include "gxp-ubm-mux6.dtsi"
++
++/ {
++	model = "HPE ProLiant DL360 Gen11";
++	compatible = "hpe,gxp-dl360gen11", "hpe,gxp";
++};
++
++&{/ahb@80000000} {
++	kcs_conf: kcs_conf@80fc0430 {
++		compatible = "hpe,gxp-kcs-bmc-cfg", "simple-mfd", "syscon";
++		reg = <0x80fc0430 0x100>;
++	};
++
++	kcs_reg: kcs_reg@80fd0400 {
++		compatible = "hpe,gxp-kcs-bmc";
++		reg = <0x80fd0400 0x8>;
++		interrupts = <6>;
++		interrupt-parent = <&vic1>;
++		kcs-chan = <1>;
++		status = "okay";
++		kcs-bmc-cfg = <&kcs_conf>;
++	};
++
++	i2cmux@7 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c7>;
++		mux-controls = <&i2c_mux_ctrl 7>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c7@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu1: psu@58 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x58>;
++			};
++		};
++		i2c7@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu2: psu@59 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x59>;
++			};
++		};
++	};
++
++	syspower: syspower {
++		compatible = "hpe,gxp-power";
++		psu_phandle = <&psu1>, <&psu2>;
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/hpe-bmc-dl365gen11.dts b/arch/arm/boot/dts/hpe/hpe-bmc-dl365gen11.dts
+new file mode 100644
+index 000000000000..5af54a24175b
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/hpe-bmc-dl365gen11.dts
+@@ -0,0 +1,138 @@
++/dts-v1/;
++
++#include "hpe-gxp.dtsi"
++#include "gxp-ubm-mux3.dtsi"
++#include "gxp-ubm-mux4.dtsi"
++#include "gxp-ubm-mux6.dtsi"
++
++/ {
++	model = "HPE ProLiant DL365 Gen11";
++	compatible = "hpe,gxp-dl365gen11", "hpe,gxp";
++};
++
++&{/ahb@80000000} {
++	cpu: cpu@800000b8 {
++		compatible = "hpe,gxp-cpu", "simple-mfd", "syscon";
++		reg = <0x800000b8 0x2>;
++		#gpio-cells = <2>;
++		gpio-line-names =
++		"CPU1_PRSNT", "CPU2_PRSNT", "CPU3_PRSNT", "CPU4_PRSNT", "", "", "","",
++		"", "", "", "", "", "", "", "";
++	};
++
++	kcs_conf: kcs_conf@80fc0430 {
++		compatible = "hpe,gxp-kcs-bmc-cfg", "simple-mfd", "syscon";
++		reg = <0x80fc0430 0x100>;
++	};
++
++	kcs_reg: kcs_reg@80fd0400 {
++		compatible = "hpe,gxp-kcs-bmc";
++		reg = <0x80fd0400 0x8>;
++		interrupts = <6>;
++		interrupt-parent = <&vic1>;
++		kcs-chan = <1>;
++		status = "okay";
++		kcs-bmc-cfg = <&kcs_conf>;
++	};
++
++	i2cmux@0 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c0>;
++		mux-controls = <&i2c_mux_ctrl 0>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c0@5 {
++			reg = <5>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++		i2c0@6 {
++			reg = <6>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++		i2c0@7 {
++			reg = <7>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++		i2c0@8 {
++			reg = <8>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++	};
++
++	i2cmux@1 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c1>;
++		mux-controls = <&i2c_mux_ctrl 1>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c1@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			cpu-monitor = <1>;
++			sbrmi@3c {
++				compatible = "amd,sbrmi";
++				dimm-count = <12>;
++				reg = <0x3c>;
++				sbrmi-supply = <&i2c_passthrough>;
++			};
++			sbtsi@4c {
++				compatible = "amd,sbtsi";
++				reg = <0x4c>;
++				sbtsi-supply = <&i2c_passthrough>;
++			};
++		};
++		i2c1@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			cpu-monitor = <2>;
++			sbrmi@38 {
++				compatible = "amd,sbrmi";
++				dimm-count = <12>;
++				reg = <0x38>;
++				sbrmi-supply = <&i2c_passthrough>;
++			};
++			sbtsi@48 {
++				compatible = "amd,sbtsi";
++				reg = <0x48>;
++				sbtsi-supply = <&i2c_passthrough>;
++			};
++		};
++	};
++
++	i2cmux@7 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c7>;
++		mux-controls = <&i2c_mux_ctrl 7>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c7@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu1: psu@58 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x58>;
++			};
++		};
++		i2c7@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu2: psu@59 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x59>;
++			};
++		};
++	};
++
++	syspower: syspower {
++		compatible = "hpe,gxp-power";
++		psu_phandle = <&psu1>, <&psu2>;
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/hpe-bmc-dl380agen11.dts b/arch/arm/boot/dts/hpe/hpe-bmc-dl380agen11.dts
+new file mode 100644
+index 000000000000..7bd413f1526d
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/hpe-bmc-dl380agen11.dts
+@@ -0,0 +1,57 @@
++/dts-v1/;
++
++#include "hpe-gxp.dtsi"
++#include "gxp-ubm-mux3.dtsi"
++
++/ {
++	model = "HPE ProLiant DL380a Gen11";
++	compatible = "hpe,gxp-dl380agen11", "hpe,gxp";
++};
++
++&{/ahb@80000000} {
++	kcs_conf: kcs_conf@80fc0430 {
++		compatible = "hpe,gxp-kcs-bmc-cfg", "simple-mfd", "syscon";
++		reg = <0x80fc0430 0x100>;
++	};
++
++	kcs_reg: kcs_reg@80fd0400 {
++		compatible = "hpe,gxp-kcs-bmc";
++		reg = <0x80fd0400 0x8>;
++		interrupts = <6>;
++		interrupt-parent = <&vic1>;
++		kcs-chan = <1>;
++		status = "okay";
++		kcs-bmc-cfg = <&kcs_conf>;
++	};
++
++	i2cmux@7 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c7>;
++		mux-controls = <&i2c_mux_ctrl 7>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c7@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu1: psu@58 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x58>;
++			};
++		};
++		i2c7@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu2: psu@59 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x59>;
++			};
++		};
++	};
++
++	syspower: syspower {
++		compatible = "hpe,gxp-power";
++		psu_phandle = <&psu1>, <&psu2>;
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/hpe-bmc-dl380gen11.dts b/arch/arm/boot/dts/hpe/hpe-bmc-dl380gen11.dts
+new file mode 100644
+index 000000000000..95c076a7aa39
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/hpe-bmc-dl380gen11.dts
+@@ -0,0 +1,58 @@
++/dts-v1/;
++
++#include "hpe-gxp.dtsi"
++#include "gxp-ubm-mux3.dtsi"
++#include "gxp-ubm-mux4.dtsi"
++#include "gxp-ubm-mux6.dtsi"
++
++/ {
++	model = "HPE ProLiant DL380 Gen11";
++	compatible = "hpe,gxp-dl380gen11", "hpe,gxp";
++};
++
++&{/ahb@80000000} {
++	kcs_conf: kcs_conf@80fc0430 {
++		compatible = "hpe,gxp-kcs-bmc-cfg", "simple-mfd", "syscon";
++		reg = <0x80fc0430 0x100>;
++	};
++
++	kcs_reg: kcs_reg@80fd0400 {
++		compatible = "hpe,gxp-kcs-bmc";
++		reg = <0x80fd0400 0x8>;
++		interrupts = <6>;
++		interrupt-parent = <&vic1>;
++		kcs-chan = <1>;
++		status = "okay";
++		kcs-bmc-cfg = <&kcs_conf>;
++	};
++
++	i2cmux@7 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c7>;
++		mux-controls = <&i2c_mux_ctrl 7>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c7@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu1: psu@58 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x58>;
++			};
++		};
++		i2c7@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu2: psu@59 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x59>;
++			};
++		};
++	};
++	syspower: syspower {
++		compatible = "hpe,gxp-power";
++		psu_phandle = <&psu1>, <&psu2>;
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/hpe-bmc-dl385gen11.dts b/arch/arm/boot/dts/hpe/hpe-bmc-dl385gen11.dts
+new file mode 100644
+index 000000000000..37d371bd7a40
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/hpe-bmc-dl385gen11.dts
+@@ -0,0 +1,136 @@
++/dts-v1/;
++
++#include "hpe-gxp.dtsi"
++#include "gxp-ubm-mux3.dtsi"
++#include "gxp-ubm-mux4.dtsi"
++#include "gxp-ubm-mux6.dtsi"
++
++/ {
++	model = "HPE ProLiant DL385 Gen11";
++	compatible = "hpe,gxp-dl385gen11", "hpe,gxp";
++};
++
++&{/ahb@80000000} {
++	cpu: cpu@800000b8 {
++		compatible = "hpe,gxp-cpu", "simple-mfd", "syscon";
++		reg = <0x800000b8 0x2>;
++		#gpio-cells = <2>;
++		gpio-line-names =
++		"CPU1_PRSNT", "CPU2_PRSNT", "CPU3_PRSNT", "CPU4_PRSNT", "", "", "","",
++		"", "", "", "", "", "", "", "";
++	};
++
++	kcs_conf: kcs_conf@80fc0430 {
++		compatible = "hpe,gxp-kcs-bmc-cfg", "simple-mfd", "syscon";
++		reg = <0x80fc0430 0x100>;
++	};
++
++	kcs_reg: kcs_reg@80fd0400 {
++		compatible = "hpe,gxp-kcs-bmc";
++		reg = <0x80fd0400 0x8>;
++		interrupts = <6>;
++		interrupt-parent = <&vic1>;
++		kcs-chan = <1>;
++		status = "okay";
++		kcs-bmc-cfg = <&kcs_conf>;
++	};
++
++	i2cmux@0 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c0>;
++		mux-controls = <&i2c_mux_ctrl 0>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c0@5 {
++			reg = <5>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++		i2c0@6 {
++			reg = <6>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++		i2c0@7 {
++			reg = <7>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++		i2c0@8 {
++			reg = <8>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++	};
++	i2cmux@1 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c1>;
++		mux-controls = <&i2c_mux_ctrl 1>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c1@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			cpu-monitor = <1>;
++			sbrmi@3c {
++				compatible = "amd,sbrmi";
++				dimm-count = <12>;
++				reg = <0x3c>;
++				sbrmi-supply = <&i2c_passthrough>;
++			};
++			sbtsi@4c {
++				compatible = "amd,sbtsi";
++				reg = <0x4c>;
++				sbtsi-supply = <&i2c_passthrough>;
++			};
++		};
++		i2c1@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			cpu-monitor = <2>;
++			sbrmi@38 {
++				compatible = "amd,sbrmi";
++				dimm-count = <12>;
++				reg = <0x38>;
++				sbrmi-supply = <&i2c_passthrough>;
++			};
++			sbtsi@48 {
++				compatible = "amd,sbtsi";
++				reg = <0x48>;
++				sbtsi-supply = <&i2c_passthrough>;
++			};
++		};
++	};
++
++	i2cmux@7 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c7>;
++		mux-controls = <&i2c_mux_ctrl 7>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c7@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu1: psu@58 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x58>;
++			};
++		};
++		i2c7@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu2: psu@59 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x59>;
++			};
++		};
++	};
++	syspower: syspower {
++		compatible = "hpe,gxp-power";
++		psu_phandle = <&psu1>, <&psu2>;
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/hpe-bmc-dl560gen11.dts b/arch/arm/boot/dts/hpe/hpe-bmc-dl560gen11.dts
+new file mode 100644
+index 000000000000..d55cff322023
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/hpe-bmc-dl560gen11.dts
+@@ -0,0 +1,57 @@
++/dts-v1/;
++
++#include "hpe-gxp.dtsi"
++#include "gxp-ubm-mux3.dtsi"
++
++/ {
++	model = "HPE ProLiant DL560 Gen11";
++	compatible = "hpe,gxp-dl560gen11", "hpe,gxp";
++};
++
++&{/ahb@80000000} {
++	kcs_conf: kcs_conf@80fc0430 {
++		compatible = "hpe,gxp-kcs-bmc-cfg", "simple-mfd", "syscon";
++		reg = <0x80fc0430 0x100>;
++	};
++
++	kcs_reg: kcs_reg@80fd0400 {
++		compatible = "hpe,gxp-kcs-bmc";
++		reg = <0x80fd0400 0x8>;
++		interrupts = <6>;
++		interrupt-parent = <&vic1>;
++		kcs-chan = <1>;
++		status = "okay";
++		kcs-bmc-cfg = <&kcs_conf>;
++	};
++
++	i2cmux@7 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c7>;
++		mux-controls = <&i2c_mux_ctrl 7>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c7@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu1: psu@58 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x58>;
++			};
++		};
++		i2c7@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu2: psu@59 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x59>;
++			};
++		};
++	};
++
++	syspower: syspower {
++		compatible = "hpe,gxp-power";
++		psu_phandle = <&psu1>, <&psu2>;
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/hpe-bmc-rl300gen11.dts b/arch/arm/boot/dts/hpe/hpe-bmc-rl300gen11.dts
+new file mode 100644
+index 000000000000..5658990378df
+--- /dev/null
++++ b/arch/arm/boot/dts/hpe/hpe-bmc-rl300gen11.dts
+@@ -0,0 +1,63 @@
++/dts-v1/;
++
++#include "hpe-gxp.dtsi"
++#include "gxp-ubm-mux3.dtsi"
++#include "gxp-ubm-mux4.dtsi"
++
++/ {
++	model = "HPE ProLiant RL300 Gen11";
++	compatible = "hpe,gxp-rl300gen11", "hpe,gxp";
++};
++
++&{/ahb@80000000} {
++	i2cmux@7 {
++		compatible = "i2c-mux";
++		i2c-parent = <&i2c7>;
++		mux-controls = <&i2c_mux_ctrl 7>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		i2c7@1 {
++			reg = <1>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu1: psu@58 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x58>;
++			};
++		};
++		i2c7@2 {
++			reg = <2>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			psu2: psu@59 {
++				compatible = "hpe,gxp-psu";
++				reg = <0x59>;
++			};
++		};
++	};
++
++	syspower: syspower {
++		compatible = "hpe,gxp-power";
++		psu_phandle = <&psu1>, <&psu2>;
++	};
++};
++
++&i2c1 {
++	bus-frequency = <400000>;
++	smpro@4f {
++		compatible = "ampere,smpro";
++		reg = <0x4f>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		cpu-monitor = <1>;
++		hwmon {
++			compatible = "ampere,ac01-hwmon";
++		};
++		misc {
++			compatible = "ampere,ac01-misc";
++		};
++		errmon {
++			compatible = "ampere,ac01-errmon";
++		};
++	};
++};
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
+index cf735b3c4f35..6bea75085cd0 100644
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
+@@ -10,6 +10,22 @@ / {
+ 	#address-cells = <1>;
+ 	#size-cells = <1>;
+ 
++	aliases {
++		serial0 = &uarta;
++		serial1 = &uartb;
++		serial2 = &uartc;
++	};
++
++	chosen {
++		stdout-path = "serial2:115200n8";
++		bootargs = "earlyprintk console=ttyS2,115200";
++	};
++
++	memory@40000000 {
++		device_type = "memory";
++		reg = <0x40000000 0x20000000>;
++	};
++
+ 	cpus {
+ 		#address-cells = <1>;
+ 		#size-cells = <0>;
+-- 
+2.55.0
+
