@@ -13,13 +13,13 @@ Upstream-Status: Pending
 
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
- arch/arm/boot/dts/hpe/hpe-gxp.dts | 36 +++++++++++++++++++++++++++++++
+ arch/arm/boot/dts/hpe/hpe-gxp.dtsi | 36 +++++++++++++++++++++++++++++++
  1 file changed, 36 insertions(+)
 
-diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
 index e5f6d21b8de9..6f86a011f59f 100644
---- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
-+++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
 @@ -257,6 +257,42 @@ i2c9: i2c@c0002900 {
  			#size-cells = <0>;
  		};

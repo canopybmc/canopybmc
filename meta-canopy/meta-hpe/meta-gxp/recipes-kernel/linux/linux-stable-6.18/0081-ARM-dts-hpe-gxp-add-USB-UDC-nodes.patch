@@ -16,13 +16,13 @@ Upstream-Status: Pending
 Signed-off-by: Christian Walter <christian.walter@9elements.com>
 Signed-off-by: Georg Hackel <georg.hackel@9elements.com>
 ---
- arch/arm/boot/dts/hpe/hpe-gxp.dts | 35 +++++++++++++++++++++++++++++++
+ arch/arm/boot/dts/hpe/hpe-gxp.dtsi | 35 +++++++++++++++++++++++++++++++
  1 file changed, 35 insertions(+)
 
-diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
 index 11412d2adf81..0646d3bf6e63 100644
---- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
-+++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
 @@ -646,6 +646,41 @@ thumbnail: video@c0000500 {
  			hpe,bits-per-pixel = <32>;
  		};

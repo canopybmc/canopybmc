@@ -29,7 +29,7 @@ Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
 Signed-off-by: Georg Hackel <georg.hackel@9elements.com>
 ---
  .../boot/dts/hpe/gxp-bmc-flash-layout.dtsi    |  58 ++++
- arch/arm/boot/dts/hpe/hpe-gxp.dts             | 315 ++++++++++++++----
+ arch/arm/boot/dts/hpe/hpe-gxp.dtsi             | 315 ++++++++++++++----
  2 files changed, 307 insertions(+), 66 deletions(-)
  create mode 100644 arch/arm/boot/dts/hpe/gxp-bmc-flash-layout.dtsi
 
@@ -97,10 +97,10 @@ index 000000000000..c8a4fe40a24a
 +		read-only;
 +	};
 +};
-diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
 index 6bea75085cd0..e5f6d21b8de9 100644
---- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
-+++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
 @@ -26,6 +26,22 @@ memory@40000000 {
  		reg = <0x40000000 0x20000000>;
  	};

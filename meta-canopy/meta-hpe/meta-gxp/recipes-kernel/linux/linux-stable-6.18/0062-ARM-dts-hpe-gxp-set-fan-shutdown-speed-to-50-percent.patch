@@ -11,13 +11,13 @@ Upstream-Status: Pending
 
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
- arch/arm/boot/dts/hpe/hpe-gxp.dts | 1 +
+ arch/arm/boot/dts/hpe/hpe-gxp.dtsi | 1 +
  1 file changed, 1 insertion(+)
 
-diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
 index e115c2293dc9..78889c794a23 100644
---- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
-+++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
 @@ -616,6 +616,7 @@ fanctrl: fan-controller@c1000c00 {
  			reg = <0xc1000c00 0x200>;
  			hpe,xreg = <&xreg>;

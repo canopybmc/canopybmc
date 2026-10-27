@@ -11,13 +11,13 @@ Upstream-Status: Pending
 
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
- arch/arm/boot/dts/hpe/hpe-gxp.dts | 18 ++++++++++++++++++
+ arch/arm/boot/dts/hpe/hpe-gxp.dtsi | 18 ++++++++++++++++++
  1 file changed, 18 insertions(+)
 
-diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
 index 40f2e8432f9f..7b77be541d66 100644
---- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
-+++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
 @@ -14,6 +14,7 @@ aliases {
  		serial0 = &uarta;
  		serial1 = &uartb;

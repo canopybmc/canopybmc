@@ -31,13 +31,13 @@ Register layout (32-bit regmap stride, little-endian):
 Upstream-Status: Pending
 Signed-off-by: Christian Walter <christian.walter@9elements.com>
 ---
- arch/arm/boot/dts/hpe/hpe-gxp.dts | 14 ++++++++++++++
+ arch/arm/boot/dts/hpe/hpe-gxp.dtsi | 14 ++++++++++++++
  1 file changed, 14 insertions(+)
 
-diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
 index 78889c794a23..9058c0c4a05c 100644
---- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
-+++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
 @@ -193,6 +193,20 @@ xreg: xreg@d1000000 {
  				"PSU3_DC", "PSU4_DC",
  				"PSU5_DC", "PSU6_DC",

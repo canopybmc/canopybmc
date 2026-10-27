@@ -10,13 +10,13 @@ Upstream-Status: Pending
 
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
- arch/arm/boot/dts/hpe/hpe-gxp.dts | 55 ++++++++++++++++++++++++++++++-
+ arch/arm/boot/dts/hpe/hpe-gxp.dtsi | 55 ++++++++++++++++++++++++++++++-
  1 file changed, 54 insertions(+), 1 deletion(-)
 
-diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
 index a9b9c7d94050..b35542d465b4 100644
---- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
-+++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
 @@ -545,7 +545,60 @@ umac1: ethernet@c0005000 {
  			nvmem-cell-names = "mac-address";
  		};

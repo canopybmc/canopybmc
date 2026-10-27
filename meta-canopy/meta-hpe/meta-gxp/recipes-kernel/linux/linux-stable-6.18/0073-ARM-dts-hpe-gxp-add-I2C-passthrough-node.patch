@@ -13,13 +13,13 @@ platform-specific overlay files.
 Upstream-Status: Pending
 Signed-off-by: Christian Walter <christian.walter@9elements.com>
 ---
- arch/arm/boot/dts/hpe/hpe-gxp.dts | 7 +++++++
+ arch/arm/boot/dts/hpe/hpe-gxp.dtsi | 7 +++++++
  1 file changed, 7 insertions(+)
 
-diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
 index 9058c0c4a05c..1f9ad626d16f 100644
---- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
-+++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
 @@ -633,6 +633,13 @@ fanctrl: fan-controller@c1000c00 {
  			fan-shutdown-percent = <50>;
  		};

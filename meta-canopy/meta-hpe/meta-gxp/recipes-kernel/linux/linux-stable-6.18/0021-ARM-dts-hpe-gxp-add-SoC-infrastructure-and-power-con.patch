@@ -15,13 +15,13 @@ Co-developed-by: Christian Walter <christian.walter@9elements.com>
 Signed-off-by: Christian Walter <christian.walter@9elements.com>
 Signed-off-by: Georg Hackel <georg.hackel@9elements.com>
 ---
- arch/arm/boot/dts/hpe/hpe-gxp.dts | 170 +++++++++++++++++++++++++++++-
+ arch/arm/boot/dts/hpe/hpe-gxp.dtsi | 170 +++++++++++++++++++++++++++++-
  1 file changed, 166 insertions(+), 4 deletions(-)
 
-diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
 index d1cdb46f8489..40f2e8432f9f 100644
---- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
-+++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
+--- a/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
++++ b/arch/arm/boot/dts/hpe/hpe-gxp.dtsi
 @@ -99,6 +99,169 @@ vic1: interrupt-controller@80f00000 {
  			#interrupt-cells = <1>;
  		};
