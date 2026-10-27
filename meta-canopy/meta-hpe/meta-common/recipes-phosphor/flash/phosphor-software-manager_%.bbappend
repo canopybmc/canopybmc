@@ -1,7 +1,6 @@
 FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 
 SRC_URI:append = " \
-    file://0001-bios-no-not-require-mux-GPIOs.patch \
     file://0002-allow-for-updating-spi-partitions.patch \
     "
 
