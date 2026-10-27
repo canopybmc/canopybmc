@@ -1,0 +1,52 @@
+From 9e945fffdcdbc527a6f9b6d2f04a0f4ecf33d601 Mon Sep 17 00:00:00 2001
+From: Michal Gorlas <michal.gorlas@9elements.com>
+Date: Tue, 27 Oct 2026 18:55:32 +0100
+Subject: [PATCH] dt-bindings: arm: hpe: add GXP Gen11 and Gen12
+
+Add binding for GXP boards from Gen11 and Gen12. Also deprecate the
+"hpe,gxp-dl360gen10" as there are no in tree users.
+
+Co-developed-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
+Signed-off-by: Michal Gorlas <michal.gorlas@9elements.com>
+
+Upstream-Status: Pending
+---
+ .../devicetree/bindings/arm/hpe,gxp.yaml      | 22 +++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/arm/hpe,gxp.yaml b/Documentation/devicetree/bindings/arm/hpe,gxp.yaml
+index 224bbcb93f95..ddca84b0d18f 100644
+--- a/Documentation/devicetree/bindings/arm/hpe,gxp.yaml
++++ b/Documentation/devicetree/bindings/arm/hpe,gxp.yaml
+@@ -17,6 +17,28 @@ properties:
+         items:
+           - enum:
+               - hpe,gxp-dl360gen10
++            deprecated: true
++          - const: hpe,gxp
++
++      - description: GXP Based Boards
++        items:
++          - enum:
++              - hpe,gxp-dl110gen11
++              - hpe,gxp-dl145gen11
++              - hpe,gxp-dl320gen11
++              - hpe,gxp-dl320gen11plus
++              - hpe,gxp-dl320gen12
++              - hpe,gxp-dl325gen11
++              - hpe,gxp-dl340gen11plus
++              - hpe,gxp-dl340gen12
++              - hpe,gxp-dl345gen11
++              - hpe,gxp-dl360gen11
++              - hpe,gxp-dl365gen11
++              - hpe,gxp-dl380agen11
++              - hpe,gxp-dl380gen11
++              - hpe,gxp-dl385gen11
++              - hpe,gxp-dl560gen11
++              - hpe,gxp-rl300gen11
+           - const: hpe,gxp
+
+ required:
+--
+2.55.0
