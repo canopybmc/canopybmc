@@ -1,4 +1,40 @@
-KERNEL_DEVICETREE ?= "hpe/hpe-gxp.dtb"
+GXP_BOARD_MAP = "\
+    0x0235:dl360gen11 \
+    0x0236:dl380gen11 \
+    0x0241:dl560gen11 \
+    0x0243:dl385gen11 \
+    0x0244:dl325gen11 \
+    0x0245:dl365gen11 \
+    0x0246:dl345gen11 \
+    0x0248:dl110gen11 \
+    0x0249:dl320gen11 \
+    0x024a:dl380agen11 \
+    0x0250:rl300gen11 \
+    0x0261:dl340gen11plus \
+    0x0263:dl320gen11plus \
+    0x0264:dl320gen12 \
+    0x0271:dl145gen11 \
+    0x0273:dl340gen12 \
+"
+
+KERNEL_DEVICETREE ?= "\
+    hpe/hpe-bmc-dl360gen11.dtb \
+    hpe/hpe-bmc-dl380gen11.dtb \
+    hpe/hpe-bmc-dl560gen11.dtb \
+    hpe/hpe-bmc-dl385gen11.dtb \
+    hpe/hpe-bmc-dl325gen11.dtb \
+    hpe/hpe-bmc-dl365gen11.dtb \
+    hpe/hpe-bmc-dl345gen11.dtb \
+    hpe/hpe-bmc-dl110gen11.dtb \
+    hpe/hpe-bmc-dl320gen11.dtb \
+    hpe/hpe-bmc-dl380agen11.dtb \
+    hpe/hpe-bmc-rl300gen11.dtb \
+    hpe/hpe-bmc-dl340gen11plus.dtb \
+    hpe/hpe-bmc-dl320gen11plus.dtb \
+    hpe/hpe-bmc-dl320gen12.dtb \
+    hpe/hpe-bmc-dl145gen11.dtb \
+    hpe/hpe-bmc-dl340gen12.dtb \
+"
 
 # bootblock loader variants in use
 HPE_GXP_LOADERS = "\
