@@ -7,10 +7,6 @@ EXTRA_OEMESON:append = " \
         "
 
 do_install:append() {
-    # Remove once https://gerrit.openbmc.org/c/openbmc/openbmc/+/95967 is merged
-    rm ${D}${libdir}/udev/ata_id
-    sed -i '/IMPORT{program}="ata_id /d' ${D}${libdir}/udev/rules.d/60-persistent-storage.rules
-
     # Remove once https://gerrit.openbmc.org/c/openbmc/openbmc/+/95968 is merged
     rm ${D}${bindir}/bootctl
 
