@@ -1,0 +1,47 @@
+---
+# Labels pull requests from their changed files, base branch, title and the
+# pull request template. See .github/triage/pr.js.
+#
+# This runs on pull_request_target to be able to label pull requests from
+# forks. It must never check out or run code from the pull request, only the
+# base branch is checked out.
+
+name: Pull request triage
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - edited
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-triage-${{ github.event.pull_request.number }}
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write # To add labels
+      pull-requests: write # To add labels
+    steps:
+      - name: Checkout base branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          sparse-checkout: |
+            .github
+            meta-canopy
+          persist-credentials: false
+
+      - name: Triage pull request
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const triage = require(`${process.env.GITHUB_WORKSPACE}/.github/triage/pr.js`);
+            await triage({ github, context, core });

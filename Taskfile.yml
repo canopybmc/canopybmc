@@ -34,5 +34,5 @@ tasks:
         SHORTLOG=$(git -C openbmc shortlog --no-merges ${OLD_COMMIT}..${NEW_COMMIT} || echo "No shortlog available")
         COMMIT_MSG="openbmc: srcrev bump ${OLD_COMMIT:0:10}..${NEW_COMMIT:0:10}"
 
-        echo -e "$COMMIT_MSG\n\n$SHORTLOG" | git commit -F -
+        echo -e "$COMMIT_MSG\n\n$SHORTLOG" | git commit -s -F -
         git push -u origin --force {{.BRANCH_NAME}}

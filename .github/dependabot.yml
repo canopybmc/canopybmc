@@ -6,6 +6,9 @@ updates:
     schedule:
       interval: 'weekly'
       time: '00:00'
+    labels:
+      - "github_actions"
+      - "topic/ci"
     groups:
       all:
         patterns:

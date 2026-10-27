@@ -1,0 +1,50 @@
+---
+name: Feature planning
+description: Planned work to achieve a feature or milestone
+labels: ["type/feature", "needs triage"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A descriptive summary of the feature.
+    validations:
+      required: true
+
+  - type: textarea
+    id: tasks
+    attributes:
+      label: Tasks
+      value: |
+        - [ ] Task A
+        - [ ] Task B
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: |
+        Links to other issues, internal or external, and standards. Remove
+        the note if nothing here is private.
+      value: |
+        -
+
+        > [!NOTE]
+        > This is a tracking item for work that may be partially done in
+        > different repositories. Items are linked as much as possible. Some
+        > repositories are private and stay private since they are used to
+        > verify and clean up vendor (derived) code.
+
+  - type: input
+    id: target
+    attributes:
+      label: Target machine
+      description: |
+        The machine name as used with `source setup <machine>`, separated by
+        commas, or `all`. Leave empty if it doesn't matter.
+
+  - type: input
+    id: components
+    attributes:
+      label: Affected components
+      description: Services or components involved, separated by commas, if known.

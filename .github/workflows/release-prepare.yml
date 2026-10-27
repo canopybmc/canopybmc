@@ -88,7 +88,12 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: release/${{ inputs.version }}
           commit-message: "chore: bump version to ${{ inputs.version }}"
+          author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
           title: "Release: ${{ inputs.version }} Pull Request"
           body: "Prepare for next release"
           assignees: "${{ github.actor }}"
           reviewers: "${{ github.actor }}"
+          labels: |
+            github_actions
+            target/all
+            topic/docs

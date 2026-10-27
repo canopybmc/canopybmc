@@ -43,6 +43,11 @@ There are known issues with the build environment on some systems. Please check 
 [open environment bugs](https://github.com/canopybmc/canopybmc/issues?q=is%3Aissue+state%3Aopen+label%3Aenvironment+label%3Abug)
 for more information.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for reporting issues, labels and the
+required commit sign-off.
+
 ## Board-Specific Information
 
 - [HPE ProLiant Gen11](doc/board-hpe_proliant_gen11.md)
