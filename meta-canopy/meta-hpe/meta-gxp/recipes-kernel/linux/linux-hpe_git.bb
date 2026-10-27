@@ -8,7 +8,6 @@ SRCREV = "cf42ecff238c6c385328a8d2a9b436f3944f02f8"
 require linux-hpe.inc
 
 require linux-gxp-flash-layout.inc
-require linux-gxp-multi-dtb.inc
 
 SRC_URI:append = " \
     file://common/defconfig \
@@ -31,8 +30,8 @@ SRC_URI:append = " \
     file://0002-spi-gxp-support-addressed-reads-with-dummy-cycles.patch \
     file://0003-i2c-gxp-fix-use-of-error-pointer-on-syscon-lookup-fa.patch \
     file://0004-mtd-spi-nor-macronix-allow-MX66L51235F-probe-without.patch \
-    file://0005-dt-bindings-arm-hpe-simplify-to-generic-GXP-compatib.patch \
-    file://0006-ARM-dts-hpe-gxp-convert-to-standalone-device-tree.patch \
+    file://0005-dt-bindings-arm-hpe-add-GXP-Gen11-and-Gen12.patch \
+    file://0006-ARM-dts-hpe-gxp-add-board-specific-Gen11-and-Gen12-d.patch \
     file://0007-ARM-dts-hpe-gxp-expand-device-tree-for-boot-support.patch \
     file://0008-dt-bindings-nvmem-add-HPE-GXP-virtual-EEPROM-binding.patch \
     file://0009-nvmem-add-HPE-GXP-virtual-EEPROM-driver.patch \
