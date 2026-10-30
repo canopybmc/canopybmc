@@ -1,0 +1,21 @@
+# LAYER_CONF_VERSION is increased each time build/conf/bblayers.conf
+# changes incompatibly
+LCONF_VERSION = "8"
+
+BBPATH = "${TOPDIR}"
+BBFILES ?= ""
+
+BBLAYERS ?= " \
+  ##OEROOT##/meta-canopy \
+  ##OEROOT##/meta-canopy/meta-aspeed \
+  ##OEROOT##/openbmc/meta \
+  ##OEROOT##/openbmc/meta-openembedded/meta-oe \
+  ##OEROOT##/openbmc/meta-openembedded/meta-networking \
+  ##OEROOT##/openbmc/meta-openembedded/meta-python \
+  ##OEROOT##/openbmc/meta-phosphor \
+  ##OEROOT##/openbmc/meta-arm/meta-arm \
+  ##OEROOT##/openbmc/meta-arm/meta-arm-toolchain \
+  ##OEROOT##/vendor/meta-zephyr/meta-zephyr-core \
+  ##OEROOT##/vendor/meta-aspeed-sdk \
+  ##OEROOT##/vendor/meta-aspeed-sdk/meta-ast2700-sdk \
+  "

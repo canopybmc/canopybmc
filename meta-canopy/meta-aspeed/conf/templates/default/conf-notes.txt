@@ -1,0 +1,5 @@
+Common targets are:
+
+     obmc-phosphor-image: Includes OpenBMC Phosphor userspace and Web UI
+
+See doc/board-aspeed_ast2700_a1_dcscm.md for the AST2700 A1 DC-SCM.
