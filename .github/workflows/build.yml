@@ -36,6 +36,7 @@ jobs:
         id: get-board
         run: |
           board=$(jq -cn '[
+            "ast2700-a1-dcscm",
             "canopy-qemu",
             "hpe-proliant-g11",
             "kommando-ipmi-card"
