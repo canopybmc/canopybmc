@@ -1,0 +1,105 @@
+---
+# For detailed description see "doc/merging.md"
+
+name: Merge gate
+
+on:
+  pull_request_target:
+    types:
+      - labeled
+      - unlabeled
+      - synchronize
+      - ready_for_review
+      - converted_to_draft # only disables auto-merge
+      - edited # base branch changes
+  # Started runs, including FirmwareCI re-runs, disable auto-merge again.
+  check_run:
+    types:
+      - created
+      - rerequested
+      - completed
+  workflow_run:
+    workflows:
+      - "Build, test and release"
+    types:
+      - requested
+      - completed
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "Pull request number (empty for all labeled pull requests)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  READY_LABEL: merge/ready
+  OVERRIDE_LABEL: merge/ignore-firmwareci
+  FAILED_LABEL: merge/failed
+  TEAM: 9e-developers
+  FWCI_APP: blindspot-software-firmware-ci
+
+jobs:
+  reset-labels:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request_target'
+      && github.event.action == 'synchronize'
+      && (contains(github.event.pull_request.labels.*.name, 'merge/ignore-firmwareci')
+      || contains(github.event.pull_request.labels.*.name, 'merge/failed'))
+    concurrency:
+      group: firmwareci-merge-gate-reset-${{ github.event.pull_request.number }}
+    steps:
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          client-id: ${{ secrets.CANOPYBMC_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.CANOPYBMC_BOT_APP_PRIVATE_KEY }}
+
+      - name: Remove override and failure labels
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: gh pr edit "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --remove-label "$OVERRIDE_LABEL" --remove-label "$FAILED_LABEL"
+
+  gate:
+    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name != 'check_run'
+      || github.event.check_run.app.slug == 'blindspot-software-firmware-ci')
+      && (github.event.action != 'edited'
+      || github.event.changes.base != null)
+      && (github.event_name != 'pull_request_target'
+      || !github.event.pull_request.draft
+      || github.event.action == 'converted_to_draft')
+    concurrency:
+      group: firmwareci-merge-gate
+      cancel-in-progress: false
+    steps:
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          client-id: ${{ secrets.CANOPYBMC_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.CANOPYBMC_BOT_APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts
+
+      - name: Evaluate pull requests
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          # Must match the branches build.yml runs for.
+          BASE_BRANCHES: ${{ github.event.repository.default_branch }} stable/*
+          BUILD_WORKFLOW: build.yml
+          MERGE_METHOD: rebase
+          BOT_LOGIN: ${{ steps.app-token.outputs.app-slug }}[bot]
+          PR_NUMBER: ${{ inputs.pr }}
+        run: .github/scripts/firmwareci-merge-gate.sh
