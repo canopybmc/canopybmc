@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - "stable/**"
     tags:
       - "*"
     paths-ignore:
@@ -13,6 +14,7 @@ on:
   pull_request:
     branches:
       - main
+      - "stable/**"
     paths-ignore:
       - "doc/**"
       - "README.md"
