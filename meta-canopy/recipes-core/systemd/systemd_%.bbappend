@@ -1,3 +1,7 @@
+FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
+
+SRC_URI:append = " file://80-canopy.preset"
+
 # Remove once https://gerrit.openbmc.org/c/openbmc/openbmc/+/95968 is merged
 EXTRA_OEMESON:append = " \
         -Dukify=disabled \
@@ -29,4 +33,15 @@ do_install:append() {
         rm ${D}${systemd_user_unitdir}/${f}
     done
     rm ${D}${datadir}/polkit-1/actions/io.systemd.storage.policy
+
+    install -m 0644 ${UNPACKDIR}/80-canopy.preset \
+        ${D}${systemd_unitdir}/system-preset/80-canopy.preset
+
+    # BMCs have no EFI, so there is no EFI pstore backend to load.
+    install -d ${D}${sysconfdir}/systemd/system
+    ln -sf /dev/null ${D}${sysconfdir}/systemd/system/modprobe@efi_pstore.service
+
+    # Only mount fusectl when the fuse module is loaded instead of
+    # unconditionally trying to modprobe fuse on every boot.
+    rm ${D}${systemd_system_unitdir}/sysinit.target.wants/sys-fs-fuse-connections.mount
 }
