@@ -16,7 +16,7 @@
 # in the binary. Use `-v` to override it.
 #
 # Usage:
-#	gen-hpe-bios-pldm‎ -i <input> [-m <model>] [-v <version>] [-o <output>]
+#	gen-hpe-bios-pldm -i <input> [-m <model>] [-v <version>] [-o <output>]
 #
 # Arguments:
 #	-i <input>	Input file: HPE-signed (*.signed.flash) or raw 32 MiB image
