@@ -1,0 +1,32 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+#include "ast2700a1-dcscm.dts"
+
+/ {
+	model = "Canopy AST2700 A1 DC-SCM";
+};
+
+&espi0 {
+	status = "disabled";
+};
+
+/* eMMC is not wired on this card */
+&emmc_controller {
+	status = "disabled";
+};
+
+&emmc {
+	status = "disabled";
+};
+
+&fmc {
+	flash@0 {
+		/delete-node/ partitions;
+	};
+};
+
+&fmc {
+	flash@0 {
+#include "aspeed-evb-flash-layout-128.dtsi"
+	};
+};
