@@ -1,0 +1,1 @@
+CHASSIS_SMP_MAX_INSTANCE:ast2700-a1-dcscm = "0"
