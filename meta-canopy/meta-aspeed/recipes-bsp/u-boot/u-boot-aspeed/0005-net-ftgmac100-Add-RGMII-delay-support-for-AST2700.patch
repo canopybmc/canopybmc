@@ -1,0 +1,153 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jacky Chou <jacky_chou@aspeedtech.com>
+Date: Wed, 21 Oct 2026 14:34:05 +0800
+Subject: [PATCH] net: ftgmac100: Add RGMII delay support for AST2700
+
+Introduce RGMII delay configuration for AST2700, mirroring the AST2600
+support added in the previous commit. The delay unit and the "disabled
+delay" offset are read from SCU registers instead of being fixed
+constants, since they can differ between TX and RX. MAC2 only supports
+SGMII, so it has no RGMII delay to configure.
+
+While at it, use dev_get_driver_data(dev) == FTGMAC100_MODEL_ASPEED_AST2700
+instead of the priv->is_ast2700 flag, since the flag was redundant with
+the model already available via the driver's compatible match data.
+This lets the two branches in ftgmac100_of_to_plat() that set up the
+same rxdes0_edorr_mask/txdes0_edotr_mask be merged.
+
+Signed-off-by: Jacky Chou <jacky_chou@aspeedtech.com>
+Upstream-Status: Backport [https://git.u-boot-project.org/u-boot/custodians/u-boot-net/-/commit/7be6cacf088bb8c39aaf350df705ffd3046f4a83]
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ drivers/net/ftgmac100.c | 78 +++++++++++++++++++++++++++++++++++++++++
+ drivers/net/ftgmac100.h | 16 +++++++++
+ 2 files changed, 94 insertions(+)
+
+diff --git a/drivers/net/ftgmac100.c b/drivers/net/ftgmac100.c
+index 4b3386be..5e74f976 100644
+--- a/drivers/net/ftgmac100.c
++++ b/drivers/net/ftgmac100.c
+@@ -701,6 +701,82 @@ static int ftgmac100_set_ast2600_rgmii_delay(struct udevice *dev)
+ 				   tx_delay_index | rx_delay_index);
+ }
+ 
++static int ftgmac100_set_ast2700_rgmii_delay(struct udevice *dev)
++{
++	struct ftgmac100_data *priv = dev_get_priv(dev);
++	struct eth_pdata *pdata = dev_get_plat(dev);
++	u32 rgmii_delay_tx_unit, rgmii_delay_rx_unit;
++	u32 rgmii_delay_tx_dis, rgmii_delay_rx_dis;
++	u32 tx_delay_index, rx_delay_index;
++	u32 reg_unit, reg_val;
++	struct regmap *scu;
++	int dly_mask;
++	int mac_id;
++
++	scu = syscon_regmap_lookup_by_phandle(dev, "aspeed,scu");
++	if (IS_ERR(scu))
++		return PTR_ERR(scu);
++
++	switch (pdata->iobase) {
++	case AST2700_MAC0_BASE_ADDR:
++		mac_id = 0;
++		regmap_read(scu, AST2700_MAC0_DLY_UNIT, &reg_unit);
++		regmap_read(scu, AST2700_MAC0_DLY_VAL, &reg_val);
++		break;
++	case AST2700_MAC1_BASE_ADDR:
++		mac_id = 1;
++		regmap_read(scu, AST2700_MAC1_DLY_UNIT, &reg_unit);
++		regmap_read(scu, AST2700_MAC1_DLY_VAL, &reg_val);
++		break;
++	case AST2700_MAC2_BASE_ADDR:
++		/* MAC2 only supports SGMII, no RGMII delay to configure */
++		return 0;
++	default:
++		dev_err(dev, "Invalid mac base address\n");
++		return -EINVAL;
++	}
++
++	rgmii_delay_tx_unit = AST2700_MAC_TX_DLY_UNIT(reg_unit);
++	rgmii_delay_rx_unit = AST2700_MAC_RX_DLY_UNIT(reg_unit);
++	rgmii_delay_tx_dis = AST2700_MAC_TX_DLY_DIS(reg_val);
++	rgmii_delay_rx_dis = AST2700_MAC_RX_DLY_DIS(reg_val);
++
++	tx_delay_index = DIV_ROUND_CLOSEST(priv->rgmii_tx_delay,
++					   rgmii_delay_tx_unit);
++	tx_delay_index += rgmii_delay_tx_dis;
++	if (tx_delay_index >= 32) {
++		dev_err(dev, "The %u ps of TX delay is out of range\n",
++			priv->rgmii_tx_delay);
++		return -EINVAL;
++	}
++
++	rx_delay_index = DIV_ROUND_CLOSEST(priv->rgmii_rx_delay,
++					   rgmii_delay_rx_unit);
++	rx_delay_index += rgmii_delay_rx_dis;
++	if (rx_delay_index >= 32) {
++		dev_err(dev, "The %u ps of RX delay is out of range\n",
++			priv->rgmii_rx_delay);
++		return -EINVAL;
++	}
++
++	if (mac_id == 0) {
++		dly_mask = ASPEED_MAC0_2_TX_DLY | ASPEED_MAC0_2_RX_DLY;
++		tx_delay_index = FIELD_PREP(ASPEED_MAC0_2_TX_DLY,
++					    tx_delay_index);
++		rx_delay_index = FIELD_PREP(ASPEED_MAC0_2_RX_DLY,
++					    rx_delay_index);
++	} else {
++		dly_mask = ASPEED_MAC1_3_TX_DLY | ASPEED_MAC1_3_RX_DLY;
++		tx_delay_index = FIELD_PREP(ASPEED_MAC1_3_TX_DLY,
++					    tx_delay_index);
++		rx_delay_index = FIELD_PREP(ASPEED_MAC1_3_RX_DLY,
++					    rx_delay_index);
++	}
++
++	return regmap_update_bits(scu, AST2700_MAC01_CLK_DLY, dly_mask,
++				   tx_delay_index | rx_delay_index);
++}
++
+ static int ftgmac100_set_internal_delay(struct udevice *dev)
+ {
+ 	struct ftgmac100_data *priv = dev_get_priv(dev);
+@@ -715,6 +791,8 @@ static int ftgmac100_set_internal_delay(struct udevice *dev)
+ 
+ 	if (data == FTGMAC100_MODEL_ASPEED_AST2600)
+ 		return ftgmac100_set_ast2600_rgmii_delay(dev);
++	else if (data == FTGMAC100_MODEL_ASPEED_AST2700)
++		return ftgmac100_set_ast2700_rgmii_delay(dev);
+ 
+ 	return 0;
+ }
+diff --git a/drivers/net/ftgmac100.h b/drivers/net/ftgmac100.h
+index 6e00282e..9b9c1e82 100644
+--- a/drivers/net/ftgmac100.h
++++ b/drivers/net/ftgmac100.h
+@@ -13,6 +13,7 @@
+ #define __FTGMAC100_H
+ 
+ /* The registers offset table of ftgmac100 */
++#include <linux/bitfield.h>
+ #include <linux/bitops.h>
+ struct ftgmac100 {
+ 	unsigned int	isr;		/* 0x00 */
+@@ -270,4 +271,19 @@ struct ftgmac100_rxdes {
+ #define AST2600_MAC2_BASE_ADDR		0x1e670000
+ #define AST2600_MAC3_BASE_ADDR		0x1e690000
+ 
++/* Aspeed SCU RGMII delay settings, AST2700 */
++#define AST2700_MAC0_DLY_UNIT		0x190
++#define AST2700_MAC0_DLY_VAL		0x194
++#define AST2700_MAC1_DLY_UNIT		0x198
++#define AST2700_MAC1_DLY_VAL		0x19c
++#define AST2700_MAC_TX_DLY_UNIT(x)	FIELD_GET(GENMASK(15, 0), (x))
++#define AST2700_MAC_RX_DLY_UNIT(x)	FIELD_GET(GENMASK(31, 16), (x))
++#define AST2700_MAC_TX_DLY_DIS(x)	FIELD_GET(GENMASK(7, 0), (x))
++#define AST2700_MAC_RX_DLY_DIS(x)	FIELD_GET(GENMASK(23, 16), (x))
++#define AST2700_MAC01_CLK_DLY		0x390
++
++#define AST2700_MAC0_BASE_ADDR		0x14050000
++#define AST2700_MAC1_BASE_ADDR		0x14060000
++#define AST2700_MAC2_BASE_ADDR		0x14070000
++
+ #endif /* __FTGMAC100_H */

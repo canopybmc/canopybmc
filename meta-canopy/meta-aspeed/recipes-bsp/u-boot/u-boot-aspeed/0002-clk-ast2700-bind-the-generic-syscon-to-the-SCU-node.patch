@@ -1,0 +1,57 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ryan Chen <ryan_chen@aspeedtech.com>
+Date: Mon, 2 Nov 2026 17:01:21 +0800
+Subject: [PATCH] clk: ast2700: bind the generic syscon to the SCU node
+
+The clock driver binds to the SCU node, which is also a "syscon",
+"simple-mfd" node, so the generic syscon driver never binds to it.
+The SCU then has no syscon device and its child nodes, for example the
+pin controllers, are never bound: every pinctrl-0 is silently ignored.
+
+Bind the generic syscon driver to the SCU node from the clock driver
+and select SYSCON for the AST2700.
+
+Fixes: 0758fddb3729 ("clk: ast2700: add clock driver support")
+Signed-off-by: Ryan Chen <ryan_chen@aspeedtech.com>
+Upstream-Status: Submitted [https://lore.kernel.org/all/20261102-clk_syscon-v1-1-197c255ccb95@aspeedtech.com/]
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ arch/arm/mach-aspeed/Kconfig     |  1 +
+ drivers/clk/aspeed/clk_ast2700.c | 12 ++++++++++++
+ 2 files changed, 13 insertions(+)
+
+diff --git a/arch/arm/mach-aspeed/Kconfig b/arch/arm/mach-aspeed/Kconfig
+index f4b038eb..0413d817 100644
+--- a/arch/arm/mach-aspeed/Kconfig
++++ b/arch/arm/mach-aspeed/Kconfig
+@@ -39,6 +39,7 @@ config ASPEED_AST2600
+ config ASPEED_AST2700
+ 	bool "Support Aspeed AST2700 SoC"
+ 	select ARM64
++	select SYSCON
+ 	select SYS_ARCH_TIMER
+ 	help
+ 	  Support for the Aspeed AST2700, an arm64 (Cortex-A35) Baseboard
+diff --git a/drivers/clk/aspeed/clk_ast2700.c b/drivers/clk/aspeed/clk_ast2700.c
+index ca76abef..78ea30b0 100644
+--- a/drivers/clk/aspeed/clk_ast2700.c
++++ b/drivers/clk/aspeed/clk_ast2700.c
+@@ -918,6 +918,18 @@ static int ast2700_clk_bind(struct udevice *dev)
+ 			debug("Warning: failed to bind reset controller: ret = %d\n", ret);
+ 	}
+ 
++	/* Bind the generic syscon driver to the same ofnode so that the
++	 * SCU child nodes, such as the pinctrl and its pin configuration
++	 * states, are bound before any consumer device probes and selects
++	 * its default pinctrl state.
++	 */
++	if (CONFIG_IS_ENABLED(SYSCON)) {
++		ret = device_bind_driver_to_node(dev, "syscon", "syscon",
++						 dev_ofnode(dev), NULL);
++		if (ret)
++			debug("Warning: failed to bind syscon: ret = %d\n", ret);
++	}
++
+ 	return 0;
+ }
+ 

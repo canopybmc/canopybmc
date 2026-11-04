@@ -1,0 +1,49 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jacky Chou <jacky_chou@aspeedtech.com>
+Date: Wed, 21 Oct 2026 14:34:08 +0800
+Subject: [PATCH] arm: dts: ast2700: add aspeed,scu property for MAC
+
+Add the aspeed,scu phandle property to the mac0-mac2 nodes so the
+ftgmac100 driver can look up the SCU1 regmap to configure the RGMII
+delay chain on boards that opt in via the tx-internal-delay-ps and
+rx-internal-delay-ps properties.
+
+ast2700-evb.dts already sets phy-mode = "rgmii-id" and
+tx/rx-internal-delay-ps = <0> for mac0/mac1, so no board-level dts
+change is needed here.
+
+Signed-off-by: Jacky Chou <jacky_chou@aspeedtech.com>
+Upstream-Status: Backport [https://git.u-boot-project.org/u-boot/custodians/u-boot-net/-/commit/e0acb7626cf1d742e9c018deec6bf13124e7e6ec]
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ arch/arm/dts/ast2700.dtsi | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/arm/dts/ast2700.dtsi b/arch/arm/dts/ast2700.dtsi
+index 3dd6826f..c7c30e24 100644
+--- a/arch/arm/dts/ast2700.dtsi
++++ b/arch/arm/dts/ast2700.dtsi
+@@ -372,6 +372,7 @@
+ 			reg = <0x0 0x14050000 0x0 0x200>;
+ 			clocks = <&syscon1 SCU1_CLK_GATE_MAC0CLK>;
+ 			resets = <&syscon1 SCU1_RESET_MAC0>;
++			aspeed,scu = <&syscon1>;
+ 			status = "disabled";
+ 		};
+ 
+@@ -380,6 +381,7 @@
+ 			reg = <0x0 0x14060000 0x0 0x200>;
+ 			clocks = <&syscon1 SCU1_CLK_GATE_MAC1CLK>;
+ 			resets = <&syscon1 SCU1_RESET_MAC1>;
++			aspeed,scu = <&syscon1>;
+ 			status = "disabled";
+ 		};
+ 
+@@ -388,6 +390,7 @@
+ 			reg = <0x0 0x14070000 0x0 0x200>;
+ 			clocks = <&syscon1 SCU1_CLK_GATE_MAC2CLK>;
+ 			resets = <&syscon1 SCU1_RESET_MAC2>;
++			aspeed,scu = <&syscon1>;
+ 			status = "disabled";
+ 		};
+ 

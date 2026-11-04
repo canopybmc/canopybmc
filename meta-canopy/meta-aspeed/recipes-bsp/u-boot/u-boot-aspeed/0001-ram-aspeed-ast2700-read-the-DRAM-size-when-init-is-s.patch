@@ -1,0 +1,75 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Wed, 4 Nov 2026 12:00:00 +0100
+Subject: [PATCH] ram: aspeed: ast2700: read the DRAM size when init is
+ skipped
+
+When the DRAM init flag is set, the driver skips training but still runs
+sdrammc_calc_size(). That widens the controller to 2 GiB, writes test
+patterns at the DRAM base and 1 GiB, and sizes the part by aliasing.
+
+On AST2700 A1 the BootMCU firmware trains the controller, programs its
+size and hard-locks it before the CA35 starts. The 2 GiB write is
+dropped, so the aliasing test runs against the locked size, and the
+result can never exceed 2 GiB. On the A1 DC-SCM card U-Boot reports
+1.9 GiB and stops right after the DRAM line.
+
+When init is skipped, read back the size field the firmware programmed
+in MCFG instead, as the BootMCU firmware and the ASPEED SDK U-Boot do.
+The full init path keeps sdrammc_calc_size().
+
+Upstream-Status: Pending
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ drivers/ram/aspeed/sdram_ast2700.c | 24 +++++++++++++++++++++---
+ 1 file changed, 21 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/ram/aspeed/sdram_ast2700.c b/drivers/ram/aspeed/sdram_ast2700.c
+index 8605a92abb2..d3d390677ee 100644
+--- a/drivers/ram/aspeed/sdram_ast2700.c
++++ b/drivers/ram/aspeed/sdram_ast2700.c
+@@ -199,6 +199,23 @@ static int sdrammc_calc_size(struct sdrammc *sdrammc)
+ 	return 0;
+ }
+ 
++/*
++ * Read back the size programmed by the firmware that initialized the
++ * controller. On AST2700 A1 the BootMCU firmware locks the controller after
++ * init, so sdrammc_calc_size() cannot widen it for its aliasing test.
++ */
++static void sdrammc_get_size(struct sdrammc *sdrammc)
++{
++	struct sdrammc_regs *regs = sdrammc->regs;
++	u32 sz = (readl(&regs->mcfg) >> 2) & 0x7;
++
++	sdrammc->info.base = CFG_SYS_SDRAM_BASE;
++	sdrammc->info.size = (size_t)SZ_256M << sz;
++
++	/* reserve the VGA memory */
++	sdrammc->info.size -= ast2700_sdrammc_get_vga_mem_size(sdrammc);
++}
++
+ static int sdrammc_bist(struct sdrammc *sdrammc, u32 addr, u32 size, u32 cfg, u32 timeout)
+ {
+ 	struct sdrammc_regs *regs = sdrammc->regs;
+@@ -918,8 +935,10 @@ static int ast2700_sdrammc_probe(struct udevice *dev)
+ 
+ 	/* skip DRAM init if already done */
+ 	reg = readl(sdrammc->scu0 + SCU0_VGA0_SCRATCH);
+-	if (reg & SCU0_VGA0_SCRATCH_DRAM_INIT)
+-		goto out;
++	if (reg & SCU0_VGA0_SCRATCH_DRAM_INIT) {
++		sdrammc_get_size(sdrammc);
++		return 0;
++	}
+ 
+ 	/* unlock DRAM controller */
+ 	writel(DRAMC_UNLK_KEY, &regs->prot_key);
+@@ -948,7 +967,6 @@ static int ast2700_sdrammc_probe(struct udevice *dev)
+ 	reg |= SCU0_VGA0_SCRATCH_DRAM_INIT;
+ 	writel(reg, sdrammc->scu0 + SCU0_VGA0_SCRATCH);
+ 
+-out:
+ 	sdrammc_calc_size(sdrammc);
+ 
+ 	return 0;
