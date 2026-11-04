@@ -43,6 +43,8 @@ Removed:
   Ibex firmware.
 - Secure boot, iROT and AST27x5 support: secure-mode includes, socsec,
   `aspeed-image-gen-secureboot`, `aspeed-image-irot` and their image classes.
+- `otptool.bbclass`: `meta-canopy/meta-aspeed` carries the openbmc class with
+  the AST2700 support instead.
 - eMMC and UFS boot: `ast-mmc.inc`, `ast-ufs.inc`, the wic files and
   `aspeed-image-emmcboot`.
 - UART recovery: `aspeed-image-recoveryuart` and `aspeed-image-tools`.
