@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Wed, 4 Nov 2026 12:00:00 +0100
+Subject: [PATCH] arm: dts: ast2700-evb: mux the FMC quad SPI pins
+
+The FMC flashes are read with four data lines, but nothing muxes the
+FWQSPI pins (M16 and A15) that carry IO2 and IO3. This only works when
+an earlier boot stage has set them. On AST2700 A1 the BootMCU firmware
+reads the boot flash in single mode and leaves them unset, so every
+quad read through the FMC window returns garbage and bootspi fails with
+FDT_ERR_BADMAGIC.
+
+Select the FWQSPI function for the FMC, as the ASPEED SDK device tree
+does.
+
+Upstream-Status: Pending
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ arch/arm/dts/ast2700-evb.dts | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/arch/arm/dts/ast2700-evb.dts b/arch/arm/dts/ast2700-evb.dts
+index e7222d9691f..fc8d6955d7e 100644
+--- a/arch/arm/dts/ast2700-evb.dts
++++ b/arch/arm/dts/ast2700-evb.dts
+@@ -58,8 +58,17 @@
+ 	tx-internal-delay-ps = <0>;
+ };
+ 
++&pinctrl1 {
++	pinctrl_fwqspi_default: fwqspi-default {
++		function = "FWQSPI";
++		groups = "FWQSPI";
++	};
++};
++
+ &fmc {
+ 	status = "okay";
++	pinctrl-names = "default";
++	pinctrl-0 = <&pinctrl_fwqspi_default>;
+ 
+ 	flash@0 {
+ 		status = "okay";
