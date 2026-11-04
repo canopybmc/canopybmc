@@ -1,0 +1,46 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jacky Chou <jacky_chou@aspeedtech.com>
+Date: Wed, 21 Oct 2026 14:34:09 +0800
+Subject: [PATCH] arm: dts: ast2700-evb: Set TI DP83867 internal delay for mac1
+ PHY
+
+For the DDR5 variant of the board, explicitly set ti,rx-internal-delay
+and ti,tx-internal-delay to DP83867_RGMIIDCTL_2_00_NS for mac1's PHY,
+matching the driver's own default for "rgmii-id" mode. This documents
+the required delay in the devicetree instead of relying on the
+driver's implicit default, so it keeps working if that default ever
+changes.
+
+This is independent of the ftgmac100 MAC-side RGMII delay support
+added earlier in this series: it configures delay compensation on the
+PHY side.
+
+Signed-off-by: Jacky Chou <jacky_chou@aspeedtech.com>
+Upstream-Status: Backport [https://git.u-boot-project.org/u-boot/custodians/u-boot-net/-/commit/c35db056f4bbad029d8a22561d481453032641f1]
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ arch/arm/dts/ast2700-evb.dts | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/arm/dts/ast2700-evb.dts b/arch/arm/dts/ast2700-evb.dts
+index fc8d6955..b4e1c347 100644
+--- a/arch/arm/dts/ast2700-evb.dts
++++ b/arch/arm/dts/ast2700-evb.dts
+@@ -4,6 +4,7 @@
+ 
+ #include "ast2700.dtsi"
+ #include "ast2700-u-boot.dtsi"
++#include <dt-bindings/net/ti-dp83867.h>
+ 
+ / {
+ 	model = "AST2700 EVB";
+@@ -39,6 +40,9 @@
+ 	#size-cells = <0>;
+ 	ethphy1: ethernet-phy@0 {
+ 		reg = <0>;
++		/* For DDR5 board */
++		ti,rx-internal-delay = <DP83867_RGMIIDCTL_2_00_NS>;
++		ti,tx-internal-delay = <DP83867_RGMIIDCTL_2_00_NS>;
+ 	};
+ };
+ 

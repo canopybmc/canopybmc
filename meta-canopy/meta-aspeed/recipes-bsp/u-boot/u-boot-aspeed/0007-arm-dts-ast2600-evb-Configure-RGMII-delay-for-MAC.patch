@@ -1,0 +1,90 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jacky Chou <jacky_chou@aspeedtech.com>
+Date: Wed, 21 Oct 2026 14:34:07 +0800
+Subject: [PATCH] arm: dts: ast2600-evb: Configure RGMII delay for MAC
+
+Switch mac0-mac3 to phy-mode "rgmii-id" and set tx-internal-delay-ps/
+rx-internal-delay-ps to let the ftgmac100 driver configure the RGMII
+delay chain through the SCU instead of relying on the PHY-side delay
+implied by "rgmii-rxid"/"rgmii".
+
+This also drops the mac0-clk-delay/mac1-clk-delay/mac2-clk-delay/
+mac3-clk-delay properties under &scu, which are not consumed by any
+driver in the tree.
+
+Signed-off-by: Jacky Chou <jacky_chou@aspeedtech.com>
+Upstream-Status: Backport [https://git.u-boot-project.org/u-boot/custodians/u-boot-net/-/commit/e2d3ed713ac523c1bd2c3a4cf785912b0a8776aa]
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ arch/arm/dts/ast2600-evb.dts | 33 +++++++++++++++------------------
+ 1 file changed, 15 insertions(+), 18 deletions(-)
+
+diff --git a/arch/arm/dts/ast2600-evb.dts b/arch/arm/dts/ast2600-evb.dts
+index 570ba619..9516b0fb 100644
+--- a/arch/arm/dts/ast2600-evb.dts
++++ b/arch/arm/dts/ast2600-evb.dts
+@@ -212,49 +212,46 @@
+ 
+ &mac0 {
+ 	status = "okay";
+-	phy-mode = "rgmii-rxid";
++	phy-mode = "rgmii-id";
+ 	phy-handle = <&ethphy0>;
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_rgmii1_default>;
++
++	tx-internal-delay-ps = <0>;
++	rx-internal-delay-ps = <0>;
+ };
+ 
+ &mac1 {
+ 	status = "okay";
+-	phy-mode = "rgmii-rxid";
++	phy-mode = "rgmii-id";
+ 	phy-handle = <&ethphy1>;
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_rgmii2_default>;
++
++	tx-internal-delay-ps = <0>;
++	rx-internal-delay-ps = <0>;
+ };
+ 
+ &mac2 {
+ 	status = "okay";
+-	phy-mode = "rgmii";
++	phy-mode = "rgmii-id";
+ 	phy-handle = <&ethphy2>;
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_rgmii3_default>;
++
++	tx-internal-delay-ps = <0>;
++	rx-internal-delay-ps = <0>;
+ };
+ 
+ &mac3 {
+ 	status = "okay";
+-	phy-mode = "rgmii";
++	phy-mode = "rgmii-id";
+ 	phy-handle = <&ethphy3>;
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_rgmii4_default>;
+-};
+ 
+-&scu {
+-	mac0-clk-delay = <0x1d 0x1c
+-			  0x10 0x17
+-			  0x10 0x17>;
+-	mac1-clk-delay = <0x1d 0x10
+-			  0x10 0x10
+-			  0x10 0x10>;
+-	mac2-clk-delay = <0x0a 0x04
+-			  0x08 0x04
+-			  0x08 0x04>;
+-	mac3-clk-delay = <0x0a 0x04
+-			  0x08 0x04
+-			  0x08 0x04>;
++	tx-internal-delay-ps = <0>;
++	rx-internal-delay-ps = <0>;
+ };
+ 
+ &hace {

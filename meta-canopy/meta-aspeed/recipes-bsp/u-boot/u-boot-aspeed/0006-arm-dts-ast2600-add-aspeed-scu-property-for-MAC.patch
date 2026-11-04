@@ -1,0 +1,53 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jacky Chou <jacky_chou@aspeedtech.com>
+Date: Wed, 21 Oct 2026 14:34:06 +0800
+Subject: [PATCH] arm: dts: ast2600: add aspeed,scu property for MAC
+
+Add the aspeed,scu phandle property to the mac0-mac3 nodes so the
+ftgmac100 driver can look up the SCU regmap to configure the RGMII
+delay chain on boards that opt in via the tx-internal-delay-ps and
+rx-internal-delay-ps properties.
+
+Signed-off-by: Jacky Chou <jacky_chou@aspeedtech.com>
+Upstream-Status: Backport [https://git.u-boot-project.org/u-boot/custodians/u-boot-net/-/commit/c687ee1b0f2ade2a55f2311cee65a09deefe93b1]
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ arch/arm/dts/ast2600.dtsi | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/arm/dts/ast2600.dtsi b/arch/arm/dts/ast2600.dtsi
+index a048951f..30f06cbe 100644
+--- a/arch/arm/dts/ast2600.dtsi
++++ b/arch/arm/dts/ast2600.dtsi
+@@ -277,6 +277,7 @@
+ 			reg = <0x1e660000 0x180>, <0x1e650000 0x4>;
+ 			interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;
+ 			clocks = <&scu ASPEED_CLK_GATE_MAC1CLK>;
++			aspeed,scu = <&syscon>;
+ 			status = "disabled";
+ 		};
+ 
+@@ -287,6 +288,7 @@
+ 			#size-cells = <0>;
+ 			interrupts = <GIC_SPI 3 IRQ_TYPE_LEVEL_HIGH>;
+ 			clocks = <&scu ASPEED_CLK_GATE_MAC2CLK>;
++			aspeed,scu = <&syscon>;
+ 			status = "disabled";
+ 		};
+ 
+@@ -297,6 +299,7 @@
+ 			#size-cells = <0>;
+ 			interrupts = <GIC_SPI 32 IRQ_TYPE_LEVEL_HIGH>;
+ 			clocks = <&scu ASPEED_CLK_GATE_MAC3CLK>;
++			aspeed,scu = <&syscon>;
+ 			status = "disabled";
+ 		};
+ 
+@@ -307,6 +310,7 @@
+ 			#size-cells = <0>;
+ 			interrupts = <GIC_SPI 33 IRQ_TYPE_LEVEL_HIGH>;
+ 			clocks = <&scu ASPEED_CLK_GATE_MAC4CLK>;
++			aspeed,scu = <&syscon>;
+ 			status = "disabled";
+ 		};
+ 

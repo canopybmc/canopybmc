@@ -1,0 +1,87 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Wed, 4 Nov 2026 12:00:00 +0100
+Subject: [PATCH] arm: dts: ast2700-evb: mux the MDIO and RGMII pins
+
+The MDIO and RGMII pins of mac0 and mac1 are never muxed, so MDIO reads
+return nothing and U-Boot finds no PHY on either bus:
+
+  Could not get PHY for mdio@14040000: addr 0
+  ftgmac100 ftgmac@14050000: Failed to initialize PHY: -19
+
+Select the MDIO0, MDIO1, RGMII0 and RGMII1 functions on the MDIO
+controllers and MACs, as the ASPEED SDK device tree does.
+
+Upstream-Status: Pending
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ arch/arm/dts/ast2700-evb.dts | 28 ++++++++++++++++++++++++++++
+ 1 file changed, 28 insertions(+)
+
+diff --git a/arch/arm/dts/ast2700-evb.dts b/arch/arm/dts/ast2700-evb.dts
+index fc8d695..0db2f40 100644
+--- a/arch/arm/dts/ast2700-evb.dts
++++ b/arch/arm/dts/ast2700-evb.dts
+@@ -26,6 +26,8 @@
+ 
+ &mdio0 {
+ 	status = "okay";
++	pinctrl-names = "default";
++	pinctrl-0 = <&pinctrl_mdio0_default>;
+ 	#address-cells = <1>;
+ 	#size-cells = <0>;
+ 	ethphy0: ethernet-phy@0 {
+@@ -35,6 +37,8 @@
+ 
+ &mdio1 {
+ 	status = "okay";
++	pinctrl-names = "default";
++	pinctrl-0 = <&pinctrl_mdio1_default>;
+ 	#address-cells = <1>;
+ 	#size-cells = <0>;
+ 	ethphy1: ethernet-phy@0 {
+@@ -44,6 +48,8 @@
+ 
+ &mac0 {
+ 	status = "okay";
++	pinctrl-names = "default";
++	pinctrl-0 = <&pinctrl_rgmii0_default>;
+ 	phy-mode = "rgmii-id";
+ 	phy-handle = <&ethphy0>;
+ 	rx-internal-delay-ps = <0>;
+@@ -52,6 +58,8 @@
+ 
+ &mac1 {
+ 	status = "okay";
++	pinctrl-names = "default";
++	pinctrl-0 = <&pinctrl_rgmii1_default>;
+ 	phy-mode = "rgmii-id";
+ 	phy-handle = <&ethphy1>;
+ 	rx-internal-delay-ps = <0>;
+@@ -63,6 +71,26 @@
+ 		function = "FWQSPI";
+ 		groups = "FWQSPI";
+ 	};
++
++	pinctrl_mdio0_default: mdio0-default {
++		function = "MDIO0";
++		groups = "MDIO0";
++	};
++
++	pinctrl_mdio1_default: mdio1-default {
++		function = "MDIO1";
++		groups = "MDIO1";
++	};
++
++	pinctrl_rgmii0_default: rgmii0-default {
++		function = "RGMII0";
++		groups = "RGMII0";
++	};
++
++	pinctrl_rgmii1_default: rgmii1-default {
++		function = "RGMII1";
++		groups = "RGMII1";
++	};
+ };
+ 
+ &fmc {
