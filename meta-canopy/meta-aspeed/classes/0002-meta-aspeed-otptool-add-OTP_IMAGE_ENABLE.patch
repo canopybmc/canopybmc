@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Thu, 5 Nov 2026 21:27:23 +0100
+Subject: [PATCH 2/3] meta-aspeed: otptool: add OTP_IMAGE_ENABLE
+
+The class creates OTP images only when SOCSEC_SIGN_ENABLE is set, which
+ties them to SPL signing with socsec. AST2700 doesn't sign with socsec,
+but its secure boot still uses OTP images.
+
+Add OTP_IMAGE_ENABLE as the switch for OTP images, off by default.
+p10bmc and pstbmc, the only machines with OTPTOOL_CONFIGS, already set
+it. Other machines that sign with socsec and set OTPTOOL_CONFIGS need
+to set it too, because socsec-sign verifies the signed SPL against the
+OTP images.
+
+Upstream-Status: Pending
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ meta-aspeed/classes/otptool.bbclass | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/meta-aspeed/classes/otptool.bbclass b/meta-aspeed/classes/otptool.bbclass
+index 13e5840..47626cd 100644
+--- a/meta-aspeed/classes/otptool.bbclass
++++ b/meta-aspeed/classes/otptool.bbclass
+@@ -7,7 +7,8 @@ OTPTOOL_KEY_DIR ?= ""
+ OTPTOOL_USER_DIR ?= ""
+ OTPTOOL_EXTRA_OPTS ?= ""
+ OTPTOOL_EXTRA_DEPENDS ?= " socsec-native"
+-DEPENDS += '${@oe.utils.conditional("SOCSEC_SIGN_ENABLE", "1", "${OTPTOOL_EXTRA_DEPENDS}", "", d)}'
++OTP_IMAGE_ENABLE ?= "0"
++DEPENDS += '${@oe.utils.conditional("OTP_IMAGE_ENABLE", "1", "${OTPTOOL_EXTRA_DEPENDS}", "", d)}'
+ 
+ do_otptool() {
+     local otptool_config=$1
+@@ -77,7 +78,7 @@ create_otp() {
+ }
+ 
+ do_deploy:prepend() {
+-    if [ "${SOCSEC_SIGN_ENABLE}" = "1" ] ; then
++    if [ "${OTP_IMAGE_ENABLE}" = "1" ] ; then
+         create_otp
+     fi
+ }
