@@ -45,4 +45,5 @@ for more information.
 
 ## Board-Specific Information
 
+- [ASPEED AST2700 A1 DC-SCM](doc/board-aspeed_ast2700_a1_dcscm.md)
 - [HPE ProLiant Gen11](doc/board-hpe_proliant_gen11.md)

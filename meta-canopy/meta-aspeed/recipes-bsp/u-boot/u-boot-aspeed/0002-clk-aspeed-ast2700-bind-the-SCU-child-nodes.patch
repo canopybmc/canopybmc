@@ -1,0 +1,35 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Wed, 4 Nov 2026 12:00:00 +0100
+Subject: [PATCH] clk: aspeed: ast2700: bind the SCU child nodes
+
+The SCU nodes are bound by the clock driver, which matches their first
+compatible. Their pinctrl@400 children are never scanned, so the SoC0
+and SoC1 pinctrl drivers never bind, and a pinctrl-0 reference to a
+state under them fails silently at probe.
+
+Scan the children from the clock driver bind, as the generic syscon
+driver would.
+
+Upstream-Status: Pending
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ drivers/clk/aspeed/clk_ast2700.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/clk/aspeed/clk_ast2700.c b/drivers/clk/aspeed/clk_ast2700.c
+index ca76abef48f..30487c592fa 100644
+--- a/drivers/clk/aspeed/clk_ast2700.c
++++ b/drivers/clk/aspeed/clk_ast2700.c
+@@ -918,6 +918,11 @@ static int ast2700_clk_bind(struct udevice *dev)
+ 			debug("Warning: failed to bind reset controller: ret = %d\n", ret);
+ 	}
+ 
++	/* The SCU node is bound as a clock device, so bind its pinctrl child */
++	ret = dm_scan_fdt_dev(dev);
++	if (ret)
++		debug("Warning: failed to bind SCU children: ret = %d\n", ret);
++
+ 	return 0;
+ }
+ 

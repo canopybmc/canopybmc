@@ -1,0 +1,56 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Wed, 4 Nov 2026 12:00:00 +0100
+Subject: [PATCH] arm: dts: aspeed: add the AST2700 DC-SCM card
+
+ASPEED's AST2700 DC-SCM card only wires mac0. U-Boot built for the EVB
+probes mac1 as well and muxes its RGMII and MDIO pins on a board that
+doesn't use them.
+
+Add a device tree that includes the EVB one and disables mac1 and
+mdio1, as the ASPEED SDK does.
+
+Upstream-Status: Pending
+Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
+---
+ arch/arm/dts/Makefile          |  1 +
+ arch/arm/dts/ast2700-dcscm.dts | 18 ++++++++++++++++++
+ 2 files changed, 19 insertions(+)
+ create mode 100644 arch/arm/dts/ast2700-dcscm.dts
+
+diff --git a/arch/arm/dts/Makefile b/arch/arm/dts/Makefile
+index 37d3b6fd3cc..88406a718a8 100644
+--- a/arch/arm/dts/Makefile
++++ b/arch/arm/dts/Makefile
+@@ -1025,6 +1025,7 @@ dtb-$(CONFIG_ASPEED_AST2600) += \
+ 	ast2600-sbp1.dtb \
+ 	ast2600-x4tf.dtb
+ dtb-$(CONFIG_ASPEED_AST2700) += \
++	ast2700-dcscm.dtb \
+ 	ast2700-evb.dtb
+ 
+ dtb-$(CONFIG_STM32MP15X) += \
+diff --git a/arch/arm/dts/ast2700-dcscm.dts b/arch/arm/dts/ast2700-dcscm.dts
+new file mode 100644
+index 00000000000..14b6f79b4dd
+--- /dev/null
++++ b/arch/arm/dts/ast2700-dcscm.dts
+@@ -0,0 +1,18 @@
++// SPDX-License-Identifier: GPL-2.0+
++
++/dts-v1/;
++
++#include "ast2700-evb.dts"
++
++/ {
++	model = "AST2700 DC-SCM";
++};
++
++/* The card only wires mac0 */
++&mac1 {
++	status = "disabled";
++};
++
++&mdio1 {
++	status = "disabled";
++};
