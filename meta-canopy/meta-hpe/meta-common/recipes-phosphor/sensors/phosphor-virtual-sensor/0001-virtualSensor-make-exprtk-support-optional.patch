@@ -1,4 +1,4 @@
-From e0591f0e9ff2c21628c1fec3e9a7dcdf328fb7ae Mon Sep 17 00:00:00 2001
+From dc14750402eca0df10332694880ba4ecabeda088 Mon Sep 17 00:00:00 2001
 From: Pedro Maione <pedro.maione@9elements.com>
 Date: Fri, 7 Aug 2026 07:18:34 +0200
 Subject: [PATCH] virtualSensor: make exprtk support optional
@@ -61,7 +61,7 @@ index 0fc2767..fbf69b0 100644
 +    description: 'Support Expression-based virtual sensors from the static JSON config. Disabling drops the exprtk dependency and leaves only the D-Bus calculation types (Sum, Average, Maximum, Minimum, ModifiedMedian).',
 +)
 diff --git a/src/virtualSensor.cpp b/src/virtualSensor.cpp
-index 8d12285..65ac617 100644
+index 4ac249e..2dd9b0f 100644
 --- a/src/virtualSensor.cpp
 +++ b/src/virtualSensor.cpp
 @@ -15,9 +15,11 @@ PHOSPHOR_LOG2_USING_WITH_FLAGS;
@@ -129,7 +129,7 @@ index 8d12285..65ac617 100644
      /* Set sensor value to dbus interface */
      setSensorValue(val);
 diff --git a/src/virtualSensor.hpp b/src/virtualSensor.hpp
-index 1d8ef31..a6c81e7 100644
+index ce83097..307ea79 100644
 --- a/src/virtualSensor.hpp
 +++ b/src/virtualSensor.hpp
 @@ -1,7 +1,9 @@
@@ -142,9 +142,9 @@ index 1d8ef31..a6c81e7 100644
  #include "thresholds.hpp"
  
  #include <nlohmann/json.hpp>
-@@ -18,6 +20,45 @@ namespace phosphor::virtual_sensor
+@@ -21,6 +23,45 @@ PHOSPHOR_LOG2_USING_WITH_FLAGS;
  
- PHOSPHOR_LOG2_USING_WITH_FLAGS;
+ using ObjectManager = sdbusplus::common::org::freedesktop::d_bus::ObjectManager;
  
 +#ifdef NO_EXPRTK
 +/** @brief Minimal stand-in for exprtk::symbol_table.
@@ -185,10 +185,10 @@ index 1d8ef31..a6c81e7 100644
 +};
 +#endif
 +
- using BasicVariantType =
-     std::variant<std::string, int64_t, uint64_t, double, int32_t, uint32_t,
-                  int16_t, uint16_t, uint8_t, bool, std::vector<std::string>>;
-@@ -155,12 +196,17 @@ class VirtualSensor : public ValueObject
+ using ManagedObjectType = ObjectManager::get_managed_objects_t::return_type;
+ 
+ using InterfaceMap = ManagedObjectType::mapped_type;
+@@ -154,12 +195,17 @@ class VirtualSensor : public ValueObject
      std::string entityPath;
      /** @brief Expression string for virtual sensor value calculations */
      std::string exprStr;
@@ -206,7 +206,7 @@ index 1d8ef31..a6c81e7 100644
      /** @brief The maximum valid value for an input sensor **/
      double maxValidInput = std::numeric_limits<double>::infinity();
      /** @brief The minimum valid value for an input sensor **/
-@@ -180,9 +226,11 @@ class VirtualSensor : public ValueObject
+@@ -179,9 +225,11 @@ class VirtualSensor : public ValueObject
      /** @brief The association interface object */
      std::unique_ptr<AssociationObject> associationIface;
  
@@ -235,6 +235,3 @@ index 8f27ad2..1d3a366 100644
  
  test('test_exprtk_tools', test_exprtk_tools)
 +endif
--- 
-2.39.5
-
