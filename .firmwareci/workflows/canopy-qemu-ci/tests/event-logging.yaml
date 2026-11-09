@@ -176,7 +176,7 @@ stages:
         name: Delete all test log entries
         transport: *bmc_ssh
         options:
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: busctl
           args: ["call", "xyz.openbmc_project.Logging",

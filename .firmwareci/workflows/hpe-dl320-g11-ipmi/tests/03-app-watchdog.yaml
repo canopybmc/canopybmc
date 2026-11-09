@@ -17,7 +17,7 @@ stages:
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
+          on-failure: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
@@ -31,7 +31,7 @@ stages:
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
+          on-failure: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
@@ -47,7 +47,7 @@ stages:
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
+          on-failure: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
@@ -62,7 +62,7 @@ stages:
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
+          on-failure: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
@@ -76,7 +76,7 @@ stages:
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
+          on-failure: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
@@ -97,7 +97,7 @@ stages:
             password: "[[attributes.BMCPassword]]"
         options:
           timeout: "30s"
-          on-error: continue
+          on-failure: continue
         parameters:
           command: >-
             busctl get-property xyz.openbmc_project.Watchdog
@@ -114,7 +114,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: "30s"
-          on-error: continue
+          on-failure: continue
         parameters:
           command: systemctl is-active phosphor-watchdog.service
           expect:
@@ -124,7 +124,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: "30s"
-          on-error: continue
+          on-failure: continue
         parameters:
           command: systemctl cat phosphor-watchdog.service
           expect:
@@ -139,7 +139,7 @@ stages:
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
+          on-failure: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
@@ -156,7 +156,7 @@ stages:
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
+          on-failure: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]

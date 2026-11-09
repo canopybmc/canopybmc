@@ -62,7 +62,7 @@ stages:
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
+          on-failure: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
@@ -89,7 +89,7 @@ stages:
         transport: *local
         options:
           timeout: "1m"
-          on-error: continue
+          on-failure: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]
@@ -151,7 +151,7 @@ stages:
         transport: *local
         options:
           timeout: "30s"
-          on-error: continue
+          on-failure: continue
         parameters:
           command: >-
             ipmitool -I lanplus -H [[attributes.BMC]]

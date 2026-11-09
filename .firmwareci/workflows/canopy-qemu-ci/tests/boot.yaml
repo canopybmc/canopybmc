@@ -54,6 +54,6 @@ stages:
         name: "[Report only] dmesg output"
         transport: *bmc_ssh
         options:
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: dmesg

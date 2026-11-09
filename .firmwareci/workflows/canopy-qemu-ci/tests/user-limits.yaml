@@ -205,7 +205,7 @@ stages:
         name: Delete limituser01
         transport: *local
         options:
-          on-error: continue
+          on-failure: continue
         parameters:
           command: >-
             curl -sk -u root:[[attributes.BMCPassword]]
@@ -216,7 +216,7 @@ stages:
         name: Delete limituser02
         transport: *local
         options:
-          on-error: continue
+          on-failure: continue
         parameters:
           command: >-
             curl -sk -u root:[[attributes.BMCPassword]]
@@ -227,7 +227,7 @@ stages:
         name: Delete limituser03
         transport: *local
         options:
-          on-error: continue
+          on-failure: continue
         parameters:
           command: >-
             curl -sk -u root:[[attributes.BMCPassword]]
@@ -238,7 +238,7 @@ stages:
         name: Delete invalidrole user (if created)
         transport: *local
         options:
-          on-error: continue
+          on-failure: continue
         parameters:
           command: >-
             curl -sk -u root:[[attributes.BMCPassword]]
@@ -249,7 +249,7 @@ stages:
         name: Delete nopassuser (if created)
         transport: *local
         options:
-          on-error: continue
+          on-failure: continue
         parameters:
           command: >-
             curl -sk -u root:[[attributes.BMCPassword]]

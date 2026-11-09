@@ -22,7 +22,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: readlink
           args: [/dev/ttyVUART0]
@@ -33,7 +33,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: test
           args: ["-c", "/dev/ttyS3"]
@@ -45,7 +45,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: test
           args: ["-d", "/sys/devices/platform/ahb@80000000/80fd0200.serial"]
@@ -54,7 +54,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: cat
           args: ["/sys/firmware/devicetree/base/ahb@80000000/serial@80fd0200/compatible"]
@@ -65,7 +65,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: dmesg
           args: []
@@ -79,7 +79,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:
@@ -90,7 +90,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: cat
           args: ["/sys/devices/platform/ahb@80000000/80fd0200.serial/lpc_address"]
@@ -101,7 +101,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           command: >-
             VAL=$(cat /sys/devices/platform/ahb@80000000/80fd0200.serial/sirq);
@@ -171,7 +171,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 10s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:
@@ -182,7 +182,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:
@@ -193,7 +193,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:

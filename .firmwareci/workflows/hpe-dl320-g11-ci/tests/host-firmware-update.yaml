@@ -182,7 +182,7 @@ stages:
         transport: *local
         options:
           timeout: 10m
-          on-error: continue
+          on-failure: continue
         parameters:
           command: |
             Task=$(echo {{ UpdateTriggerOutput }} | grep -Eo "/redfish/v1/TaskService/Tasks/[0-9]+" );
@@ -211,7 +211,7 @@ stages:
         name: Check for updated inventory
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         transport: *local
         parameters:
           command: |
@@ -228,7 +228,7 @@ stages:
         name: Wait for host OS
         options:
           timeout: 10m
-          on-error: continue
+          on-failure: continue
         parameters:
           host: "[[attributes.Host]]"
 

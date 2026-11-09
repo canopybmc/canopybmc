@@ -13,7 +13,7 @@ defaults:
 
 stages:
   - name: Critical Services Running
-    on-error: continue
+    on-failure: continue
     steps:
       - cmd: cmd
         name: EntityManager

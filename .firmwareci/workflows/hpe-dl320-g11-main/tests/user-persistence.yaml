@@ -178,7 +178,7 @@ stages:
         name: Cleanup - delete persistuser if exists
         transport: *local
         options:
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:

@@ -132,7 +132,7 @@ stages:
         name: Cleanup - delete readonlyuser
         transport: *local
         options:
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:
@@ -142,7 +142,7 @@ stages:
         name: Cleanup - delete operatoruser
         transport: *local
         options:
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:
@@ -152,7 +152,7 @@ stages:
         name: Cleanup - delete shouldfail if created
         transport: *local
         options:
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:
@@ -162,7 +162,7 @@ stages:
         name: Cleanup - delete shouldfail2 if created
         transport: *local
         options:
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:

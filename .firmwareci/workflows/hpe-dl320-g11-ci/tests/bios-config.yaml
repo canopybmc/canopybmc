@@ -100,7 +100,7 @@ stages:
           host: "[[attributes.Host]]"
 
   - name: CHIF Service and EV Store
-    on-error: continue
+    on-failure: continue
     steps:
       - cmd: cmd
         name: CHIF service is running

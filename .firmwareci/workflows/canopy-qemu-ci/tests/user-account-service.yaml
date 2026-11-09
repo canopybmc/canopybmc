@@ -184,7 +184,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:
@@ -195,7 +195,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:

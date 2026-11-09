@@ -85,7 +85,7 @@ stages:
             - regex: "SMBIOS ready"
 
   - name: Console check
-    on-error: continue
+    on-failure: continue
     steps:
       - cmd: shell
         name: BMC IPv4 shown on host console

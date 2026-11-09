@@ -16,7 +16,7 @@ post-stage:
     name: Host system DC gets/stays powered off (systemd-journal)
     options:
       timeout: 1m
-      on-error: continue
+      on-failure: continue
     transport: &bmc_ssh
       proto: ssh
       options:
@@ -32,7 +32,7 @@ post-stage:
     name: Current host PowerState is off
     options:
       timeout: 10s
-      on-error: continue
+      on-failure: continue
     transport:
       proto: local
     parameters:
@@ -51,7 +51,7 @@ post-stage:
   - cmd: copy
     name: Copy original NVRAM to DUT
     options:
-      on-error: continue
+      on-failure: continue
     transport: *bmc_ssh
     parameters:
       source: "[[storage.dl320g11_nvram]]"
@@ -61,7 +61,7 @@ post-stage:
   - cmd: shell
     name: Flash original NVRAM to DUT
     options:
-      on-error: continue
+      on-failure: continue
     transport: *bmc_ssh
     parameters:
       command: "flashcp -v /tmp/[[storage.dl320g11_nvram.rom]] /dev/mtd/host-reserved"

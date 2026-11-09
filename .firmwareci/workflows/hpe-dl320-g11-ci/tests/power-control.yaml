@@ -52,7 +52,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           command: "grep -qi 'Initialization' /var/log/obmc-console.log"
 
@@ -61,7 +61,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           command: "grep -qi 'BIOS' /var/log/obmc-console.log"
 
@@ -70,7 +70,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           command: "grep -qi 'Memory' /var/log/obmc-console.log"
 
@@ -88,7 +88,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: busctl
           args: [get-property, xyz.openbmc_project.State.Host, /xyz/openbmc_project/state/host0, xyz.openbmc_project.State.Host, CurrentHostState]
@@ -100,7 +100,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: busctl
           args: [get-property, xyz.openbmc_project.State.Chassis, /xyz/openbmc_project/state/chassis0, xyz.openbmc_project.State.Chassis, CurrentPowerState]
@@ -112,7 +112,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: systemctl
           args: ["is-active", "xyz.openbmc_project.Chassis.Control.Power@0.service"]
@@ -144,7 +144,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
@@ -156,7 +156,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: busctl
           args: [get-property, xyz.openbmc_project.State.Host, /xyz/openbmc_project/state/host0, xyz.openbmc_project.State.Host, CurrentHostState]
@@ -214,7 +214,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           command: "grep -qi 'Initialization' /var/log/obmc-console.log"
 
@@ -223,7 +223,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           command: "grep -qi 'BIOS' /var/log/obmc-console.log"
 
@@ -232,7 +232,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           command: "grep -qi 'Memory' /var/log/obmc-console.log"
 
@@ -241,7 +241,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: busctl
           args: [get-property, xyz.openbmc_project.State.Host, /xyz/openbmc_project/state/host0, xyz.openbmc_project.State.Host, CurrentHostState]

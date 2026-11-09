@@ -21,7 +21,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: test
           args: ["-c", "/dev/video0"]
@@ -30,7 +30,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: cat
           args: ["/sys/class/video4linux/video0/name"]
@@ -44,7 +44,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: cat
           args: ["/sys/firmware/devicetree/base/ahb@80000000/video@c0000500/compatible"]
@@ -55,7 +55,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: dmesg
           args: []
@@ -66,7 +66,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: dmesg
           args: []
@@ -77,7 +77,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: dmesg
           args: []
@@ -91,7 +91,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: test
           args: ["-d", "/sys/devices/platform/ahb@80000000/80401000.usb"]
@@ -100,7 +100,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: cat
           args: ["/sys/firmware/devicetree/base/ahb@80000000/usb@80401000/compatible"]
@@ -111,7 +111,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: test
           args: ["-d", "/sys/class/udc/80401000.usb"]
@@ -122,7 +122,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           command: |
             exec 3<>/dev/tcp/127.0.0.1/5900
@@ -140,7 +140,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: test
           args: ["-d", "/sys/kernel/config/usb_gadget"]
@@ -149,7 +149,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: test
           args: ["-d", "/sys/kernel/config/usb_gadget/obmc_hid"]
@@ -158,7 +158,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: cat
           args: ["/sys/kernel/config/usb_gadget/obmc_hid/functions/hid.0/protocol"]
@@ -169,7 +169,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: cat
           args: ["/sys/kernel/config/usb_gadget/obmc_hid/functions/hid.1/protocol"]
