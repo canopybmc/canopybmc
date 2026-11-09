@@ -102,7 +102,7 @@ stages:
           host: "[[attributes.Host]]"
 
   - name: Boot EVs and override test
-    on-error: continue
+    on-failure: continue
     steps:
       - cmd: shell
         name: Boot options (CQSBOOT) published by firmware

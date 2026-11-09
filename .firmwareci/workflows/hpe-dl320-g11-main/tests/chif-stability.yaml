@@ -236,7 +236,7 @@ stages:
         name: "[Report] Total SMBIOS receptions across cycles"
         transport: *bmc_ssh
         options:
-          on-error: continue
+          on-failure: continue
         parameters:
           command: "journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep -c 'MDR AgentSynchronizeData called'"
 
@@ -244,6 +244,6 @@ stages:
         name: "[Report] Kernel go-bit drops"
         transport: *bmc_ssh
         options:
-          on-error: continue
+          on-failure: continue
         parameters:
           command: "dmesg | grep -c 'go bit of rq_ctrl not set' || echo 0"

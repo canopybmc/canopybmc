@@ -54,7 +54,7 @@ stages:
         name: Default gateway configured
         transport: *bmc_ssh
         options:
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: ip
           args: ["route", "show", "default"]
@@ -84,7 +84,7 @@ stages:
         name: "[Report only] Network interface details"
         transport: *bmc_ssh
         options:
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: ip
           args: ["addr"]

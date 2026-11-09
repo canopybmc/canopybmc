@@ -16,7 +16,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/ASUS_Kommando_IPMI_Card/Sensors"]
@@ -30,7 +30,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/ASUS_Kommando_IPMI_Card/Sensors"]

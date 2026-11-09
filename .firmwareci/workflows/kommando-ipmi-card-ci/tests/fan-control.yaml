@@ -20,7 +20,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: systemctl
           args: ["is-active", "phosphor-pid-control.service"]
@@ -29,7 +29,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: systemctl
           args: ["is-active", "phosphor-fan-presence-tach@0.service"]
@@ -41,7 +41,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 10s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:
@@ -55,7 +55,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: busctl
           args: [tree, xyz.openbmc_project.State.FanCtrl, --no-pager]

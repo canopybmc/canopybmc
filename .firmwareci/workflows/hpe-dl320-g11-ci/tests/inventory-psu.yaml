@@ -2,7 +2,7 @@ name: "Inventory: Power Supplies"
 description: >-
   Verify PSU sensor presence, live power/voltage readings, sensor health, and
   PSU identity via Redfish. Covers gxp-psu kernel driver, entity-manager PSU
-  config, and the PowerSubsystem Redfish path. PSU2 checks use on-error:
+  config, and the PowerSubsystem Redfish path. PSU2 checks use on-failure:
   continue as some platforms may have only 1 PSU.
 
 defaults:
@@ -36,7 +36,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:
@@ -50,7 +50,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/power_PINPUT_PSU2"]
@@ -61,7 +61,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/power_POUTPUT_PSU2"]
@@ -75,7 +75,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/voltage_VINPUT_PSU2"]
@@ -86,7 +86,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/voltage_VOUTPUT_PSU2"]
@@ -100,7 +100,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/power_PINPUT_PSU2"]
@@ -114,7 +114,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/HPE_POWER_SUPPLY_1"]
@@ -125,7 +125,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/HPE_POWER_SUPPLY_1"]
@@ -136,7 +136,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/HPE_POWER_SUPPLY_1"]
@@ -150,7 +150,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/HPE_POWER_SUPPLY_2"]
@@ -161,7 +161,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/HPE_POWER_SUPPLY_2"]
@@ -172,7 +172,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/HPE_POWER_SUPPLY_2"]
@@ -186,7 +186,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:
@@ -197,7 +197,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/power_PINPUT_PSU2"]

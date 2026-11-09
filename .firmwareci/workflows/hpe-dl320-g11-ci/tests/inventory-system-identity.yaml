@@ -52,7 +52,7 @@ stages:
           proto: local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
@@ -63,7 +63,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
@@ -74,7 +74,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
@@ -85,7 +85,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
@@ -96,7 +96,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
@@ -107,7 +107,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
@@ -121,7 +121,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
@@ -132,7 +132,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
@@ -143,7 +143,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
@@ -154,7 +154,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:
@@ -168,7 +168,7 @@ stages:
         transport: *local
         options:
           timeout: 30s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: curl
           args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]

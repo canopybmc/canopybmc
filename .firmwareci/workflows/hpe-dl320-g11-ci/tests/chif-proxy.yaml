@@ -75,7 +75,7 @@ stages:
             - regex: "^0$"
 
   - name: I2C Proxy Error Codes
-    on-error: continue
+    on-failure: continue
     steps:
       - cmd: shell
         name: "[Report] I2C segment-not-found errors"
@@ -108,7 +108,7 @@ stages:
             - regex: "^0$"
 
   - name: CHIF Kernel Health
-    on-error: continue
+    on-failure: continue
     steps:
       - cmd: shell
         name: "[Report] Kernel go-bit drops"

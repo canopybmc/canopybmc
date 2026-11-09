@@ -21,7 +21,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: systemctl
           args: ["is-active", "obmc-console@ttyVUART0.service"]
@@ -30,7 +30,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:
@@ -43,7 +43,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:
@@ -59,7 +59,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: cat
           args: ["/etc/obmc-console/server.ttyVUART0.conf"]
@@ -70,7 +70,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:
@@ -84,7 +84,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:
@@ -97,7 +97,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: ls
           args: ["/usr/lib/udev/rules.d/80-gxp-obmc-console-uart.rules"]
@@ -109,7 +109,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: cat
           args: ["/proc/net/unix"]
@@ -123,7 +123,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: systemctl
           args: ["is-active", "obmc-console-ssh.socket"]
@@ -132,7 +132,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: test
           args: ["-f", "/etc/obmc-console/dropbear.env"]
@@ -141,7 +141,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: cat
           args: ["/proc/net/tcp6"]
@@ -155,7 +155,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: test
           args: ["-f", "/var/log/obmc-console.log"]
@@ -164,7 +164,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:
@@ -180,7 +180,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: test
           args: ["-x", "/usr/bin/obmc-console-client"]
@@ -237,7 +237,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 10s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:
@@ -248,7 +248,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:

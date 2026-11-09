@@ -46,7 +46,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: busctl
           args: [tree, xyz.openbmc_project.Smbios.MDR_V2, --no-pager]
@@ -57,7 +57,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: sh
           args:
@@ -68,7 +68,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: busctl
           args: [tree, xyz.openbmc_project.Smbios.MDR_V2, --no-pager]
@@ -79,7 +79,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: busctl
           args: [tree, xyz.openbmc_project.Smbios.MDR_V2, --no-pager]
@@ -90,7 +90,7 @@ stages:
         transport: *bmc_ssh
         options:
           timeout: 5s
-          on-error: continue
+          on-failure: continue
         parameters:
           executable: busctl
           args: [tree, xyz.openbmc_project.Smbios.MDR_V2, --no-pager]

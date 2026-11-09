@@ -13,7 +13,7 @@ defaults:
 
 stages:
   - name: D-Bus Services Registered
-    on-error: continue
+    on-failure: continue
     steps:
       - cmd: cmd
         name: GxpChif on D-Bus

@@ -43,7 +43,7 @@ stages:
             - regex: "SMBIOS ready"
 
   - name: Processors Collection
-    on-error: continue
+    on-failure: continue
     steps:
       - cmd: cmd
         name: Processors collection has >= 1 member
@@ -57,7 +57,7 @@ stages:
             - regex: '"Members@odata.count": *[1-9]'
 
   - name: cpu0 State
-    on-error: continue
+    on-failure: continue
     steps:
       - cmd: cmd
         name: cpu0 State is Enabled
@@ -71,7 +71,7 @@ stages:
             - regex: '"State": *"Enabled"'
 
   - name: cpu0 Attributes
-    on-error: continue
+    on-failure: continue
     steps:
       - cmd: cmd
         name: cpu0 Manufacturer is populated
@@ -140,7 +140,7 @@ stages:
             - regex: '"EffectiveModel": *"[^"][^"]*"'
 
   - name: cpu0 SerialNumber
-    on-error: continue
+    on-failure: continue
     steps:
       - cmd: shell
         name: cpu0 SerialNumber is not HPE fake data
@@ -157,7 +157,7 @@ stages:
             echo "SerialNumber OK"
 
   - name: System Processor Summary
-    on-error: continue
+    on-failure: continue
     steps:
       - cmd: cmd
         name: ProcessorSummary CoreCount > 0
