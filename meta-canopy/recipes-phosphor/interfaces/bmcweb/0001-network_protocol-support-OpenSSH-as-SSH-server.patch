@@ -1,0 +1,192 @@
+From f53ba76fd63f16ef6a8d3448106287551bd1bb2a Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Tue, 10 Nov 2026 20:16:40 +0100
+Subject: [PATCH] network_protocol: support OpenSSH as SSH server
+
+The state of SSH is only provided for dropbear. Systems built with the
+ssh-server-openssh image feature replace dropbear with OpenSSH, so it
+lways reported SSH as disabled without a port, and SSH/ProtocolEnabled
+could not be changed as srvcfg-manager has no dropbear object on those
+systems.
+
+Handle both SSH servers, preferring sshd if it exists.
+
+Tested: on two AST2600 platforms, one using OpenSSH and one using
+dropbear:
+- GET /redfish/v1/Managers/bmc/NetworkProtocol reports SSH once with
+  ProtocolEnabled and Port matching the SSH server in use.
+- PATCH Disable SSH returns 204, the object in srvcfg-manager reports
+  Running/Enabled false, the socket is stopped and GET reports
+  ProtocolEnabled false. Setting it back to true restores SSH access.
+
+Upstream-Status: Pending
+Change-Id: I9875154c25fa17931af20622473afd422e27b31f
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ redfish-core/lib/network_protocol.hpp | 35 ++++++++++++++++++---------
+ redfish-core/lib/redfish_util.hpp     | 27 +++++++++++++++++++--
+ 2 files changed, 49 insertions(+), 13 deletions(-)
+
+diff --git a/redfish-core/lib/network_protocol.hpp b/redfish-core/lib/network_protocol.hpp
+index 7b5ec538..cf3ed102 100644
+--- a/redfish-core/lib/network_protocol.hpp
++++ b/redfish-core/lib/network_protocol.hpp
+@@ -45,14 +45,17 @@ namespace redfish
+ 
+ void getNTPProtocolEnabled(const std::shared_ptr<bmcweb::AsyncResp>& asyncResp);
+ 
+-static constexpr std::string_view sshServiceName = "dropbear";
++static constexpr std::array<std::string_view, 2> sshServiceNames = {
++    "sshd", "dropbear"};
+ static constexpr std::string_view httpsServiceName = "bmcweb";
+ static constexpr std::string_view ipmiServiceName = "phosphor-ipmi-net";
+ 
+ // Mapping from Redfish NetworkProtocol key name to backend service that hosts
+-// that protocol.
+-static constexpr std::array<std::pair<std::string_view, std::string_view>, 3>
+-    networkProtocolToDbus = {{{"SSH", sshServiceName},
++// that protocol. Where several services can host the same protocol, the first
++// one found takes precedence.
++static constexpr std::array<std::pair<std::string_view, std::string_view>, 4>
++    networkProtocolToDbus = {{{"SSH", sshServiceNames[0]},
++                              {"SSH", sshServiceNames[1]},
+                               {"HTTPS", httpsServiceName},
+                               {"IPMI", ipmiServiceName}}};
+ 
+@@ -405,14 +408,14 @@ inline void handleNTPServersPatch(
+ inline void handleProtocolEnabled(
+     const bool protocolEnabled,
+     const std::shared_ptr<bmcweb::AsyncResp>& asyncResp,
+-    const std::string& netBasePath, std::string_view redfishProperty)
++    std::vector<std::string> netBasePaths, std::string_view redfishProperty)
+ {
+     constexpr std::array<std::string_view, 1> interfaces = {
+         "xyz.openbmc_project.Control.Service.Attributes"};
+     dbus::utility::getSubTree(
+         "/xyz/openbmc_project/control/service", 0, interfaces,
+         // ast-grep-ignore: long-lambda
+-        [protocolEnabled, asyncResp, netBasePath,
++        [protocolEnabled, asyncResp, netBasePaths = std::move(netBasePaths),
+          redfishProperty = std::string(redfishProperty)](
+             const boost::system::error_code& ec,
+             const dbus::utility::MapperGetSubTreeResponse& subtree) {
+@@ -432,10 +435,15 @@ inline void handleProtocolEnabled(
+                 return;
+             }
+ 
+-            for (const auto& entry : subtree)
++            // netBasePaths is ordered by preference
++            for (const std::string& netBasePath : netBasePaths)
+             {
+-                if (entry.first.starts_with(netBasePath))
++                for (const auto& entry : subtree)
+                 {
++                    if (!entry.first.starts_with(netBasePath))
++                    {
++                        continue;
++                    }
+                     if (entry.second.empty())
+                     {
+                         BMCWEB_LOG_ERROR(
+@@ -552,14 +560,19 @@ inline void handleManagersNetworkProtocolPatch(
+     {
+         handleProtocolEnabled(
+             *ipmiEnabled, asyncResp,
+-            encodeServiceObjectPath(std::string(ipmiServiceName) + '@'),
++            {encodeServiceObjectPath(std::string(ipmiServiceName) + '@')},
+             "IPMI/ProtocolEnabled");
+     }
+ 
+     if (sshEnabled)
+     {
+-        handleProtocolEnabled(*sshEnabled, asyncResp,
+-                              encodeServiceObjectPath(sshServiceName),
++        std::vector<std::string> sshBasePaths;
++        sshBasePaths.reserve(sshServiceNames.size());
++        for (std::string_view sshServiceName : sshServiceNames)
++        {
++            sshBasePaths.emplace_back(encodeServiceObjectPath(sshServiceName));
++        }
++        handleProtocolEnabled(*sshEnabled, asyncResp, std::move(sshBasePaths),
+                               "SSH/ProtocolEnabled");
+     }
+ }
+diff --git a/redfish-core/lib/redfish_util.hpp b/redfish-core/lib/redfish_util.hpp
+index 7dec752b..61c25f5f 100644
+--- a/redfish-core/lib/redfish_util.hpp
++++ b/redfish-core/lib/redfish_util.hpp
+@@ -19,6 +19,7 @@
+ #include <charconv>
+ #include <cstddef>
+ #include <cstdint>
++#include <iterator>
+ #include <memory>
+ #include <ranges>
+ #include <span>
+@@ -116,6 +117,12 @@ void getPortStatusAndPath(
+                 return;
+             }
+ 
++            // Index into protocolToDBus of the service each socketData entry
++            // was taken from. A protocol can be provided by alternative
++            // services (for example SSH by sshd or dropbear), in which case
++            // the one listed first in protocolToDBus wins.
++            std::vector<size_t> socketPriority;
++
+             // save all service output into vector
+             for (const UnitStruct& unit : r)
+             {
+@@ -148,8 +155,10 @@ void getPortStatusAndPath(
+                 // unitsName without ".socket", only <xyz>
+                 std::string unitNameStr = unitName.substr(0, lastCharPos);
+ 
+-                for (const auto& kv : protocolToDBus)
++                for (size_t priority = 0; priority < protocolToDBus.size();
++                     priority++)
+                 {
++                    const auto& kv = protocolToDBus[priority];
+                     // We are interested in services, which starts with
+                     // mapped service name
+                     if (unitNameStr != kv.second)
+@@ -174,12 +183,22 @@ void getPortStatusAndPath(
+                                   i) { return std::get<1>(i) == kv.first; });
+                     if (find != socketData.end())
+                     {
++                        auto findIdx = static_cast<size_t>(
++                            std::distance(socketData.begin(), find));
++                        size_t existingPriority = socketPriority[findIdx];
++                        if (existingPriority < priority)
++                        {
++                            // A preferred service already provides this
++                            // protocol, ignore the alternative.
++                            break;
++                        }
+                         // It only takes one enabled systemd service to consider
+                         // a protocol enabled so if the current entry already
+                         // has it enabled (or the new one is disabled) then just
+                         // continue, otherwise remove the current one and add
+                         // this new one.
+-                        if (std::get<2>(*find) || !isProtocolEnabled)
++                        if (existingPriority == priority &&
++                            (std::get<2>(*find) || !isProtocolEnabled))
+                         {
+                             // Already registered as enabled or current one is
+                             // not enabled, nothing to do
+@@ -191,10 +210,14 @@ void getPortStatusAndPath(
+                         // Remove existing entry and replace with new one
+                         // (below)
+                         socketData.erase(find);
++                        socketPriority.erase(
++                            socketPriority.begin() +
++                            static_cast<std::ptrdiff_t>(findIdx));
+                     }
+ 
+                     socketData.emplace_back(socketPath, std::string(kv.first),
+                                             isProtocolEnabled);
++                    socketPriority.emplace_back(priority);
+                     // We found service, return from inner loop.
+                     break;
+                 }
+-- 
+2.53.0
+
