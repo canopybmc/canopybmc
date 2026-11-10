@@ -1,6 +1,6 @@
 FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 SRC_URI:append = " \
-    file://0001-reduce-image-size-by-moving-to-Multi-call-Binary.patch \
+    file://0002-reduce-image-size-by-moving-to-Multi-call-Binary.patch \
     file://0002-fansensor-support-TachInput-configuration-for-PWM-on.patch \
     file://0003-fansensor-add-fan-fault-monitoring-via-hwmon-fault-a.patch \
     file://0004-hwmontempsensor-add-platform-device-support.patch \
