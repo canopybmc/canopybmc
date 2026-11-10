@@ -1,0 +1,121 @@
+From d1d88c3733576f0c67b338cef8d62a504a5ae3cd Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Tue, 10 Nov 2026 20:16:40 +0100
+Subject: [PATCH] network_protocol: support OpenSSH as SSH server
+
+The state of SSH is only provided for dropbear. Systems built with the
+ssh-server-openssh image feature replace dropbear with OpenSSH, so it
+always reported SSH as disabled without a port, and SSH/ProtocolEnabled
+could not be changed as srvcfg-manager has no dropbear object on those
+systems.
+
+Handle both SSH servers. Only one of them can be installed, as the
+packages conflict with each other.
+
+Tested: on two AST2600 platforms, one using OpenSSH and one using
+dropbear:
+- GET /redfish/v1/Managers/bmc/NetworkProtocol reports SSH once with
+  ProtocolEnabled and Port matching the SSH server in use.
+- PATCH Disable SSH returns 204, the object in srvcfg-manager reports
+  Running/Enabled false, the socket is stopped and GET reports
+  ProtocolEnabled false. Setting it back to true restores SSH access.
+
+Upstream-Status: Pending
+Change-Id: I9875154c25fa17931af20622473afd422e27b31f
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ redfish-core/lib/network_protocol.hpp | 34 ++++++++++++++++++++-------
+ 1 file changed, 25 insertions(+), 9 deletions(-)
+
+diff --git a/redfish-core/lib/network_protocol.hpp b/redfish-core/lib/network_protocol.hpp
+index 7b5ec538..c3516f4c 100644
+--- a/redfish-core/lib/network_protocol.hpp
++++ b/redfish-core/lib/network_protocol.hpp
+@@ -28,6 +28,7 @@
+ #include <boost/url/format.hpp>
+ #include <sdbusplus/message/native_types.hpp>
+ 
++#include <algorithm>
+ #include <array>
+ #include <cstddef>
+ #include <functional>
+@@ -45,14 +46,21 @@ namespace redfish
+ 
+ void getNTPProtocolEnabled(const std::shared_ptr<bmcweb::AsyncResp>& asyncResp);
+ 
+-static constexpr std::string_view sshServiceName = "dropbear";
++// SSH is provided by either OpenSSH or dropbear. The packages conflict with
++// each other.
++// NOTE: OpenSSH is only detected in socket mode (systemd-sshd-socket-mode).
++// With systemd-sshd-service-mode there is no sshd.socket, so SSH is reported
++// as disabled.
++static constexpr std::array<std::string_view, 2> sshServiceNames = {
++    "sshd", "dropbear"};
+ static constexpr std::string_view httpsServiceName = "bmcweb";
+ static constexpr std::string_view ipmiServiceName = "phosphor-ipmi-net";
+ 
+ // Mapping from Redfish NetworkProtocol key name to backend service that hosts
+ // that protocol.
+-static constexpr std::array<std::pair<std::string_view, std::string_view>, 3>
+-    networkProtocolToDbus = {{{"SSH", sshServiceName},
++static constexpr std::array<std::pair<std::string_view, std::string_view>, 4>
++    networkProtocolToDbus = {{{"SSH", sshServiceNames[0]},
++                              {"SSH", sshServiceNames[1]},
+                               {"HTTPS", httpsServiceName},
+                               {"IPMI", ipmiServiceName}}};
+ 
+@@ -405,14 +413,14 @@ inline void handleNTPServersPatch(
+ inline void handleProtocolEnabled(
+     const bool protocolEnabled,
+     const std::shared_ptr<bmcweb::AsyncResp>& asyncResp,
+-    const std::string& netBasePath, std::string_view redfishProperty)
++    std::vector<std::string> netBasePaths, std::string_view redfishProperty)
+ {
+     constexpr std::array<std::string_view, 1> interfaces = {
+         "xyz.openbmc_project.Control.Service.Attributes"};
+     dbus::utility::getSubTree(
+         "/xyz/openbmc_project/control/service", 0, interfaces,
+         // ast-grep-ignore: long-lambda
+-        [protocolEnabled, asyncResp, netBasePath,
++        [protocolEnabled, asyncResp, netBasePaths = std::move(netBasePaths),
+          redfishProperty = std::string(redfishProperty)](
+             const boost::system::error_code& ec,
+             const dbus::utility::MapperGetSubTreeResponse& subtree) {
+@@ -434,7 +442,10 @@ inline void handleProtocolEnabled(
+ 
+             for (const auto& entry : subtree)
+             {
+-                if (entry.first.starts_with(netBasePath))
++                if (std::ranges::any_of(
++                        netBasePaths, [&entry](const std::string& netBasePath) {
++                            return entry.first.starts_with(netBasePath);
++                        }))
+                 {
+                     if (entry.second.empty())
+                     {
+@@ -552,14 +563,19 @@ inline void handleManagersNetworkProtocolPatch(
+     {
+         handleProtocolEnabled(
+             *ipmiEnabled, asyncResp,
+-            encodeServiceObjectPath(std::string(ipmiServiceName) + '@'),
++            {encodeServiceObjectPath(std::string(ipmiServiceName) + '@')},
+             "IPMI/ProtocolEnabled");
+     }
+ 
+     if (sshEnabled)
+     {
+-        handleProtocolEnabled(*sshEnabled, asyncResp,
+-                              encodeServiceObjectPath(sshServiceName),
++        std::vector<std::string> sshBasePaths;
++        sshBasePaths.reserve(sshServiceNames.size());
++        for (std::string_view sshServiceName : sshServiceNames)
++        {
++            sshBasePaths.emplace_back(encodeServiceObjectPath(sshServiceName));
++        }
++        handleProtocolEnabled(*sshEnabled, asyncResp, std::move(sshBasePaths),
+                               "SSH/ProtocolEnabled");
+     }
+ }
+-- 
+2.56.0
+
