@@ -1,4 +1,4 @@
-From 78d190885bbf16c1e9ca0ffbacdc0d7fb3c0ea6c Mon Sep 17 00:00:00 2001
+From f5277a59afe373654dff9f546502afb96332647c Mon Sep 17 00:00:00 2001
 From: Willy Tu <wltu@google.com>
 Date: Tue, 24 Mar 2026 15:14:33 +0000
 Subject: [PATCH] reduce image size by moving to Multi-call Binary
