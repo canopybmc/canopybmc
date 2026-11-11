@@ -1,0 +1,90 @@
+From ccfc198a7aef1741203f149bcf560e01ed6c9252 Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Tue, 10 Nov 2026 19:03:44 +0100
+Subject: [PATCH] fan: catch error if symlink read fails
+
+Depending on the boot performance of the system, it can happen that
+fansensor tries to read the device symlink of a hwmon that doesn't exist
+yet, because it's being provisioned by the kernel in the same moment.
+This causes fansensor to throw because of a filesystem error:
+
+```
+FanSensor terminate called after throwing an instance of 'std::filesystem::__cxx11::filesystem_error'
+FanSensor what(): filesystem error: read_symlink: No such file or directory [/sys/class/hwmon/hwmon6/device]
+```
+
+Catch the error of read_symlink and continue if it fails instead of
+throwing the whole app, which could lead into a start-limit-hit throttle
+by systemd.
+
+Tested: On an affected system, the error did not throw after >200
+        reboots.
+
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/dbus-sensors/+/97035]
+Change-Id: I99103bd68a839ae880fd2fb78a06f4c032d8cb1d
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ src/fan/FanMain.cpp | 29 +++++++++++++++++++++++------
+ 1 file changed, 23 insertions(+), 6 deletions(-)
+
+diff --git a/src/fan/FanMain.cpp b/src/fan/FanMain.cpp
+index a978661..2331d1c 100644
+--- a/src/fan/FanMain.cpp
++++ b/src/fan/FanMain.cpp
+@@ -91,12 +91,19 @@ static const std::map<std::string, FanTypes> compatibleFanTypes = {
+ FanTypes getFanType(const std::filesystem::path& parentPath)
+ {
+     std::filesystem::path linkPath = parentPath / "of_node";
+-    if (!std::filesystem::exists(linkPath))
++    std::error_code ec;
++    if (!std::filesystem::exists(linkPath, ec))
+     {
+         return FanTypes::i2c;
+     }
+ 
+-    std::string canonical = std::filesystem::canonical(linkPath);
++    std::string canonical = std::filesystem::canonical(linkPath, ec);
++    if (ec)
++    {
++        lg2::error("canonical() failed for '{PATH}': '{ERROR_MESSAGE}'", "PATH",
++                   linkPath, "ERROR_MESSAGE", ec.message());
++        return FanTypes::i2c;
++    }
+     std::string compatiblePath = canonical + "/compatible";
+     std::ifstream compatibleStream(compatiblePath);
+ 
+@@ -361,9 +368,18 @@ void createSensors(
+                 }
+                 if (fanType == FanTypes::i2c)
+                 {
+-                    std::string deviceName =
+-                        std::filesystem::read_symlink(directory / "device")
+-                            .filename();
++                    std::error_code ec;
++                    std::filesystem::path deviceLink =
++                        std::filesystem::read_symlink(directory / "device", ec);
++                    if (ec)
++                    {
++                        lg2::error("read_symlink() failed for '{PATH}': "
++                                   "'{ERROR_MESSAGE}'",
++                                   "PATH", directory / "device",
++                                   "ERROR_MESSAGE", ec.message());
++                        continue;
++                    }
++                    std::string deviceName = deviceLink.filename();
+ 
+                     size_t bus = 0;
+                     size_t addr = 0;
+@@ -636,7 +652,8 @@ void createSensors(
+                 led);
+             tachSensor->setupRead();
+ 
+-            if (!pwmPath.empty() && std::filesystem::exists(pwmPath) &&
++            std::error_code ec;
++            if (!pwmPath.empty() && std::filesystem::exists(pwmPath, ec) &&
+                 (!pwmSensors.contains(pwmPath)))
+             {
+                 pwmSensors[pwmPath] = std::make_unique<PwmSensor>(
+-- 
+2.53.0
+
