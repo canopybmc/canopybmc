@@ -1,0 +1,50 @@
+From 45c0473ad833422a71e4eddb975cdd7d2aeee4a0 Mon Sep 17 00:00:00 2001
+From: Tan Siewert <tan.siewert@9elements.com>
+Date: Tue, 10 Nov 2026 15:49:22 +0100
+Subject: [PATCH] Add OpenSSH to managed services
+
+On systems that have the ssh-server-openssh image feature set, dropbear
+is replaced by OpenSSH. At the moment, this causes consumers like bmcweb
+to report the SSH server state to be disabled or they can not manage
+OpenSSH.
+
+Add it to the list.
+
+Tested: On a system with OpenSSH, managing it via busctl (in this case
+        enable and disable the service + socket) was possible.
+
+Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/service-config-manager/+/97014]
+Change-Id: I2cba142fc5bc2006c868054149bc8c17b95f1ba1
+Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
+---
+ src/main.cpp | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/src/main.cpp b/src/main.cpp
+index 956609e..0ae8be8 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -40,10 +40,16 @@ static constexpr const char* tmpFileBad = "/tmp/srvcfg-mgr.json.bad";
+ // units(service/socket) will be managed by this daemon.
+ static std::unordered_map<std::string /* unitName */,
+                           bool /* isSocketActivated */>
+-    managedServices = {{"phosphor-ipmi-net", false}, {"bmcweb", false},
+-                       {"phosphor-ipmi-kcs", false}, {"obmc-ikvm", false},
+-                       {"obmc-console", false},      {"dropbear", true},
+-                       {"obmc-console-ssh", true},   {"ssifbridge", false}};
++    managedServices = {
++        {"phosphor-ipmi-net", false},
++        {"bmcweb", false},
++        {"phosphor-ipmi-kcs", false},
++        {"obmc-ikvm", false},
++        {"obmc-console", false},
++        {"dropbear", true},
++        {"obmc-console-ssh", true},
++        {"ssifbridge", false},
++        {"sshd", true}};
+ 
+ enum class UnitType
+ {
+-- 
+2.53.0
+
