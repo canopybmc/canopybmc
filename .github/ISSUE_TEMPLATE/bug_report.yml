@@ -1,0 +1,127 @@
+---
+name: Bug report
+description: Something on the BMC or in the build doesn't work as expected
+labels: ["type/bug", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Labels are pre-filled from your answers by a bot and confirmed by a
+        maintainer during triage.
+
+  - type: input
+    id: target
+    attributes:
+      label: Target machine
+      description: |
+        The machine name as used with `source setup <machine>`, e.g.
+        `hpe-proliant-g11`. Separate several machines with commas, or use
+        `all` if every platform is affected.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: |
+        The firmware version of the running BMC image, e.g. `2026.06` for a
+        release or `2026.06-94-1519e89` for a build from an untagged commit.
+        It's shown in the web UI, in Redfish as `Version` of the image that
+        `/redfish/v1/Managers/bmc` links as `ActiveSoftwareImage`, and as
+        `VERSION_ID` in `/etc/os-release` on the BMC.
+    validations:
+      required: true
+
+  - type: input
+    id: logid
+    attributes:
+      label: canopy-diag Log ID
+      description: The Log ID (UUID) of an FFDC uploaded to canopy-diag, if you have one.
+      placeholder: 00000000-0000-0000-0000-000000000000
+
+  - type: input
+    id: components
+    attributes:
+      label: Affected components
+      description: Services or components involved, separated by commas, if known.
+      placeholder: bmcweb, entity-manager, dbus-sensors
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A short description of the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Current behavior
+      description: How does the observed behavior deviate from the expected behavior?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: regression
+    attributes:
+      label: Regression
+      options:
+        - label: This worked in an earlier version
+
+  - type: input
+    id: last-working
+    attributes:
+      label: Last working version
+      description: |
+        The last version or commit where this worked, if this is a regression.
+        Either a firmware version like `2026.06` or a commit hash of this
+        repository.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant journal or console output. This is rendered as code, no backticks needed.
+      render: shell
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround
+      description: Is there a workaround for the described issue?
+
+  - type: textarea
+    id: build-config
+    attributes:
+      label: Build configuration
+      description: |
+        For build issues or self-built images: the "Build Configuration"
+        block BitBake prints at the start of every build, including the
+        host distribution, machine, distro version and the revision of
+        every layer. This is rendered as code, no backticks needed.
+      placeholder: |
+        Build Configuration:
+        BB_VERSION           = "..."
+        BUILD_SYS            = "x86_64-linux"
+        NATIVELSBSTRING      = "ubuntu-24.04"
+        ...
+      render: text

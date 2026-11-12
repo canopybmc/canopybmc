@@ -1,0 +1,44 @@
+---
+# Labels new issues from their issue form answers and comments with a
+# summary. See .github/triage/issue.js.
+
+name: Issue triage
+
+on:
+  issues:
+    types:
+      - opened
+      - edited
+      - reopened
+
+permissions:
+  contents: read
+
+concurrency:
+  group: issue-triage-${{ github.event.issue.number }}
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    # Stop following edits once a maintainer finished triage.
+    if: github.event.action != 'edited' || contains(github.event.issue.labels.*.name, 'needs triage')
+    permissions:
+      contents: read
+      issues: write # To add labels and comment
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # The machine list comes from `setup` and the layers, the openbmc
+          # submodule is not needed.
+          sparse-checkout: |
+            .github
+            meta-canopy
+          persist-credentials: false
+
+      - name: Triage issue
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const triage = require(`${process.env.GITHUB_WORKSPACE}/.github/triage/issue.js`);
+            await triage({ github, context, core });

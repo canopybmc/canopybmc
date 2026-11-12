@@ -1,0 +1,49 @@
+---
+name: Hardware enablement
+description: Request or plan support for a new platform
+labels: ["type/hardware-enablement", "needs triage"]
+body:
+  - type: input
+    id: vendor
+    attributes:
+      label: Vendor
+      placeholder: HPE
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: The name people know the platform by.
+      placeholder: ProLiant DL320 Gen11
+    validations:
+      required: true
+
+  - type: input
+    id: soc
+    attributes:
+      label: BMC SoC
+      placeholder: AST2600, GXP, ...
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What should be supported, and why?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: availability
+    attributes:
+      label: Availability
+      options:
+        - label: Hardware is available to the developers
+        - label: Documentation or vendor support is available
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Upstream OpenBMC support, vendor documentation, related issues.
