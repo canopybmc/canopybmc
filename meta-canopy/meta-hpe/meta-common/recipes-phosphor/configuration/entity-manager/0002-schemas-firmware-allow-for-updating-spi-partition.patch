@@ -1,4 +1,4 @@
-From 3f6ec1a8001d4fc7b39adcc372e65b13e9680802 Mon Sep 17 00:00:00 2001
+From 0bac3524e14323ebcf19858bd36b046c2e1918aa Mon Sep 17 00:00:00 2001
 From: Alexander Hansen <alexander.hansen@9elements.com>
 Date: Wed, 1 Jul 2026 14:18:29 +0200
 Subject: [PATCH] schemas/firmware: allow for updating spi partition
@@ -48,21 +48,39 @@ Upstream-Status: Submitted [Gerrit, https://gerrit.openbmc.org/c/openbmc/entity-
 Change-Id: Ifd0fa059d7b4b597d860bb0f9509282f6202f372
 Signed-off-by: Alexander Hansen <alexander.hansen@9elements.com>
 ---
- schemas/firmware.json | 4 ++++
- 1 file changed, 4 insertions(+)
+ configurations/hpe/dl360g11_baseboard.json | 1 +
+ schemas/firmware.json                      | 6 ++++++
+ 2 files changed, 7 insertions(+)
 
+diff --git a/configurations/hpe/dl360g11_baseboard.json b/configurations/hpe/dl360g11_baseboard.json
+index 5de50ef4..e56ae854 100644
+--- a/configurations/hpe/dl360g11_baseboard.json
++++ b/configurations/hpe/dl360g11_baseboard.json
+@@ -112,6 +112,7 @@
+             },
+             "MuxOutputs": [],
+             "Name": "UEFIPrimary",
++            "Offset": 33554432,
+             "SPIControllerIndex": 1,
+             "SPIDeviceIndex": 1,
+             "Type": "HostSPIFlash"
 diff --git a/schemas/firmware.json b/schemas/firmware.json
-index c921811..58d0a24 100644
+index c9218116..c5f118fa 100644
 --- a/schemas/firmware.json
 +++ b/schemas/firmware.json
-@@ -102,6 +102,10 @@
+@@ -102,6 +102,12 @@
                      "description": "The index of the SPI device connected to that controller",
                      "type": "number"
                  },
-+                "Partition": {
-+                    "description": "The name of the partition to update. Leave empty if there is only a single partition without a name.",
-+                    "type": "string"
++                "Offset": {
++                    "description": "The start of the MTD partition to update, in bytes from the beginning of the SPI flash. Omit to use the default MTD device selection.",
++                    "type": "integer",
++                    "minimum": 0,
++                    "maximum": 18446744073709551615
 +                },
                  "MuxOutputs": {
                      "$ref": "#/$defs/MuxOutputs"
                  },
+-- 
+2.53.0
+
