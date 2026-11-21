@@ -74,18 +74,18 @@ Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
  3 files changed, 99 insertions(+)
 
 diff --git a/src/entity_manager/perform_scan.cpp b/src/entity_manager/perform_scan.cpp
-index 64d995b..7efa5b9 100644
+index 1657a1e..750117e 100644
 --- a/src/entity_manager/perform_scan.cpp
 +++ b/src/entity_manager/perform_scan.cpp
-@@ -17,6 +17,7 @@
- #include <flat_map>
+@@ -18,6 +18,7 @@
  #include <flat_set>
  #include <list>
+ #include <numeric>
 +#include <optional>
  
  struct DBusInterfaceInstance
  {
-@@ -461,6 +462,26 @@ static std::string generateDeviceName(
+@@ -462,6 +463,26 @@ static std::string generateDeviceName(
      }
      return copyForName;
  }
@@ -112,7 +112,7 @@ index 64d995b..7efa5b9 100644
  static void applyTemplateAndExposeActions(
      const std::string& recordName, const DBusObject& dbusObject,
      size_t foundDeviceIdx, const std::optional<std::string>& replaceStr,
-@@ -471,6 +492,8 @@ static void applyTemplateAndExposeActions(
+@@ -472,6 +493,8 @@ static void applyTemplateAndExposeActions(
          em_utils::templateCharReplace(valueInner, dbusObject, foundDeviceIdx,
                                        replaceStr);
  
@@ -122,7 +122,7 @@ index 64d995b..7efa5b9 100644
                             valueInner);
      }
 diff --git a/src/utils.cpp b/src/utils.cpp
-index 3872c4e..1982054 100644
+index d2718a2..3926307 100644
 --- a/src/utils.cpp
 +++ b/src/utils.cpp
 @@ -109,6 +109,71 @@ bool getI2cDevicePaths(const fs::path& dirPath,
@@ -198,10 +198,10 @@ index 3872c4e..1982054 100644
  ///
  /// Default match JSON/DBus match implementation
 diff --git a/src/utils.hpp b/src/utils.hpp
-index 70fc603..f5af419 100644
+index a744773..d90ead6 100644
 --- a/src/utils.hpp
 +++ b/src/utils.hpp
-@@ -10,6 +10,8 @@
+@@ -9,6 +9,8 @@
  #include <charconv>
  #include <filesystem>
  #include <flat_map>
@@ -210,7 +210,7 @@ index 70fc603..f5af419 100644
  
  using DBusValueVariant =
      std::variant<std::string, int64_t, uint64_t, double, int32_t, uint32_t,
-@@ -35,6 +37,15 @@ bool findFiles(const std::vector<std::filesystem::path>& dirPaths,
+@@ -34,6 +36,15 @@ bool findFiles(const std::vector<std::filesystem::path>& dirPaths,
  bool getI2cDevicePaths(const std::filesystem::path& dirPath,
                         std::flat_map<size_t, std::filesystem::path>& busPaths);
  
@@ -223,6 +223,6 @@ index 70fc603..f5af419 100644
 +    std::string_view dtPath,
 +    const std::filesystem::path& i2cDevicesDir = "/sys/bus/i2c/devices");
 +
- struct DBusInternalError final : public sdbusplus::exception_t
- {
-     const char* name() const noexcept override
+ /// \brief Match a Dbus property against a probe statement.
+ /// \param probe the probe statement to match against.
+ /// \param dbusValue the property value being matched to a probe.
