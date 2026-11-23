@@ -1,0 +1,82 @@
+From eea29200ac6e2912698e12cf947d6e64b558f710 Mon Sep 17 00:00:00 2001
+From: Vernon Mauery <vernon.mauery@gmail.com>
+Date: Thu, 2 Jul 2026 14:23:02 -0700
+Subject: [PATCH] Defer session privilege commitment until RAKP3 is verified
+
+Keep the channel/user privilege-access lookup in RAKP12 - it is required
+to build a spec-correct RAKP2 response (INACTIVE_ROLE / UNAUTH_NAME
+error codes and the user-name/privilege lookup per IPMI 2.0 sec 13.21) -
+but no longer commit currentPrivilege there. Instead, once RAKP34 has
+verified the RAKP3 HMAC, set currentPrivilege to min(USER, channel
+limit, user privilege), reproducing the original semantics. Until that
+point the session carries no usable privilege.
+
+Tested: Used a python script to test pre-session commands
+        ipmitool mc info
+        ipmitool lan print 1
+
+Upstream-Status: Backport [Security, https://gerrit.openbmc.org/c/openbmc/phosphor-net-ipmid/+/91965]
+Change-Id: I4d03df5c13424f359d1b834b85dafceb133720c4
+Signed-off-by: Vernon Mauery <vernon.mauery@gmail.com>
+---
+ command/rakp12.cpp | 17 -----------------
+ command/rakp34.cpp |  8 ++++++++
+ 2 files changed, 8 insertions(+), 17 deletions(-)
+
+diff --git a/command/rakp12.cpp b/command/rakp12.cpp
+index e03eec6fbe..aa9d7d9bd8 100644
+--- a/command/rakp12.cpp
++++ b/command/rakp12.cpp
+@@ -191,7 +191,6 @@ std::vector<uint8_t> RAKP12(const std::vector<uint8_t>& inPayload,
+             static_cast<uint8_t>(RAKP_ReturnCode::UNAUTH_ROLE_PRIV);
+         return outPayload;
+     }
+-    session->currentPrivilege(static_cast<uint8_t>(session::Privilege::USER));
+ 
+     session->reqMaxPrivLevel =
+         static_cast<session::Privilege>(request->req_max_privilege_level);
+@@ -288,22 +287,6 @@ std::vector<uint8_t> RAKP12(const std::vector<uint8_t>& inPayload,
+     }
+     session->channelNum(chNum);
+     session->userID(userId);
+-    // minimum privilege of Channel / User / session::privilege::USER
+-    // has to be used as session current privilege level
+-    uint8_t minPriv = 0;
+-    if (session->sessionChannelAccess.privLimit <
+-        session->sessionUserPrivAccess.privilege)
+-    {
+-        minPriv = session->sessionChannelAccess.privLimit;
+-    }
+-    else
+-    {
+-        minPriv = session->sessionUserPrivAccess.privilege;
+-    }
+-    if (session->currentPrivilege() > minPriv)
+-    {
+-        session->currentPrivilege(static_cast<uint8_t>(minPriv));
+-    }
+     // For username / privilege lookup, fail with UNAUTH_NAME, if requested
+     // max privilege does not match user privilege
+     if (((request->req_max_privilege_level & userNameOnlyLookupMask) ==
+diff --git a/command/rakp34.cpp b/command/rakp34.cpp
+index 438c5c9fe6..eb857634c2 100644
+--- a/command/rakp34.cpp
++++ b/command/rakp34.cpp
+@@ -176,6 +176,14 @@ std::vector<uint8_t> RAKP34(const std::vector<uint8_t>& inPayload,
+         return outPayload;
+     }
+ 
++    // Now that RAKP3 shows the user has the correct credentials,
++    // the session can carry the corresponding privilege details.
++    uint8_t channelPrivLimit = session->sessionChannelAccess.privLimit;
++    uint8_t userPrivilege = session->sessionUserPrivAccess.privilege;
++    uint8_t minPriv = std::min(channelPrivLimit, userPrivilege);
++    session->currentPrivilege(std::min<uint8_t>(
++        static_cast<uint8_t>(session::Privilege::USER), minPriv));
++
+     /*
+      * Session Integrity Key
+      *
+-- 
+2.56.0
+
