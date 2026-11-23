@@ -1,0 +1,228 @@
+From 668d5681ac83a3a690f2385547ce53c84f986ef0 Mon Sep 17 00:00:00 2001
+From: Vernon Mauery <vernon.mauery@gmail.com>
+Date: Wed, 18 Nov 2026 15:30:38 -0800
+Subject: [PATCH] rakp: reject RAKP3 against stale or default key material
+
+RAKP Message 3 validated the remote console's HMAC against whatever
+authentication state happened to be in the session, without confirming
+that RAKP Message 1/2 had committed fresh material for it. Every
+early-return path in RAKP1 (for example a request for CALLBACK
+privilege, which returns 0x0a) bails out before the per-account user
+key and a freshly generated BMC random number are committed, leaving a
+constant default key ("0penBmc") and a stale/uninitialized BMC random
+behind. RAKP3 then validated against that state, letting an
+unauthenticated attacker activate a session with no valid password.
+
+ - Zero-initialize the user key and BMC/console random numbers
+ - Track whether RAKP2 committed fresh key material
+ - Reject RAKP3 unless the session is still in setupInProgress, so an
+   active session cannot re-run activation.
+ - Add regression tests covering the RAKP3 state guard.
+
+Tested: added unit test cases for the RAKP3 setup guard
+        After applying fix, passwordless RAKP3 activation fails
+
+Upstream-Status: Backport [Security, https://gerrit.openbmc.org/c/openbmc/phosphor-net-ipmid/+/97459]
+Fixes: CVE-2026-16141
+Change-Id: I0e4b49c10d5b0d4e85d93b68aced8c076af7f9e5
+Signed-off-by: Vernon Mauery <vernon.mauery@gmail.com>
+Reported-by: HD Moore
+---
+ auth_algo.hpp                | 11 +++++------
+ command/rakp12.cpp           |  7 +++++++
+ command/rakp34.cpp           | 12 ++++++++++++
+ command/rakp_setup_check.hpp | 22 ++++++++++++++++++++++
+ session.hpp                  | 17 +++++++++++++++++
+ test/rakp12.cpp              | 28 ++++++++++++++++++++++++++++
+ 6 files changed, 91 insertions(+), 6 deletions(-)
+
+diff --git a/auth_algo.hpp b/auth_algo.hpp
+index e179d72abf..6c0a1c2315 100644
+--- a/auth_algo.hpp
++++ b/auth_algo.hpp
+@@ -114,15 +114,14 @@ class Interface
+         }
+     }
+ 
+-    // User Key is hardcoded to PASSW0RD till the IPMI User account
+-    // management is in place.
+-    std::array<uint8_t, USER_KEY_MAX_LENGTH> userKey = {"0penBmc"};
++    // User Key - the per-account secret used to key the RAKP HMAC.
++    std::array<uint8_t, USER_KEY_MAX_LENGTH> userKey = {};
+ 
+-    // Managed System Random Number
+-    std::array<uint8_t, BMC_RANDOM_NUMBER_LEN> bmcRandomNum;
++    // Managed System Random Number - set during RAKP
++    std::array<uint8_t, BMC_RANDOM_NUMBER_LEN> bmcRandomNum = {};
+ 
+     // Remote Console Random Number
+-    std::array<uint8_t, REMOTE_CONSOLE_RANDOM_NUMBER_LEN> rcRandomNum;
++    std::array<uint8_t, REMOTE_CONSOLE_RANDOM_NUMBER_LEN> rcRandomNum = {};
+ 
+     // Session Integrity Key
+     std::vector<uint8_t> sessionIntegrityKey;
+diff --git a/command/rakp12.cpp b/command/rakp12.cpp
+index faeecac685..dfb904f153 100644
+--- a/command/rakp12.cpp
++++ b/command/rakp12.cpp
+@@ -365,6 +365,13 @@ std::vector<uint8_t> RAKP12(const std::vector<uint8_t>& inPayload,
+     // Generate Key Exchange Authentication Code - RAKP2
+     auto output = authAlgo->generateHMAC(input);
+ 
++    // Fresh per-account key material and BMC random number are now committed to
++    // the authentication algorithm; mark RAKP2 complete so RAKP Message 3 is
++    // permitted to validate against them. This must be the only place this flag
++    // is set - every early-return above leaves it false so RAKP Message 3
++    // cannot complete against stale/default state.
++    session->rakp2Committed = true;
++
+     response->messageTag = request->messageTag;
+     response->rmcpStatusCode = static_cast<uint8_t>(RAKP_ReturnCode::NO_ERROR);
+     response->reserved = 0;
+diff --git a/command/rakp34.cpp b/command/rakp34.cpp
+index eb857634c2..5873816e5a 100644
+--- a/command/rakp34.cpp
++++ b/command/rakp34.cpp
+@@ -4,6 +4,7 @@
+ #include "endian.hpp"
+ #include "guid.hpp"
+ #include "memcmp.hpp"
++#include "rakp_setup_check.hpp"
+ #include "rmcp.hpp"
+ #include "sessions_manager.hpp"
+ 
+@@ -106,6 +107,17 @@ std::vector<uint8_t> RAKP34(const std::vector<uint8_t>& inPayload,
+ 
+     session->updateLastTransactionTime();
+ 
++    if (!rakp3AllowedForState(session->state()) || !session->rakp2Committed)
++    {
++        lg2::warning(
++            "RAKP34: RAKP Message 3 rejected; no completed RAKP Message 2, "
++            "id: {ID}",
++            "ID", lg2::hex, session->getBMCSessionID());
++        response->rmcpStatusCode =
++            static_cast<uint8_t>(RAKP_ReturnCode::INVALID_INTEGRITY_VALUE);
++        return outPayload;
++    }
++
+     auto authAlgo = session->getAuthAlgo();
+     /*
+      * Key Authentication Code - RAKP 3
+diff --git a/command/rakp_setup_check.hpp b/command/rakp_setup_check.hpp
+index 79607ec029..080a04a825 100644
+--- a/command/rakp_setup_check.hpp
++++ b/command/rakp_setup_check.hpp
+@@ -29,6 +29,28 @@ inline bool rakp1AllowedForState(uint8_t sessionState)
+            session::State::setupInProgress;
+ }
+ 
++/**
++ * @brief Determine whether RAKP Message 3 may be processed for a session.
++ *
++ * RAKP Message 3 completes the RMCP+ key-exchange and activates the session.
++ * It must only be processed while the session is still being set up. Once a
++ * session is active (or tearing down / inactive), re-processing RAKP Message 3
++ * would allow an attacker who knows the BMC session ID to re-run activation
++ * against already-installed state. Combined with the Session::rakp2Committed
++ * gate (which ensures a matching RAKP Message 2 actually committed fresh key
++ * material), this prevents RAKP Message 3 from validating against stale or
++ * default authentication state.
++ *
++ * @param[in] sessionState - the current session::State value of the session
++ *
++ * @return true if RAKP Message 3 is permitted for this state, else false
++ */
++inline bool rakp3AllowedForState(uint8_t sessionState)
++{
++    return static_cast<session::State>(sessionState) ==
++           session::State::setupInProgress;
++}
++
+ /**
+  * @brief Verify an incoming RAKP message originates from the console that
+  *        opened the session.
+diff --git a/session.hpp b/session.hpp
+index 1ed3c02306..9b1915b562 100644
+--- a/session.hpp
++++ b/session.hpp
+@@ -242,6 +242,7 @@ class Session : public SessionIface
+     {
+         integrityAlgoInterface = nullptr;
+         cryptAlgoInterface = nullptr;
++        rakp2Committed = false;
+         if (authAlgoInterface)
+         {
+             authAlgoInterface->sessionIntegrityKey.clear();
+@@ -339,6 +340,22 @@ class Session : public SessionIface
+     uint16_t remoteConsolePort{0};
+     bool requesterBound{false};
+ 
++    /** @brief Whether RAKP Message 1 committed fresh authentication material.
++     *
++     * Set only at the successful completion of RAKP Message 1 processing, once
++     * the per-account user key and a freshly generated BMC random number have
++     * been committed to the authentication algorithm. Cleared by
++     * resetDerivedCryptoState() at the start of every RAKP Message 1.
++     *
++     * RAKP Message 3 must refuse to validate unless this is set: every
++     * early-return error path in RAKP Message 1 leaves stale key material (a
++     * default/previous user key and a stale BMC random number) in the
++     * authentication algorithm, and without this gate RAKP Message 3 would
++     * happily validate against that stale state, activating a session with no
++     * valid password.
++     */
++    bool rakp2Committed{false};
++
+   private:
+     SessionID bmcSessionID = 0;           // BMC Session ID
+     SessionID remoteConsoleSessionID = 0; // Remote Console Session ID
+diff --git a/test/rakp12.cpp b/test/rakp12.cpp
+index 8d2fe2fe1b..4c63b74255 100644
+--- a/test/rakp12.cpp
++++ b/test/rakp12.cpp
+@@ -9,6 +9,7 @@
+ 
+ using command::rakp1AllowedForState;
+ using command::rakp1RequesterMatches;
++using command::rakp3AllowedForState;
+ 
+ // Regression test for the RAKP Message 1 relabeling CVE.
+ //
+@@ -40,6 +41,33 @@ TEST(RAKP1SetupGuard, OnlySetupInProgressAllowsRakp1)
+         static_cast<uint8_t>(session::State::tearDownInProgress)));
+ }
+ 
++// Regression test for the RAKP Message 3 stale-state authentication bypass
++//
++// Every early-return error path in RAKP Message 1 (for example a request for
++// CALLBACK privilege) returns before the per-account user key and a fresh BMC
++// random number are committed to the authentication algorithm, leaving stale
++// or default key material behind. Before the fix, RAKP Message 3 validated
++// against whatever state was present, so an attacker could activate a session
++// without a valid password. RAKP Message 3 must only be processed for a
++// session still in setup (and, in RAKP34(), only when rakp2Committed is set).
++
++TEST(RAKP3SetupGuard, OnlySetupInProgressAllowsRakp3)
++{
++    // A session still being set up is the only state that may process RAKP3.
++    EXPECT_TRUE(rakp3AllowedForState(
++        static_cast<uint8_t>(session::State::setupInProgress)));
++
++    // An already-active session must not re-process RAKP Message 3.
++    EXPECT_FALSE(
++        rakp3AllowedForState(static_cast<uint8_t>(session::State::active)));
++
++    // Every other non-setup state must reject RAKP Message 3.
++    EXPECT_FALSE(
++        rakp3AllowedForState(static_cast<uint8_t>(session::State::inactive)));
++    EXPECT_FALSE(rakp3AllowedForState(
++        static_cast<uint8_t>(session::State::tearDownInProgress)));
++}
++
+ TEST(RAKP1SetupGuard, RequesterTupleMustMatch)
+ {
+     const std::string addr = "10.0.0.5";
+-- 
+2.56.0
+

@@ -1,0 +1,48 @@
+From 55de3fff984ad19fac3c711c709b07232140eb69 Mon Sep 17 00:00:00 2001
+From: Vernon Mauery <vernon.mauery@gmail.com>
+Date: Thu, 2 Jul 2026 14:22:16 -0700
+Subject: [PATCH] Reject pre-authentication payloads during session setup
+
+Reject any payload other than the session-setup payloads (Open Session
+Request, RAKP1, RAKP3) on a numbered session that is still in the
+setupInProgress state. The handshake payloads themselves are carried on
+session zero, so the RAKP exchange is unaffected.
+
+Tested: Used a python script to test pre-session commands
+        ipmitool mc info
+        ipmitool lan print 1
+
+Upstream-Status: Backport [Security, https://gerrit.openbmc.org/c/openbmc/phosphor-net-ipmid/+/91963]
+Change-Id: Ic8fdc4fb8621c03b03c67cff871925cd86f422ce
+Signed-off-by: Vernon Mauery <vernon.mauery@gmail.com>
+---
+ message_parsers.cpp | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/message_parsers.cpp b/message_parsers.cpp
+index 755a284c99..8252a4dedd 100644
+--- a/message_parsers.cpp
++++ b/message_parsers.cpp
+@@ -200,6 +200,19 @@ std::shared_ptr<Message> unflatten(std::vector<uint8_t>& inPacket)
+     message->rmcpMsgClass =
+         static_cast<ClassOfMsg>(header->base.rmcp.classOfMsg);
+ 
++    // Reject messages that have a session, but are not session init
++    // messages prior to the session being fully active
++    if (sessionID != session::sessionZero &&
++        session->state() ==
++            static_cast<uint8_t>(session::State::setupInProgress) &&
++        message->payloadType != PayloadType::OPEN_SESSION_REQUEST &&
++        message->payloadType != PayloadType::RAKP1 &&
++        message->payloadType != PayloadType::RAKP3)
++    {
++        throw std::runtime_error(
++            "Pre-authentication payload rejected: session not activated");
++    }
++
+     // Confirm the number of data bytes received correlates to
+     // the packet length in the header
+     size_t payloadLen = endian::from_ipmi(header->payloadLength);
+-- 
+2.56.0
+

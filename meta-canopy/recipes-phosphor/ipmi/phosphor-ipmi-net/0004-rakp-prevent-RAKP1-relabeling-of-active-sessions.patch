@@ -1,0 +1,387 @@
+From 356f836feab755c45b2af5b12da1c2b834e928b9 Mon Sep 17 00:00:00 2001
+From: Vernon Mauery <vernon.mauery@gmail.com>
+Date: Wed, 18 Nov 2026 15:30:18 -0800
+Subject: [PATCH] rakp: prevent RAKP1 relabeling of active sessions
+
+RAKP Message 1 derives a session's identity and privilege but was
+accepted regardless of session state or packet source. An attacker who
+knew a session's BMC session ID could send a second RAKP1 to relabel an
+already-authenticated session, and the previously installed integrity/
+confidentiality packet keys were retained across the change.
+
+ - Reject RAKP1 unless the session is in setupInProgress, so an active
+   session's identity and privilege can no longer be altered.
+ - Bind the originating requester tuple (source IP + port) at Open
+   Session and verify RAKP1 arrives from the same endpoint.
+ - Invalidate derived integrity/confidentiality state and the session
+   integrity key on re-derivation so no stale packet keys survive.
+ - Add regression tests covering the state and requester-tuple guards.
+
+Tested: added 4 unit test cases for RAKP1
+        After applying fix, relabeling a session fails
+
+Upstream-Status: Backport [Security, https://gerrit.openbmc.org/c/openbmc/phosphor-net-ipmid/+/97460]
+Fixes: CVE-2026-16140
+Change-Id: I0d7b3d6aff2599a9416bcdd1b81ef2f8bbd48d37
+Signed-off-by: Vernon Mauery <vernon.mauery@gmail.com>
+Reported-by: HD Moore
+Reported-by: Gadi Evron
+---
+ command/open_session.cpp     | 17 ++++++++--
+ command/rakp12.cpp           | 36 +++++++++++++++++++-
+ command/rakp_setup_check.hpp | 65 ++++++++++++++++++++++++++++++++++++
+ message_handler.hpp          | 12 +++++++
+ session.hpp                  | 48 ++++++++++++++++++++++++++
+ test/meson.build             |  2 +-
+ test/rakp12.cpp              | 62 ++++++++++++++++++++++++++++++++++
+ 7 files changed, 237 insertions(+), 5 deletions(-)
+ create mode 100644 command/rakp_setup_check.hpp
+ create mode 100644 test/rakp12.cpp
+
+diff --git a/command/open_session.cpp b/command/open_session.cpp
+index 9d5fc49..fcc1a8b 100644
+--- a/command/open_session.cpp
++++ b/command/open_session.cpp
+@@ -9,9 +9,8 @@
+ namespace command
+ {
+ 
+-std::vector<uint8_t> openSession(
+-    const std::vector<uint8_t>& inPayload,
+-    std::shared_ptr<message::Handler>& /* handler */)
++std::vector<uint8_t> openSession(const std::vector<uint8_t>& inPayload,
++                                 std::shared_ptr<message::Handler>& handler)
+ {
+     auto request =
+         reinterpret_cast<const OpenSessionRequest*>(inPayload.data());
+@@ -24,6 +23,14 @@ std::vector<uint8_t> openSession(
+     std::vector<uint8_t> outPayload(sizeof(OpenSessionResponse));
+     auto response = reinterpret_cast<OpenSessionResponse*>(outPayload.data());
+ 
++    if (!handler || !handler->getChannel())
++    {
++        response->status_code =
++            static_cast<uint8_t>(RAKP_ReturnCode::INSUFFICIENT_RESOURCE);
++        lg2::error("openSession : no handler or channel info present");
++        return outPayload;
++    }
++
+     // Per the IPMI Spec, messageTag and remoteConsoleSessionID are always
+     // returned
+     response->messageTag = request->messageTag;
+@@ -110,6 +117,10 @@ std::vector<uint8_t> openSession(
+ 
+     session->updateLastTransactionTime();
+ 
++    uint32_t ipAddr{0};
++    std::string addr = handler->getChannel()->getRemoteAddress(ipAddr);
++    session->bindRequester(addr, handler->getChannel()->getPort());
++
+     // Session state is Setup in progress
+     session->state(static_cast<uint8_t>(session::State::setupInProgress));
+     return outPayload;
+diff --git a/command/rakp12.cpp b/command/rakp12.cpp
+index aa9d7d9..faeecac 100644
+--- a/command/rakp12.cpp
++++ b/command/rakp12.cpp
+@@ -5,6 +5,7 @@
+ #include "comm_module.hpp"
+ #include "endian.hpp"
+ #include "guid.hpp"
++#include "rakp_setup_check.hpp"
+ #include "sessions_manager.hpp"
+ 
+ #include <openssl/rand.h>
+@@ -67,7 +68,7 @@ bool rejectIfNotClear(ipmi::Cc cc, bool positive, uint8_t userId,
+ } // namespace
+ 
+ std::vector<uint8_t> RAKP12(const std::vector<uint8_t>& inPayload,
+-                            std::shared_ptr<message::Handler>& /* handler */)
++                            std::shared_ptr<message::Handler>& handler)
+ {
+     auto request = reinterpret_cast<const RAKP1request*>(inPayload.data());
+     // verify inPayload minimum size
+@@ -104,6 +105,39 @@ std::vector<uint8_t> RAKP12(const std::vector<uint8_t>& inPayload,
+         return outPayload;
+     }
+ 
++    if (!rakp1AllowedForState(session->state()))
++    {
++        lg2::warning(
++            "RAKP12: RAKP Message 1 rejected; session not in setup, id: {ID}",
++            "ID", lg2::hex, session->getBMCSessionID());
++        response->rmcpStatusCode =
++            static_cast<uint8_t>(RAKP_ReturnCode::INVALID_SESSION_ID);
++        logInvalidLoginRedfishEvent(
++            "RAKP Message 1 on non-setup session rejected");
++        return outPayload;
++    }
++
++    if (handler && handler->getChannel())
++    {
++        uint32_t ipAddr = 0;
++        std::string reqAddr = handler->getChannel()->getRemoteAddress(ipAddr);
++        uint16_t reqPort = handler->getChannel()->getPort();
++        if (!rakp1RequesterMatches(session->requesterBound, session->remoteAddr,
++                                   session->remoteConsolePort, reqAddr,
++                                   reqPort))
++        {
++            lg2::warning("RAKP12: RAKP Message 1 requester mismatch, id: {ID}",
++                         "ID", lg2::hex, session->getBMCSessionID());
++            response->rmcpStatusCode =
++                static_cast<uint8_t>(RAKP_ReturnCode::INVALID_SESSION_ID);
++            logInvalidLoginRedfishEvent(
++                "RAKP Message 1 requester tuple mismatch rejected");
++            return outPayload;
++        }
++    }
++
++    session->resetDerivedCryptoState();
++
+     auto rakp1Size =
+         sizeof(RAKP1request) - (userNameMaxLen - request->user_name_len);
+ 
+diff --git a/command/rakp_setup_check.hpp b/command/rakp_setup_check.hpp
+new file mode 100644
+index 0000000..79607ec
+--- /dev/null
++++ b/command/rakp_setup_check.hpp
+@@ -0,0 +1,65 @@
++#pragma once
++
++#include <ipmid/sessiondef.hpp>
++
++#include <cstdint>
++#include <string>
++
++namespace command
++{
++
++/**
++ * @brief Determine whether RAKP Message 1 may (re-)derive a session's identity.
++ *
++ * RAKP Message 1 begins the RMCP+ key-exchange for a session that is still
++ * being set up. Once a session has become active, its identity (user name,
++ * user id, channel/user privilege) is fixed for the life of the session.
++ * Accepting another RAKP Message 1 on an active session would allow an
++ * attacker who knows or guesses the BMC session ID to relabel the session's
++ * identity or privilege. Only sessions in the setupInProgress state may
++ * process RAKP Message 1.
++ *
++ * @param[in] sessionState - the current session::State value of the session
++ *
++ * @return true if RAKP Message 1 is permitted for this state, else false
++ */
++inline bool rakp1AllowedForState(uint8_t sessionState)
++{
++    return static_cast<session::State>(sessionState) ==
++           session::State::setupInProgress;
++}
++
++/**
++ * @brief Verify an incoming RAKP message originates from the console that
++ *        opened the session.
++ *
++ * The session setup state is bound to the originating requester tuple: the
++ * source IP address and port of the remote console that sent the Open Session
++ * Request (the remote console and BMC session identifiers are already bound to
++ * the session at creation time). An incoming RAKP message whose source tuple
++ * differs from the bound tuple is rejected, preventing an attacker on a
++ * different endpoint from hijacking or relabeling a session that is in setup.
++ *
++ * @param[in] bound     - whether a requester tuple has been bound to the
++ *                        session yet
++ * @param[in] boundAddr - source address bound at Open Session
++ * @param[in] boundPort - source port bound at Open Session
++ * @param[in] reqAddr   - source address of the incoming RAKP message
++ * @param[in] reqPort   - source port of the incoming RAKP message
++ *
++ * @return true if the requester tuple matches (or none is bound yet), else
++ *         false
++ */
++inline bool rakp1RequesterMatches(bool bound, const std::string& boundAddr,
++                                  uint16_t boundPort,
++                                  const std::string& reqAddr, uint16_t reqPort)
++{
++    if (!bound)
++    {
++        // No requester tuple has been bound yet; nothing to compare against.
++        return true;
++    }
++    return boundAddr == reqAddr && boundPort == reqPort;
++}
++
++} // namespace command
+diff --git a/message_handler.hpp b/message_handler.hpp
+index 1c06b67..04731bf 100644
+--- a/message_handler.hpp
++++ b/message_handler.hpp
+@@ -63,6 +63,18 @@ class Handler : public std::enable_shared_from_this<Handler>
+     /** @brief Set socket channel in session object */
+     void setChannelInSession() const;
+ 
++    /** @brief Get the socket channel this handler is operating on.
++     *
++     *  Used by the session setup commands to bind and verify the originating
++     *  requester tuple (source address and port).
++     *
++     *  @return shared pointer to the socket channel
++     */
++    std::shared_ptr<udpsocket::Channel> getChannel() const
++    {
++        return channel;
++    }
++
+     /** @brief Send the SOL payload
+      *
+      *  The SOL payload is flattened and sent out on the socket
+diff --git a/session.hpp b/session.hpp
+index 8f7c7c9..1ed3c02 100644
+--- a/session.hpp
++++ b/session.hpp
+@@ -227,6 +227,44 @@ class Session : public SessionIface
+         return cryptAlgoInterface ? true : false;
+     }
+ 
++    /**
++     * @brief Drop packet keys derived during key exchange, used on RAKP1
++     *        re-derivation so no previously installed keys survive.
++     *
++     * The integrity and confidentiality interfaces are derived packet-key
++     * state (installed at RAKP3/4) and are torn down; they are rebuilt by the
++     * next RAKP3/4. The authentication interface holds the algorithm negotiated
++     * at Open Session (not re-negotiated by RAKP1) and is used right after this
++     * call, so it is kept and only its derived session integrity key is
++     * cleared.
++     */
++    void resetDerivedCryptoState()
++    {
++        integrityAlgoInterface = nullptr;
++        cryptAlgoInterface = nullptr;
++        if (authAlgoInterface)
++        {
++            authAlgoInterface->sessionIntegrityKey.clear();
++        }
++    }
++
++    /**
++     * @brief Bind the originating requester tuple to the session.
++     *
++     * Records the source IP address and port of the remote console that
++     * originated session setup. Subsequent RAKP messages are verified to
++     * originate from this same tuple.
++     *
++     * @param[in] addr - source IP address of the remote console
++     * @param[in] port - source port of the remote console
++     */
++    void bindRequester(const std::string& addr, uint16_t port)
++    {
++        remoteAddr = addr;
++        remoteConsolePort = port;
++        requesterBound = true;
++    }
++
+     void updateLastTransactionTime()
+     {
+         lastTime = std::chrono::steady_clock::now();
+@@ -291,6 +329,16 @@ class Session : public SessionIface
+     /** @brief Socket channel for communicating with the remote client.*/
+     std::shared_ptr<udpsocket::Channel> channelPtr;
+ 
++    /** @brief Originating requester tuple bound at session setup.
++     *
++     * The source IP address and port of the remote console that originated the
++     * Open Session Request. RAKP setup messages for this session must originate
++     * from this same tuple; see command::rakp1RequesterMatches().
++     */
++    std::string remoteAddr{};
++    uint16_t remoteConsolePort{0};
++    bool requesterBound{false};
++
+   private:
+     SessionID bmcSessionID = 0;           // BMC Session ID
+     SessionID remoteConsoleSessionID = 0; // Remote Console Session ID
+diff --git a/test/meson.build b/test/meson.build
+index 02f3ba1..c6973d6 100644
+--- a/test/meson.build
++++ b/test/meson.build
+@@ -21,7 +21,7 @@ endif
+ 
+ test_sources = ['../integrity_algo.cpp', '../crypt_algo.cpp']
+ 
+-tests = ['cipher.cpp']
++tests = ['cipher.cpp', 'rakp12.cpp']
+ 
+ foreach t : tests
+     test(
+diff --git a/test/rakp12.cpp b/test/rakp12.cpp
+new file mode 100644
+index 0000000..8d2fe2f
+--- /dev/null
++++ b/test/rakp12.cpp
+@@ -0,0 +1,62 @@
++#include "command/rakp_setup_check.hpp"
++
++#include <ipmid/sessiondef.hpp>
++
++#include <cstdint>
++#include <string>
++
++#include <gtest/gtest.h>
++
++using command::rakp1AllowedForState;
++using command::rakp1RequesterMatches;
++
++// Regression test for the RAKP Message 1 relabeling CVE.
++//
++// RAKP Message 1 (re-)derives a session's identity and privilege. Before the
++// fix, RAKP Message 1 was accepted regardless of session state, so an attacker
++// who knew the BMC session ID could send a second RAKP Message 1 against an
++// already-authenticated (active) session and relabel its identity/privilege.
++// The guard below is the check RAKP12() consults before touching any identity
++// state; these tests ensure only setupInProgress sessions may process it.
++
++TEST(RAKP1SetupGuard, ActiveSessionRejectsRakp1)
++{
++    // The core of the CVE: a fully authenticated, active session must NOT be
++    // allowed to process another RAKP Message 1 (which would relabel it).
++    EXPECT_FALSE(
++        rakp1AllowedForState(static_cast<uint8_t>(session::State::active)));
++}
++
++TEST(RAKP1SetupGuard, OnlySetupInProgressAllowsRakp1)
++{
++    // A session still being set up is the only state that may process RAKP1.
++    EXPECT_TRUE(rakp1AllowedForState(
++        static_cast<uint8_t>(session::State::setupInProgress)));
++
++    // Every non-setup state must reject RAKP Message 1.
++    EXPECT_FALSE(
++        rakp1AllowedForState(static_cast<uint8_t>(session::State::inactive)));
++    EXPECT_FALSE(rakp1AllowedForState(
++        static_cast<uint8_t>(session::State::tearDownInProgress)));
++}
++
++TEST(RAKP1SetupGuard, RequesterTupleMustMatch)
++{
++    const std::string addr = "10.0.0.5";
++
++    // An identical source tuple is accepted (legitimate RAKP1 / retransmit).
++    EXPECT_TRUE(rakp1RequesterMatches(true, addr, 1234, addr, 1234));
++
++    // A RAKP Message 1 injected from a different source address is rejected.
++    EXPECT_FALSE(rakp1RequesterMatches(true, addr, 1234, "10.0.0.6", 1234));
++
++    // A RAKP Message 1 injected from a different source port is rejected.
++    EXPECT_FALSE(rakp1RequesterMatches(true, addr, 1234, addr, 4321));
++}
++
++TEST(RAKP1SetupGuard, UnboundRequesterAllowed)
++{
++    // If no requester tuple has been bound yet, there is nothing to compare
++    // against and the check does not block.
++    EXPECT_TRUE(rakp1RequesterMatches(false, "", 0, "10.0.0.6", 4321));
++}
+-- 
+2.56.0
+

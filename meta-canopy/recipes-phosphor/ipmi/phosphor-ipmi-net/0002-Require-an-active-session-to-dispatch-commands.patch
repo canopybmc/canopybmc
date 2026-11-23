@@ -1,0 +1,49 @@
+From c5cce35ad0b9f89f6f0c13ad075b5ee22ac59ce6 Mon Sep 17 00:00:00 2001
+From: Vernon Mauery <vernon.mauery@gmail.com>
+Date: Thu, 2 Jul 2026 14:22:38 -0700
+Subject: [PATCH] Require an active session to dispatch commands
+
+Only session-setup payloads (Open Session Request, RAKP1, RAKP3) legit-
+imately run before a session is active, and those are dispatched under
+session zero, which bypasses this check entirely. Any command that
+carries a numbered session ID must therefore belong to a fully activated
+session.
+
+Tested: Used a python script to test pre-session commands
+        ipmitool mc info
+        ipmitool lan print 1
+
+Upstream-Status: Backport [Security, https://gerrit.openbmc.org/c/openbmc/phosphor-net-ipmid/+/91964]
+Change-Id: I2f14c00d9a738370b001931d5b87f692485f543a
+Signed-off-by: Vernon Mauery <vernon.mauery@gmail.com>
+---
+ command_table.cpp | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/command_table.cpp b/command_table.cpp
+index 9880bc05cf..0047d2e077 100644
+--- a/command_table.cpp
++++ b/command_table.cpp
+@@ -106,14 +106,16 @@ void Table::executeCommand(uint32_t inCommand,
+     {
+         auto start = std::chrono::steady_clock::now();
+ 
+-        // Ignore messages that are not part of an active/pre-active session
++        // Ignore messages that are not part of an active session. Session-setup
++        // payloads (Open Session Request, RAKP1, RAKP3) are dispatched under
++        // session ID zero, so a non-zero session ID here must be fully
++        // activated (RAKP handshake complete) before any command is executed.
+         if (handler->sessionID != session::sessionZero)
+         {
+             std::shared_ptr<session::Session> session =
+                 session::Manager::get().getSession(handler->sessionID);
+             auto state = static_cast<session::State>(session->state());
+-            if ((state != session::State::setupInProgress) &&
+-                (state != session::State::active))
++            if (state != session::State::active)
+             {
+                 return;
+             }
+-- 
+2.56.0
+
