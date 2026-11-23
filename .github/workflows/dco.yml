@@ -16,12 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check Signed-off-by
-        uses: KineticCafe/actions-dco@v3.2.0
+        # TODO: Change back to KineticCafe/actions-dco once PR 224 is merged
+        uses: sinuscosinustan/actions-dco@19416252ba465aabee1b01dfae0ab732b2421a58
         with:
           # Commits of these bots don't need a sign-off: Dependabot can't sign
           # off, canopybmc-bot (update-openbmc) and github-actions
-          # (release-prepare) are our own automation.
+          # (release-prepare) are our own automation. No other bot is exempt.
           config: |
-            [bot]
-            policy = "allowlist"
+            [bots]
+            policy = "none"
             allow = ["dependabot[bot]", "canopybmc-bot[bot]", "github-actions[bot]"]
