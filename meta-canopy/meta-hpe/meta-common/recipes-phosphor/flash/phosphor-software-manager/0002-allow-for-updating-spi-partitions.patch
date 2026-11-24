@@ -197,12 +197,11 @@ Signed-off-by: Tan Siewert <tan.siewert@9elements.com>
  spi-flash/spi_factory.hpp          |   4 +-
  spi-flash/spi_software_manager.cpp |  10 +-
  test/meson.build                   |   1 +
- test/spi-flash/meson.build         |  10 ++
+ test/spi-flash/meson.build         |  11 ++
  test/spi-flash/mtd_utils.cpp       | 159 +++++++++++++++++++++++++++++
- 15 files changed, 374 insertions(+), 24 deletions(-)
+ 15 files changed, 375 insertions(+), 24 deletions(-)
  create mode 100644 spi-flash/mtd_utils.cpp
  create mode 100644 spi-flash/mtd_utils.hpp
- create mode 100644 test/spi-flash/meson.build
  create mode 100644 test/spi-flash/mtd_utils.cpp
 
 diff --git a/spi-flash/bios/bios_device.cpp b/spi-flash/bios/bios_device.cpp
@@ -449,18 +448,18 @@ index 0000000..4769b54
 +
 +} // namespace phosphor::software::manager
 diff --git a/spi-flash/spi_device.cpp b/spi-flash/spi_device.cpp
-index 85b06fc..54267a9 100644
+index 33ed50b..6fff0b5 100644
 --- a/spi-flash/spi_device.cpp
 +++ b/spi-flash/spi_device.cpp
-@@ -4,6 +4,7 @@
- #include "common/include/software_manager.hpp"
+@@ -5,6 +5,7 @@
  #include "common/include/system_state.hpp"
  #include "common/include/utils.hpp"
+ #include "flashcp_progress.hpp"
 +#include "mtd_utils.hpp"
  
  #include <gpio_controller.hpp>
  #include <phosphor-logging/lg2.hpp>
-@@ -56,18 +57,18 @@ static std::optional<std::string> getSPIDevAddr(uint64_t spiControllerIndex)
+@@ -59,18 +60,18 @@ static std::optional<std::string> getSPIDevAddr(uint64_t spiControllerIndex)
      return std::nullopt;
  }
  
@@ -486,7 +485,7 @@ index 85b06fc..54267a9 100644
  {
      auto optAddr = getSPIDevAddr(spiControllerIndex);
  
-@@ -485,6 +486,20 @@ std::optional<std::string> SPIDevice::getMTDDevicePath() const
+@@ -496,6 +497,20 @@ std::optional<std::string> SPIDevice::getMTDDevicePath() const
          return std::nullopt;
      }
  
@@ -508,7 +507,7 @@ index 85b06fc..54267a9 100644
      {
          const std::string mtdName = entry.path().filename().string();
 diff --git a/spi-flash/spi_device.hpp b/spi-flash/spi_device.hpp
-index f777866..ff2bc85 100644
+index 93d7fc3..65f784d 100644
 --- a/spi-flash/spi_device.hpp
 +++ b/spi-flash/spi_device.hpp
 @@ -8,6 +8,8 @@
@@ -518,9 +517,9 @@ index f777866..ff2bc85 100644
 +#include <cstdint>
 +#include <optional>
  #include <string>
+ #include <string_view>
  
- class SPIDevice;
-@@ -35,8 +37,8 @@ class SPIDevice : public Device
+@@ -36,8 +38,8 @@ class SPIDevice : public Device
    public:
      using Device::softwareCurrent;
      SPIDevice(sdbusplus::async::context& ctx, uint64_t spiControllerIndex,
@@ -531,7 +530,7 @@ index f777866..ff2bc85 100644
                const std::vector<bool>& gpioValuesIn, SoftwareConfig& config,
                SoftwareManager* parent, enum FlashLayout layout,
                enum FlashTool tool);
-@@ -66,6 +68,8 @@ class SPIDevice : public Device
+@@ -67,6 +69,8 @@ class SPIDevice : public Device
  
      uint64_t spiControllerIndex;
      uint64_t spiDeviceIndex;
@@ -634,7 +633,7 @@ index 8e1709b..23dc5cf 100644
      if (spiDevice == nullptr)
      {
 diff --git a/test/meson.build b/test/meson.build
-index 5e5c634..f5e7333 100644
+index 809b8ed..ecc06c2 100644
 --- a/test/meson.build
 +++ b/test/meson.build
 @@ -3,6 +3,7 @@ subdir('create_package')
@@ -646,11 +645,14 @@ index 5e5c634..f5e7333 100644
  if get_option('cpld-software-update').allowed()
      subdir('cpld')
 diff --git a/test/spi-flash/meson.build b/test/spi-flash/meson.build
-new file mode 100644
-index 0000000..793c6fe
---- /dev/null
+index efda770..b04e7cf 100644
+--- a/test/spi-flash/meson.build
 +++ b/test/spi-flash/meson.build
-@@ -0,0 +1,10 @@
+@@ -8,3 +8,14 @@ test(
+         ],
+     ),
+ )
++
 +test(
 +    'spi_mtd_partition',
 +    executable(

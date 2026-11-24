@@ -70,11 +70,11 @@ Signed-off-by: Pedro Maione <pedro.maione@9elements.com>
 ---
  src/entity_manager/perform_scan.cpp | 23 ++++++++++
  src/utils.cpp                       | 65 +++++++++++++++++++++++++++++
- src/utils.hpp                       | 11 +++++
- 3 files changed, 99 insertions(+)
+ src/utils.hpp                       | 10 +++++
+ 3 files changed, 98 insertions(+)
 
 diff --git a/src/entity_manager/perform_scan.cpp b/src/entity_manager/perform_scan.cpp
-index 1657a1e..750117e 100644
+index 47286840..0f19baa9 100644
 --- a/src/entity_manager/perform_scan.cpp
 +++ b/src/entity_manager/perform_scan.cpp
 @@ -18,6 +18,7 @@
@@ -85,7 +85,7 @@ index 1657a1e..750117e 100644
  
  struct DBusInterfaceInstance
  {
-@@ -462,6 +463,26 @@ static std::string generateDeviceName(
+@@ -443,6 +444,26 @@ static std::string generateDeviceName(
      }
      return copyForName;
  }
@@ -112,7 +112,7 @@ index 1657a1e..750117e 100644
  static void applyTemplateAndExposeActions(
      const std::string& recordName, const DBusObject& dbusObject,
      size_t foundDeviceIdx, const std::optional<std::string>& replaceStr,
-@@ -472,6 +493,8 @@ static void applyTemplateAndExposeActions(
+@@ -453,6 +474,8 @@ static void applyTemplateAndExposeActions(
          em_utils::templateCharReplace(valueInner, dbusObject, foundDeviceIdx,
                                        replaceStr);
  
@@ -122,10 +122,10 @@ index 1657a1e..750117e 100644
                             valueInner);
      }
 diff --git a/src/utils.cpp b/src/utils.cpp
-index d2718a2..3926307 100644
+index 9f9284b2..0dc26c5f 100644
 --- a/src/utils.cpp
 +++ b/src/utils.cpp
-@@ -109,6 +109,71 @@ bool getI2cDevicePaths(const fs::path& dirPath,
+@@ -139,6 +139,71 @@ bool getI2cDevicePaths(const fs::path& dirPath,
      return true;
  }
  
@@ -198,19 +198,18 @@ index d2718a2..3926307 100644
  ///
  /// Default match JSON/DBus match implementation
 diff --git a/src/utils.hpp b/src/utils.hpp
-index a744773..d90ead6 100644
+index 36fc1dab..fbfe10d4 100644
 --- a/src/utils.hpp
 +++ b/src/utils.hpp
-@@ -9,6 +9,8 @@
- #include <charconv>
+@@ -11,6 +11,7 @@
  #include <filesystem>
  #include <flat_map>
-+#include <optional>
+ #include <optional>
 +#include <string_view>
  
  using DBusValueVariant =
      std::variant<std::string, int64_t, uint64_t, double, int32_t, uint32_t,
-@@ -34,6 +36,15 @@ bool findFiles(const std::vector<std::filesystem::path>& dirPaths,
+@@ -39,6 +40,15 @@ bool findFiles(const std::vector<std::filesystem::path>& dirPaths,
  bool getI2cDevicePaths(const std::filesystem::path& dirPath,
                         std::flat_map<size_t, std::filesystem::path>& busPaths);
  
