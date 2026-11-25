@@ -15,14 +15,14 @@ Co-developed-by: Christian Walter <christian.walter@9elements.com>
 Signed-off-by: Christian Walter <christian.walter@9elements.com>
 Signed-off-by: Georg Hackel <georg.hackel@9elements.com>
 ---
- arch/arm/boot/dts/hpe/hpe-gxp.dts | 170 +++++++++++++++++++++++++++++-
- 1 file changed, 166 insertions(+), 4 deletions(-)
+ arch/arm/boot/dts/hpe/hpe-gxp.dts | 164 +++++++++++++++++++++++++++++-
+ 1 file changed, 160 insertions(+), 4 deletions(-)
 
 diff --git a/arch/arm/boot/dts/hpe/hpe-gxp.dts b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-index d1cdb46f8489..40f2e8432f9f 100644
+index d1cdb46f8489..46704a642822 100644
 --- a/arch/arm/boot/dts/hpe/hpe-gxp.dts
 +++ b/arch/arm/boot/dts/hpe/hpe-gxp.dts
-@@ -99,6 +99,169 @@ vic1: interrupt-controller@80f00000 {
+@@ -99,6 +99,163 @@ vic1: interrupt-controller@80f00000 {
  			#interrupt-cells = <1>;
  		};
  
@@ -68,15 +68,9 @@ index d1cdb46f8489..40f2e8432f9f 100644
 +				"fan11-installed", "fan12-installed",
 +				"fan13-installed", "fan14-installed",
 +				"fan15-installed", "fan16-installed",
-+				/* 24-39: Fan fail status (active low) */
-+				"fan1-fail", "fan2-fail",
-+				"fan3-fail", "fan4-fail",
-+				"fan5-fail", "fan6-fail",
-+				"fan7-fail", "fan8-fail",
-+				"fan9-fail", "fan10-fail",
-+				"fan11-fail", "fan12-fail",
-+				"fan13-fail", "fan14-fail",
-+				"fan15-fail", "fan16-fail",
++				/* 24-39: Reserved */
++				"", "", "", "", "", "", "", "",
++				"", "", "", "", "", "", "", "",
 +				/* 40-55: Fan ID */
 +				"fan1-id", "fan2-id",
 +				"fan3-id", "fan4-id",
@@ -192,7 +186,7 @@ index d1cdb46f8489..40f2e8432f9f 100644
  		uarta: serial@c00000e0 {
  			compatible = "ns16550a";
  			reg = <0xc00000e0 0x8>;
-@@ -351,10 +514,9 @@ umac1: ethernet@c0005000 {
+@@ -351,10 +508,9 @@ umac1: ethernet@c0005000 {
  
  		fanctrl: fan-controller@c1000c00 {
  			compatible = "hpe,gxp-fan-ctrl";

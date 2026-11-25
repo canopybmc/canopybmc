@@ -22,9 +22,9 @@ Signed-off-by: Georg Hackel <georg.hackel@9elements.com>
  drivers/soc/hpe/gxp-fn2.c        | 279 ++++++++++++
  drivers/soc/hpe/gxp-soclib.c     |  37 ++
  drivers/soc/hpe/gxp-soclib.h     |  14 +
- drivers/soc/hpe/gxp-xreg.c       | 747 +++++++++++++++++++++++++++++++
+ drivers/soc/hpe/gxp-xreg.c       | 727 +++++++++++++++++++++++++++++++
  include/linux/soc/hpe/gxp-regs.h | 208 +++++++++
- 10 files changed, 1623 insertions(+)
+ 10 files changed, 1603 insertions(+)
  create mode 100644 drivers/soc/hpe/Kconfig
  create mode 100644 drivers/soc/hpe/Makefile
  create mode 100644 drivers/soc/hpe/gxp-csm.c
@@ -762,10 +762,10 @@ index 000000000000..1d30d05f0df8
 +#endif /* __GXP_SOCLIB_H__ */
 diff --git a/drivers/soc/hpe/gxp-xreg.c b/drivers/soc/hpe/gxp-xreg.c
 new file mode 100644
-index 000000000000..709a56222bff
+index 000000000000..5cd03ab3f3ef
 --- /dev/null
 +++ b/drivers/soc/hpe/gxp-xreg.c
-@@ -0,0 +1,747 @@
+@@ -0,0 +1,727 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * HPE GXP XREG (Extended Register Block) driver
@@ -821,22 +821,6 @@ index 000000000000..709a56222bff
 +	FAN14_INST,
 +	FAN15_INST,
 +	FAN16_INST,
-+	FAN1_FAIL = 24,
-+	FAN2_FAIL,
-+	FAN3_FAIL,
-+	FAN4_FAIL,
-+	FAN5_FAIL,
-+	FAN6_FAIL,
-+	FAN7_FAIL,
-+	FAN8_FAIL,
-+	FAN9_FAIL,
-+	FAN10_FAIL,
-+	FAN11_FAIL,
-+	FAN12_FAIL,
-+	FAN13_FAIL,
-+	FAN14_FAIL,
-+	FAN15_FAIL,
-+	FAN16_FAIL,
 +	FAN1_ID = 40,
 +	FAN2_ID,
 +	FAN3_ID,
@@ -1159,10 +1143,6 @@ index 000000000000..709a56222bff
 +	case PSU1_DC ... PSU8_DC:
 +		regmap_read(drvdata->xreg_map, XREG_PSU_POWER_STATUS, &val);
 +		return !!(val & BIT((offset - PSU1_DC) + XREG_PSU_DC_OK_SHIFT));
-+	case FAN1_FAIL ... FAN16_FAIL:
-+		regmap_read(drvdata->xreg_map, XREG_FAN_FAIL_ID, &val);
-+		/* Dual motor fans use x2 bits */
-+		return !!(val & BIT(2 * (offset - FAN1_FAIL)));
 +	case FAN1_ID ... FAN8_ID:
 +		regmap_read(drvdata->xreg_map, XREG_FAN_FAIL_ID, &val);
 +		return !!(val & BIT((offset - FAN1_ID) + XREG_FAN1_8_ID_SHIFT));
