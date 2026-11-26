@@ -1,0 +1,198 @@
+name: Redfish role permissions
+description: >-
+  The predefined Redfish roles limit what an account may do: ReadOnly and
+  Operator accounts read the account service but cannot create accounts or
+  change the account service, ReadOnly cannot delete accounts, and an account
+  may change its own password.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Redfish role permissions
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: A leftover ReadOnly test account is removed
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: DELETE, path: /redfish/v1/AccountService/Accounts/tsreadonly, status: [200, 204, 404]}
+
+      - cmd: redfish
+        name: A leftover Operator test account is removed
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: DELETE, path: /redfish/v1/AccountService/Accounts/tsoperator, status: [200, 204, 404]}
+
+      - cmd: redfish
+        name: A ReadOnly account is created
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: /redfish/v1/AccountService/Accounts
+            body: {UserName: tsreadonly, Password: Ts-R3adOnly-26, RoleId: ReadOnly, Enabled: true}
+            status: 201
+
+      - cmd: redfish
+        name: An Operator account is created
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: /redfish/v1/AccountService/Accounts
+            body: {UserName: tsoperator, Password: Ts-0perator-26, RoleId: Operator, Enabled: true}
+            status: 201
+
+      - cmd: redfish
+        name: ReadOnly reads the account service
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {user: tsreadonly, password: Ts-R3adOnly-26}
+          validate: request
+          request: {method: GET, path: /redfish/v1/AccountService, status: 200}
+
+      - cmd: redfish
+        name: ReadOnly cannot create accounts
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {user: tsreadonly, password: Ts-R3adOnly-26}
+          validate: request
+          request:
+            method: POST
+            path: /redfish/v1/AccountService/Accounts
+            body: {UserName: tsdenied, Password: Ts-D3nied-26, RoleId: ReadOnly, Enabled: true}
+            status: 403
+
+      - cmd: redfish
+        name: ReadOnly cannot change the account service
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {user: tsreadonly, password: Ts-R3adOnly-26}
+          validate: request
+          request:
+            method: PATCH
+            path: /redfish/v1/AccountService
+            body: {AccountLockoutDuration: 60}
+            status: 403
+
+      - cmd: redfish
+        name: ReadOnly cannot delete another account
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {user: tsreadonly, password: Ts-R3adOnly-26}
+          validate: request
+          request: {method: DELETE, path: /redfish/v1/AccountService/Accounts/tsoperator, status: 403}
+
+      - cmd: redfish
+        name: Operator reads the account service
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {user: tsoperator, password: Ts-0perator-26}
+          validate: request
+          request: {method: GET, path: /redfish/v1/AccountService, status: 200}
+
+      - cmd: redfish
+        name: Operator cannot create accounts
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {user: tsoperator, password: Ts-0perator-26}
+          validate: request
+          request:
+            method: POST
+            path: /redfish/v1/AccountService/Accounts
+            body: {UserName: tsdenied, Password: Ts-D3nied-26, RoleId: ReadOnly, Enabled: true}
+            status: 403
+
+      - cmd: redfish
+        name: Operator cannot change the account service
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {user: tsoperator, password: Ts-0perator-26}
+          validate: request
+          request:
+            method: PATCH
+            path: /redfish/v1/AccountService
+            body: {AccountLockoutDuration: 60}
+            status: 403
+
+      - cmd: redfish
+        name: ReadOnly changes its own password
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {user: tsreadonly, password: Ts-R3adOnly-26}
+          validate: request
+          request:
+            method: PATCH
+            path: /redfish/v1/AccountService/Accounts/tsreadonly
+            body: {Password: Ts-S3lfPass-26}
+            status: [200, 204]
+
+      - cmd: redfish
+        name: The ReadOnly account is deleted
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: DELETE, path: /redfish/v1/AccountService/Accounts/tsreadonly, status: [200, 204]}
+
+      - cmd: redfish
+        name: The Operator account is deleted
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: DELETE, path: /redfish/v1/AccountService/Accounts/tsoperator, status: [200, 204]}

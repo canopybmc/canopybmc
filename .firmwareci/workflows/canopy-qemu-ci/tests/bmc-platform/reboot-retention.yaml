@@ -1,0 +1,133 @@
+name: BMC reboot keeps its state
+description: >-
+  What an administrator configures survives a forced BMC restart: a Redfish
+  account keeps its role and password, and a changed session timeout keeps
+  its value. The test runs only on a BMC whose session timeout starts at the
+  default of 1800 seconds, and sets that default again at the end.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: BMC reboot keeps its state
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The session timeout starts at 1800 seconds
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/SessionService, prop: SessionTimeout, op: eq, value: "1800"}
+
+      - cmd: redfish
+        name: A leftover test account is removed
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: DELETE, path: /redfish/v1/AccountService/Accounts/tsretain, status: [200, 204, 404]}
+
+      - cmd: redfish
+        name: An Operator test account is created
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: /redfish/v1/AccountService/Accounts
+            body: {UserName: tsretain, Password: Ts-R3tain-26, RoleId: Operator, Enabled: true}
+            status: 201
+
+      - cmd: redfish
+        name: The session timeout is set to 1200 seconds
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: PATCH, path: /redfish/v1/SessionService, body: {SessionTimeout: 1200}, status: [200, 204]}
+
+      - cmd: redfish
+        name: A forced restart takes the BMC down and back up
+        transport: *local
+        options: {timeout: 15m}
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishManager]]/Actions/Manager.Reset"
+            body: {ResetType: ForceRestart}
+            status: [200, 202, 204]
+            restart: {down: 3m, up: 10m}
+
+      - cmd: redfish
+        name: The test account still has the Operator role
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 5m}
+            rules:
+              - {path: /redfish/v1/AccountService/Accounts/tsretain, prop: RoleId, op: eq, value: Operator}
+
+      - cmd: redfish
+        name: The test account still logs in with its password
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          auth: {user: tsretain, password: Ts-R3tain-26}
+          validate: request
+          request: {method: GET, path: /redfish/v1/AccountService, status: 200}
+
+      - cmd: redfish
+        name: The session timeout is still 1200 seconds
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/SessionService, prop: SessionTimeout, op: eq, value: "1200"}
+
+      - cmd: redfish
+        name: The session timeout is set back to 1800 seconds
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: PATCH, path: /redfish/v1/SessionService, body: {SessionTimeout: 1800}, status: [200, 204]}
+
+      - cmd: redfish
+        name: The test account is deleted
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: DELETE, path: /redfish/v1/AccountService/Accounts/tsretain, status: [200, 204]}

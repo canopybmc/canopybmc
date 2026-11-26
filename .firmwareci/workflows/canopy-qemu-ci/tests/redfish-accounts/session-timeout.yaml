@@ -1,0 +1,119 @@
+name: Redfish session timeout
+description: >-
+  An idle Redfish session expires after the session timeout. The test sets the
+  timeout to 30 seconds, leaves a session idle for longer and checks that it
+  is gone. It runs only on a BMC whose timeout starts at the default of 1800
+  seconds, and sets that default again at the end.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Redfish session timeout
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The session timeout starts at 1800 seconds
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/SessionService, prop: SessionTimeout, op: eq, value: "1800"}
+
+      - cmd: redfish
+        name: The session timeout is set to 30 seconds
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: PATCH
+            path: /redfish/v1/SessionService
+            body: {SessionTimeout: 30}
+            status: [200, 204]
+
+      - cmd: redfish
+        name: The session service reports 30 seconds
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/SessionService, prop: SessionTimeout, op: eq, value: "30"}
+
+      - cmd: redfish
+        name: A session is opened
+        transport: *local
+        parameters:
+          <<: *admin
+          auth: {mode: none}
+          validate: request
+          request:
+            method: POST
+            path: /redfish/v1/SessionService/Sessions
+            body: {UserName: "[[attributes.BMCUser]]", Password: "[[attributes.BMCPassword]]"}
+            status: 201
+            rules:
+              - {prop: "@odata.id", op: matches, value: "^/redfish/v1/SessionService/Sessions/", variable: SESSION}
+
+      - cmd: redfish
+        name: The new session is listed
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: GET, path: "{{ SESSION }}", status: 200}
+
+      # The idle time is the test itself: twice the 30 second timeout.
+      - cmd: sleep
+        name: The session stays idle for 60 seconds
+        parameters:
+          duration: 60s
+
+      - cmd: redfish
+        name: The idle session has expired
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: GET, path: "{{ SESSION }}", status: 404}
+
+      - cmd: redfish
+        name: The session timeout is set back to 1800 seconds
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: PATCH
+            path: /redfish/v1/SessionService
+            body: {SessionTimeout: 1800}
+            status: [200, 204]

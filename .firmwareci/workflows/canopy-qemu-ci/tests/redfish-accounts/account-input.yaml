@@ -1,0 +1,133 @@
+name: Redfish account input checks
+description: >-
+  The account service refuses invalid account requests: a duplicate user
+  name, an unknown role and a missing password. The administrator account
+  that runs the tests cannot be deleted while it is logged in.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Redfish account input checks
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: A leftover test account is removed
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: DELETE, path: /redfish/v1/AccountService/Accounts/tslimit, status: [200, 204, 404]}
+
+      - cmd: redfish
+        name: A test account is created
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: /redfish/v1/AccountService/Accounts
+            body: {UserName: tslimit, Password: Ts-L1mit-Pass26, RoleId: ReadOnly, Enabled: true}
+            status: 201
+
+      # DMTF does not fix one status for a duplicate; BMCs answer 400 or 409.
+      - cmd: redfish
+        name: A duplicate user name is refused
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: /redfish/v1/AccountService/Accounts
+            body: {UserName: tslimit, Password: Ts-L1mit-Pass26, RoleId: ReadOnly, Enabled: true}
+            status: [400, 409]
+
+      - cmd: redfish
+        name: An unknown role is refused
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: /redfish/v1/AccountService/Accounts
+            body: {UserName: tsbadrole, Password: Ts-B4drole-26, RoleId: NoSuchRole, Enabled: true}
+            status: 400
+
+      - cmd: redfish
+        name: An account without a password is refused
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: /redfish/v1/AccountService/Accounts
+            body: {UserName: tsnopass, RoleId: ReadOnly, Enabled: true}
+            status: 400
+
+      - cmd: redfish
+        name: The logged-in administrator cannot delete itself
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: DELETE, path: "/redfish/v1/AccountService/Accounts/[[attributes.BMCUser]]", status: [400, 403, 405]}
+
+      - cmd: redfish
+        name: The test account is deleted
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: DELETE, path: /redfish/v1/AccountService/Accounts/tslimit, status: [200, 204]}
+
+      # Remove accounts that a refused request created by mistake.
+      - cmd: redfish
+        name: No account with an unknown role was left
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: DELETE, path: /redfish/v1/AccountService/Accounts/tsbadrole, status: 404}
+
+      - cmd: redfish
+        name: No account without a password was left
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: DELETE, path: /redfish/v1/AccountService/Accounts/tsnopass, status: 404}

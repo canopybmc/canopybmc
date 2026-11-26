@@ -1,0 +1,196 @@
+name: Redfish request handling
+description: >-
+  The service answers wrong requests with the status DSP0266 defines: 404 for
+  unknown resources, 400 for wrong property types, unknown or read-only
+  properties, malformed JSON and unknown reset types, 405 for methods a resource does not
+  allow, 401 without valid credentials, and 412 for a PATCH with a stale ETag.
+  None of the requests changes anything when the service behaves.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+    validate: request
+  anonymous: &anonymous
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth: {mode: none}
+    validate: request
+
+stages:
+  - name: Redfish request handling
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: An unknown resource answers 404
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          request: {method: GET, path: /redfish/v1/TsNoSuchResource, status: 404}
+
+      - cmd: redfish
+        name: An unknown system answers 404
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          request: {method: GET, path: /redfish/v1/Systems/ts-no-such-system, status: 404}
+
+      - cmd: redfish
+        name: A wrong property type is refused with 400
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          request: {method: PATCH, path: "[[attributes.RedfishSystem]]", body: {AssetTag: 42}, status: 400}
+
+      - cmd: redfish
+        name: An unknown property is refused with 400
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          request: {method: PATCH, path: "[[attributes.RedfishSystem]]", body: {TsNoSuchProperty: x}, status: 400}
+
+      - cmd: redfish
+        name: A read-only property is refused with 400
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          request: {method: PATCH, path: "[[attributes.RedfishManager]]", body: {Id: ts-renamed}, status: 400}
+
+      # The redfish step sends `body` only as valid JSON, so the truncated body comes from a file on the runner.
+      - cmd: shell
+        name: A truncated JSON body is written on the runner
+        transport: *local
+        parameters:
+          command: >-
+            printf '{"DateTimeLocalOffset": ' > /tmp/ts-malformed.json && echo written
+          expect:
+            - regex: '^written$'
+
+      - cmd: redfish
+        name: Malformed JSON is refused with 400
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          request:
+            method: PATCH
+            path: "[[attributes.RedfishManager]]"
+            file: /tmp/ts-malformed.json
+            headers: {Content-Type: application/json}
+            status: 400
+            rules:
+              - {prop: error/code, op: matches, value: MalformedJSON}
+
+      - cmd: redfish
+        name: An unknown host reset type is refused with 400
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: TsNoSuchReset}
+            status: 400
+
+      - cmd: redfish
+        name: An unknown BMC reset type is refused with 400
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          request:
+            method: POST
+            path: "[[attributes.RedfishManager]]/Actions/Manager.Reset"
+            body: {ResetType: TsNoSuchReset}
+            status: 400
+
+      - cmd: redfish
+        name: DELETE on the manager is refused with 405
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          request: {method: DELETE, path: "[[attributes.RedfishManager]]", status: 405}
+
+      - cmd: redfish
+        name: POST on the service root is refused with 405
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          request: {method: POST, path: /redfish/v1, body: {Name: ts}, status: 405}
+
+      - cmd: redfish
+        name: A read without credentials is refused with 401
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *anonymous
+          request: {method: GET, path: "[[attributes.RedfishSystem]]", status: 401}
+
+      - cmd: redfish
+        name: An action without credentials is refused with 401
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *anonymous
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: TsNoSuchReset}
+            status: 401
+
+      - cmd: redfish
+        name: A wrong password is refused with 401
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          auth: {user: "[[attributes.BMCUser]]", password: not-the-password}
+          request: {method: GET, path: "[[attributes.RedfishManager]]", status: 401}
+
+      - cmd: redfish
+        name: The manager serves an ETag
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          request:
+            method: GET
+            path: "[[attributes.RedfishManager]]"
+            status: 200
+            rules:
+              - {header: ETag, op: exists}
+
+      - cmd: redfish
+        name: A PATCH with a stale ETag is refused with 412
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          request:
+            method: PATCH
+            path: "[[attributes.RedfishManager]]"
+            headers: {If-Match: '"ts-stale"'}
+            body: {DateTimeLocalOffset: "+00:00"}
+            status: 412

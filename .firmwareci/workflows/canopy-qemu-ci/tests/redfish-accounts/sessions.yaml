@@ -1,0 +1,154 @@
+name: Redfish sessions
+description: >-
+  Redfish authentication: the service root answers without login, protected
+  resources refuse anonymous requests, a session opens with the right
+  password, its token works, it belongs to its user, and it is gone after a
+  delete. Wrong passwords and unknown users get no session.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Redfish sessions
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The service root answers without login
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {mode: none}
+          validate: request
+          request: {method: GET, path: /redfish/v1, status: 200}
+
+      - cmd: redfish
+        name: The account service refuses anonymous requests
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {mode: none}
+          validate: request
+          request: {method: GET, path: /redfish/v1/AccountService, status: 401}
+
+      - cmd: redfish
+        name: The managers refuse anonymous requests
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {mode: none}
+          validate: request
+          request: {method: GET, path: /redfish/v1/Managers, status: 401}
+
+      - cmd: redfish
+        name: An administrator opens a session
+        transport: *local
+        parameters:
+          <<: *admin
+          auth: {mode: none}
+          validate: request
+          request:
+            method: POST
+            path: /redfish/v1/SessionService/Sessions
+            body: {UserName: "[[attributes.BMCUser]]", Password: "[[attributes.BMCPassword]]"}
+            status: 201
+            rules:
+              - {prop: "@odata.id", op: matches, value: "^/redfish/v1/SessionService/Sessions/", variable: SESSION}
+
+      - cmd: redfish
+        name: The session belongs to the administrator
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: GET
+            path: "{{ SESSION }}"
+            status: 200
+            rules:
+              - {prop: UserName, op: eq, value: "[[attributes.BMCUser]]"}
+
+      - cmd: redfish
+        name: A session token reads the account service
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {user: "[[attributes.BMCUser]]", password: "[[attributes.BMCPassword]]", mode: session}
+          validate: request
+          request: {method: GET, path: /redfish/v1/AccountService, status: 200}
+
+      - cmd: redfish
+        name: The session is deleted
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: DELETE, path: "{{ SESSION }}", status: [200, 204]}
+
+      - cmd: redfish
+        name: The deleted session is gone
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: GET, path: "{{ SESSION }}", status: 404}
+
+      - cmd: redfish
+        name: A session with a wrong password is refused
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {mode: none}
+          validate: request
+          request:
+            method: POST
+            path: /redfish/v1/SessionService/Sessions
+            body: {UserName: "[[attributes.BMCUser]]", Password: not-the-password}
+            status: 401
+
+      - cmd: redfish
+        name: A session for an unknown user is refused
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {mode: none}
+          validate: request
+          request:
+            method: POST
+            path: /redfish/v1/SessionService/Sessions
+            body: {UserName: tsnobody, Password: Ts-N0body-26}
+            status: 401

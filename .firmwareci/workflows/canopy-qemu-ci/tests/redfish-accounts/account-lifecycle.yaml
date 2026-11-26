@@ -1,0 +1,188 @@
+name: Redfish account lifecycle
+description: >-
+  An administrator creates a ReadOnly account over Redfish, changes its role,
+  password and enabled state, and deletes it. After each change the account
+  logs in, or is refused, as the change says.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Redfish account lifecycle
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: A leftover test account is removed
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: DELETE, path: /redfish/v1/AccountService/Accounts/tslifecycle, status: [200, 204, 404]}
+
+      - cmd: redfish
+        name: A ReadOnly account is created
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: /redfish/v1/AccountService/Accounts
+            body: {UserName: tslifecycle, Password: Ts-L1fecycle-26, RoleId: ReadOnly, Enabled: true}
+            status: 201
+
+      - cmd: redfish
+        name: The new account has the ReadOnly role
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: GET
+            path: /redfish/v1/AccountService/Accounts/tslifecycle
+            status: 200
+            rules:
+              - {prop: RoleId, op: eq, value: ReadOnly}
+
+      - cmd: redfish
+        name: The new account logs in
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {user: tslifecycle, password: Ts-L1fecycle-26}
+          validate: request
+          request: {method: GET, path: /redfish/v1/AccountService, status: 200}
+
+      - cmd: redfish
+        name: An administrator changes the role to Operator
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: PATCH
+            path: /redfish/v1/AccountService/Accounts/tslifecycle
+            body: {RoleId: Operator}
+            status: [200, 204]
+
+      - cmd: redfish
+        name: The account has the Operator role
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: GET
+            path: /redfish/v1/AccountService/Accounts/tslifecycle
+            status: 200
+            rules:
+              - {prop: RoleId, op: eq, value: Operator}
+
+      - cmd: redfish
+        name: An administrator changes the account password
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: PATCH
+            path: /redfish/v1/AccountService/Accounts/tslifecycle
+            body: {Password: Ts-N3wPass-26}
+            status: [200, 204]
+
+      - cmd: redfish
+        name: The new password logs in
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {user: tslifecycle, password: Ts-N3wPass-26}
+          validate: request
+          request: {method: GET, path: /redfish/v1/AccountService, status: 200}
+
+      - cmd: redfish
+        name: The old password is refused
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {user: tslifecycle, password: Ts-L1fecycle-26}
+          validate: request
+          request: {method: GET, path: /redfish/v1/AccountService, status: 401}
+
+      - cmd: redfish
+        name: An administrator disables the account
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: PATCH
+            path: /redfish/v1/AccountService/Accounts/tslifecycle
+            body: {Enabled: false}
+            status: [200, 204]
+
+      - cmd: redfish
+        name: The disabled account is refused
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {user: tslifecycle, password: Ts-N3wPass-26}
+          validate: request
+          request: {method: GET, path: /redfish/v1/AccountService, status: 401}
+
+      - cmd: redfish
+        name: The account is deleted
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: DELETE, path: /redfish/v1/AccountService/Accounts/tslifecycle, status: [200, 204]}
+
+      - cmd: redfish
+        name: The deleted account is gone
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: GET, path: /redfish/v1/AccountService/Accounts/tslifecycle, status: 404}
+
+      - cmd: redfish
+        name: The deleted account is refused
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {user: tslifecycle, password: Ts-N3wPass-26}
+          validate: request
+          request: {method: GET, path: /redfish/v1/AccountService, status: 401}
