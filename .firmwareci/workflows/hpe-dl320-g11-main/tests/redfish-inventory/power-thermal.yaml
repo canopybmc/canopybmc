@@ -1,0 +1,94 @@
+name: Redfish power and cooling
+description: >-
+  Power supplies and fans are served over Redfish in the current
+  PowerSubsystem and ThermalSubsystem model: the expected number of power
+  supplies is present and healthy, and every present fan is healthy.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+    validate: inventory
+
+stages:
+  - name: Redfish power and cooling
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The expected power supplies are present
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishPowerChassis]]/PowerSubsystem", collection: PowerSupplies, op: ge, value: "[[attributes.Inventory.PowerSupplies]]"}
+
+      - cmd: redfish
+        name: Every present power supply is healthy
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - path: "[[attributes.RedfishPowerChassis]]/PowerSubsystem"
+                forEach: PowerSupplies
+                where: {prop: Status/State, op: ne, value: Absent}
+                prop: Status/Health
+                op: eq
+                value: OK
+
+      - cmd: redfish
+        name: Every present power supply reports its model
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - path: "[[attributes.RedfishPowerChassis]]/PowerSubsystem"
+                forEach: PowerSupplies
+                where: {prop: Status/State, op: ne, value: Absent}
+                prop: Model
+                op: matches
+                value: '\S'
+
+      - cmd: redfish
+        name: The board chassis serves its fans
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]/ThermalSubsystem", prop: "Fans/@odata.id", op: exists}
+
+      - cmd: redfish
+        name: Every present fan is healthy
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - path: "[[attributes.RedfishChassis]]/ThermalSubsystem"
+                forEach: Fans
+                where: {prop: Status/State, op: ne, value: Absent}
+                prop: Status/Health
+                op: eq
+                value: OK

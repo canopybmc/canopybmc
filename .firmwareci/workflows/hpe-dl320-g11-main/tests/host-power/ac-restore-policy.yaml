@@ -1,0 +1,164 @@
+name: IPMI AC restore policy
+description: >-
+  The host follows the power restore policy after AC power returns: with
+  always-off it stays off, with always-on it powers on. AC power is switched
+  through dutctl. The test runs only on a board whose policy is always-on,
+  and leaves it always-on.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
+
+stages:
+  - name: IPMI AC restore policy
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      # The test ends on always-on; it runs only where that is the policy anyway.
+      - cmd: ipmi
+        name: The power restore policy starts as always-on
+        transport: *local
+        parameters:
+          lan: *lan
+          get: chassis/power-restore-policy
+          expect: {eq: always-on}
+
+      - cmd: ipmi
+        name: The policy is set to always-off
+        transport: *local
+        parameters:
+          lan: *lan
+          set: chassis/power-restore-policy
+          value: always-off
+          expect: {completion: 0}
+
+      - cmd: dutctl
+        name: AC power off (always-off)
+        parameters:
+          agent: "[[attributes.Agent]]"
+          device: "[[attributes.Device]]"
+          command: power
+          args: ["off"]
+
+      # Lets the board drain, so the next power-on is a real AC power-on.
+      - cmd: sleep
+        name: The board loses AC power (always-off)
+        parameters:
+          duration: 15s
+
+      - cmd: dutctl
+        name: AC power on (always-off)
+        parameters:
+          agent: "[[attributes.Agent]]"
+          device: "[[attributes.Device]]"
+          command: power
+          args: ["on"]
+
+      - cmd: ipmi
+        name: IPMI answers after the AC power-on (always-off)
+        transport: *local
+        parameters:
+          lan: *lan
+          get: device/ipmi-version
+          retry: {timeout: 15m, interval: 10s}
+          expect: {eq: "2.0"}
+
+      # Gives the BMC time to power the host on, if the policy says so.
+      - cmd: sleep
+        name: The BMC applies the restore policy (always-off)
+        parameters:
+          duration: 1m
+
+      - cmd: ipmi
+        name: The host stayed off after AC power-on with always-off
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: chassis/power
+          expect: {eq: off}
+
+      - cmd: ipmi
+        name: The policy is set to always-on
+        transport: *local
+        parameters:
+          lan: *lan
+          set: chassis/power-restore-policy
+          value: always-on
+          expect: {completion: 0}
+
+      - cmd: dutctl
+        name: AC power off (always-on)
+        parameters:
+          agent: "[[attributes.Agent]]"
+          device: "[[attributes.Device]]"
+          command: power
+          args: ["off"]
+
+      # Lets the board drain, so the next power-on is a real AC power-on.
+      - cmd: sleep
+        name: The board loses AC power (always-on)
+        parameters:
+          duration: 15s
+
+      - cmd: dutctl
+        name: AC power on (always-on)
+        parameters:
+          agent: "[[attributes.Agent]]"
+          device: "[[attributes.Device]]"
+          command: power
+          args: ["on"]
+
+      - cmd: ipmi
+        name: IPMI answers after the AC power-on (always-on)
+        transport: *local
+        parameters:
+          lan: *lan
+          get: device/ipmi-version
+          retry: {timeout: 15m, interval: 10s}
+          expect: {eq: "2.0"}
+
+      # Gives the BMC time to power the host on, if the policy says so.
+      - cmd: sleep
+        name: The BMC applies the restore policy (always-on)
+        parameters:
+          duration: 1m
+
+      - cmd: ipmi
+        name: The host powered on after AC power-on with always-on
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: chassis/power
+          retry: {timeout: 3m, interval: 10s}
+          expect: {eq: on}
+
+      - cmd: ipmi
+        name: The policy is always-on at the end
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: chassis/power-restore-policy
+          expect: {eq: always-on}

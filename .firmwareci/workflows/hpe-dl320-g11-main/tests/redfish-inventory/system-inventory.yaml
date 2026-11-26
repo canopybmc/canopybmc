@@ -1,0 +1,216 @@
+name: Redfish system inventory
+description: >-
+  With the host powered on, the system inventory over Redfish is complete and
+  healthy: the expected number of processors and total memory, every present
+  processor and memory module enabled and healthy with its key attributes,
+  and the system identity of the board.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+    validate: inventory
+
+stages:
+  - name: Redfish system inventory
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      # 409: the host is already on.
+      - cmd: redfish
+        name: The host is powered on
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 202, 204, 409]
+
+      - cmd: redfish
+        name: The host reports power on
+        transport: *local
+        parameters:
+          <<: *admin
+          inventory:
+            retry: {timeout: 5m, interval: 10s}
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+
+      # The BMC learns CPUs and DIMMs from the host firmware during POST.
+      - cmd: redfish
+        name: The processor inventory is filled after the host POST
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            retry: {timeout: 15m, interval: 10s}
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", collection: Processors, op: eq, value: "[[attributes.Inventory.Processors]]"}
+
+      - cmd: redfish
+        name: Every present memory module is enabled
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            retry: {timeout: 5m, interval: 10s}
+            rules:
+              - path: "[[attributes.RedfishSystem]]"
+                forEach: Memory
+                where: {prop: Status/State, op: ne, value: Absent}
+                prop: Status/State
+                op: eq
+                value: Enabled
+
+      - cmd: redfish
+        name: Every present processor is healthy
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - path: "[[attributes.RedfishSystem]]"
+                forEach: Processors
+                where: {prop: Status/State, op: ne, value: Absent}
+                prop: Status/Health
+                op: eq
+                value: OK
+
+      - cmd: redfish
+        name: Every present processor reports its core count
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - path: "[[attributes.RedfishSystem]]"
+                forEach: Processors
+                where: {prop: Status/State, op: ne, value: Absent}
+                prop: TotalCores
+                op: ge
+                value: "1"
+
+      - cmd: redfish
+        name: Every present processor reports its manufacturer
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - path: "[[attributes.RedfishSystem]]"
+                forEach: Processors
+                where: {prop: Status/State, op: ne, value: Absent}
+                prop: Manufacturer
+                op: matches
+                value: '\S'
+
+      - cmd: redfish
+        name: Every present memory module is healthy
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - path: "[[attributes.RedfishSystem]]"
+                forEach: Memory
+                where: {prop: Status/State, op: ne, value: Absent}
+                prop: Status/Health
+                op: eq
+                value: OK
+
+      - cmd: redfish
+        name: Every present memory module reports its capacity
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - path: "[[attributes.RedfishSystem]]"
+                forEach: Memory
+                where: {prop: Status/State, op: ne, value: Absent}
+                prop: CapacityMiB
+                op: ge
+                value: "1"
+
+      - cmd: redfish
+        name: The total memory is the board's
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: MemorySummary/TotalSystemMemoryGiB, op: eq, value: "[[attributes.Inventory.MemoryGiB]]"}
+
+      - cmd: redfish
+        name: The system manufacturer is the board's
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: Manufacturer, op: eq, value: "[[attributes.System.Manufacturer]]"}
+
+      - cmd: redfish
+        name: The system model is the board's
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: Model, op: eq, value: "[[attributes.System.Model]]"}
+
+      - cmd: redfish
+        name: The system reports a serial number
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: SerialNumber, op: matches, value: '\S'}
+
+      - cmd: redfish
+        name: The system UUID is not all zeros
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: UUID, op: ne, value: "00000000-0000-0000-0000-000000000000"}
+
+      - cmd: redfish
+        name: The system reports a BIOS version
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: BiosVersion, op: matches, value: '\S'}

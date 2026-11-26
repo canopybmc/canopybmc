@@ -1,0 +1,150 @@
+name: IPMI host power control
+description: >-
+  The host's power follows the IPMI chassis control commands: power off, power
+  on, power cycle and soft shutdown each lead to the chassis power state they
+  promise. The host is on at the end.
+
+defaults:
+  local: &local
+    proto: local
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
+
+stages:
+  - name: IPMI host power control
+    steps:
+      # Waits until the BMC answers IPMI over LAN.
+      - cmd: ipmi
+        name: IPMI answers over LAN
+        transport: *local
+        parameters:
+          lan: *lan
+          get: device/ipmi-version
+          retry: {timeout: 10m, interval: 10s}
+          expect: {eq: "2.0"}
+
+      - cmd: ipmi
+        name: The host is powered on first
+        transport: *local
+        parameters:
+          lan: *lan
+          set: chassis/power
+          value: "on"
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: Chassis power reads on
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: chassis/power
+          retry: {timeout: 5m, interval: 5s}
+          expect: {eq: on}
+
+      - cmd: ipmi
+        name: Chassis power off is accepted
+        transport: *local
+        parameters:
+          lan: *lan
+          set: chassis/power
+          value: "off"
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: Chassis power reads off after power off
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: chassis/power
+          retry: {timeout: 2m, interval: 5s}
+          expect: {eq: off}
+
+      - cmd: ipmi
+        name: Chassis power on is accepted
+        transport: *local
+        parameters:
+          lan: *lan
+          set: chassis/power
+          value: "on"
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: Chassis power reads on after power on
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: chassis/power
+          retry: {timeout: 5m, interval: 5s}
+          expect: {eq: on}
+
+      - cmd: ipmi
+        name: Chassis power cycle is accepted
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          set: chassis/power
+          value: cycle
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: Chassis power reads on after the power cycle
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: chassis/power
+          retry: {timeout: 5m, interval: 5s}
+          expect: {eq: on}
+
+      # The host needs time to boot an OS that answers the ACPI power button.
+      - cmd: sleep
+        name: The host OS boots
+        parameters:
+          duration: 4m
+
+      - cmd: ipmi
+        name: Soft shutdown is accepted
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          set: chassis/power
+          value: soft
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: Chassis power reads off after the soft shutdown
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: chassis/power
+          retry: {timeout: 10m, interval: 5s}
+          expect: {eq: off}
+
+      - cmd: ipmi
+        name: Chassis power on at the end is accepted
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          set: chassis/power
+          value: "on"
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: Chassis power reads on at the end
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: chassis/power
+          retry: {timeout: 5m, interval: 5s}
+          expect: {eq: on}

@@ -9,6 +9,7 @@ attributes:
   RedfishManager: /redfish/v1/Managers/bmc
   RedfishSystem: /redfish/v1/Systems/system
   RedfishChassis: /redfish/v1/Chassis/chassis
+  RedfishPowerChassis: /redfish/v1/Chassis/chassis
   Agent: worker102.lab.9e.network:2024
   Device: dl320
   Host: dl320g11-1.lab.9e.network
@@ -59,6 +60,16 @@ attributes:
   Sensors:
     Count: "20..9999"
     Names: [GXP_Temp, DTS_CPU1, Die_CPU1]
+  Inventory:
+    MinSensors: "20"
+    Processors: "1"
+    MemoryGiB: "64"
+    PowerSupplies: "2"
+  System:
+    Manufacturer: Hewlett Packard Enterprise
+    Model: HPE ProLiant DL320 Gen11
+  Cooling:
+    MinFans: "5"
   Memory:
     Dimms:
       - {Id: dimm2, Type: DDR5, Manufacturer: Hynix, PartNumber: HMCG88AGBRA619N, Serial: E3712D7D}
@@ -83,6 +94,8 @@ attributes:
   Smbios:
     MinPcieSlots: "4"
   IPMI:
+    ManufacturerID: "47196"
+    ProductID: "8192"
     KCSUnit: phosphor-ipmi-kcs@ipmi_kcs1.service
     ControllerID: hpe-proliant-g11
     Sensors:
@@ -92,4 +105,10 @@ attributes:
       Fan: Pwm
   FRU:
     ChassisType: Rack Mount Chassis
+    Size: "232"
+    Board:
+      Manufacturer: Hewlett Packard Enterprise
+      Product: HPE ProLiant DL320 Gen11
+      Serial: CZUD3N0278
+      PartNumber: P77243-425
 reservation-system: dutctl

@@ -1,0 +1,76 @@
+name: KVM keyboard
+description: >-
+  The KVM carries the keyboard to the host: text typed over the KVM appears
+  on the host screen, and Ctrl-U erases it again. The host must show a text
+  console or a login prompt that echoes typed text.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: KVM keyboard
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The host is powered on
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 202, 204, 409]
+
+      - cmd: ping
+        name: The host OS answers on SSH
+        options: {timeout: 15m}
+        parameters:
+          host: "[[attributes.Host]]"
+          port: 22
+
+      # Lets the host finish printing boot messages, so only the typed text changes the screen.
+      - cmd: sleep
+        name: The host console settles
+        parameters:
+          duration: 1m
+
+      - cmd: vnc
+        name: Text typed over the KVM appears on the host screen
+        options: {on-failure: continue}
+        parameters:
+          host: "[[attributes.BMC]]"
+          auth: {user: "[[attributes.BMCUser]]", password: "[[attributes.BMCPassword]]"}
+          insecure: true
+          keys: [{text: "########################################"}]
+          wait: 3s
+          expect: {delta: {ge: 0.03}}
+
+      - cmd: vnc
+        name: Ctrl-U over the KVM erases the typed text
+        options: {on-failure: continue}
+        parameters:
+          host: "[[attributes.BMC]]"
+          auth: {user: "[[attributes.BMCUser]]", password: "[[attributes.BMCPassword]]"}
+          insecure: true
+          keys: [ctrl-u]
+          wait: 3s
+          expect: {delta: {le: -0.03}}

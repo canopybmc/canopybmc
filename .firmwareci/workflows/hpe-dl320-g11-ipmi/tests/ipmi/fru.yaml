@@ -1,0 +1,108 @@
+name: IPMI FRU
+description: >-
+  FRU 0 holds the board's inventory as the IPMI FRU specification defines it:
+  it is readable, has a version 1 common header and the board area fields of
+  the board's asset record. Unknown FRU IDs are refused.
+
+defaults:
+  local: &local
+    proto: local
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
+
+stages:
+  - name: IPMI FRU
+    steps:
+      # Waits until the BMC answers IPMI over LAN.
+      - cmd: ipmi
+        name: IPMI answers over LAN
+        transport: *local
+        parameters:
+          lan: *lan
+          get: device/ipmi-version
+          retry: {timeout: 10m, interval: 10s}
+          expect: {eq: "2.0"}
+
+      - cmd: ipmi
+        name: FRU 0 is readable
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: fru/0/size
+          expect: {ne: 0}
+
+      - cmd: ipmi
+        name: FRU 0 area size is the board's
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: fru/0/size
+          expect: {eq: "[[attributes.FRU.Size]]"}
+
+      - cmd: ipmi
+        name: FRU 0 common header is format version 1
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: fru/0/header/version
+          expect: {eq: 1}
+
+      - cmd: ipmi
+        name: FRU board manufacturer is the board's
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: fru/0/board/manufacturer
+          expect: {eq: "[[attributes.FRU.Board.Manufacturer]]"}
+
+      - cmd: ipmi
+        name: FRU board product is the board's
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: fru/0/board/product
+          expect: {eq: "[[attributes.FRU.Board.Product]]"}
+
+      - cmd: ipmi
+        name: FRU board serial is the board's
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: fru/0/board/serial
+          expect: {eq: "[[attributes.FRU.Board.Serial]]"}
+
+      - cmd: ipmi
+        name: FRU board part number is the board's
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: fru/0/board/part-number
+          expect: {eq: "[[attributes.FRU.Board.PartNumber]]"}
+
+      - cmd: ipmi
+        name: Unknown FRU ID 0xff is refused
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: fru/0xff/size
+          expect: {completion: 0xcc}
+
+      - cmd: ipmi
+        name: FRU area info rejects an extra byte
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          raw: 0x0a 0x10 0x00 0x00
+          expect: {completion: 0xc7}
