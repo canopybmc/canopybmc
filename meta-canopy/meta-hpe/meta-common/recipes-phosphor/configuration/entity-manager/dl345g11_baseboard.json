@@ -38,75 +38,93 @@
         },
         {
             "Connector": {
-                "Fail": "fan1-fail",
-                "Inst": "fan1-installed",
                 "Name": "Fan Connector 1",
-                "Pwm": 0
+                "Pwm": 0,
+                "Tachs": []
             },
             "Name": "Fan 1",
             "Type": "HPEFan",
             "Index": 0,
-            "TachInput": false
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan1-installed",
+                "Polarity": "High"
+            }
         },
         {
             "Connector": {
-                "Fail": "fan2-fail",
-                "Inst": "fan2-installed",
                 "Name": "Fan Connector 2",
-                "Pwm": 1
+                "Pwm": 1,
+                "Tachs": []
             },
             "Name": "Fan 2",
             "Type": "HPEFan",
             "Index": 1,
-            "TachInput": false
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan2-installed",
+                "Polarity": "High"
+            }
         },
         {
             "Connector": {
-                "Fail": "fan3-fail",
-                "Inst": "fan3-installed",
                 "Name": "Fan Connector 3",
-                "Pwm": 2
+                "Pwm": 2,
+                "Tachs": []
             },
             "Name": "Fan 3",
             "Type": "HPEFan",
             "Index": 2,
-            "TachInput": false
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan3-installed",
+                "Polarity": "High"
+            }
         },
         {
             "Connector": {
-                "Fail": "fan4-fail",
-                "Inst": "fan4-installed",
                 "Name": "Fan Connector 4",
-                "Pwm": 3
+                "Pwm": 3,
+                "Tachs": []
             },
             "Name": "Fan 4",
             "Type": "HPEFan",
             "Index": 3,
-            "TachInput": false
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan4-installed",
+                "Polarity": "High"
+            }
         },
         {
             "Connector": {
-                "Fail": "fan5-fail",
-                "Inst": "fan5-installed",
                 "Name": "Fan Connector 5",
-                "Pwm": 4
+                "Pwm": 4,
+                "Tachs": []
             },
             "Name": "Fan 5",
             "Type": "HPEFan",
             "Index": 4,
-            "TachInput": false
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan5-installed",
+                "Polarity": "High"
+            }
         },
         {
             "Connector": {
-                "Fail": "fan7-fail",
-                "Inst": "fan7-installed",
                 "Name": "Fan Connector 6",
-                "Pwm": 6
+                "Pwm": 6,
+                "Tachs": []
             },
             "Name": "Fan 6",
             "Type": "HPEFan",
             "Index": 6,
-            "TachInput": false
+            "Presence": {
+                "MonitorType": "Polling",
+                "PinName": "fan7-installed",
+                "Polarity": "High"
+            }
         },
         {
             "Name": "GXP Temp",
