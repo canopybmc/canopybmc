@@ -37,6 +37,25 @@ stages:
             rules:
               - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
 
+      # The fan sensor service publishes the PWM objects some time after
+      # Redfish answers.
+      - cmd: shell
+        name: The PWM sensors are on D-Bus
+        transport: *bmc
+        options: {timeout: 3m}
+        parameters:
+          command: >-
+            p=/xyz/openbmc_project/sensors/fan_pwm;
+            for i in $(seq 24); do
+            busctl introspect xyz.openbmc_project.FanSensor $p/[[attributes.Fans.Pwms.0]] >/dev/null 2>&1 &&
+            busctl introspect xyz.openbmc_project.FanSensor $p/[[attributes.Fans.Pwms.1]] >/dev/null 2>&1 &&
+            break; sleep 5; done;
+            busctl introspect xyz.openbmc_project.FanSensor $p/[[attributes.Fans.Pwms.0]] >/dev/null 2>&1 &&
+            busctl introspect xyz.openbmc_project.FanSensor $p/[[attributes.Fans.Pwms.1]] >/dev/null 2>&1 &&
+            echo published || echo missing
+          expect:
+            - regex: '^published$'
+
       - cmd: shell
         name: phosphor-pid-control is active
         transport: *bmc
