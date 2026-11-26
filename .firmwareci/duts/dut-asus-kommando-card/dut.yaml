@@ -2,9 +2,60 @@ name: ASUS-Kommando-IPMI-Expansion-Card
 label: asus-kommando-card
 attributes:
   BMC: asus-kommando-card-fwci.lab.9e.network
+  BMCUser: root
   BMCPassword: 0penBmc
+  SSHPort: "22"
+  RedfishPort: "443"
+  RedfishManager: /redfish/v1/Managers/bmc
+  RedfishSystem: /redfish/v1/Systems/system
+  RedfishChassis: /redfish/v1/Chassis/ASUS_Kommando_IPMI_Card
   Agent: worker117.lab.9e.network:2024
   Device: kommando
   Host: asus-ipmi-host.lab.9e.network
   HostUser: oscar
+  Services:
+    Active: >-
+      xyz.openbmc_project.EntityManager.service
+      xyz.openbmc_project.FruDevice.service
+      xyz.openbmc_project.gpiopresence.service
+      xyz.openbmc_project.Inventory.Manager.service
+      xyz.openbmc_project.LED.GroupManager.service
+      xyz.openbmc_project.adcsensor.service
+      xyz.openbmc_project.fansensor.service
+      xyz.openbmc_project.hwmontempsensor.service
+      xyz.openbmc_project.intelcpusensor.service
+      xyz.openbmc_project.psusensor.service
+      phosphor-pid-control.service
+      xyz.openbmc_project.Chassis.Control.Power@0.service
+      xyz.openbmc_project.State.BMC.service
+      bmcweb.service
+      phosphor-ipmi-host.service
+      xyz.openbmc_project.Network.service
+      xyz.openbmc_project.User.Manager.service
+      xyz.openbmc_project.Dump.Manager.service
+      xyz.openbmc_project.Logging.service
+      xyz.openbmc_project.Telemetry.service
+      xyz.openbmc_project.Software.Manager.service
+  DBus:
+    Names: >-
+      xyz.openbmc_project.EntityManager
+      xyz.openbmc_project.FanSensor
+      xyz.openbmc_project.PSUSensor
+      xyz.openbmc_project.HwmonTempSensor
+      xyz.openbmc_project.IntelCPUSensor
+      xyz.openbmc_project.State.Host
+      xyz.openbmc_project.State.Chassis
+      xyz.openbmc_project.Hwmon.external
+      xyz.openbmc_project.State.FanCtrl
+  KVM:
+    Product: Virtual Keyboard and Mouse
+  Sensors:
+    Count: "19..19"
+    Names: ["Header[0-2]_Temp"]
+  Fans:
+    Pwms: [Pwm_7, Pwm_8]
+  Console:
+    HostTty: ttyS0
+    UdevRule: 80-obmc-console-uart.rules
+    SshPort: "2200"
 reservation-system: dutctl

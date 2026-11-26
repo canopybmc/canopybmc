@@ -2,9 +2,94 @@ name: HPE-DL320
 label: hpe-dl320
 attributes:
   BMC: dl320g11-bmc-fwci.lab.9e.network
+  BMCUser: root
   BMCPassword: 0penBmc
+  SSHPort: "22"
+  RedfishPort: "443"
+  RedfishManager: /redfish/v1/Managers/bmc
+  RedfishSystem: /redfish/v1/Systems/system
+  RedfishChassis: /redfish/v1/Chassis/chassis
   Agent: worker102.lab.9e.network:2024
   Device: dl320
   Host: dl320g11-1.lab.9e.network
   HostUser: oscar
+  Services:
+    Active: >-
+      xyz.openbmc_project.EntityManager.service
+      xyz.openbmc_project.GxpChif.service
+      smbios-mdrv2.service
+      xyz.openbmc_project.fansensor.service
+      xyz.openbmc_project.psusensor.service
+      xyz.openbmc_project.hwmontempsensor.service
+      xyz.openbmc_project.intelcpusensor.service
+      phosphor-pid-control.service
+      xyz.openbmc_project.Chassis.Control.Power@0.service
+      bmcweb.service
+      xyz.openbmc_project.FruDevice.service
+      xyz.openbmc_project.LED.GroupManager.service
+      xyz.openbmc_project.gpiopresence.service
+      xyz.openbmc_project.Inventory.Manager.service
+      xyz.openbmc_project.Logging.service
+      xyz.openbmc_project.Dump.Manager.service
+      xyz.openbmc_project.Network.service
+      xyz.openbmc_project.User.Manager.service
+      phosphor-ipmi-host.service
+      xyz.openbmc_project.Software.Manager.service
+      xyz.openbmc_project.State.BMC.service
+      xyz.openbmc_project.Telemetry.service
+      xyz.openbmc_project.adcsensor.service
+      obmc-console@ttyVUART0.service
+    NoRestart: xyz.openbmc_project.GxpChif.service smbios-mdrv2.service
+  DBus:
+    Names: >-
+      xyz.openbmc_project.GxpChif
+      xyz.openbmc_project.Smbios.MDR_V2
+      xyz.openbmc_project.EntityManager
+      xyz.openbmc_project.FanSensor
+      xyz.openbmc_project.PSUSensor
+      xyz.openbmc_project.HwmonTempSensor
+      xyz.openbmc_project.IntelCPUSensor
+      xyz.openbmc_project.State.Host
+      xyz.openbmc_project.State.Chassis
+      xyz.openbmc_project.Hwmon.external
+      xyz.openbmc_project.State.FanCtrl
+  KVM:
+    Product: virtual_input
+    Udc: 80401000.usb
+  Sensors:
+    Count: "20..9999"
+    Names: [GXP_Temp, DTS_CPU1, Die_CPU1]
+  Memory:
+    Dimms:
+      - {Id: dimm2, Type: DDR5, Manufacturer: Hynix, PartNumber: HMCG88AGBRA619N, Serial: E3712D7D}
+      - {Id: dimm9, Type: DDR5, Manufacturer: Hynix, PartNumber: HMCG88AGBRA619N, Serial: E3712D3E}
+  PSU:
+    Count: "2"
+    Sensors: [IINPUT_PSU1, IOUTPUT_PSU1, VINPUT_PSU1, VOUTPUT_PSU1, PINPUT_PSU1, POUTPUT_PSU1, TEMP1_PSU1, FAN1_PSU1]
+    InputPower: power_PINPUT_PSU2
+    OutputPower: power_POUTPUT_PSU2
+    InputVoltage: {Sensor: voltage_VINPUT_PSU2, Range: "100..250"}
+    OutputVoltage: {Sensor: voltage_VOUTPUT_PSU2, Range: "11..14"}
+  Identity:
+    Manufacturer: Hewlett Packard Enterprise
+    Model: Gen11
+    ChassisType: RackMount
+  Fans:
+    Pwms: [Pwm_3, Pwm_4, Pwm_5, Pwm_6, Pwm_7]
+  Console:
+    HostTty: ttyS3
+    UdevRule: 80-gxp-obmc-console-uart.rules
+    SshPort: "2200"
+  Smbios:
+    MinPcieSlots: "4"
+  IPMI:
+    KCSUnit: phosphor-ipmi-kcs@ipmi_kcs1.service
+    ControllerID: hpe-proliant-g11
+    Sensors:
+      PSU1: PSU1
+      PSU2: PSU2
+      SoCTemp: GXP_Temp
+      Fan: Pwm
+  FRU:
+    ChassisType: Rack Mount Chassis
 reservation-system: dutctl
