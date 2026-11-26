@@ -5,7 +5,7 @@ Subject: [PATCH] dt-bindings: hwmon: gxp-fan-ctrl: add fan-shutdown-percent
  property
 
 Add an optional fan-shutdown-percent property (0-100) to configure the
-PWM duty cycle applied to all present fans during kernel shutdown or
+PWM duty cycle applied to all fans during kernel shutdown or
 driver removal. This prevents fans from staying at a low duty cycle
 set by userspace if the BMC reboots while the host is under load.
 
@@ -17,7 +17,7 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 10 insertions(+)
 
 diff --git a/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml b/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml
-index 3c3897639e29..1cb6405671ed 100644
+index 1db75efa332b..5a3091b00c9e 100644
 --- a/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml
 +++ b/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml
 @@ -33,6 +33,15 @@ properties:
@@ -26,7 +26,7 @@ index 3c3897639e29..1cb6405671ed 100644
  
 +  fan-shutdown-percent:
 +    description:
-+      PWM duty cycle percentage to set on all present fans during kernel
++      PWM duty cycle percentage to set on all fans during kernel
 +      shutdown or driver removal. Prevents fans from running at a low
 +      duty cycle set by userspace if the BMC reboots while the host is
 +      under load. If unset, defaults to 50 percent.

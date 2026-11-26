@@ -74,7 +74,6 @@ Every patch should contain an "Upstream-Status" tag as described in the
 
 - 0037 # dt-bindings: hwmon: gxp-fan-ctrl: replace fn2 syscon with fan-supply
 - 0038 # hwmon: gxp-fan-ctrl: use fan-supply regulator and fix sysfs semantics
-    - 0043 # hwmon: gxp-fan-ctrl: expose fan_input reporting PWM duty cycle
 - 0039 # dt-bindings: soc: hpe: gxp-fn2: allow regulator child nodes
 
 #### needs CLPD & fan-supply (not directly related)

@@ -17,7 +17,7 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 12 insertions(+), 9 deletions(-)
 
 diff --git a/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml b/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml
-index bc29a684a8f4..3c3897639e29 100644
+index c0cd518260cd..1db75efa332b 100644
 --- a/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml
 +++ b/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml
 @@ -7,11 +7,16 @@ $schema: http://devicetree.org/meta-schemas/core.yaml#
@@ -31,7 +31,7 @@ index bc29a684a8f4..3c3897639e29 100644
 -  The HPE GXP fan controller controls the fans through an external CPLD
 -  device that connects to the fans.
 +  The HPE GXP fan controller controls fans through an external CPLD.
-+  Fan presence and fault status are read from the XREG syscon. When
++  Fan fault status is read from the XREG syscon. When
 +  a fan-supply regulator is provided, PWM reads return zero and writes
 +  are rejected while the supply is off (host powered down).
 +
@@ -42,7 +42,7 @@ index bc29a684a8f4..3c3897639e29 100644
    compatible:
 @@ -25,17 +30,15 @@ properties:
      $ref: /schemas/types.yaml#/definitions/phandle
-     description: Phandle to the XREG syscon for fan install/fail status
+     description: Phandle to the XREG syscon for fan fail status
  
 -  hpe,fn2:
 -    $ref: /schemas/types.yaml#/definitions/phandle

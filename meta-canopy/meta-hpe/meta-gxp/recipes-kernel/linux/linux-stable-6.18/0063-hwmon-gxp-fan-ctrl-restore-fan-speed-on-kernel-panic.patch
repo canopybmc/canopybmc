@@ -4,7 +4,7 @@ Date: Fri, 13 Feb 2026 13:29:20 +0100
 Subject: [PATCH] hwmon: gxp-fan-ctrl: restore fan speed on kernel panic
 
 Register a panic notifier that writes the safe PWM duty cycle to all
-present fans. The GXP fan controller lives in an external CPLD that
+fans. The GXP fan controller lives in an external CPLD that
 retains PWM values across BMC resets, so a panic would otherwise leave
 fans at whatever duty cycle userspace last programmed.
 
@@ -19,7 +19,7 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 31 insertions(+)
 
 diff --git a/drivers/hwmon/gxp-fan-ctrl.c b/drivers/hwmon/gxp-fan-ctrl.c
-index 545c4fffe904..3c546037f2a0 100644
+index 6106f56873f2..41d5ad0bf4a8 100644
 --- a/drivers/hwmon/gxp-fan-ctrl.c
 +++ b/drivers/hwmon/gxp-fan-ctrl.c
 @@ -12,6 +12,7 @@
@@ -35,11 +35,11 @@ index 545c4fffe904..3c546037f2a0 100644
  	struct regmap		*xreg_map;
  	struct regulator	*fan_supply;
 +	struct notifier_block	panic_nb;
- 	u8			fan_present;
  	u8			pwm_shutdown;
  };
-@@ -194,6 +196,24 @@ static void gxp_fan_ctrl_restore_pwm(void *data)
- 	}
+ 
+@@ -175,6 +177,24 @@ static void gxp_fan_ctrl_restore_pwm(void *data)
+ 		       drvdata->base + GXP_FAN_PWM_BASE + i);
  }
  
 +static int gxp_fan_ctrl_panic(struct notifier_block *nb,
@@ -63,7 +63,7 @@ index 545c4fffe904..3c546037f2a0 100644
  static int gxp_fan_ctrl_probe(struct platform_device *pdev)
  {
  	struct gxp_fan_ctrl_drvdata *drvdata;
-@@ -245,6 +265,17 @@ static int gxp_fan_ctrl_probe(struct platform_device *pdev)
+@@ -221,6 +241,17 @@ static int gxp_fan_ctrl_probe(struct platform_device *pdev)
  	if (ret)
  		return ret;
  

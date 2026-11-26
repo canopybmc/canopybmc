@@ -5,21 +5,37 @@ Subject: [PATCH] hwmon: gxp-fan-ctrl: use fan-supply regulator and fix sysfs
  semantics
 
 Replace the direct FN2 syscon dependency with a fan-supply regulator
-consumer for host power state detection. Read fan presence from XREG
-at probe time and use is_visible to hide absent fan channels.
+consumer for host power state detection.
 
-Remove non-standard fan_enable attribute and add standard pwm_enable.
-Reject PWM writes with -EACCES when host power is off.
+Remove non-standard fan_enable attribute and add standard pwm_enable,
+and update the sysfs documentation to match. Reject PWM writes with
+-EACCES when host power is off.
 
 Upstream-Status: Pending
 
 Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
 ---
- drivers/hwmon/gxp-fan-ctrl.c | 196 ++++++++++++++++-------------------
- 1 file changed, 87 insertions(+), 109 deletions(-)
+ Documentation/hwmon/gxp-fan-ctrl.rst |   6 +-
+ drivers/hwmon/gxp-fan-ctrl.c         | 187 +++++++++++----------------
+ 2 files changed, 80 insertions(+), 113 deletions(-)
 
+diff --git a/Documentation/hwmon/gxp-fan-ctrl.rst b/Documentation/hwmon/gxp-fan-ctrl.rst
+index ae3397e81c04..6a4833d61338 100644
+--- a/Documentation/hwmon/gxp-fan-ctrl.rst
++++ b/Documentation/hwmon/gxp-fan-ctrl.rst
+@@ -22,7 +22,7 @@ Sysfs attributes
+ ----------------
+ 
+ ======================= ===========================================================
+-pwm[0-7]		Fan 0 to 7 respective PWM value (0-255)
+-fan[0-7]_fault		Fan 0 to 7 respective fault status: 1 fail, 0 ok
+-fan[0-7]_enable         Fan 0 to 7 respective enabled status: 1 enabled, 0 disabled
++pwm[1-8]		Fan 1 to 8 respective PWM value (0-255)
++pwm[1-8]_enable		Fan 1 to 8 respective enabled status: 1 enabled, 0 disabled
++fan[1-8]_fault		Fan 1 to 8 respective fault status: 1 fail, 0 ok
+ ======================= ===========================================================
 diff --git a/drivers/hwmon/gxp-fan-ctrl.c b/drivers/hwmon/gxp-fan-ctrl.c
-index 33decc881b92..328291cacfbd 100644
+index 33decc881b92..a0ad0157e5a1 100644
 --- a/drivers/hwmon/gxp-fan-ctrl.c
 +++ b/drivers/hwmon/gxp-fan-ctrl.c
 @@ -1,5 +1,10 @@
@@ -34,7 +50,7 @@ index 33decc881b92..328291cacfbd 100644
  
  #include <linux/bits.h>
  #include <linux/err.h>
-@@ -10,121 +15,97 @@
+@@ -10,121 +15,96 @@
  #include <linux/mod_devicetable.h>
  #include <linux/platform_device.h>
  #include <linux/regmap.h>
@@ -50,7 +66,6 @@ index 33decc881b92..328291cacfbd 100644
 +	void __iomem		*base;
 +	struct regmap		*xreg_map;
 +	struct regulator	*fan_supply;
-+	u8			fan_present;
  };
  
 -static bool fan_installed(struct device *dev, int fan)
@@ -58,11 +73,11 @@ index 33decc881b92..328291cacfbd 100644
  {
 -	struct gxp_fan_ctrl_drvdata *drvdata = dev_get_drvdata(dev);
 -	unsigned int val;
+-
+-	regmap_read(drvdata->xreg_map, XREG_FAN_INSTALLED, &val);
 +	if (!drvdata->fan_supply)
 +		return true;
  
--	regmap_read(drvdata->xreg_map, XREG_FAN_INSTALLED, &val);
--
 -	return !!(val & BIT(fan + XREG_FAN1_8_INST_SHIFT));
 +	return regulator_is_enabled(drvdata->fan_supply) > 0;
  }
@@ -201,16 +216,12 @@ index 33decc881b92..328291cacfbd 100644
  	default:
  		return -EOPNOTSUPP;
  	}
-@@ -134,33 +115,29 @@ static umode_t gxp_fan_ctrl_is_visible(const void *_data,
+@@ -134,33 +114,24 @@ static umode_t gxp_fan_ctrl_is_visible(const void *_data,
  				       enum hwmon_sensor_types type,
  				       u32 attr, int channel)
  {
 -	umode_t mode = 0;
-+	const struct gxp_fan_ctrl_drvdata *drvdata = _data;
-+
-+	if (!(drvdata->fan_present & BIT(channel)))
-+		return 0;
- 
+-
  	switch (type) {
  	case hwmon_fan:
 -		switch (attr) {
@@ -245,7 +256,7 @@ index 33decc881b92..328291cacfbd 100644
  }
  
  static const struct hwmon_ops gxp_fan_ctrl_ops = {
-@@ -171,30 +148,25 @@ static const struct hwmon_ops gxp_fan_ctrl_ops = {
+@@ -171,30 +142,25 @@ static const struct hwmon_ops gxp_fan_ctrl_ops = {
  
  static const struct hwmon_channel_info * const gxp_fan_ctrl_info[] = {
  	HWMON_CHANNEL_INFO(fan,
@@ -288,11 +299,9 @@ index 33decc881b92..328291cacfbd 100644
  };
  
  static int gxp_fan_ctrl_probe(struct platform_device *pdev)
-@@ -202,9 +174,9 @@ static int gxp_fan_ctrl_probe(struct platform_device *pdev)
- 	struct gxp_fan_ctrl_drvdata *drvdata;
+@@ -203,8 +169,7 @@ static int gxp_fan_ctrl_probe(struct platform_device *pdev)
  	struct device *dev = &pdev->dev;
  	struct device *hwmon_dev;
-+	unsigned int val;
  
 -	drvdata = devm_kzalloc(dev, sizeof(struct gxp_fan_ctrl_drvdata),
 -			       GFP_KERNEL);
@@ -300,7 +309,7 @@ index 33decc881b92..328291cacfbd 100644
  	if (!drvdata)
  		return -ENOMEM;
  
-@@ -219,13 +191,19 @@ static int gxp_fan_ctrl_probe(struct platform_device *pdev)
+@@ -219,13 +184,15 @@ static int gxp_fan_ctrl_probe(struct platform_device *pdev)
  		return dev_err_probe(dev, PTR_ERR(drvdata->xreg_map),
  				     "failed to find hpe,xreg syscon\n");
  
@@ -316,10 +325,6 @@ index 33decc881b92..328291cacfbd 100644
 +					     "failed to get fan supply\n");
 +		drvdata->fan_supply = NULL;
 +	}
-+
-+	regmap_read(drvdata->xreg_map, XREG_FAN_INSTALLED, &val);
-+	drvdata->fan_present = (val & XREG_FAN1_8_INST_MASK) >>
-+			       XREG_FAN1_8_INST_SHIFT;
  
 -	hwmon_dev = devm_hwmon_device_register_with_info(&pdev->dev,
 +	hwmon_dev = devm_hwmon_device_register_with_info(dev,
