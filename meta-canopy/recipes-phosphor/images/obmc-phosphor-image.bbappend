@@ -9,3 +9,10 @@ IMAGE_FEATURES:remove:canopy-qemu = " \
     obmc-host-state-mgmt \
     obmc-leds \
     "
+
+# entity-manager describes the emulated board and its sensors, so Redfish
+# serves a chassis with sensors.
+OBMC_IMAGE_EXTRA_INSTALL:append:canopy-qemu = " \
+    dbus-sensors \
+    entity-manager \
+"
