@@ -1,17 +1,26 @@
 name: "Console: VUART Data Path"
 description: >-
-  Verify the GXP VUART kernel driver TX data path. Tests direct writes
-  to ttyVUART0 and writes through the obmc-console-server socket bridge,
-  validating that data reaches the hardware via /proc/tty/driver/serial
-  TX counters. Requires host power-on for POST output verification.
+  Verify the GXP VUART kernel driver TX data path. Powers the host on and
+  waits for POST to complete, then writes directly to ttyVUART0 and through
+  the obmc-console-server socket bridge. Each write must raise the ttyS3 TX
+  counter in /proc/tty/driver/serial above its value before the write.
 
 defaults:
-  transport: &bmc_ssh
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  bmc_ssh: &bmc_ssh
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
+  ttys3_tx: &ttys3_tx "sed -n 's/^3:.* tx:\\([0-9]*\\).*/\\1/p' /proc/tty/driver/serial"
 
 stages:
   - name: VUART Kernel Driver
@@ -47,7 +56,7 @@ stages:
           expect:
             - regex: "^0x[23]f8$"
       - cmd: cmd
-        name: VUART IRQ is firing
+        name: ttyS3 has an IRQ in /proc/interrupts
         transport: *bmc_ssh
         options:
           timeout: 5s
@@ -59,30 +68,55 @@ stages:
 
   - name: Power On Host
     steps:
+      - cmd: redfish
+        name: The host is powered on
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 204]
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+            retry: {timeout: 5m, interval: 5s}
       - cmd: shell
-        name: Send Power On via Redfish
-        transport: &local
-          proto: local
+        name: Wait for SMBIOS transfer (host POST complete)
+        transport: *bmc_ssh
+        options:
+          timeout: 15m
         parameters:
           command: >-
-            curl -sk -u root:[[attributes.BMCPassword]]
-            -X POST -H 'Content-Type: application/json'
-            -d '{"ResetType":"On"}'
-            -o /dev/null -w '%{http_code}'
-            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+            full=$(journalctl -k --no-pager | grep -c 'push: queue is full');
+            while [ ! -f /var/lib/smbios/smbios2 ] ||
+                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
+            do
+              now=$(journalctl -k --no-pager | grep -c 'push: queue is full');
+              if [ "$now" -gt "$full" ]; then
+                echo "CHIF push queue full ($full -> $now): restarting CHIF";
+                systemctl restart xyz.openbmc_project.GxpChif.service;
+                full=$now;
+              fi;
+              sleep 5;
+            done;
+            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
           expect:
-            - regex: "^(200|204)$"
-      - cmd: cmd
-        name: Wait for host POST
-        transport: *local
-        options:
-          timeout: 4m
-        parameters:
-          executable: sleep
-          args: ["180"]
+            - regex: "SMBIOS ready"
 
-  - name: TX Path — Direct TTY Write
+  - name: TX Path - Direct TTY Write
     steps:
+      - cmd: shell
+        name: Record ttyS3 TX counter before the direct write
+        transport: *bmc_ssh
+        options:
+          timeout: 5s
+        parameters:
+          command: *ttys3_tx
+          expect:
+            - regex: "^[0-9]+$"
+          variable: TX_BEFORE_TTY
       - cmd: shell
         name: Write test string to /dev/ttyVUART0
         transport: *bmc_ssh
@@ -90,19 +124,31 @@ stages:
           timeout: 10s
         parameters:
           command: "echo -n 'FWCI_VUART_TX_TEST' > /dev/ttyVUART0"
-      - cmd: cmd
+      # The counter may lag the write by a moment, so poll for up to 10 s.
+      - cmd: shell
         name: TX counter increased after direct write
+        transport: *bmc_ssh
+        options:
+          timeout: 15s
+        parameters:
+          command: >-
+            for i in 1 2 3 4 5 6 7 8 9 10; do
+            tx=$(sed -n 's/^3:.* tx:\([0-9]*\).*/\1/p' /proc/tty/driver/serial);
+            [ "$tx" -gt {{ TX_BEFORE_TTY }} ] && break; sleep 1; done;
+            echo "tx {{ TX_BEFORE_TTY }} -> $tx"; [ "$tx" -gt {{ TX_BEFORE_TTY }} ]
+
+  - name: TX Path - Console Server Bridge
+    steps:
+      - cmd: shell
+        name: Record ttyS3 TX counter before the bridge write
         transport: *bmc_ssh
         options:
           timeout: 5s
         parameters:
-          executable: cat
-          args: ["/proc/tty/driver/serial"]
+          command: *ttys3_tx
           expect:
-            - regex: "^3:.*tx:[1-9][0-9]*"
-
-  - name: TX Path — Console Server Bridge
-    steps:
+            - regex: "^[0-9]+$"
+          variable: TX_BEFORE_BRIDGE
       - cmd: shell
         name: Write via obmc-console-client
         transport: *bmc_ssh
@@ -110,13 +156,15 @@ stages:
           timeout: 10s
         parameters:
           command: "echo -n 'FWCI_CONSOLE_BRIDGE' | obmc-console-client -i default"
-      - cmd: cmd
+      # The console server forwards the client data asynchronously, so poll for up to 10 s.
+      - cmd: shell
         name: TX counter increased via console bridge
         transport: *bmc_ssh
         options:
-          timeout: 5s
+          timeout: 15s
         parameters:
-          executable: cat
-          args: ["/proc/tty/driver/serial"]
-          expect:
-            - regex: "^3:.*tx:[1-9][0-9]*"
+          command: >-
+            for i in 1 2 3 4 5 6 7 8 9 10; do
+            tx=$(sed -n 's/^3:.* tx:\([0-9]*\).*/\1/p' /proc/tty/driver/serial);
+            [ "$tx" -gt {{ TX_BEFORE_BRIDGE }} ] && break; sleep 1; done;
+            echo "tx {{ TX_BEFORE_BRIDGE }} -> $tx"; [ "$tx" -gt {{ TX_BEFORE_BRIDGE }} ]

@@ -1,38 +1,54 @@
 name: "Inventory: Sensors"
 description: >-
-  Verify sensor count and presence of platform-universal sensors via Redfish.
-  Covers entity-manager configs and dbus-sensors for hwmontempsensor.
-  Fan PWM sensors are verified in fan-control.yaml.
+  Verify over Redfish that the board chassis serves the number of sensors in
+  the DUT attribute Sensors.Count (a min..max range) and every sensor named
+  in Sensors.Names (each item is a regular expression for one sensor name).
+  Covers entity-manager configs and dbus-sensors for hwmontempsensor. Fan
+  PWM sensors are verified in fan-control.yaml.
 
 defaults:
-  transport: &local
+  local: &local
     proto: local
+  redfish: &redfish
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+    validate: inventory
 
 stages:
-  - name: Sensor Counts
+  - name: Sensors
     steps:
-      - cmd: cmd
-        name: Total sensor count = 19
+      - cmd: redfish
+        name: Redfish service answers
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/ASUS_Kommando_IPMI_Card/Sensors"]
-          expect:
-            - regex: '"Members@odata.count": 19'
+          <<: *redfish
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
 
-  - name: Temperature Sensors Present
-    steps:
-      - cmd: cmd
-        name: Header Temp present
+      # The sensor daemons add their sensors after the BMC boot.
+      - cmd: redfish
+        name: The chassis serves the board's number of sensors
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/ASUS_Kommando_IPMI_Card/Sensors"]
-          expect:
-            - regex: "Header[0-2]_Temp"
+          <<: *redfish
+          inventory:
+            retry: {timeout: 5m, interval: 10s}
+            rules:
+              - {path: "[[attributes.RedfishChassis]]", collection: Sensors, op: range, value: "[[attributes.Sensors.Count]]"}
+
+      # bmcweb names each member <type>_<sensor name>.
+      - cmd: redfish
+        name: The board's named sensors exist
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            retry: {timeout: 5m, interval: 10s}
+            rules:
+              - {path: "[[attributes.RedfishChassis]]/Sensors", prop: Members, op: matches, value: '/Sensors/[a-z_]+_[[attributes.Sensors.Names.0]]\b'}

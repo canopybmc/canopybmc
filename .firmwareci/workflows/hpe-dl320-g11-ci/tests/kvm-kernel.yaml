@@ -3,175 +3,184 @@ description: >-
   Verify the GXP KVM kernel drivers are loaded and functional: the
   thumbnail video capture driver (V4L2 /dev/video0) and the USB device
   controller driver (GXP UDC). Checks device nodes, driver bindings,
-  sysfs attributes, and dmesg probe messages.
+  sysfs attributes and dmesg probe messages, the HID gadget devices while a
+  VNC client is connected, and the HID gadget in configfs. The device tree
+  paths and compatible strings are those of the GXP SoC.
 
 defaults:
-  transport: &bmc_ssh
+  bmc: &bmc
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
 
 stages:
-  - name: Video Device
+  - name: KVM Kernel Drivers
     steps:
-      - cmd: cmd
-        name: /dev/video0 character device exists
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
+      # The SSH transport does not retry a refused connection, so wait for
+      # the BMC on Redfish first.
+      - cmd: redfish
+        name: Redfish service answers
+        transport:
+          proto: local
         parameters:
-          executable: test
-          args: ["-c", "/dev/video0"]
-      - cmd: cmd
-        name: Video device is V4L2 capable
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: cat
-          args: ["/sys/class/video4linux/video0/name"]
-          expect:
-            - regex: "gxp"
+          host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+          auth:
+            user: "[[attributes.BMCUser]]"
+            password: "[[attributes.BMCPassword]]"
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
 
-  - name: Video Driver Binding
-    steps:
-      - cmd: cmd
-        name: Thumbnail DT node compatible is hpe,gxp-video-thumbnail
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: cat
-          args: ["/sys/firmware/devicetree/base/ahb@80000000/video@c0000500/compatible"]
-          expect:
-            - regex: "hpe,gxp-video-thumbnail"
-      - cmd: cmd
-        name: Video driver probed in dmesg
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: dmesg
-          args: []
-          expect:
-            - regex: "gxp-video-thumbnail"
-      - cmd: cmd
-        name: Capture resolution is 1024x768
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: dmesg
-          args: []
-          expect:
-            - regex: "width=1024, height=768"
-      - cmd: cmd
-        name: Pixel format is 32bpp (XRGB32)
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: dmesg
-          args: []
-          expect:
-            - regex: "bpp=4"
-
-  - name: UDC Device
-    steps:
-      - cmd: cmd
-        name: UDC platform device exists
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: test
-          args: ["-d", "/sys/devices/platform/ahb@80000000/80401000.usb"]
-      - cmd: cmd
-        name: UDC DT compatible is hpe,gxp-udc
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: cat
-          args: ["/sys/firmware/devicetree/base/ahb@80000000/usb@80401000/compatible"]
-          expect:
-            - regex: "hpe,gxp-udc"
-      - cmd: cmd
-        name: UDC registered in sysfs
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: test
-          args: ["-d", "/sys/class/udc/80401000.usb"]
-  - name: HID Gadget Devices
-    steps:
       - cmd: shell
-        name: Connect to VNC and verify /dev/hidg0 and /dev/hidg1 exist
-        transport: *bmc_ssh
+        name: /dev/video0 is a character device
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: ls -l /dev/video0
+          expect:
+            - regex: '^c'
+
+      - cmd: shell
+        name: The V4L2 device is the GXP capture driver
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: cat /sys/class/video4linux/video0/name
+          expect:
+            - regex: 'gxp'
+
+      - cmd: shell
+        name: Thumbnail DT node compatible is hpe,gxp-video-thumbnail
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: cat /sys/firmware/devicetree/base/ahb@80000000/video@c0000500/compatible
+          expect:
+            - regex: 'hpe,gxp-video-thumbnail'
+
+      - cmd: shell
+        name: Video driver probed in dmesg
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: dmesg | grep 'gxp-video-thumbnail' | head -n 5
+          expect:
+            - regex: 'gxp-video-thumbnail'
+
+      - cmd: shell
+        name: Capture resolution is 1024x768
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: dmesg | grep 'width=' | head -n 5
+          expect:
+            - regex: 'width=1024, height=768'
+
+      - cmd: shell
+        name: Pixel format is 32bpp (XRGB32)
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: dmesg | grep 'bpp=' | head -n 5
+          expect:
+            - regex: 'bpp=4'
+
+      - cmd: shell
+        name: UDC platform device exists
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: ls -ld /sys/devices/platform/ahb@80000000/80401000.usb
+          expect:
+            - regex: '^d'
+
+      - cmd: shell
+        name: UDC DT compatible is hpe,gxp-udc
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: cat /sys/firmware/devicetree/base/ahb@80000000/usb@80401000/compatible
+          expect:
+            - regex: 'hpe,gxp-udc'
+
+      - cmd: shell
+        name: UDC registered in sysfs
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: ls /sys/class/udc
+          expect:
+            - regex: '^80401000\.usb$'
+
+      # obmc-ikvm binds the HID gadget only while a VNC client is connected,
+      # so the step holds a TCP connection to port 5900 open.
+      - cmd: shell
+        name: /dev/hidg0 exists while a VNC client is connected
+        transport: *bmc
         options:
           timeout: 30s
           on-failure: continue
         parameters:
           command: |
             exec 3<>/dev/tcp/127.0.0.1/5900
-            sleep 3
-            RESULT=0
-            test -c /dev/hidg0 && echo "hidg0 OK" || { echo "hidg0 MISSING"; RESULT=1; }
-            test -c /dev/hidg1 && echo "hidg1 OK" || { echo "hidg1 MISSING"; RESULT=1; }
+            for i in 1 2 3 4 5 6 7 8 9 10; do [ -c /dev/hidg0 ] && break; sleep 1; done
+            ls -l /dev/hidg0
             exec 3>&-
-            exit $RESULT
+          expect:
+            - regex: '^c'
 
-  - name: USB Gadget ConfigFS
-    steps:
-      - cmd: cmd
-        name: ConfigFS mounted
-        transport: *bmc_ssh
+      - cmd: shell
+        name: /dev/hidg1 exists while a VNC client is connected
+        transport: *bmc
         options:
-          timeout: 5s
+          timeout: 30s
           on-failure: continue
         parameters:
-          executable: test
-          args: ["-d", "/sys/kernel/config/usb_gadget"]
-      - cmd: cmd
+          command: |
+            exec 3<>/dev/tcp/127.0.0.1/5900
+            for i in 1 2 3 4 5 6 7 8 9 10; do [ -c /dev/hidg1 ] && break; sleep 1; done
+            ls -l /dev/hidg1
+            exec 3>&-
+          expect:
+            - regex: '^c'
+
+      - cmd: shell
+        name: USB gadget configfs is mounted
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: ls -ld /sys/kernel/config/usb_gadget
+          expect:
+            - regex: '^d'
+
+      - cmd: shell
         name: obmc_hid gadget directory exists
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          executable: test
-          args: ["-d", "/sys/kernel/config/usb_gadget/obmc_hid"]
-      - cmd: cmd
-        name: Keyboard function (hid.0) configured
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: cat
-          args: ["/sys/kernel/config/usb_gadget/obmc_hid/functions/hid.0/protocol"]
+          command: ls -ld /sys/kernel/config/usb_gadget/obmc_hid
           expect:
-            - regex: "^1$"
-      - cmd: cmd
-        name: Mouse function (hid.1) configured
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
+            - regex: '^d'
+
+      - cmd: shell
+        name: Keyboard function (hid.0) has protocol 1
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          executable: cat
-          args: ["/sys/kernel/config/usb_gadget/obmc_hid/functions/hid.1/protocol"]
+          command: cat /sys/kernel/config/usb_gadget/obmc_hid/functions/hid.0/protocol
           expect:
-            - regex: "^2$"
+            - regex: '^1$'
+
+      - cmd: shell
+        name: Mouse function (hid.1) has protocol 2
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: cat /sys/kernel/config/usb_gadget/obmc_hid/functions/hid.1/protocol
+          expect:
+            - regex: '^2$'

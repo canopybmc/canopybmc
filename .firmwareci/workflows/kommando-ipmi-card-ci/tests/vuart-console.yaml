@@ -1,186 +1,164 @@
 name: "Console: VUART Userspace"
 description: >-
-  Verify the OpenBMC host console stack: obmc-console-server on ttyVUART0,
-  obmc-console-ssh socket on port 2200, log file capture, and udev symlink.
-  This is an OpenBMC userspace test — it validates the phosphor console
-  infrastructure on top of the GXP VUART kernel driver.
+  Verify the OpenBMC host console stack: obmc-console-server on ttyVUART0
+  with the host tty of the DUT attribute Console.HostTty open, its
+  configuration, the udev symlink and rule, the console socket, the
+  obmc-console-ssh port, log file capture and the console client. This is an
+  OpenBMC userspace test: it validates the phosphor console infrastructure on
+  top of the board's UART driver.
 
 defaults:
-  transport: &bmc_ssh
+  bmc: &bmc
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
+  server_pid: &server_pid 'ls -l /proc/$(systemctl show -p MainPID --value obmc-console@ttyVUART0.service)/fd/'
 
 stages:
-  - name: Console Server
+  - name: Host Console
     steps:
-      - cmd: cmd
+      # The SSH transport does not retry a refused connection, so wait for
+      # the BMC on Redfish first.
+      - cmd: redfish
+        name: Redfish service answers
+        transport:
+          proto: local
+        parameters:
+          host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+          auth:
+            user: "[[attributes.BMCUser]]"
+            password: "[[attributes.BMCPassword]]"
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: shell
         name: obmc-console-server active on ttyVUART0
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          executable: systemctl
-          args: ["is-active", "obmc-console@ttyVUART0.service"]
-      - cmd: cmd
-        name: Server process running with correct config
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "PID=$(pidof obmc-console-server); test -n \"$PID\" && cat /proc/$PID/cmdline 2>/dev/null | tr '\\0' ' '"
+          command: systemctl is-active obmc-console@ttyVUART0.service
           expect:
-            - regex: "ttyVUART0"
-      - cmd: cmd
-        name: Server has ttyS0 file descriptor open
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "PID=$(pidof obmc-console-server); ls -la /proc/$PID/fd/ 2>/dev/null"
-          expect:
-            - regex: "ttyS0"
+            - regex: '^active$'
 
-  - name: Console Configuration
-    steps:
-      - cmd: cmd
-        name: Server config exists with logsize
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
+      - cmd: shell
+        name: Server process runs for ttyVUART0
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          executable: cat
-          args: ["/etc/obmc-console/server.ttyVUART0.conf"]
+          command: 'tr "\0" " " < /proc/$(systemctl show -p MainPID --value obmc-console@ttyVUART0.service)/cmdline'
           expect:
-            - regex: "logsize"
-      - cmd: cmd
+            - regex: 'ttyVUART0'
+
+      - cmd: shell
+        name: Server has the host tty open
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: *server_pid
+          expect:
+            - regex: '-> /dev/[[attributes.Console.HostTty]]$'
+
+      - cmd: shell
+        name: Server config sets logsize
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: cat /etc/obmc-console/server.ttyVUART0.conf
+          expect:
+            - regex: '^\s*logsize'
+
+      - cmd: shell
         name: No self-referencing local-tty in config
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "! grep -q 'local-tty' /etc/obmc-console/server.ttyVUART0.conf"
-
-  - name: Udev Symlink
-    steps:
-      - cmd: cmd
-        name: ttyVUART0 symlink created by udev rule
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "test -L /dev/ttyVUART0 && readlink /dev/ttyVUART0"
+          command: awk '/local-tty/ {n++} END {print n+0}' /etc/obmc-console/server.ttyVUART0.conf
           expect:
-            - regex: "ttyS0"
-      - cmd: cmd
-        name: udev rule installed
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: ls
-          args: ["/usr/lib/udev/rules.d/80-obmc-console-uart.rules"]
+            - regex: '^0$'
 
-  - name: Console Unix Socket
-    steps:
-      - cmd: cmd
+      - cmd: shell
+        name: ttyVUART0 symlink points to the host tty
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: ls -l /dev/ttyVUART0
+          expect:
+            - regex: '^l.*-> (.*/)?[[attributes.Console.HostTty]]$'
+
+      - cmd: shell
+        name: Console udev rule installed
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: ls -l /usr/lib/udev/rules.d/[[attributes.Console.UdevRule]]
+          expect:
+            - regex: '^-'
+
+      - cmd: shell
         name: Abstract socket obmc-console.default exists
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          executable: cat
-          args: ["/proc/net/unix"]
+          command: cat /proc/net/unix
           expect:
-            - regex: "@obmc-console\\.default"
+            - regex: '@obmc-console\.default'
 
-  - name: Console SSH Service
-    steps:
-      - cmd: cmd
-        name: obmc-console-ssh socket listening on port 2200
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
+      - cmd: shell
+        name: obmc-console-ssh socket active
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          executable: systemctl
-          args: ["is-active", "obmc-console-ssh.socket"]
-      - cmd: cmd
+          command: systemctl is-active obmc-console-ssh.socket
+          expect:
+            - regex: '^active$'
+
+      - cmd: shell
         name: Dropbear config exists
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          executable: test
-          args: ["-f", "/etc/obmc-console/dropbear.env"]
-      - cmd: cmd
-        name: Port 2200 is listening
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: cat
-          args: ["/proc/net/tcp6"]
+          command: ls -l /etc/obmc-console/dropbear.env
           expect:
-            - regex: ":0898"
+            - regex: '^-'
 
-  - name: Console Log File
-    steps:
-      - cmd: cmd
+      - cmd: ping
+        name: Console SSH port accepts connections
+        options:
+          timeout: 10s
+          on-failure: continue
+        parameters:
+          host: "[[attributes.BMC]]"
+          port: "[[attributes.Console.SshPort]]"
+
+      - cmd: shell
         name: Log file exists at /var/log/obmc-console.log
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          executable: test
-          args: ["-f", "/var/log/obmc-console.log"]
-      - cmd: cmd
-        name: Log file writable by console server
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "PID=$(pidof obmc-console-server); ls -la /proc/$PID/fd/ 2>/dev/null"
+          command: ls -l /var/log/obmc-console.log
           expect:
-            - regex: "obmc-console\\.log"
+            - regex: '^-'
 
-  - name: obmc-console-client
-    steps:
-      - cmd: cmd
-        name: obmc-console-client binary installed
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
+      - cmd: shell
+        name: Log file open by console server
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          executable: test
-          args: ["-x", "/usr/bin/obmc-console-client"]
+          command: *server_pid
+          expect:
+            - regex: '-> /var/log/obmc-console\.log$'
+
+      - cmd: shell
+        name: obmc-console-client is installed and executable
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: ls -l /usr/bin/obmc-console-client
+          expect:
+            - regex: '^-..x'

@@ -1,110 +1,138 @@
 name: "KVM: Userspace Services"
 description: >-
-  Verify the OpenBMC KVM-over-IP userspace stack: obmc-ikvm service
-  running with correct arguments, VNC port 5900 listening, HID gadget
-  setup script installed, and USB gadget UDC binding. This is a
-  userspace test — it validates the phosphor KVM infrastructure on
-  top of the GXP video and UDC kernel drivers.
+  Verify the OpenBMC KVM-over-IP userspace stack: obmc-ikvm runs without
+  restarts on the video device, the HID gadgets and the USB device controller
+  of the DUT attribute KVM.Udc, the HID gadget setup script is installed, the
+  USB gadget has the Linux Foundation vendor ID and the product string of the
+  DUT attribute KVM.Product, VNC listens on port 5900, and bmcweb upgrades
+  /kvm/0 to a WebSocket.
 
 defaults:
-  transport: &bmc_ssh
+  bmc: &bmc
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
+  ikvm_cmdline: &ikvm_cmdline 'tr "\0" " " < /proc/$(pidof obmc-ikvm)/cmdline'
 
 stages:
-  - name: Service Status
+  - name: KVM Userspace
     steps:
-      - cmd: cmd
-        name: obmc-ikvm service is active
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
+      # The SSH transport does not retry a refused connection, so wait for
+      # the BMC on Redfish first.
+      - cmd: redfish
+        name: Redfish service answers
+        transport:
+          proto: local
         parameters:
-          executable: systemctl
-          args: ["is-active", "obmc-ikvm.service"]
-      - cmd: cmd
-        name: obmc-ikvm no restarts
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "RESTARTS=$(systemctl show obmc-ikvm.service -p NRestarts --value); echo \"obmc-ikvm NRestarts=$RESTARTS\"; test \"$RESTARTS\" = \"0\""
-      - cmd: cmd
-        name: obmc-ikvm process running with correct args
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "PID=$(pidof obmc-ikvm); test -n \"$PID\" && cat /proc/$PID/cmdline 2>/dev/null | tr '\\0' ' '"
-          expect:
-            - regex: "/dev/video0"
-            - regex: "/dev/hidg0"
-            - regex: "/dev/hidg1"
-            - regex: "80401000\\.usb"
+          host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+          auth:
+            user: "[[attributes.BMCUser]]"
+            password: "[[attributes.BMCPassword]]"
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
 
-  - name: HID Gadget Setup
-    steps:
-      - cmd: cmd
-        name: create_usbhid.sh script installed
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: test
-          args: ["-x", "/usr/bin/create_usbhid.sh"]
-      - cmd: cmd
-        name: Gadget vendor is Linux Foundation (0x1d6b)
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: cat
-          args: ["/sys/kernel/config/usb_gadget/obmc_hid/idVendor"]
-          expect:
-            - regex: "0x1d6b"
-      - cmd: cmd
-        name: Gadget product string is virtual_input
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: cat
-          args: ["/sys/kernel/config/usb_gadget/obmc_hid/strings/0x409/product"]
-          expect:
-            - regex: "virtual_input"
-
-  - name: VNC Port
-    steps:
-      - cmd: cmd
-        name: Port 5900 is listening
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "cat /proc/net/tcp /proc/net/tcp6 2>/dev/null"
-          expect:
-            - regex: ":170C"
       - cmd: shell
-        name: KVM WebSocket endpoint reachable via bmcweb
+        name: obmc-ikvm service is active
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: systemctl is-active obmc-ikvm.service
+          expect:
+            - regex: '^active$'
+
+      - cmd: shell
+        name: obmc-ikvm did not restart
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: systemctl show -p NRestarts --value obmc-ikvm.service
+          expect:
+            - regex: '^0$'
+
+      - cmd: shell
+        name: obmc-ikvm captures from /dev/video0
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: *ikvm_cmdline
+          expect:
+            - regex: '/dev/video0'
+
+      - cmd: shell
+        name: obmc-ikvm drives the keyboard gadget /dev/hidg0
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: *ikvm_cmdline
+          expect:
+            - regex: '/dev/hidg0'
+
+      - cmd: shell
+        name: obmc-ikvm drives the mouse gadget /dev/hidg1
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: *ikvm_cmdline
+          expect:
+            - regex: '/dev/hidg1'
+
+      - cmd: shell
+        name: obmc-ikvm binds the board's USB device controller
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: *ikvm_cmdline
+          expect:
+            - regex: '[[attributes.KVM.Udc]]'
+
+      - cmd: shell
+        name: create_usbhid.sh is installed and executable
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: ls -l /usr/bin/create_usbhid.sh
+          expect:
+            - regex: '^-..x'
+
+      - cmd: shell
+        name: Gadget vendor is Linux Foundation (0x1d6b)
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: cat /sys/kernel/config/usb_gadget/obmc_hid/idVendor
+          expect:
+            - regex: '^0x1d6b$'
+
+      - cmd: shell
+        name: Gadget product string is the board's
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: cat /sys/kernel/config/usb_gadget/obmc_hid/strings/0x409/product
+          expect:
+            - regex: '^[[attributes.KVM.Product]]$'
+
+      # State 0A is LISTEN; 170C is port 5900.
+      - cmd: shell
+        name: VNC port 5900 is listening
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: cat /proc/net/tcp /proc/net/tcp6
+          expect:
+            - regex: '^\s*\d+: [0-9A-F]+:170C [0-9A-F]+:0000 0A '
+
+      # The vnc step needs a video frame, and the host is off in this test.
+      # curl runs into --max-time after the 101 answer, so only its status
+      # code counts.
+      - cmd: shell
+        name: bmcweb upgrades /kvm/0 to a WebSocket
         transport:
           proto: local
         options:
@@ -112,14 +140,12 @@ stages:
           on-failure: continue
         parameters:
           command: >-
-            curl -sk --http1.1 --max-time 5
-            -u root:[[attributes.BMCPassword]]
+            code=$(curl -sk --http1.1 --max-time 5
+            -u '[[attributes.BMCUser]]:[[attributes.BMCPassword]]'
             -o /dev/null -w '%{http_code}'
-            -H 'Upgrade: websocket'
-            -H 'Connection: Upgrade'
-            -H 'Sec-WebSocket-Key: dGVzdA=='
-            -H 'Sec-WebSocket-Version: 13'
-            https://[[attributes.BMC]]/kvm/0
-            || true
+            -H 'Upgrade: websocket' -H 'Connection: Upgrade'
+            -H 'Sec-WebSocket-Key: dGVzdA==' -H 'Sec-WebSocket-Version: 13'
+            'https://[[attributes.BMC]]:[[attributes.RedfishPort]]/kvm/0');
+            echo "$code"
           expect:
-            - regex: "^101$"
+            - regex: '^101$'

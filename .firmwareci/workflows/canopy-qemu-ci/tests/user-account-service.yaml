@@ -1,203 +1,229 @@
 name: "User: AccountService Configuration"
 description: >-
   Verify AccountService configuration, predefined roles, root account
-  properties, session service defaults, and LDAP/AD endpoint availability.
-  BMC-only test, no host power required.
+  properties, session service defaults, and that LDAP, not ActiveDirectory,
+  has a certificate endpoint. BMC-only test, no host power required.
+
+on-failure: continue
 
 defaults:
-  transport: &bmc_ssh
-    proto: ssh
-    options:
-      host: "[[attributes.BMC]]"
-      user: "root"
-      password: "[[attributes.BMCPassword]]"
-      port: 2222
+  local: &local
+    proto: local
+  inventory: &inventory
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth: {user: "[[attributes.BMCUser]]", password: "[[attributes.BMCPassword]]"}
+    validate: inventory
+  request: &request
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth: {user: "[[attributes.BMCUser]]", password: "[[attributes.BMCPassword]]"}
+    validate: request
 
 stages:
   - name: Wait for BMC
     steps:
-      - cmd: cmd
-        name: Wait for SSH
-        transport: *bmc_ssh
-        options:
-          timeout: 5m
+      # Waits on Redfish itself: the QEMU port forward accepts before the BMC listens.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
         parameters:
-          executable: echo
-          args: ["SSH connected"]
-      - cmd: cmd
-        name: Wait for services to settle
-        transport: *bmc_ssh
-        options:
-          timeout: 2m
-        parameters:
-          executable: sleep
-          args: ["45"]
+          <<: *inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
 
   - name: AccountService Configuration
     steps:
-      - cmd: cmd
+      - cmd: redfish
         name: MinPasswordLength is 8
-        transport: &local
-          proto: local
-        options:
-          timeout: 30s
+        transport: *local
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService"]
-          expect:
-            - regex: '"MinPasswordLength": *8'
-      - cmd: cmd
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService, prop: MinPasswordLength, op: eq, value: "8"}
+      - cmd: redfish
         name: MaxPasswordLength is 20
         transport: *local
-        options:
-          timeout: 30s
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService"]
-          expect:
-            - regex: '"MaxPasswordLength": *20'
-      - cmd: cmd
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService, prop: MaxPasswordLength, op: eq, value: "20"}
+      - cmd: redfish
         name: AccountLockoutThreshold is 0
         transport: *local
-        options:
-          timeout: 30s
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService"]
-          expect:
-            - regex: '"AccountLockoutThreshold": *0'
-      - cmd: cmd
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService, prop: AccountLockoutThreshold, op: eq, value: "0"}
+      - cmd: redfish
         name: AccountLockoutDuration is 0
         transport: *local
-        options:
-          timeout: 30s
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService"]
-          expect:
-            - regex: '"AccountLockoutDuration": *0'
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService, prop: AccountLockoutDuration, op: eq, value: "0"}
 
   - name: Predefined Roles
     steps:
-      - cmd: cmd
+      - cmd: redfish
         name: 3 predefined roles exist
         transport: *local
-        options:
-          timeout: 30s
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Roles"]
-          expect:
-            - regex: '"Members@odata.count": *3'
-      - cmd: cmd
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService, collection: Roles, op: count, value: "3"}
+      - cmd: redfish
+        name: Administrator role exists
+        transport: *local
+        parameters:
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService/Roles/Administrator, prop: RoleId, op: eq, value: Administrator}
+      - cmd: redfish
         name: Administrator role has ConfigureManager
         transport: *local
-        options:
-          timeout: 30s
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Roles/Administrator"]
-          expect:
-            - regex: '"RoleId": *"Administrator"'
-            - regex: '"ConfigureManager"'
-            - regex: '"ConfigureUsers"'
-      - cmd: cmd
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService/Roles/Administrator, prop: AssignedPrivileges, op: contains, value: ConfigureManager}
+      - cmd: redfish
+        name: Administrator role has ConfigureUsers
+        transport: *local
+        parameters:
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService/Roles/Administrator, prop: AssignedPrivileges, op: contains, value: ConfigureUsers}
+      - cmd: redfish
         name: Operator role exists
         transport: *local
-        options:
-          timeout: 30s
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Roles/Operator"]
-          expect:
-            - regex: '"RoleId": *"Operator"'
-            - regex: '"Login"'
-            - regex: '"ConfigureSelf"'
-            - regex: '"ConfigureComponents"'
-      - cmd: cmd
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService/Roles/Operator, prop: RoleId, op: eq, value: Operator}
+      - cmd: redfish
+        name: Operator role has Login
+        transport: *local
+        parameters:
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService/Roles/Operator, prop: AssignedPrivileges, op: contains, value: Login}
+      - cmd: redfish
+        name: Operator role has ConfigureSelf
+        transport: *local
+        parameters:
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService/Roles/Operator, prop: AssignedPrivileges, op: contains, value: ConfigureSelf}
+      - cmd: redfish
+        name: Operator role has ConfigureComponents
+        transport: *local
+        parameters:
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService/Roles/Operator, prop: AssignedPrivileges, op: contains, value: ConfigureComponents}
+      - cmd: redfish
         name: ReadOnly role exists
         transport: *local
-        options:
-          timeout: 30s
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Roles/ReadOnly"]
-          expect:
-            - regex: '"RoleId": *"ReadOnly"'
-            - regex: '"Login"'
-            - regex: '"ConfigureSelf"'
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService/Roles/ReadOnly, prop: RoleId, op: eq, value: ReadOnly}
+      - cmd: redfish
+        name: ReadOnly role has Login
+        transport: *local
+        parameters:
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService/Roles/ReadOnly, prop: AssignedPrivileges, op: contains, value: Login}
+      - cmd: redfish
+        name: ReadOnly role has ConfigureSelf
+        transport: *local
+        parameters:
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService/Roles/ReadOnly, prop: AssignedPrivileges, op: contains, value: ConfigureSelf}
 
   - name: Root Account
     steps:
-      - cmd: cmd
-        name: root account exists and is Administrator
+      - cmd: redfish
+        name: root account exists
         transport: *local
-        options:
-          timeout: 30s
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts/root"]
-          expect:
-            - regex: '"UserName": *"root"'
-            - regex: '"RoleId": *"Administrator"'
-            - regex: '"Enabled": *true'
-            - regex: '"Locked": *false'
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: "/redfish/v1/AccountService/Accounts/[[attributes.BMCUser]]", prop: UserName, op: eq, value: "[[attributes.BMCUser]]"}
+      - cmd: redfish
+        name: root account is Administrator
+        transport: *local
+        parameters:
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: "/redfish/v1/AccountService/Accounts/[[attributes.BMCUser]]", prop: RoleId, op: eq, value: Administrator}
+      - cmd: redfish
+        name: root account is enabled
+        transport: *local
+        parameters:
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: "/redfish/v1/AccountService/Accounts/[[attributes.BMCUser]]", prop: Enabled, op: eq, value: "true"}
+      - cmd: redfish
+        name: root account is not locked
+        transport: *local
+        parameters:
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: "/redfish/v1/AccountService/Accounts/[[attributes.BMCUser]]", prop: Locked, op: eq, value: "false"}
 
   - name: Session Service
     steps:
-      - cmd: cmd
+      - cmd: redfish
         name: SessionTimeout is 1800
         transport: *local
-        options:
-          timeout: 30s
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/SessionService"]
-          expect:
-            - regex: '"SessionTimeout": *1800'
-      - cmd: cmd
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/SessionService, prop: SessionTimeout, op: eq, value: "1800"}
+      - cmd: redfish
         name: Sessions collection accessible
         transport: *local
-        options:
-          timeout: 30s
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]",
-                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/SessionService/Sessions"]
-          expect:
-            - regex: '"Members@odata.count"'
+          <<: *inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/SessionService/Sessions, prop: "Members@odata.count", op: exists}
 
   - name: LDAP and AD Endpoints
     steps:
-      - cmd: cmd
+      - cmd: redfish
         name: LDAP Certificates endpoint exists
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/LDAP/Certificates -o /dev/null -w '%{http_code}'); echo \"LDAP Certs HTTP=$HTTP\"; test \"$HTTP\" = \"200\""
-      - cmd: cmd
-        name: ActiveDirectory Certificates endpoint exists
+          <<: *request
+          request: {method: GET, path: /redfish/v1/AccountService/LDAP/Certificates, status: 200}
+      # bmcweb serves certificates for LDAP only, not for ActiveDirectory.
+      - cmd: redfish
+        name: ActiveDirectory has no Certificates endpoint
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/ActiveDirectory/Certificates -o /dev/null -w '%{http_code}'); echo \"AD Certs HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"404\""
+          <<: *request
+          request: {method: GET, path: /redfish/v1/AccountService/ActiveDirectory/Certificates, status: 404}

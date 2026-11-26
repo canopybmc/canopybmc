@@ -3,197 +3,132 @@ description: >-
   Verify System Event Log commands (Table G-1, §31): Get SEL Info (40h), Get
   SEL Allocation Info (41h), Reserve SEL (42h), Get SEL Entry (43h), Add SEL
   Entry (44h), Partial Add SEL Entry (45h), Delete SEL Entry (46h), Clear SEL
-  (47h), Get/Set SEL Time (48h/49h), and Get SEL Time UTC Offset (5Ch).
+  (47h), Get/Set SEL Time (48h/49h) and Get SEL Time UTC Offset (5Ch).
+
+  The SEL is not stored on this BMC yet: an added entry does not reach the
+  SEL, and the commands that change entries answer with the completion codes
+  of the missing implementation. The test checks those exact codes.
 
 defaults:
-  transport: &local
+  local: &local
     proto: local
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
 
 stages:
-  - name: Get SEL Info
+  - name: Get SEL Info and Reserve SEL
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: Get SEL Info (0x0a 0x40)
+      - cmd: ipmi
+        name: SEL version is 1.5 or later
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0a 0x40
+          lan: *lan
+          get: sel/version
+          expect: {ge: 1.5}
+      - cmd: ipmi
+        name: SEL info reports an entry count
+        transport: *local
+        parameters:
+          lan: *lan
+          get: sel/entries
+          expect: {ge: 0}
+      - cmd: ipmi
+        name: Reserve SEL returns a reservation
+        transport: *local
+        parameters:
+          lan: *lan
+          get: sel/reservation
+          expect: {ne: 0}
 
-  - name: Reserve SEL
+  - name: Add and Get SEL Entry
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: Reserve SEL (0x0a 0x42)
+      # The BMC hands the entry to the SEL logger and answers record ID FFFFh, not a stored one.
+      - cmd: ipmi
+        name: Add SEL Entry answers record ID FFFFh
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0a 0x42
-
-  - name: Add SEL Entry
-    steps:
-      - cmd: shell
-        name: Add SEL Entry (0x0a 0x44)
+          lan: *lan
+          set: sel/entry
+          value: {sensor-type: 1, sensor: 1, event-type: 0, event-data: 0x00 0x00 0x00}
+          expect: {byte: 0, len: 2, eq: 0xffff}
+      # Added entries do not reach the SEL on this BMC yet, so the last entry is not found.
+      - cmd: ipmi
+        name: Get SEL Entry of the last record is rejected with 0xCB
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0a 0x44
-            0xff 0xff 0x02 0x00 0x00 0x00 0x00
-            0x20 0x00 0x04 0x01 0x01 0x00 0x00 0x00 0x00
-          expect:
-            - regex: '^\s*ff ff\s*$'
-
-  - name: Get SEL Entry
-    steps:
-      - cmd: shell
-        name: Get SEL Entry (0x0a 0x43)
+          lan: *lan
+          raw: 0x0a 0x43 0x00 0x00 0xff 0xff 0x00 0xff
+          expect: {completion: 0xcb}
+      # Not implemented on this BMC: ipmid answers 0xC1.
+      - cmd: ipmi
+        name: Partial Add SEL Entry is rejected with 0xC1
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0a 0x43 0x00 0x00 0xff 0xff 0x00 0xff 2>&1 || true
-          expect:
-            - regex: 'rsp=0xcb|Requested sensor, data, or record not found'
-      - cmd: shell
-        name: Partial Add SEL Entry (0x0a 0x45)
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0a 0x45 0x00 0x00 0xff 0xff 0x00 0xff 2>&1 || true
-          expect:
-            - regex: 'rsp=0xc1|Invalid command'
+          lan: *lan
+          raw: 0x0a 0x45 0x00 0x00 0xff 0xff 0x00 0xff
+          expect: {completion: 0xc1}
 
   - name: SEL Time
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: Get SEL Time (0x0a 0x48)
+      - cmd: ipmi
+        name: SEL time is a current date
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0a 0x48
-      - cmd: shell
-        name: Set SEL Time (0x0a 0x49) - currently 0xD5, NTP is enabled
+          lan: *lan
+          get: sel/time
+          expect: {matches: '^20[2-9][0-9]-'}
+      # NTP owns the BMC clock, so ipmid refuses a new SEL time with 0xD5.
+      - cmd: ipmi
+        name: Set SEL Time is rejected with 0xD5
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0a 0x49 0x00 0x00 0x00 0x00 2>&1 || true
-          expect:
-            - regex: 'rsp=0xd5|Command not supported in present state'
-      - cmd: shell
-        name: Get SEL Time UTC Offset (0x0a 0x5c)
+          lan: *lan
+          set: sel/time
+          value: 0
+          expect: {completion: 0xd5}
+      # Not implemented on this BMC: ipmid answers 0xC1.
+      - cmd: ipmi
+        name: Get SEL Time UTC Offset is rejected with 0xC1
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0a 0x5c 2>&1 || true
-          expect:
-            - regex: 'rsp=0xc1|Invalid command'
+          lan: *lan
+          raw: 0x0a 0x5c
+          expect: {completion: 0xc1}
 
   - name: SEL Management
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: Get SEL Allocation Info (0x0a 0x41)
+      # Not implemented on this BMC: ipmid answers 0xC1.
+      - cmd: ipmi
+        name: Get SEL Allocation Info is rejected with 0xC1
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0a 0x41 2>&1 || true
-          expect:
-            - regex: 'rsp=0xc1|Invalid command'
-      - cmd: shell
-        name: Delete SEL Entry (0x0a 0x46)
+          lan: *lan
+          raw: 0x0a 0x41
+          expect: {completion: 0xc1}
+      # Not implemented on this BMC: ipmid answers 0xC1.
+      - cmd: ipmi
+        name: Delete SEL Entry is rejected with 0xC1
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0a 0x46 0x00 0x00 0x01 0x00 2>&1 || true
-          expect:
-            - regex: 'rsp=0xc1|Invalid command'
-
-  - name: Clear SEL
-    steps:
+          lan: *lan
+          raw: 0x0a 0x46 0x00 0x00 0x01 0x00
+          expect: {completion: 0xc1}
+      # Clear SEL needs a fresh reservation, so ipmitool chains both; this BMC answers 0xFF.
       - cmd: shell
-        name: Clear SEL (0x0a 0x47)
+        name: Clear SEL with a fresh reservation is rejected with 0xFF
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            RES=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 raw 0x0a 0x42);
-            ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 raw 0x0a 0x47
-            $(echo "$RES" | awk '{print "0x"$1, "0x"$2}') 0x43 0x4c 0x52 0xaa 2>&1 || true
+          command: |
+            ipmi="ipmitool -I lanplus -H [[attributes.BMC]] -U [[attributes.BMCUser]] -P [[attributes.BMCPassword]] -C 17"
+            set -- $($ipmi raw 0x0a 0x42)
+            $ipmi raw 0x0a 0x47 0x$1 0x$2 0x43 0x4c 0x52 0xaa 2>&1
+            echo "exit $?"
           expect:
-            - regex: 'rsp=0xff|Unspecified error'
-
-  - name: SEL via ipmitool Aliases
-    steps:
-      - cmd: shell
-        name: sel info (alias)
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            sel info
-          expect:
-            - regex: 'Entries\s*:'
-      - cmd: shell
-        name: sel time get (alias)
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            sel time get
-          expect:
-            - regex: '[0-9]{2}/[0-9]{2}/[0-9]{2,4} [0-9]{2}:[0-9]{2}:[0-9]{2}'
-      - cmd: shell
-        name: sel list (alias)
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            sel list 2>&1
-          expect:
-            - regex: '(SEL has no entries|\|)'
+            - regex: 'rsp=0xff\)'

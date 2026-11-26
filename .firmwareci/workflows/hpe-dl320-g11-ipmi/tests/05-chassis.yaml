@@ -1,211 +1,229 @@
 name: "IPMI: Chassis Commands (NetFn 0x00)"
 description: >-
-  Validate non-destructive Chassis commands (Table G-1, §28): Get Chassis
-  Capabilities (00h), Get Chassis Status (01h), Chassis Identify (04h),
-  Set Chassis Capabilities (05h), Set Power Restore Policy (06h), Get System
-  Restart Cause (07h), Get/Set System Boot Options (09h/08h), Set Front Panel
-  Button Enables (0Ah), and Get POH Counter (0Fh).
+  Validate Chassis commands (Table G-1, §28): Get Chassis Capabilities (00h),
+  Get Chassis Status (01h), Chassis Identify (04h), Set Chassis Capabilities
+  (05h), Set Power Restore Policy (06h), Get System Restart Cause (07h),
+  Get/Set System Boot Options (09h/08h), Set Front Panel Button Enables (0Ah)
+  and Get POH Counter (0Fh).
+
+  The test changes the identify LED, the boot flags, the power restore policy
+  and the chassis capabilities. It saves them first and writes them back in
+  the last stages, also after a failure. The host power state is not changed.
+
+variables:
+  CHASSIS_CAPS: unsaved
+  RESTORE_POLICY: unsaved
+  BOOT_FLAGS: unsaved
 
 defaults:
-  transport: &local
+  local: &local
     proto: local
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
+  restore: &restore
+    - cmd: ipmi
+      name: Chassis identify is turned off
+      transport: *local
+      parameters:
+        lan: *lan
+        set: chassis/identify
+        value: "off"
+        expect: {completion: 0x00}
+    # The ipmi step takes no stored variable in raw or set, so ipmitool writes the saved values.
+    - cmd: shell
+      name: Boot flags are written back
+      transport: *local
+      parameters:
+        command: |
+          flags={{ BOOT_FLAGS }}
+          [ "$flags" = unsaved ] && { echo "boot flags not saved, nothing to restore"; exit 0; }
+          ipmitool -I lanplus -H [[attributes.BMC]] -U [[attributes.BMCUser]] -P [[attributes.BMCPassword]] -C 17 \
+            raw 0x00 0x08 0x05 $(printf '%s' "$flags" | cut -c5- | sed 's/../0x& /g')
+    - cmd: shell
+      name: Power restore policy is written back
+      transport: *local
+      parameters:
+        command: |
+          policy={{ RESTORE_POLICY }}
+          [ "$policy" = unsaved ] && { echo "policy not saved, nothing to restore"; exit 0; }
+          ipmitool -I lanplus -H [[attributes.BMC]] -U [[attributes.BMCUser]] -P [[attributes.BMCPassword]] -C 17 \
+            chassis policy "$policy"
+    # Set Chassis Capabilities takes only the intrusion and front panel lockout flags.
+    - cmd: shell
+      name: Chassis capabilities are written back
+      transport: *local
+      parameters:
+        command: |
+          caps={{ CHASSIS_CAPS }}
+          [ "$caps" = unsaved ] && { echo "capabilities not saved, nothing to restore"; exit 0; }
+          set -- $(printf '%s' "$caps" | sed 's/../& /g')
+          flags=$(printf '0x%02x' $((0x$1 & 0x03)))
+          shift
+          ipmitool -I lanplus -H [[attributes.BMC]] -U [[attributes.BMCUser]] -P [[attributes.BMCPassword]] -C 17 \
+            raw 0x00 0x05 $flags $(printf '0x%s ' "$@")
 
 stages:
-  - name: Get Chassis Capabilities
+  - name: Save Chassis Settings
     steps:
-      - cmd: shell
-        name: Get Chassis Capabilities (0x00 0x00)
+      - cmd: ipmi
+        name: Get Chassis Capabilities answers
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x00 0x00
+          lan: *lan
+          raw: 0x00 0x00
+          expect: {completion: 0x00}
+          variable: CHASSIS_CAPS
+      - cmd: ipmi
+        name: Power restore policy is a defined value
+        transport: *local
+        parameters:
+          lan: *lan
+          get: chassis/power-restore-policy
+          expect: {matches: '^(always-off|previous|always-on)$'}
+          variable: RESTORE_POLICY
+      - cmd: ipmi
+        name: Get Boot Options answers for the boot flags
+        transport: *local
+        parameters:
+          lan: *lan
+          raw: 0x00 0x09 0x05 0x00 0x00
+          expect: {completion: 0x00}
+          variable: BOOT_FLAGS
 
-  - name: Get Chassis Status
+  - name: Chassis Status, Restart Cause and POH
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: Get Chassis Status (0x00 0x01)
+      - cmd: ipmi
+        name: Chassis power reads on or off
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x00 0x01
+          lan: *lan
+          get: chassis/power
+          expect: {matches: '^(on|off)$'}
+      - cmd: ipmi
+        name: Restart cause is a value the specification defines
+        transport: *local
+        parameters:
+          lan: *lan
+          get: chassis/restart-cause
+          expect: {ne: reserved}
+      - cmd: ipmi
+        name: POH counter counts in 60-minute steps
+        transport: *local
+        parameters:
+          lan: *lan
+          get: chassis/minutes-per-count
+          expect: {eq: 60}
+      - cmd: ipmi
+        name: POH counter reports power-on hours
+        transport: *local
+        parameters:
+          lan: *lan
+          get: chassis/power-on-hours
+          expect: exists
+      - cmd: ipmi
+        name: Boot flags report a boot device
+        transport: *local
+        parameters:
+          lan: *lan
+          get: boot/device
+          expect: exists
 
   - name: Chassis Identify
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: Chassis Identify - Turn on for 15 seconds (0x00 0x04)
+      - cmd: ipmi
+        name: Chassis identify turns on for 15 seconds
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x00 0x04 0x0f 0x00
-      - cmd: shell
-        name: Chassis Identify - Turn off immediately (0x00 0x04)
+          lan: *lan
+          set: chassis/identify
+          value: 15s
+          expect: {completion: 0x00}
+      - cmd: ipmi
+        name: Chassis identify turns off
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x00 0x04 0x00 0x00
-
-  - name: Get System Restart Cause
-    steps:
-      - cmd: shell
-        name: Get System Restart Cause (0x00 0x07)
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x00 0x07
-          expect:
-            - regex: '^\s*[0-9a-f]{2} [0-9a-f]{2}'
-
-  - name: Get POH Counter
-    steps:
-      - cmd: shell
-        name: Get POH Counter (0x00 0x0f)
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x00 0x0f
-          expect:
-            # 0x3c minutes per count (60), then the uint32 counter, LSB first.
-            - regex: '^\s*3c( [0-9a-f]{2}){4}\s*$'
-
-  - name: Get System Boot Options
-    steps:
-      - cmd: shell
-        name: Get Boot Options - Boot Flags (0x00 0x09)
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x00 0x09 0x05 0x00 0x00
+          lan: *lan
+          set: chassis/identify
+          value: "off"
+          expect: {completion: 0x00}
 
   - name: Set System Boot Options
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: Set Boot Options - Boot from default device (0x00 0x08)
+      - cmd: ipmi
+        name: Boot from the default device in legacy mode is accepted
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x00 0x08 0x05 0x80 0x00 0x00 0x00 0x00
+          lan: *lan
+          set: boot/flags
+          value: {device: none, persistent: false, type: legacy}
+          expect: {completion: 0x00}
+      - cmd: ipmi
+        name: Boot type reads back as legacy
+        transport: *local
+        parameters:
+          lan: *lan
+          get: boot/type
+          expect: {eq: legacy}
 
   - name: Set Power Restore Policy
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: Set Power Restore Policy - Restore previous (0x00 0x06)
+      - cmd: ipmi
+        name: Power restore policy previous is accepted
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x00 0x06 0x01
+          lan: *lan
+          set: chassis/power-restore-policy
+          value: previous
+          expect: {completion: 0x00}
+      - cmd: ipmi
+        name: Power restore policy reads back as previous
+        transport: *local
+        parameters:
+          lan: *lan
+          get: chassis/power-restore-policy
+          expect: {eq: previous}
 
   - name: Set Chassis Capabilities
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: Set Chassis Capabilities (0x00 0x05)
+      - cmd: ipmi
+        name: Set Chassis Capabilities is accepted
         transport: *local
-        options:
-          timeout: "30s"
-          on-failure: continue
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x00 0x05 0x03 0x20 0x20 0x20 0x20 0x20
+          lan: *lan
+          raw: 0x00 0x05 0x03 0x20 0x20 0x20 0x20 0x20
+          expect: {completion: 0x00}
+      - cmd: ipmi
+        name: Intrusion and front panel lockout flags read back as set
+        transport: *local
+        parameters:
+          lan: *lan
+          raw: 0x00 0x00
+          expect: {byte: 0, mask: 0x03, eq: 0x03}
 
   - name: Set Front Panel Button Enables
     steps:
-      - cmd: shell
-        name: Set Front Panel Enables (0x00 0x0a) rejected with 0xFF
+      # No power or reset button objects exist on D-Bus on this board, so ipmid answers 0xFF.
+      - cmd: ipmi
+        name: Set Front Panel Enables is rejected with 0xFF
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x00 0x0a 0x00 2>&1 || true
-          expect:
-            - regex: 'rsp=0xff|Unspecified error'
+          lan: *lan
+          raw: 0x00 0x0a 0x00
+          expect: {completion: 0xff}
 
-  - name: Chassis via ipmitool Aliases
-    steps:
-      - cmd: shell
-        name: chassis status (alias)
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            chassis status
-          expect:
-            - regex: 'System Power\s*:'
-      - cmd: shell
-        name: chassis restart_cause (alias)
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            chassis restart_cause
-          expect:
-            - regex: 'System restart cause:'
-      - cmd: shell
-        name: chassis poh (alias)
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            chassis poh
-          expect:
-            - regex: 'POH Counter'
-      - cmd: shell
-        name: chassis bootparam get 5 (alias)
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            chassis bootparam get 5
-          expect:
-            - regex: 'Boot parameter'
+  - name: Restore Chassis Settings
+    on-failure: continue
+    steps: *restore
+
+  - name: Restore Chassis Settings after a failure
+    run-condition: failure
+    on-failure: continue
+    steps: *restore

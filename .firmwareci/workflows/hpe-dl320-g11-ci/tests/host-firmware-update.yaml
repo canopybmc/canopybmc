@@ -1,22 +1,34 @@
 name: "Host Firmware: Update"
 description: >-
   Update the host firmware (aka BIOS) via Redfish and verify it is booting the
-  new one.
+  new one: the host first runs the golden image's BIOS version, the BIOS
+  firmware inventory item is updateable, the BMC accepts the PLDM package,
+  its update task completes, the journal reports UpdateSuccessful, the
+  firmware inventory item changes, and the host comes back with the version
+  of the package.
 
   For HPE some magic firmware preparation is needed beforehand to get a correct
   PLDM package.
 
-  If flashing takes to long the Redfish task is running in a timeout and therefore
-  gets cancelled. The flash operation is however uneffected by this, so we don't
-  error out. "Cancelled" = timeout, "Exception" = error in the update process.
-  Possible errors are captured in the following step through systemd-journal.
+  If flashing takes too long, bmcweb cancels the Redfish task while the flash
+  goes on. A Cancelled task fails its step, but the test goes on to the
+  journal step, which shows the flash result ("UpdateSuccessful", or
+  "ActivateFailed" or "UpdateNotApplicable" for an error).
 
 defaults:
-  transport: &bmc_ssh
+  local: &local
+    proto: local
+  bmc: &bmc
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: root
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  redfish: &redfish
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
 
 variables:
@@ -24,82 +36,73 @@ variables:
   BiosVersionBefore: null
   BiosVersionUpdate: null
   UpdateTarget: null
-  UpdateTriggerOutput: null
+  UpdateTask: null
 
 stages:
-  - name: Host on, OS Booting
+  - name: Host Firmware Update
     steps:
+      # Like strings(1): a printable run that is exactly "U63 v<version>".
       - cmd: shell
         name: Extract BiosVersionBefore from golden image
-        transport:
-          proto: local
+        transport: *local
         parameters:
-          shell: "/bin/bash"
-          command: |
-            strings [[storage.dl320g11_bios_update]]/[[storage.dl320g11_bios_update.golden_image]] \
-              | grep -Po "(?<=^U63 v)[0-9]\.[0-9]+$" | tail -1
+          command: >-
+            LC_ALL=C grep -a -o -P '(?<![\t[:print:]])U63 v\K[0-9]\.[0-9]+(?![\t[:print:]])'
+            '[[storage.dl320g11_bios_update]]/[[storage.dl320g11_bios_update.golden_image]]'
+            | tail -n 1
           expect:
-            - regex: '[0-9]\.[0-9]+'
+            - regex: '^[0-9]\.[0-9]+$'
           variable: BiosVersionBefore
 
       - cmd: shell
         name: Extract BiosVersionUpdate from PLDM package
-        transport:
-          proto: local
-        parameters:
-          shell: "/bin/bash"
-          command: |
-            strings [[storage.dl320g11_bios_update]]/[[storage.dl320g11_bios_update.pldm]] \
-              | grep -Po "(?<=^U63 v)[0-9]\.[0-9]+$"
-          expect:
-            - regex: '[0-9]\.[0-9]+'
-          variable: BiosVersionUpdate
-
-      - cmd: shell
-        name: Power on host
-        transport: &local
-          proto: local
+        transport: *local
         parameters:
           command: >-
-            curl -sk -u root:[[attributes.BMCPassword]]
-            -X POST -H 'Content-Type: application/json'
-            -d '{"ResetType":"On"}'
-            -o /dev/null -w '%{http_code}'
-            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+            LC_ALL=C grep -a -o -P '(?<![\t[:print:]])U63 v\K[0-9]\.[0-9]+(?![\t[:print:]])'
+            '[[storage.dl320g11_bios_update]]/[[storage.dl320g11_bios_update.pldm]]'
+            | tail -n 1
           expect:
-            - regex: "^(200|204)$"
+            - regex: '^[0-9]\.[0-9]+$'
+          variable: BiosVersionUpdate
 
+      - cmd: redfish
+        name: The host is powered on
+        transport: *local
+        parameters:
+          <<: *redfish
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 204]
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+            retry: {timeout: 5m, interval: 5s}
+
+      # The host firmware sends SMBIOS late in POST. When the CHIF push queue
+      # is full the transfer stalls, and a CHIF restart recovers it.
       - cmd: shell
-        name: Host system DC gets powered on (systemd-journal)
-        options:
-          timeout: 20s
-        transport: *bmc_ssh
+        name: The host POST delivers SMBIOS data
+        transport: *bmc
+        options: {timeout: 12m}
         parameters:
           command: |
-            journalctl -t power-control -f \
-              | awk '{print} /Host system DC power is on/{exit}'
-
-      - cmd: shell
-        name: Wait for SMBIOS transfer (host POST complete)
-        transport: *bmc_ssh
-        options:
-          timeout: 12m
-        parameters:
-          command: |
-            full=$(journalctl -k --no-pager | grep -c 'push: queue is full');
+            full=$(journalctl -k --no-pager | grep -c 'push: queue is full')
             while [ ! -f /var/lib/smbios/smbios2 ] ||
-                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
-            do
-              now=$(journalctl -k --no-pager | grep -c 'push: queue is full');
+                  [ "$(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0)" -le 1000 ]; do
+              now=$(journalctl -k --no-pager | grep -c 'push: queue is full')
               if [ "$now" -gt "$full" ]; then
-                echo "CHIF push queue full ($full -> $now): restarting CHIF";
-                systemctl restart xyz.openbmc_project.GxpChif.service;
-                full=$now;
-              fi;
-              sleep 5;
-            done; echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
+                echo "CHIF push queue full ($full -> $now): restarting CHIF"
+                systemctl restart xyz.openbmc_project.GxpChif.service
+                full=$now
+              fi
+              sleep 5
+            done
+            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
           expect:
-            - regex: "SMBIOS ready"
+            - regex: '^SMBIOS ready'
 
       - cmd: ping
         name: Wait for host OS
@@ -109,123 +112,100 @@ stages:
           host: "[[attributes.Host]]"
 
       - cmd: redfish
-        name: Current BiosVersion
-        options:
-          timeout: 10s
+        name: The host runs the golden BIOS version
         transport: *local
         parameters:
-          host: "[[attributes.BMC]]"
-          auth:
-            user: root
-            password: "[[attributes.BMCPassword]]"
+          <<: *redfish
           validate: inventory
           inventory:
             rules:
-              - path: /redfish/v1/Systems/system
-                prop: BiosVersion
-                op: matches
-                value: "{{ BiosVersionBefore }}"
+              - {path: "[[attributes.RedfishSystem]]", prop: BiosVersion, op: matches, value: "{{ BiosVersionBefore }}"}
 
-  - name: "Firmware update to newer version"
-    steps:
+      # The inventory id has a counter that changes with each update, and no
+      # native rule can store a member id found by a pattern.
       - cmd: shell
         name: Get update endpoint
-        options:
-          timeout: 30s
         transport: *local
+        options: {timeout: 30s}
         parameters:
-          command: |
-            curl -sk --user root:[[attributes.BMCPassword]] \
-              https://[[attributes.BMC]]/redfish/v1/UpdateService/FirmwareInventory \
-              | grep -Eo {{ UpdateEndpointPrefix }}_[0-9]+
+          command: >-
+            curl -sk -u '[[attributes.BMCUser]]:[[attributes.BMCPassword]]'
+            'https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/UpdateService/FirmwareInventory'
+            | grep -Eo '{{ UpdateEndpointPrefix }}_[0-9]+' | head -n 1
           expect:
-            - regex: '{{ UpdateEndpointPrefix }}_\d+'
+            - regex: '^{{ UpdateEndpointPrefix }}_\d+$'
           variable: UpdateTarget
 
       - cmd: redfish
-        name: Is updateable?
-        options:
-          timeout: 30s
+        name: The BIOS firmware is updateable
         transport: *local
         parameters:
-          host: "[[attributes.BMC]]"
-          auth:
-            user: root
-            password: "[[attributes.BMCPassword]]"
+          <<: *redfish
           validate: inventory
           inventory:
             rules:
-              - path: /redfish/v1/UpdateService/FirmwareInventory/{{ UpdateTarget }}
-                prop: Updateable
-                op: eq
-                value: "true"
+              - {path: "/redfish/v1/UpdateService/FirmwareInventory/{{ UpdateTarget }}", prop: Updateable, op: eq, value: "true"}
 
-      - cmd: shell
-        name: Trigger update
-        options:
-          timeout: 5m
+      - cmd: redfish
+        name: The BMC accepts the PLDM package
         transport: *local
         parameters:
-          command: >-
-            curl -sk --user root:[[attributes.BMCPassword]]
-            -X POST -H Content-Type:multipart/form-data
-            -F 'UpdateParameters={"Targets":["/redfish/v1/UpdateService/FirmwareInventory/{{ UpdateTarget }}"],"@Redfish.OperationApplyTime":"Immediate"};type=application/json'
-            -F 'UpdateFile=@[[storage.dl320g11_bios_update]]/[[storage.dl320g11_bios_update.pldm]];type=application/octet-stream'
-            https://[[attributes.BMC]]/redfish/v1/UpdateService/update-multipart
-          expect:
-            - regex: TaskStarted
-          variable: UpdateTriggerOutput
+          <<: *redfish
+          validate: request
+          request:
+            method: POST
+            path: /redfish/v1/UpdateService/update-multipart
+            upload: multipart
+            file: "[[storage.dl320g11_bios_update]]/[[storage.dl320g11_bios_update.pldm]]"
+            body:
+              Targets: ["/redfish/v1/UpdateService/FirmwareInventory/{{ UpdateTarget }}"]
+              "@Redfish.OperationApplyTime": Immediate
+            status: 202
+            timeout: 5m
+            rules:
+              - {prop: "@odata.id", op: matches, value: '^/redfish/v1/TaskService/Tasks/[0-9]+$', variable: UpdateTask}
 
-      - cmd: shell
-        name: Wait for update finish (Redfish)
-        # fails when update is too slow
+      - cmd: redfish
+        name: The update task completes
         transport: *local
-        options:
-          timeout: 10m
-          on-failure: continue
+        options: {on-failure: continue}
         parameters:
-          command: |
-            Task=$(echo {{ UpdateTriggerOutput }} | grep -Eo "/redfish/v1/TaskService/Tasks/[0-9]+" );
-            TaskState="Running";
-            while [ "$TaskState" = "Running" ]; do
-              sleep 2;
-              TaskState=$(curl -sk --user root:[[attributes.BMCPassword]] https://[[attributes.BMC]]${Task} | grep TaskState | sed -E 's/.*"(.*)",$/\1/');
-            done;
-            echo "$TaskState"
-          expect:
-            - regex: Completed
+          <<: *redfish
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m, interval: 5s}
+            rules:
+              - {path: "{{ UpdateTask }}", prop: TaskState, op: eq, value: Completed}
 
       - cmd: shell
         name: Wait for update finish (systemd-journal)
-        options:
-          timeout: 5m
-        transport: *bmc_ssh
+        transport: *bmc
+        options: {timeout: 5m}
         parameters:
           command: |
             journalctl -n 5 -t phosphor-spi-flash-software-update -t power-control -f \
               | awk '{print} /UpdateSuccessful|ActivateFailed|UpdateNotApplicable/{exit}'
           expect:
-            - regex: UpdateSuccessful
+            - regex: 'UpdateSuccessful'
 
       - cmd: shell
-        name: Check for updated inventory
+        name: The firmware inventory lists a new BIOS item
+        transport: *local
         options:
           timeout: 30s
           on-failure: continue
-        transport: *local
         parameters:
-          command: |
-            NEWTARGET=$(curl -sk --user root:[[attributes.BMCPassword]] \
-            https://[[attributes.BMC]]/redfish/v1/UpdateService/FirmwareInventory \
-            | grep -Eo "{{ UpdateEndpointPrefix }}_[0-9]+")
-            if [ "{{ UpdateTarget }}" != "$NEWTARGET" ]; then
-              echo "$NEWTARGET";
-            fi;
+          command: >-
+            t=$(curl -sk -u '[[attributes.BMCUser]]:[[attributes.BMCPassword]]'
+            'https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/UpdateService/FirmwareInventory'
+            | grep -Eo '{{ UpdateEndpointPrefix }}_[0-9]+' | head -n 1);
+            if [ -n "$t" ] && [ "$t" != "{{ UpdateTarget }}" ]; then echo "$t";
+            else echo "unchanged: ${t:-none}"; fi
           expect:
-            - regex: '{{ UpdateEndpointPrefix }}_\d+'
+            - regex: '^{{ UpdateEndpointPrefix }}_\d+$'
 
       - cmd: ping
-        name: Wait for host OS
+        name: Wait for host OS after the update
         options:
           timeout: 10m
           on-failure: continue
@@ -233,19 +213,11 @@ stages:
           host: "[[attributes.Host]]"
 
       - cmd: redfish
-        name: Approve updated BiosVersion
-        options:
-          timeout: 10s
+        name: The host runs the BIOS version of the package
         transport: *local
         parameters:
-          host: "[[attributes.BMC]]"
-          auth:
-            user: root
-            password: "[[attributes.BMCPassword]]"
+          <<: *redfish
           validate: inventory
           inventory:
             rules:
-              - path: /redfish/v1/Systems/system
-                prop: BiosVersion
-                op: eq
-                value: '{{ BiosVersionUpdate }}'
+              - {path: "[[attributes.RedfishSystem]]", prop: BiosVersion, op: eq, value: "{{ BiosVersionUpdate }}"}

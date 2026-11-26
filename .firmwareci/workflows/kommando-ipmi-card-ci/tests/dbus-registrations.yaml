@@ -1,89 +1,47 @@
 name: "Smoke: D-Bus Registrations"
 description: >-
-  Verify all critical D-Bus well-known names are registered
-  on the system bus.
+  Verify that every critical D-Bus well-known name of the board is registered
+  on the system bus. The DUT attribute DBus.Names lists the names; the step
+  names each one that busctl does not list.
 
 defaults:
-  transport: &bmc_ssh
+  bmc: &bmc
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
 
 stages:
   - name: D-Bus Services Registered
-    on-failure: continue
     steps:
-      - cmd: cmd
-        name: EntityManager on D-Bus
-        transport: *bmc_ssh
+      # The SSH transport does not retry a refused connection, so wait for
+      # the BMC on Redfish first.
+      - cmd: redfish
+        name: Redfish service answers
+        transport:
+          proto: local
         parameters:
-          executable: busctl
-          args: [list, --no-pager]
-          expect:
-            - regex: "xyz\\.openbmc_project\\.EntityManager"
-      - cmd: cmd
-        name: FanSensor on D-Bus
-        transport: *bmc_ssh
+          host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+          auth:
+            user: "[[attributes.BMCUser]]"
+            password: "[[attributes.BMCPassword]]"
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: shell
+        name: Every critical D-Bus name is registered
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          executable: busctl
-          args: [list, --no-pager]
+          command: >-
+            l=$(busctl list --no-pager --no-legend | awk '{print $1}');
+            m=$(for n in [[attributes.DBus.Names]]; do
+            echo "$l" | grep -qF "$n" || echo "missing: $n"; done);
+            echo "${m:-none}"
           expect:
-            - regex: "xyz\\.openbmc_project\\.FanSensor"
-      - cmd: cmd
-        name: PSUSensor on D-Bus
-        transport: *bmc_ssh
-        parameters:
-          executable: busctl
-          args: [list, --no-pager]
-          expect:
-            - regex: "xyz\\.openbmc_project\\.PSUSensor"
-      - cmd: cmd
-        name: HwmonTempSensor on D-Bus
-        transport: *bmc_ssh
-        parameters:
-          executable: busctl
-          args: [list, --no-pager]
-          expect:
-            - regex: "xyz\\.openbmc_project\\.HwmonTempSensor"
-      - cmd: cmd
-        name: IntelCPUSensor on D-Bus
-        transport: *bmc_ssh
-        parameters:
-          executable: busctl
-          args: [list, --no-pager]
-          expect:
-            - regex: "xyz\\.openbmc_project\\.IntelCPUSensor"
-      - cmd: cmd
-        name: State.Host on D-Bus
-        transport: *bmc_ssh
-        parameters:
-          executable: busctl
-          args: [list, --no-pager]
-          expect:
-            - regex: "xyz\\.openbmc_project\\.State\\.Host"
-      - cmd: cmd
-        name: State.Chassis on D-Bus
-        transport: *bmc_ssh
-        parameters:
-          executable: busctl
-          args: [list, --no-pager]
-          expect:
-            - regex: "xyz\\.openbmc_project\\.State\\.Chassis"
-      - cmd: cmd
-        name: Hwmon.external on D-Bus
-        transport: *bmc_ssh
-        parameters:
-          executable: busctl
-          args: [list, --no-pager]
-          expect:
-            - regex: "xyz\\.openbmc_project\\.Hwmon\\.external"
-      - cmd: cmd
-        name: State.FanCtrl on D-Bus
-        transport: *bmc_ssh
-        parameters:
-          executable: busctl
-          args: [list, --no-pager]
-          expect:
-            - regex: "xyz\\.openbmc_project\\.State\\.FanCtrl"
+            - regex: '^none$'

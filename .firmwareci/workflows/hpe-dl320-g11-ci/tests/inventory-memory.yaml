@@ -1,216 +1,158 @@
 name: "Inventory: Memory"
 description: >-
-  Verify DIMM inventory via Redfish. Checks that the CHIF to SMBIOS to Redfish
-  pipeline correctly reports memory slots, enabled DIMMs, and DDR5 attributes.
-  Generic — no hardcoded DIMM IDs or counts. Requires host POST complete.
+  Verify the DIMM inventory over Redfish after the host POST. Checks that the
+  CHIF to SMBIOS to Redfish pipeline reports the memory slots, at least one
+  empty slot as Absent, the total system memory, and the two DIMMs in the DUT
+  attribute Memory.Dimms: each one Enabled with its memory type,
+  manufacturer, part number and serial number.
 
 defaults:
-  transport: &local
+  local: &local
     proto: local
+  bmc: &bmc
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  redfish: &redfish
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+    validate: inventory
 
 stages:
-  - name: Power on host
+  - name: Memory Inventory
     steps:
-      - cmd: cmd
-        name: Power on host via Redfish
+      - cmd: redfish
+        name: Redfish service answers
         transport: *local
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"Power On HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
-      - cmd: shell
-        name: Wait for SMBIOS transfer
-        transport:
-          proto: ssh
-          options:
-            host: "[[attributes.BMC]]"
-            user: "root"
-            password: "[[attributes.BMCPassword]]"
-        options:
-          timeout: 15m
+          <<: *redfish
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The host is powered on
+        transport: *local
         parameters:
-          command: >-
+          <<: *redfish
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 204]
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+            retry: {timeout: 5m, interval: 5s}
+
+      # The host firmware sends SMBIOS late in POST. When the CHIF push queue
+      # is full the transfer stalls, and a CHIF restart recovers it.
+      - cmd: shell
+        name: The host POST delivers SMBIOS data
+        transport: *bmc
+        options: {timeout: 15m}
+        parameters:
+          command: |
+            full=$(journalctl -k --no-pager | grep -c 'push: queue is full')
             while [ ! -f /var/lib/smbios/smbios2 ] ||
-                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
-            do sleep 1; done;
+                  [ "$(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0)" -le 1000 ]; do
+              now=$(journalctl -k --no-pager | grep -c 'push: queue is full')
+              if [ "$now" -gt "$full" ]; then
+                echo "CHIF push queue full ($full -> $now): restarting CHIF"
+                systemctl restart xyz.openbmc_project.GxpChif.service
+                full=$now
+              fi
+              sleep 5
+            done
             echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
           expect:
-            - regex: "SMBIOS ready"
+            - regex: '^SMBIOS ready'
 
-  - name: Memory Collection
-    steps:
-      - cmd: cmd
-        name: Memory collection has >= 1 member
+      - cmd: redfish
+        name: The Memory collection has members
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory"]
-          expect:
-            - regex: '"Members@odata.count": *[1-9][0-9]*'
-      - cmd: cmd
-        name: At least 1 DIMM is Enabled
-        transport: *local
-        options:
-          timeout: 60s
-          on-failure: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "MEMBERS=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory | grep -o '\"@odata.id\": *\"/redfish/v1/Systems/system/Memory/[^\"]*\"' | grep -o '/redfish/v1/Systems/system/Memory/[^\"]*'); ENABLED=0; for M in $MEMBERS; do curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]$M 2>/dev/null | grep -q '\"State\": *\"Enabled\"' && ENABLED=$((ENABLED+1)); done; echo \"Enabled DIMMs: $ENABLED\"; test \"$ENABLED\" -ge 1"
-      - cmd: cmd
-        name: Not all DIMMs are Absent
-        transport: *local
-        options:
-          timeout: 60s
-          on-failure: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "MEMBERS=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory | grep -o '\"@odata.id\": *\"/redfish/v1/Systems/system/Memory/[^\"]*\"' | grep -o '/redfish/v1/Systems/system/Memory/[^\"]*'); TOTAL=0; ABSENT=0; for M in $MEMBERS; do TOTAL=$((TOTAL+1)); curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]$M 2>/dev/null | grep -q '\"State\": *\"Absent\"' && ABSENT=$((ABSENT+1)); done; echo \"Total: $TOTAL, Absent: $ABSENT\"; test \"$ABSENT\" -lt \"$TOTAL\""
-      - cmd: cmd
-        name: At least 1 Absent DIMM reported
-        transport: *local
-        options:
-          timeout: 60s
-          on-failure: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "MEMBERS=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory | grep -o '\"@odata.id\": *\"/redfish/v1/Systems/system/Memory/[^\"]*\"' | grep -o '/redfish/v1/Systems/system/Memory/[^\"]*'); ABSENT=0; for M in $MEMBERS; do curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]$M 2>/dev/null | grep -q '\"State\": *\"Absent\"' && ABSENT=$((ABSENT+1)); done; echo \"Absent DIMMs: $ABSENT\"; test \"$ABSENT\" -ge 1"
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", collection: Memory, op: ge, value: "1"}
 
-  - name: DIMM2 Attributes
-    steps:
-      - cmd: cmd
-        name: dimm2 is Enabled
+      # sum fails when no member matches, so this also proves that at least
+      # one empty slot is listed.
+      - cmd: redfish
+        name: Empty slots are reported Absent with no capacity
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm2"]
-          expect:
-            - regex: '"State": "Enabled"'
-      - cmd: cmd
-        name: dimm2 is DDR5
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm2"]
-          expect:
-            - regex: '"MemoryDeviceType": "DDR5"'
-      - cmd: cmd
-        name: dimm2 Manufacturer is Hynix
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm2"]
-          expect:
-            - regex: '"Manufacturer": "Hynix"'
-      - cmd: cmd
-        name: dimm2 PartNumber is HMCG88AGBRA619N
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm2"]
-          expect:
-            - regex: '"PartNumber": "HMCG88AGBRA619N"'
-      - cmd: cmd
-        name: dimm2 SerialNumber is E3712D7D
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm2"]
-          expect:
-            - regex: '"SerialNumber": "E3712D7D"'
+          <<: *redfish
+          inventory:
+            rules:
+              - path: "[[attributes.RedfishSystem]]"
+                forEach: Memory
+                where: {prop: Status/State, op: eq, value: Absent}
+                prop: CapacityMiB
+                op: sum
+                value: "0"
 
-  - name: DIMM9 Attributes
-    steps:
-      - cmd: cmd
-        name: dimm9 is Enabled
+      - cmd: redfish
+        name: "[[attributes.Memory.Dimms.0.Id]] is Enabled"
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm9"]
-          expect:
-            - regex: '"State": "Enabled"'
-      - cmd: cmd
-        name: dimm9 is DDR5
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm9"]
-          expect:
-            - regex: '"MemoryDeviceType": "DDR5"'
-      - cmd: cmd
-        name: dimm9 Manufacturer is Hynix
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm9"]
-          expect:
-            - regex: '"Manufacturer": "Hynix"'
-      - cmd: cmd
-        name: dimm9 PartNumber is HMCG88AGBRA619N
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm9"]
-          expect:
-            - regex: '"PartNumber": "HMCG88AGBRA619N"'
-      - cmd: cmd
-        name: dimm9 SerialNumber is E3712D3E
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Memory/dimm9"]
-          expect:
-            - regex: '"SerialNumber": "E3712D3E"'
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]/Memory/[[attributes.Memory.Dimms.0.Id]]", prop: Status/State, op: eq, value: Enabled}
 
-  - name: System Memory Summary
-    steps:
-      - cmd: cmd
-        name: TotalSystemMemoryGiB > 0
+      - cmd: redfish
+        name: "[[attributes.Memory.Dimms.0.Id]] is the board's module"
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
-          expect:
-            - regex: '"TotalSystemMemoryGiB": *([1-9][0-9]*\.?[0-9]*|0\.[0-9]*[1-9][0-9]*)'
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]/Memory/[[attributes.Memory.Dimms.0.Id]]", prop: MemoryDeviceType, op: eq, value: "[[attributes.Memory.Dimms.0.Type]]"}
+              - {path: "[[attributes.RedfishSystem]]/Memory/[[attributes.Memory.Dimms.0.Id]]", prop: Manufacturer, op: eq, value: "[[attributes.Memory.Dimms.0.Manufacturer]]"}
+              - {path: "[[attributes.RedfishSystem]]/Memory/[[attributes.Memory.Dimms.0.Id]]", prop: PartNumber, op: eq, value: "[[attributes.Memory.Dimms.0.PartNumber]]"}
+              - {path: "[[attributes.RedfishSystem]]/Memory/[[attributes.Memory.Dimms.0.Id]]", prop: SerialNumber, op: eq, value: "[[attributes.Memory.Dimms.0.Serial]]"}
+
+      - cmd: redfish
+        name: "[[attributes.Memory.Dimms.1.Id]] is Enabled"
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]/Memory/[[attributes.Memory.Dimms.1.Id]]", prop: Status/State, op: eq, value: Enabled}
+
+      - cmd: redfish
+        name: "[[attributes.Memory.Dimms.1.Id]] is the board's module"
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]/Memory/[[attributes.Memory.Dimms.1.Id]]", prop: MemoryDeviceType, op: eq, value: "[[attributes.Memory.Dimms.1.Type]]"}
+              - {path: "[[attributes.RedfishSystem]]/Memory/[[attributes.Memory.Dimms.1.Id]]", prop: Manufacturer, op: eq, value: "[[attributes.Memory.Dimms.1.Manufacturer]]"}
+              - {path: "[[attributes.RedfishSystem]]/Memory/[[attributes.Memory.Dimms.1.Id]]", prop: PartNumber, op: eq, value: "[[attributes.Memory.Dimms.1.PartNumber]]"}
+              - {path: "[[attributes.RedfishSystem]]/Memory/[[attributes.Memory.Dimms.1.Id]]", prop: SerialNumber, op: eq, value: "[[attributes.Memory.Dimms.1.Serial]]"}
+
+      - cmd: redfish
+        name: TotalSystemMemoryGiB is above 0
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: MemorySummary/TotalSystemMemoryGiB, op: matches, value: '^([1-9][0-9]*(\.[0-9]+)?|0\.[0-9]*[1-9][0-9]*)$'}

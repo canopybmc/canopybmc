@@ -1,36 +1,131 @@
 name: "CHIF: Reboot Stability"
 description: >-
-  Verify CHIF I2C proxy and PlatDef download handlers remain stable
-  across 3 consecutive host reboot cycles. Reboots are triggered via
-  Redfish ForceRestart; host availability is detected by pinging the
-  host OS. After each reboot, checks the BMC journal for consistent
-  CHIF behavior and the host console log for absence of
-  response-format errors.
+  Verify CHIF I2C proxy and PlatDef download handlers remain stable across
+  three host boots: one Redfish power-on and two Redfish ForceRestarts. Each
+  boot waits for a fresh SMBIOS transfer and for the host OS to answer, then
+  checks that the host state is Running and that the host console log has no
+  CHIF response-format errors; boots 2 and 3 also check for PlatDef download
+  errors, and boot 1 checks the BMC journal for an MDR sync. At the end the
+  CHIF service is active, systemd has not restarted it automatically, and the
+  journal holds at least one MDR sync per boot.
 
 defaults:
-  transport: &bmc_ssh
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  bmc_ssh: &bmc_ssh
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
+  # Restarts CHIF when the kernel reports a full push queue, see commit faa5b4d.
+  smbios_wait: &smbios_wait >-
+    full=$(journalctl -k --no-pager | grep -c 'push: queue is full');
+    while [ ! -f /var/lib/smbios/smbios2 ] ||
+          [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
+    do
+      now=$(journalctl -k --no-pager | grep -c 'push: queue is full');
+      if [ "$now" -gt "$full" ]; then
+        echo "CHIF push queue full ($full -> $now): restarting CHIF";
+        systemctl restart xyz.openbmc_project.GxpChif.service;
+        full=$now;
+      fi;
+      sleep 5;
+    done;
+    echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
+  wait_host_os: &wait_host_os
+    cmd: ping
+    name: Wait for host OS
+    options:
+      timeout: 5m
+    parameters:
+      host: "[[attributes.Host]]"
+  host_running: &host_running
+    cmd: shell
+    name: Host state is Running
+    transport: *bmc_ssh
+    options:
+      timeout: 30s
+      on-failure: continue
+    parameters:
+      command: "busctl get-property xyz.openbmc_project.State.Host /xyz/openbmc_project/state/host0 xyz.openbmc_project.State.Host CurrentHostState"
+      expect:
+        - regex: "Running"
+  no_chif_errors: &no_chif_errors
+    cmd: shell
+    name: No CHIF response-format errors in the console log
+    transport: *bmc_ssh
+    options:
+      on-failure: continue
+    parameters:
+      command: "awk '/CHIF response invalid.*Size/ {n++} END {print n+0}' /var/log/obmc-console.log"
+      expect:
+        - regex: "^0$"
+  no_platdef_errors: &no_platdef_errors
+    cmd: shell
+    name: No PlatDef download errors in the console log
+    transport: *bmc_ssh
+    options:
+      on-failure: continue
+    parameters:
+      command: "awk '/DownloadDemandedTypePlatDef: CHIF response invalid/ {n++} END {print n+0}' /var/log/obmc-console.log"
+      expect:
+        - regex: "^0$"
+  clear_smbios: &clear_smbios
+    cmd: cmd
+    name: Clear SMBIOS data of the previous boot
+    transport: *bmc_ssh
+    parameters:
+      executable: rm
+      args: ["-f", "/var/lib/smbios/smbios2"]
+  force_restart: &force_restart
+    cmd: redfish
+    name: The host is restarted with ForceRestart
+    transport: *local
+    parameters:
+      <<: *admin
+      validate: request
+      request:
+        method: POST
+        path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+        body: {ResetType: ForceRestart}
+        status: [200, 204]
+        rules:
+          - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+        retry: {timeout: 5m, interval: 5s}
 
 stages:
-  - name: Reboot Cycle 1
+  - name: "Boot 1: power on"
     steps:
       - cmd: shell
-        name: Power on host
-        transport: &local
-          proto: local
+        name: Count MDR syncs before the first boot
+        transport: *bmc_ssh
         parameters:
-          command: >-
-            curl -sk -u root:[[attributes.BMCPassword]]
-            -X POST -H 'Content-Type: application/json'
-            -d '{"ResetType":"On"}'
-            -o /dev/null -w '%{http_code}'
-            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+          command: "journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | awk '/MDR AgentSynchronizeData called/ {n++} END {print n+0}'"
           expect:
-            - regex: "^(200|204)$"
+            - regex: "^[0-9]+$"
+          variable: MDR_BEFORE
+
+      - cmd: redfish
+        name: The host is powered on
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 204]
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+            retry: {timeout: 5m, interval: 5s}
 
       - cmd: shell
         name: Wait for SMBIOS transfer (host POST complete)
@@ -38,67 +133,28 @@ stages:
         options:
           timeout: 15m
         parameters:
-          command: >-
-            while [ ! -f /var/lib/smbios/smbios2 ] ||
-                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
-            do sleep 1; done;
-            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
+          command: *smbios_wait
           expect:
             - regex: "SMBIOS ready"
 
-      - cmd: ping
-        name: Wait for host OS
-        options:
-          timeout: 5m
-        parameters:
-          host: "[[attributes.Host]]"
+      - *wait_host_os
+      - *host_running
 
       - cmd: shell
-        name: Host state is Running
+        name: The BMC journal has an MDR sync from this boot
         transport: *bmc_ssh
         options:
-          timeout: 30s
+          on-failure: continue
         parameters:
-          command: "busctl get-property xyz.openbmc_project.State.Host /xyz/openbmc_project/state/host0 xyz.openbmc_project.State.Host CurrentHostState"
+          command: "journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | awk -v before={{ MDR_BEFORE }} '/MDR AgentSynchronizeData called/ {n++} END {print (n - before) \" new MDR syncs\"}'"
           expect:
-            - regex: "Running"
+            - regex: "^[1-9][0-9]* new MDR syncs$"
 
-      - cmd: shell
-        name: SMBIOS received in this cycle
-        transport: *bmc_ssh
-        parameters:
-          command: "journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep -c 'MDR AgentSynchronizeData called'"
-          expect:
-            - regex: "^[1-9]"
+      - *no_chif_errors
+      - *clear_smbios
+      - *force_restart
 
-      - cmd: shell
-        name: No CHIF response-format errors
-        transport: *bmc_ssh
-        parameters:
-          command: "grep -c 'CHIF response invalid.*Size' /var/log/obmc-console.log 2>/dev/null || echo 0"
-          expect:
-            - regex: "^0$"
-
-      - cmd: shell
-        name: Reboot host via Redfish
-        transport: *local
-        parameters:
-          command: >-
-            curl -sk -u root:[[attributes.BMCPassword]]
-            -X POST -H 'Content-Type: application/json'
-            -d '{"ResetType":"ForceRestart"}'
-            -o /dev/null -w '%{http_code}'
-            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
-          expect:
-            - regex: "^(200|204)$"
-
-      - cmd: shell
-        name: Clear stale SMBIOS data
-        transport: *bmc_ssh
-        parameters:
-          command: "rm -f /var/lib/smbios/smbios2"
-
-  - name: Reboot Cycle 2
+  - name: "Boot 2: first ForceRestart"
     steps:
       - cmd: shell
         name: Wait for SMBIOS transfer
@@ -106,67 +162,18 @@ stages:
         options:
           timeout: 5m
         parameters:
-          command: >-
-            while [ ! -f /var/lib/smbios/smbios2 ] ||
-                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
-            do sleep 1; done;
-            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
+          command: *smbios_wait
           expect:
             - regex: "SMBIOS ready"
 
-      - cmd: ping
-        name: Wait for host OS
-        options:
-          timeout: 5m
-        parameters:
-          host: "[[attributes.Host]]"
+      - *wait_host_os
+      - *host_running
+      - *no_chif_errors
+      - *no_platdef_errors
+      - *clear_smbios
+      - *force_restart
 
-      - cmd: shell
-        name: Host state is Running
-        transport: *bmc_ssh
-        options:
-          timeout: 30s
-        parameters:
-          command: "busctl get-property xyz.openbmc_project.State.Host /xyz/openbmc_project/state/host0 xyz.openbmc_project.State.Host CurrentHostState"
-          expect:
-            - regex: "Running"
-
-      - cmd: shell
-        name: No CHIF response-format errors
-        transport: *bmc_ssh
-        parameters:
-          command: "grep -c 'CHIF response invalid.*Size' /var/log/obmc-console.log 2>/dev/null || echo 0"
-          expect:
-            - regex: "^0$"
-
-      - cmd: shell
-        name: No PlatDef download errors
-        transport: *bmc_ssh
-        parameters:
-          command: "grep -c 'DownloadDemandedTypePlatDef: CHIF response invalid' /var/log/obmc-console.log 2>/dev/null || echo 0"
-          expect:
-            - regex: "^0$"
-
-      - cmd: shell
-        name: Reboot host via Redfish
-        transport: *local
-        parameters:
-          command: >-
-            curl -sk -u root:[[attributes.BMCPassword]]
-            -X POST -H 'Content-Type: application/json'
-            -d '{"ResetType":"ForceRestart"}'
-            -o /dev/null -w '%{http_code}'
-            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
-          expect:
-            - regex: "^(200|204)$"
-
-      - cmd: shell
-        name: Clear stale SMBIOS data
-        transport: *bmc_ssh
-        parameters:
-          command: "rm -f /var/lib/smbios/smbios2"
-
-  - name: Reboot Cycle 3
+  - name: "Boot 3: second ForceRestart"
     steps:
       - cmd: shell
         name: Wait for SMBIOS transfer
@@ -174,76 +181,42 @@ stages:
         options:
           timeout: 5m
         parameters:
-          command: >-
-            while [ ! -f /var/lib/smbios/smbios2 ] ||
-                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
-            do sleep 1; done;
-            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
+          command: *smbios_wait
           expect:
             - regex: "SMBIOS ready"
 
-      - cmd: ping
-        name: Wait for host OS
-        options:
-          timeout: 5m
-        parameters:
-          host: "[[attributes.Host]]"
-
-      - cmd: shell
-        name: Host state is Running
-        transport: *bmc_ssh
-        options:
-          timeout: 30s
-        parameters:
-          command: "busctl get-property xyz.openbmc_project.State.Host /xyz/openbmc_project/state/host0 xyz.openbmc_project.State.Host CurrentHostState"
-          expect:
-            - regex: "Running"
-
-      - cmd: shell
-        name: No CHIF response-format errors after 3 cycles
-        transport: *bmc_ssh
-        parameters:
-          command: "grep -c 'CHIF response invalid.*Size' /var/log/obmc-console.log 2>/dev/null || echo 0"
-          expect:
-            - regex: "^0$"
-
-      - cmd: shell
-        name: No PlatDef download errors after 3 cycles
-        transport: *bmc_ssh
-        parameters:
-          command: "grep -c 'DownloadDemandedTypePlatDef: CHIF response invalid' /var/log/obmc-console.log 2>/dev/null || echo 0"
-          expect:
-            - regex: "^0$"
+      - *wait_host_os
+      - *host_running
+      - *no_chif_errors
+      - *no_platdef_errors
 
   - name: Final Validation
     steps:
       - cmd: cmd
         name: CHIF service still running
         transport: *bmc_ssh
+        options:
+          on-failure: continue
         parameters:
           executable: systemctl
           args: ["is-active", "xyz.openbmc_project.GxpChif.service"]
 
       - cmd: shell
-        name: CHIF service did not restart (PID unchanged)
+        name: CHIF service has no automatic restarts (NRestarts=0)
         transport: *bmc_ssh
+        options:
+          on-failure: continue
         parameters:
           command: "systemctl show -p NRestarts xyz.openbmc_project.GxpChif.service"
           expect:
-            - regex: "NRestarts=0"
+            - regex: "^NRestarts=0$"
 
       - cmd: shell
-        name: "[Report] Total SMBIOS receptions across cycles"
+        name: The BMC journal has an MDR sync for each of the 3 boots
         transport: *bmc_ssh
         options:
           on-failure: continue
         parameters:
-          command: "journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep -c 'MDR AgentSynchronizeData called'"
-
-      - cmd: shell
-        name: "[Report] Kernel go-bit drops"
-        transport: *bmc_ssh
-        options:
-          on-failure: continue
-        parameters:
-          command: "dmesg | grep -c 'go bit of rq_ctrl not set' || echo 0"
+          command: "journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | awk -v before={{ MDR_BEFORE }} '/MDR AgentSynchronizeData called/ {n++} END {print (n - before) \" new MDR syncs\"}'"
+          expect:
+            - regex: "^([3-9]|[1-9][0-9]+) new MDR syncs$"

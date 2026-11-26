@@ -6,11 +6,11 @@ post-stage:
       proto: local
     parameters:
       command: >-
-        curl -sk -u root:[[attributes.BMCPassword]]
+        curl -sk -u '[[attributes.BMCUser]]:[[attributes.BMCPassword]]'
         -X POST -H 'Content-Type: application/json'
         -d '{"ResetType":"ForceOff"}'
         -o /dev/null -w '%{http_code}'
-        https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset || true
+        'https://[[attributes.BMC]]:[[attributes.RedfishPort]][[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset' || true
 
   - cmd: cmd
     name: Wait for host shutdown

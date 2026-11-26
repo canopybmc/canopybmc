@@ -2,248 +2,233 @@ name: "Power: Host Control"
 description: >-
   Verify the full host power control chain end-to-end: kernel power-ctrl
   driver, x86-power-control, D-Bus state, Redfish actions, and host POST
-  output. Reads the obmc-console ring buffer log on the BMC at
-  /var/log/obmc-console.log to verify the host produces POST messages.
-  Run this test LAST as it power-cycles the host.
+  output. Powers the host on, checks Redfish, D-Bus and the console output of
+  this boot, powers it off with ForceOff and checks the off state, then powers
+  it on again and checks the console output of the second boot. The console
+  output comes from /var/log/obmc-console.log, read from a mark set before
+  each power-on.
 
 defaults:
-  transport: &bmc_ssh
+  local: &local
+    proto: local
+  bmc: &bmc
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  redfish: &redfish
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
 
+  # Marks the end of the console log, so that a later step reads only what
+  # the host writes after this point.
+  console_mark: &console_mark
+    cmd: shell
+    name: Mark the end of the host console log
+    transport: *bmc
+    parameters:
+      command: stat -c '%i:%s' /var/log/obmc-console.log 2>/dev/null || echo 0:0
+      variable: CONSOLE_MARK
+
+  power_on: &power_on
+    cmd: redfish
+    name: The host is powered on
+    transport: *local
+    parameters:
+      <<: *redfish
+      validate: request
+      request:
+        method: POST
+        path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+        body: {ResetType: "On"}
+        status: [200, 204]
+        rules:
+          - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+        retry: {timeout: 5m, interval: 5s}
+
+  # The host firmware sends SMBIOS late in POST. When the CHIF push queue is
+  # full the transfer stalls, and a CHIF restart recovers it.
+  wait_smbios: &wait_smbios
+    cmd: shell
+    name: The host POST delivers SMBIOS data
+    transport: *bmc
+    options: {timeout: 15m}
+    parameters:
+      command: |
+        full=$(journalctl -k --no-pager | grep -c 'push: queue is full')
+        while [ ! -f /var/lib/smbios/smbios2 ] ||
+              [ "$(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0)" -le 1000 ]; do
+          now=$(journalctl -k --no-pager | grep -c 'push: queue is full')
+          if [ "$now" -gt "$full" ]; then
+            echo "CHIF push queue full ($full -> $now): restarting CHIF"
+            systemctl restart xyz.openbmc_project.GxpChif.service
+            full=$now
+          fi
+          sleep 5
+        done
+        echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
+      expect:
+        - regex: '^SMBIOS ready'
+
+  # obmc-console renames a full log to .log.1; the inode tells which file
+  # held the mark.
+  console_capture: &console_capture
+    cmd: shell
+    name: The host wrote to its console during this boot
+    transport: *bmc
+    parameters:
+      command: |
+        L=/var/log/obmc-console.log; m={{ CONSOLE_MARK }}; ino=${m%%:*}; off=${m##*:}
+        if [ "$(stat -c %i $L 2>/dev/null)" = "$ino" ]; then tail -c +$((off + 1)) $L
+        elif [ "$(stat -c %i $L.1 2>/dev/null)" = "$ino" ]; then tail -c +$((off + 1)) $L.1; cat $L
+        else cat $L.1 $L 2>/dev/null; fi > /tmp/fwci-console.txt
+        echo "$(( $(wc -c < /tmp/fwci-console.txt) )) bytes"
+      expect:
+        - regex: '^[1-9][0-9]* bytes$'
+
+  console_initialization: &console_initialization
+    cmd: shell
+    name: Console of this boot contains Initialization output
+    transport: *bmc
+    options: {on-failure: continue}
+    parameters:
+      command: >-
+        l=$(grep -a -i -m 1 'Initialization' /tmp/fwci-console.txt); echo "${l:-not found}"
+      expect:
+        - regex: '(?i)initialization'
+
+  console_bios: &console_bios
+    cmd: shell
+    name: Console of this boot contains BIOS output
+    transport: *bmc
+    options: {on-failure: continue}
+    parameters:
+      command: >-
+        l=$(grep -a -i -m 1 'BIOS' /tmp/fwci-console.txt); echo "${l:-not found}"
+      expect:
+        - regex: '(?i)bios'
+
+  console_memory: &console_memory
+    cmd: shell
+    name: Console of this boot contains Memory output
+    transport: *bmc
+    options: {on-failure: continue}
+    parameters:
+      command: >-
+        l=$(grep -a -i -m 1 'Memory' /tmp/fwci-console.txt); echo "${l:-not found}"
+      expect:
+        - regex: '(?i)memory'
+
+  host_running: &host_running
+    cmd: shell
+    name: Host state is Running on D-Bus
+    transport: *bmc
+    options: {on-failure: continue}
+    parameters:
+      command: >-
+        busctl get-property xyz.openbmc_project.State.Host
+        /xyz/openbmc_project/state/host0 xyz.openbmc_project.State.Host
+        CurrentHostState
+      expect:
+        - regex: 'HostState\.Running"$'
+
 stages:
-  - name: Power On Host
+  - name: Host Power Control
     steps:
+      # The SSH transport does not retry a refused connection, so wait for
+      # the BMC on Redfish first.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *redfish
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - *console_mark
+      - *power_on
+      - *wait_smbios
+      - *console_capture
+      - *console_initialization
+      - *console_bios
+      - *console_memory
+      - *host_running
+
       - cmd: shell
-        name: Send Power On via Redfish
-        transport: &local
-          proto: local
+        name: Chassis power state is On on D-Bus
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
           command: >-
-            curl -sk -u root:[[attributes.BMCPassword]]
-            -X POST -H 'Content-Type: application/json'
-            -d '{"ResetType":"On"}'
-            -o /dev/null -w '%{http_code}'
-            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+            busctl get-property xyz.openbmc_project.State.Chassis
+            /xyz/openbmc_project/state/chassis0 xyz.openbmc_project.State.Chassis
+            CurrentPowerState
           expect:
-            - regex: "^(200|204)$"
+            - regex: 'PowerState\.On"$'
 
       - cmd: shell
-        name: Wait for SMBIOS transfer
-        transport: *bmc_ssh
-        options:
-          timeout: 15m
+        name: Power control service is active
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: systemctl is-active xyz.openbmc_project.Chassis.Control.Power@0.service
+          expect:
+            - regex: '^active$'
+
+      - cmd: redfish
+        name: Redfish ForceOff powers the host off
+        transport: *local
+        parameters:
+          <<: *redfish
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: ForceOff}
+            status: [200, 204]
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "Off"}
+            retry: {timeout: 2m, interval: 5s}
+
+      - cmd: shell
+        name: Host state is Off on D-Bus
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
           command: >-
-            while [ ! -f /var/lib/smbios/smbios2 ] ||
-                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
-            do sleep 1; done;
-            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
+            busctl get-property xyz.openbmc_project.State.Host
+            /xyz/openbmc_project/state/host0 xyz.openbmc_project.State.Host
+            CurrentHostState
           expect:
-            - regex: "SMBIOS ready"
+            - regex: 'HostState\.Off"$'
 
-  - name: Verify Host Is On
-    steps:
-      - cmd: shell
-        name: Console contains Initialization output
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          command: "grep -qi 'Initialization' /var/log/obmc-console.log"
-
-      - cmd: shell
-        name: Console contains BIOS output
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          command: "grep -qi 'BIOS' /var/log/obmc-console.log"
-
-      - cmd: shell
-        name: Console contains Memory output
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          command: "grep -qi 'Memory' /var/log/obmc-console.log"
-
-      - cmd: cmd
-        name: PowerState is On via Redfish
-        transport: *local
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
-          expect:
-            - regex: '"PowerState": *"On"'
-
-      - cmd: cmd
-        name: Host state Running via D-Bus
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: busctl
-          args: [get-property, xyz.openbmc_project.State.Host, /xyz/openbmc_project/state/host0, xyz.openbmc_project.State.Host, CurrentHostState]
-          expect:
-            - regex: "Running"
-
-      - cmd: cmd
-        name: Chassis state On via D-Bus
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: busctl
-          args: [get-property, xyz.openbmc_project.State.Chassis, /xyz/openbmc_project/state/chassis0, xyz.openbmc_project.State.Chassis, CurrentPowerState]
-          expect:
-            - regex: "On"
-
-      - cmd: cmd
-        name: Power control service active
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: systemctl
-          args: ["is-active", "xyz.openbmc_project.Chassis.Control.Power@0.service"]
-
-  - name: Power Off Host via Redfish
-    steps:
-      - cmd: shell
-        name: Send ForceOff
-        transport: *local
-        parameters:
-          command: >-
-            curl -sk -u root:[[attributes.BMCPassword]]
-            -X POST -H 'Content-Type: application/json'
-            -d '{"ResetType":"ForceOff"}'
-            -o /dev/null -w '%{http_code}'
-            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
-          expect:
-            - regex: "^(200|204)$"
-
-      - cmd: cmd
-        name: Wait for power off
-        transport: *local
-        parameters:
-          executable: sleep
-          args: ["15"]
-
-      - cmd: cmd
-        name: PowerState is Off via Redfish
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
-          expect:
-            - regex: '"PowerState": *"Off"'
-
-      - cmd: cmd
-        name: Host state Off via D-Bus
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: busctl
-          args: [get-property, xyz.openbmc_project.State.Host, /xyz/openbmc_project/state/host0, xyz.openbmc_project.State.Host, CurrentHostState]
-          expect:
-            - regex: "Off"
-
-  - name: Power On Host via Redfish
-    steps:
+      # Without the old file, the next SMBIOS wait proves a new POST.
       - cmd: shell
         name: Clear stale SMBIOS data
-        transport: *bmc_ssh
+        transport: *bmc
         parameters:
-          command: "rm -f /var/lib/smbios/smbios2"
+          command: rm -f /var/lib/smbios/smbios2
 
-      - cmd: shell
-        name: Send Power On
-        transport: *local
-        parameters:
-          command: >-
-            curl -sk -u root:[[attributes.BMCPassword]]
-            -X POST -H 'Content-Type: application/json'
-            -d '{"ResetType":"On"}'
-            -o /dev/null -w '%{http_code}'
-            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
-          expect:
-            - regex: "^(200|204)$"
-
-      - cmd: shell
-        name: Wait for SMBIOS transfer
-        transport: *bmc_ssh
-        options:
-          timeout: 15m
-        parameters:
-          command: >-
-            while [ ! -f /var/lib/smbios/smbios2 ] ||
-                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
-            do sleep 1; done;
-            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
-          expect:
-            - regex: "SMBIOS ready"
-
-  - name: Verify Second Boot
-    steps:
-      - cmd: cmd
-        name: PowerState is On via Redfish
-        transport: *local
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
-          expect:
-            - regex: '"PowerState": *"On"'
-
-      - cmd: shell
-        name: Console contains Initialization output
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          command: "grep -qi 'Initialization' /var/log/obmc-console.log"
-
-      - cmd: shell
-        name: Console contains BIOS output
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          command: "grep -qi 'BIOS' /var/log/obmc-console.log"
-
-      - cmd: shell
-        name: Console contains Memory output
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          command: "grep -qi 'Memory' /var/log/obmc-console.log"
-
-      - cmd: cmd
-        name: Host state Running via D-Bus
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: busctl
-          args: [get-property, xyz.openbmc_project.State.Host, /xyz/openbmc_project/state/host0, xyz.openbmc_project.State.Host, CurrentHostState]
-          expect:
-            - regex: "Running"
+      - <<: *console_mark
+        name: Mark the end of the console log before the second boot
+      - <<: *power_on
+        name: The host is powered on again
+      - <<: *wait_smbios
+        name: The second POST delivers SMBIOS data
+      - <<: *console_capture
+        name: The host wrote to its console during the second boot
+      - <<: *console_initialization
+        name: Console of the second boot contains Initialization output
+      - <<: *console_bios
+        name: Console of the second boot contains BIOS output
+      - <<: *console_memory
+        name: Console of the second boot contains Memory output
+      - <<: *host_running
+        name: Host state is Running on D-Bus after the second boot

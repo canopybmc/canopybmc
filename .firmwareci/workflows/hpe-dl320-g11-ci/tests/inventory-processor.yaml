@@ -1,171 +1,184 @@
 name: "Inventory: Processors"
 description: >-
-  Verify CPU inventory via Redfish. Checks that SMBIOS processor data flows
-  correctly through smbios-mdr to Redfish. Assumes cpu0 is present and
-  Enabled. Requires host POST complete.
+  Verify the CPU inventory over Redfish after the host POST. Checks that
+  SMBIOS processor data flows through smbios-mdr to Redfish: the Processors
+  collection has members, and every present processor is Enabled and reports
+  its manufacturer, at least 4 cores, its threads, its maximum speed, its
+  family and model, and a serial number that is not the HPE placeholder
+  "Proc N". The ProcessorSummary core count is above 0.
 
 defaults:
-  transport: &local
+  local: &local
     proto: local
+  bmc: &bmc
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  redfish: &redfish
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+    validate: inventory
+  present: &present {prop: Status/State, op: ne, value: Absent}
 
 stages:
-  - name: Power on host
+  - name: Processor Inventory
     steps:
-      - cmd: shell
-        name: Power on host via Redfish
+      - cmd: redfish
+        name: Redfish service answers
         transport: *local
         parameters:
-          command: >-
-            curl -sk -u root:[[attributes.BMCPassword]]
-            -X POST -H 'Content-Type: application/json'
-            -d '{"ResetType":"On"}'
-            -o /dev/null -w '%{http_code}'
-            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
-          expect:
-            - regex: "^(200|204)$"
-      - cmd: shell
-        name: Wait for SMBIOS transfer
-        transport:
-          proto: ssh
-          options:
-            host: "[[attributes.BMC]]"
-            user: "root"
-            password: "[[attributes.BMCPassword]]"
-        options:
-          timeout: 15m
+          <<: *redfish
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The host is powered on
+        transport: *local
         parameters:
-          command: >-
+          <<: *redfish
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 204]
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+            retry: {timeout: 5m, interval: 5s}
+
+      # The host firmware sends SMBIOS late in POST. When the CHIF push queue
+      # is full the transfer stalls, and a CHIF restart recovers it.
+      - cmd: shell
+        name: The host POST delivers SMBIOS data
+        transport: *bmc
+        options: {timeout: 15m}
+        parameters:
+          command: |
+            full=$(journalctl -k --no-pager | grep -c 'push: queue is full')
             while [ ! -f /var/lib/smbios/smbios2 ] ||
-                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
-            do sleep 1; done;
+                  [ "$(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0)" -le 1000 ]; do
+              now=$(journalctl -k --no-pager | grep -c 'push: queue is full')
+              if [ "$now" -gt "$full" ]; then
+                echo "CHIF push queue full ($full -> $now): restarting CHIF"
+                systemctl restart xyz.openbmc_project.GxpChif.service
+                full=$now
+              fi
+              sleep 5
+            done
             echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
           expect:
-            - regex: "SMBIOS ready"
+            - regex: '^SMBIOS ready'
 
-  - name: Processors Collection
-    on-failure: continue
-    steps:
-      - cmd: cmd
-        name: Processors collection has >= 1 member
+      - cmd: redfish
+        name: The Processors collection has members
         transport: *local
-        options:
-          timeout: 30s
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors"]
-          expect:
-            - regex: '"Members@odata.count": *[1-9]'
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", collection: Processors, op: ge, value: "1"}
 
-  - name: cpu0 State
-    on-failure: continue
-    steps:
-      - cmd: cmd
-        name: cpu0 State is Enabled
+      - cmd: redfish
+        name: Every present processor is Enabled
         transport: *local
-        options:
-          timeout: 30s
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors/cpu0"]
-          expect:
-            - regex: '"State": *"Enabled"'
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", forEach: Processors, where: *present, prop: Status/State, op: eq, value: Enabled}
 
-  - name: cpu0 Attributes
-    on-failure: continue
-    steps:
-      - cmd: cmd
-        name: cpu0 Manufacturer is populated
+      - cmd: redfish
+        name: Every present processor reports its manufacturer
         transport: *local
-        options:
-          timeout: 30s
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors/cpu0"]
-          expect:
-            - regex: '"Manufacturer": *"[^"][^"]*"'
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", forEach: Processors, where: *present, prop: Manufacturer, op: matches, value: '\S'}
 
-      - cmd: cmd
-        name: cpu0 TotalCores >= 4
+      - cmd: redfish
+        name: Every present processor has at least 4 cores
         transport: *local
-        options:
-          timeout: 30s
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors/cpu0"]
-          expect:
-            - regex: '"TotalCores": *[0-9]'
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", forEach: Processors, where: *present, prop: TotalCores, op: ge, value: "4"}
 
-      - cmd: cmd
-        name: cpu0 TotalThreads > 0
+      - cmd: redfish
+        name: Every present processor reports its threads
         transport: *local
-        options:
-          timeout: 30s
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors/cpu0"]
-          expect:
-            - regex: '"TotalThreads": *[1-9]'
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", forEach: Processors, where: *present, prop: TotalThreads, op: ge, value: "1"}
 
-      - cmd: cmd
-        name: cpu0 MaxSpeedMHz > 0
+      - cmd: redfish
+        name: Every present processor reports its maximum speed
         transport: *local
-        options:
-          timeout: 30s
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors/cpu0"]
-          expect:
-            - regex: '"MaxSpeedMHz": *[1-9]'
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", forEach: Processors, where: *present, prop: MaxSpeedMHz, op: ge, value: "1"}
 
-      - cmd: cmd
-        name: cpu0 EffectiveFamily is populated
+      - cmd: redfish
+        name: Every present processor reports its family
         transport: *local
-        options:
-          timeout: 30s
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors/cpu0"]
-          expect:
-            - regex: '"EffectiveFamily": *"[^"][^"]*"'
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", forEach: Processors, where: *present, prop: ProcessorId/EffectiveFamily, op: matches, value: '\S'}
 
-      - cmd: cmd
-        name: cpu0 EffectiveModel is populated
+      - cmd: redfish
+        name: Every present processor reports its model
         transport: *local
-        options:
-          timeout: 30s
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors/cpu0"]
-          expect:
-            - regex: '"EffectiveModel": *"[^"][^"]*"'
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", forEach: Processors, where: *present, prop: ProcessorId/EffectiveModel, op: matches, value: '\S'}
 
-  - name: cpu0 SerialNumber
-    on-failure: continue
-    steps:
-      - cmd: shell
-        name: cpu0 SerialNumber is not HPE fake data
+      # RE2 has no negative lookahead: the regex matches every non-empty value
+      # except the HPE placeholder "Proc <digit>".
+      - cmd: redfish
+        name: No processor serial number is HPE placeholder data
         transport: *local
-        options:
-          timeout: 30s
+        options: {on-failure: continue}
         parameters:
-          command: >-
-            DATA=$(curl -sk -u root:[[attributes.BMCPassword]]
-            https://[[attributes.BMC]]/redfish/v1/Systems/system/Processors/cpu0);
-            SN=$(echo "$DATA" | grep -o '"SerialNumber": *"[^"]*"' | head -1);
-            echo "$SN";
-            echo "$SN" | grep -q '"Proc [0-9]"' && { echo "FAIL: fake HPE SerialNumber"; exit 1; };
-            echo "SerialNumber OK"
+          <<: *redfish
+          inventory:
+            rules:
+              - path: "[[attributes.RedfishSystem]]"
+                forEach: Processors
+                where: *present
+                prop: SerialNumber
+                op: matches
+                value: '^([^P].*|P[^r].*|Pr[^o].*|Pro[^c].*|Proc[^ ].*|Proc [^0-9].*|Proc [0-9].+|P|Pr|Pro|Proc|Proc )$'
 
-  - name: System Processor Summary
-    on-failure: continue
-    steps:
-      - cmd: cmd
-        name: ProcessorSummary CoreCount > 0
+      - cmd: redfish
+        name: ProcessorSummary CoreCount is above 0
         transport: *local
-        options:
-          timeout: 30s
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
-          expect:
-            - regex: '"CoreCount": *[0-9]{2,3}'
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: ProcessorSummary/CoreCount, op: ge, value: "1"}

@@ -1,43 +1,59 @@
 name: "Smoke: Service Failures"
 description: >-
-  Verify no unexpected service failures and no crash-looping
-  critical services.
+  Verify that no systemd unit failed on the BMC, except clear-once and
+  trace-enable, which may fail on this platform, and that none of the
+  services in the DUT attribute Services.NoRestart restarted since the boot
+  (no crash loop). Each step names the units that fail it.
 
 defaults:
-  transport: &bmc_ssh
+  bmc: &bmc
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
 
 stages:
   - name: No Unexpected Failures
     steps:
-      - cmd: cmd
-        name: List failed units
-        transport: *bmc_ssh
+      # The SSH transport does not retry a refused connection, so wait for
+      # the BMC on Redfish first.
+      - cmd: redfish
+        name: Redfish service answers
+        transport:
+          proto: local
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "FAILED=$(systemctl list-units --state=failed --no-pager --no-legend | grep -v 'clear-once\\|trace-enable'); if [ -n \"$FAILED\" ]; then echo \"$FAILED\"; exit 1; fi; echo '0 unexpected failures'"
+          host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+          auth:
+            user: "[[attributes.BMCUser]]"
+            password: "[[attributes.BMCPassword]]"
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
 
-  - name: No Crash Loops
-    steps:
-      - cmd: cmd
-        name: CHIF no restarts
-        transport: *bmc_ssh
+      - cmd: shell
+        name: No unit failed except clear-once and trace-enable
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "RESTARTS=$(systemctl show xyz.openbmc_project.GxpChif.service -p NRestarts --value); echo \"CHIF NRestarts=$RESTARTS\"; test \"$RESTARTS\" = \"0\""
-      - cmd: cmd
-        name: SMBIOS MDR no restarts
-        transport: *bmc_ssh
+          command: >-
+            f=$(systemctl list-units --state=failed --no-pager --no-legend --plain
+            | grep -v -e clear-once -e trace-enable | awk '{print $1}');
+            echo "${f:-none}"
+          expect:
+            - regex: '^none$'
+
+      - cmd: shell
+        name: No crash-loop service restarted since the boot
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "RESTARTS=$(systemctl show smbios-mdrv2.service -p NRestarts --value); echo \"smbios-mdr NRestarts=$RESTARTS\"; test \"$RESTARTS\" = \"0\""
+          command: >-
+            r=$(for u in [[attributes.Services.NoRestart]]; do
+            n=$(systemctl show -p NRestarts --value "$u"); [ "$n" = 0 ] || echo "$u NRestarts=$n";
+            done); echo "${r:-none}"
+          expect:
+            - regex: '^none$'

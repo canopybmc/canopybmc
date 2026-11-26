@@ -1,12 +1,68 @@
 name: "Smoke: Boot"
-description: Checks if the system boots successfully and is accessible via SSH.
+description: >-
+  Checks that the BMC finished its boot after the DUT pre-stage: the Redfish
+  Manager is enabled and healthy, and systemd on the BMC reports that the boot
+  is complete.
+
+defaults:
+  local: &local
+    proto: local
+  bmc: &bmc
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  redfish: &redfish
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+    validate: inventory
 
 stages:
-  - name: Check SSH connectivity
+  - name: BMC boot finished
     steps:
-      - cmd: ping
-        name: Wait for SSH service
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *redfish
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The Manager is enabled
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: Status/State, op: eq, value: Enabled}
+
+      - cmd: redfish
+        name: The Manager is healthy
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: Status/Health, op: eq, value: OK}
+
+      # degraded also means the boot finished; failed units are the job of
+      # "Smoke: Service Failures".
+      - cmd: shell
+        name: systemd reports the boot as finished
+        transport: *bmc
         options:
           timeout: 10m
+          on-failure: continue
         parameters:
-          host: "[[attributes.BMC]]"
+          command: s=$(systemctl is-system-running --wait); echo "$s"
+          expect:
+            - regex: '^(running|degraded)$'

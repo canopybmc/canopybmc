@@ -10,142 +10,157 @@ description: >-
   for the synthetic FRU files to appear before asserting on them.
 
 defaults:
-  transport: &local
+  local: &local
     proto: local
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
+  bmc: &bmc
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
 
 stages:
-  - name: FRU Inventory Area Info
+  - name: FRU Inventory Area Info and Read FRU Data
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: Get FRU Inventory Area Info (0x0a 0x10) - FRU device 0
+      - cmd: ipmi
+        name: FRU device 0 has an inventory area
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0a 0x10 0x00
-
-  - name: Read FRU Data
-    steps:
-      - cmd: shell
-        name: Read FRU Data (0x0a 0x11) - FRU 0 offset 0 8 bytes
+          lan: *lan
+          get: fru/0/size
+          expect: {ne: 0}
+      - cmd: ipmi
+        name: FRU device 0 common header is format version 1
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0a 0x11 0x00 0x00 0x00 0x08
+          lan: *lan
+          get: fru/0/header/version
+          expect: {eq: 1}
+      - cmd: ipmi
+        name: FRU device 0 common header checksum is valid
+        transport: *local
+        parameters:
+          lan: *lan
+          get: fru/0/header/checksum-ok
+          expect: {eq: true}
 
   - name: Baseboard FRU Values (device 0)
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: fru print 0 - baseboard from device-tree VPD
+      # The chassis type is what makes the baseboard FRU device 0.
+      - cmd: ipmi
+        name: Baseboard chassis type is the board's
         transport: *local
-        options:
-          timeout: "1m"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            fru print 0
-          expect:
-            # Rack Mount chassis area is what makes the baseboard FRU device 0.
-            - regex: 'Chassis Type\s*:\s*Rack Mount Chassis'
-            - regex: 'Board Mfg\s*:\s*\S'
-            - regex: 'Board Product\s*:\s*\S'
-            - regex: 'Board Serial\s*:\s*\S'
+          lan: *lan
+          get: fru/0/chassis/type
+          expect: {eq: "[[attributes.FRU.ChassisType]]"}
+      - cmd: ipmi
+        name: Baseboard reports a board manufacturer
+        transport: *local
+        parameters:
+          lan: *lan
+          get: fru/0/board/manufacturer
+          expect: exists
+      - cmd: ipmi
+        name: Baseboard reports a board product
+        transport: *local
+        parameters:
+          lan: *lan
+          get: fru/0/board/product
+          expect: exists
+      - cmd: ipmi
+        name: Baseboard reports a board serial number
+        transport: *local
+        parameters:
+          lan: *lan
+          get: fru/0/board/serial
+          expect: exists
 
   - name: Power on host for SMBIOS-sourced FRU
     steps:
-      - cmd: shell
-        name: Chassis power on (no-op if already on)
+      - cmd: ipmi
+        name: Host power on is accepted
         transport: *local
-        options:
-          timeout: "1m"
-          on-failure: continue
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            chassis power on
+          lan: *lan
+          set: chassis/power
+          value: "on"
+          expect: {completion: 0x00}
 
   - name: Wait for CPU and DIMM synthetic FRUs
     steps:
+      # Restarts GxpChif when its push queue fills up, as the SMBIOS transfer then stalls.
       - cmd: shell
-        name: Wait until fru-synthesizer has written a CPU and a DIMM FRU
-        transport: &bmc_ssh
-          proto: ssh
-          options:
-            host: "[[attributes.BMC]]"
-            user: "root"
-            password: "[[attributes.BMCPassword]]"
+        name: fru-synthesizer has written a CPU and a DIMM FRU
+        transport: *bmc
         options:
-          timeout: "8m"
+          timeout: 15m
         parameters:
-          command: >-
+          command: |
+            full=$(journalctl -k --no-pager | grep -c 'push: queue is full')
             until ls /etc/fru/254-*.fru.bin >/dev/null 2>&1 &&
-            ls /etc/fru/255-*.fru.bin >/dev/null 2>&1; do sleep 5; done
+                ls /etc/fru/255-*.fru.bin >/dev/null 2>&1; do
+              now=$(journalctl -k --no-pager | grep -c 'push: queue is full')
+              if [ "$now" -gt "$full" ]; then
+                echo "CHIF push queue full ($full -> $now): restarting CHIF"
+                systemctl restart xyz.openbmc_project.GxpChif.service
+                full=$now
+              fi
+              sleep 5
+            done
+            echo "CPU and DIMM FRUs written"
+          expect:
+            - regex: 'CPU and DIMM FRUs written'
 
-  - name: fru-synthesizer Service
+  - name: Synthetic FRUs on the BMC
+    on-failure: continue
     steps:
       - cmd: shell
         name: fru-synthesizer is active
-        transport: *bmc_ssh
-        options:
-          timeout: "30s"
+        transport: *bmc
         parameters:
           command: systemctl is-active fru-synthesizer.service
-
-  - name: CPU FRU present
-    steps:
+          expect:
+            - regex: '^active\s*$'
       - cmd: shell
         name: At least one CPU FRU (bus 254) generated from SMBIOS
-        transport: *bmc_ssh
-        options:
-          timeout: "30s"
+        transport: *bmc
         parameters:
           command: ls -1 /etc/fru/254-*.fru.bin
           expect:
             - regex: '254-[0-9]+\.fru\.bin'
-
-  - name: DIMM FRU present
-    steps:
       - cmd: shell
         name: At least one DIMM FRU (bus 255) generated from SMBIOS
-        transport: *bmc_ssh
-        options:
-          timeout: "30s"
+        transport: *bmc
         parameters:
           command: ls -1 /etc/fru/255-*.fru.bin
           expect:
             - regex: '255-[0-9]+\.fru\.bin'
 
   - name: IPMI serves baseboard, CPU and DIMM
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: At least 3 FRU devices enumerated (baseboard + CPU + DIMM)
+      - cmd: ipmi
+        name: At least two FRUs besides the baseboard have a product
         transport: *local
-        options:
-          timeout: "1m"
         parameters:
-          command: >-
-            test "$(ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            fru print | grep -c 'FRU Device Description')" -ge 3
-      - cmd: shell
-        name: Product-area FRU fields present over IPMI
+          lan: *lan
+          get: fru/*/product/name
+          where: {id: {ne: 0}, name: {matches: '\S'}}
+          expect: {count: {ge: 2}}
+      - cmd: ipmi
+        name: A served FRU reports a product manufacturer
         transport: *local
-        options:
-          timeout: "1m"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            fru print
-          expect:
-            - regex: 'Product Manufacturer\s*:\s*\S'
-            - regex: 'Product Name\s*:\s*\S'
+          lan: *lan
+          get: fru/*/product/manufacturer
+          where: {manufacturer: {matches: '\S'}}
+          expect: {count: {ge: 1}}

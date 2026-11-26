@@ -1,176 +1,187 @@
 name: "Inventory: System Identity"
 description: >-
-  Verify chassis and system identity fields are populated correctly via Redfish.
+  Verify the chassis and system identity over Redfish after the host POST.
   Covers entity-manager VPD patches, devicetree-vpd-parser, and SMBIOS system
-  identity. Checks both Chassis and System resources for manufacturer, model,
-  serial, part number, asset tag, and boot configuration.
+  identity. Both the Chassis and the System report the manufacturer of the
+  DUT attribute Identity.Manufacturer, a model that contains Identity.Model,
+  and a serial number; the Chassis also reports a part number, an asset tag
+  and the chassis type Identity.ChassisType; the System has a UUID that is
+  not all zeros and boots in UEFI mode.
 
 defaults:
-  transport: &bmc_ssh
+  local: &local
+    proto: local
+  bmc: &bmc
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
+  redfish: &redfish
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+    validate: inventory
 
 stages:
-  - name: Power On host
-    steps:
-      - cmd: cmd
-        name: Power on host via Redfish
-        transport: &local
-          proto: local
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"Power On HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
-      - cmd: shell
-        name: Wait for SMBIOS transfer
-        transport:
-          proto: ssh
-          options:
-            host: "[[attributes.BMC]]"
-            user: "root"
-            password: "[[attributes.BMCPassword]]"
-        options:
-          timeout: 15m
-        parameters:
-          command: >-
-            while [ ! -f /var/lib/smbios/smbios2 ] ||
-                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
-            do sleep 1; done;
-            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
-          expect:
-            - regex: "SMBIOS ready"
-
-  - name: Chassis Identity
-    steps:
-      - cmd: cmd
-        name: Chassis Model contains Gen11
-        transport: &local
-          proto: local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
-          expect:
-            - regex: '"Model".*Gen11'
-      - cmd: cmd
-        name: Chassis Manufacturer is Hewlett Packard Enterprise
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
-          expect:
-            - regex: '"Manufacturer".*"Hewlett Packard Enterprise"'
-      - cmd: cmd
-        name: Chassis SerialNumber populated
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
-          expect:
-            - regex: '"SerialNumber": *"[^"][^"]*"'
-      - cmd: cmd
-        name: Chassis PartNumber populated
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
-          expect:
-            - regex: '"PartNumber": *"[^"][^"]*"'
-      - cmd: cmd
-        name: Chassis AssetTag populated
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
-          expect:
-            - regex: '"AssetTag": *"[^"][^"]*"'
-      - cmd: cmd
-        name: ChassisType is RackMount
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis"]
-          expect:
-            - regex: '"ChassisType".*"RackMount"'
-
   - name: System Identity
     steps:
-      - cmd: cmd
-        name: System Model contains Gen11
+      - cmd: redfish
+        name: Redfish service answers
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
-          expect:
-            - regex: '"Model".*Gen11'
-      - cmd: cmd
-        name: System Manufacturer is Hewlett Packard Enterprise
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
-          expect:
-            - regex: '"Manufacturer".*"Hewlett Packard Enterprise"'
-      - cmd: cmd
-        name: System SerialNumber populated
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
-          expect:
-            - regex: '"SerialNumber": *"[^"][^"]*"'
-      - cmd: cmd
-        name: System UUID is not all-zeros
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "UUID=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Systems/system | grep -o '\"UUID\": *\"[^\"]*\"' | grep -o '[0-9a-fA-F-]*'); echo \"UUID=$UUID\"; test \"$UUID\" != '00000000-0000-0000-0000-000000000000' && test -n \"$UUID\""
+          <<: *redfish
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
 
-  - name: Boot Configuration
-    steps:
-      - cmd: cmd
+      - cmd: redfish
+        name: The host is powered on
+        transport: *local
+        parameters:
+          <<: *redfish
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 204]
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+            retry: {timeout: 5m, interval: 5s}
+
+      # The host firmware sends SMBIOS late in POST. When the CHIF push queue
+      # is full the transfer stalls, and a CHIF restart recovers it.
+      - cmd: shell
+        name: The host POST delivers SMBIOS data
+        transport: *bmc
+        options: {timeout: 15m}
+        parameters:
+          command: |
+            full=$(journalctl -k --no-pager | grep -c 'push: queue is full')
+            while [ ! -f /var/lib/smbios/smbios2 ] ||
+                  [ "$(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0)" -le 1000 ]; do
+              now=$(journalctl -k --no-pager | grep -c 'push: queue is full')
+              if [ "$now" -gt "$full" ]; then
+                echo "CHIF push queue full ($full -> $now): restarting CHIF"
+                systemctl restart xyz.openbmc_project.GxpChif.service
+                full=$now
+              fi
+              sleep 5
+            done
+            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
+          expect:
+            - regex: '^SMBIOS ready'
+
+      - cmd: redfish
+        name: Chassis model is the board's
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]", prop: Model, op: contains, value: "[[attributes.Identity.Model]]"}
+
+      - cmd: redfish
+        name: Chassis manufacturer is the board's
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]", prop: Manufacturer, op: eq, value: "[[attributes.Identity.Manufacturer]]"}
+
+      - cmd: redfish
+        name: Chassis reports a serial number
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]", prop: SerialNumber, op: matches, value: '\S'}
+
+      - cmd: redfish
+        name: Chassis reports a part number
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]", prop: PartNumber, op: matches, value: '\S'}
+
+      - cmd: redfish
+        name: Chassis reports an asset tag
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]", prop: AssetTag, op: matches, value: '\S'}
+
+      - cmd: redfish
+        name: Chassis type is the board's
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]", prop: ChassisType, op: eq, value: "[[attributes.Identity.ChassisType]]"}
+
+      - cmd: redfish
+        name: System model is the board's
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: Model, op: contains, value: "[[attributes.Identity.Model]]"}
+
+      - cmd: redfish
+        name: System manufacturer is the board's
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: Manufacturer, op: eq, value: "[[attributes.Identity.Manufacturer]]"}
+
+      - cmd: redfish
+        name: System reports a serial number
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: SerialNumber, op: matches, value: '\S'}
+
+      - cmd: redfish
+        name: System UUID is not all zeros
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: UUID, op: ne, value: "00000000-0000-0000-0000-000000000000"}
+
+      - cmd: redfish
         name: BootSourceOverrideMode is UEFI
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
-          expect:
-            - regex: '"BootSourceOverrideMode".*"UEFI"'
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: Boot/BootSourceOverrideMode, op: eq, value: UEFI}
