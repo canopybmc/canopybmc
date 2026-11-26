@@ -31,16 +31,20 @@ stages:
             retry: {timeout: 10m}
             rules:
               - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
-      # is-system-running exits 1 when degraded; this only waits for the
-      # services to start, the checks below test them.
+      # Waits for the services this test checks, not for the whole boot:
+      # "Smoke: Boot" checks that the boot finishes.
       - cmd: shell
-        name: systemd startup finished
+        name: The checked services started
         transport: *bmc_ssh
-        options: {timeout: 10m}
+        options: {timeout: 6m}
         parameters:
-          command: echo "$(systemctl is-system-running --wait)"
+          command: >-
+            u="xyz.openbmc_project.Inventory.Manager xyz.openbmc_project.Logging
+            xyz.openbmc_project.Settings bmcweb phosphor-ipmi-host";
+            for i in $(seq 60); do systemctl is-active --quiet $u && break; sleep 5; done;
+            if systemctl is-active --quiet $u; then echo started; else systemctl is-active $u | tr '\n' ' '; fi
           expect:
-            - regex: '^(running|degraded)$'
+            - regex: '^started$'
 
   - name: D-Bus System Bus
     steps:

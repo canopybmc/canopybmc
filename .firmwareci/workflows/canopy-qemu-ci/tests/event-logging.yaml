@@ -39,16 +39,18 @@ stages:
             retry: {timeout: 10m}
             rules:
               - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
-      # is-system-running exits 1 when degraded; this only waits for the
-      # services to start, the checks below test them.
+      # Waits for the logging service, not for the whole boot: "Smoke: Boot"
+      # checks that the boot finishes.
       - cmd: shell
-        name: systemd startup finished
+        name: The logging service started
         transport: *bmc_ssh
-        options: {timeout: 10m}
+        options: {timeout: 6m}
         parameters:
-          command: echo "$(systemctl is-system-running --wait)"
+          command: >-
+            for i in $(seq 60); do systemctl is-active --quiet xyz.openbmc_project.Logging && break; sleep 5; done;
+            systemctl is-active xyz.openbmc_project.Logging
           expect:
-            - regex: '^(running|degraded)$'
+            - regex: '^active$'
 
   - name: Logging Service Running
     steps:

@@ -32,18 +32,18 @@ stages:
             retry: {timeout: 10m}
             rules:
               - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+  - name: Verify Boot
+    steps:
       # is-system-running exits 1 when degraded; the failed-units check reports that.
       - cmd: shell
-        name: systemd startup finished
+        name: systemd finished the boot
         transport: *bmc_ssh
         options: {timeout: 10m}
         parameters:
           command: echo "$(systemctl is-system-running --wait)"
           expect:
             - regex: '^(running|degraded)$'
-
-  - name: Verify Boot
-    steps:
       - cmd: shell
         name: OS release is Canopy
         transport: *bmc_ssh
@@ -65,3 +65,29 @@ stages:
           command: k=$(dmesg | grep -E 'Oops|BUG:|Kernel panic|Call Trace'); echo "${k:-none}"
           expect:
             - regex: '^none$'
+
+  # Runs only after a failure, to name what keeps the boot from finishing.
+  - name: Show what blocks the boot
+    run-condition: failure
+    steps:
+      - cmd: shell
+        name: Unfinished jobs
+        transport: *bmc_ssh
+        parameters:
+          command: systemctl list-jobs --no-pager
+      # systemctl status exits non-zero for a unit that is not running; the
+      # step only shows the output.
+      - cmd: shell
+        name: Status of the units with a job
+        transport: *bmc_ssh
+        parameters:
+          command: >-
+            for u in $(systemctl list-jobs --no-legend --plain | awk '{print $2}');
+            do systemctl status --no-pager --lines 20 "$u"; done; true
+      - cmd: shell
+        name: Services that restarted
+        transport: *bmc_ssh
+        parameters:
+          command: >-
+            systemctl show -p Id -p NRestarts '*.service'
+            | awk -F= '/^Id=/{u=$2} /^NRestarts=/ && $2 > 0 {print u, $2}'
