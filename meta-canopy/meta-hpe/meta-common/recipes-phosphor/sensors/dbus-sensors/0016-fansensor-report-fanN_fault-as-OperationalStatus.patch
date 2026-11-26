@@ -1,0 +1,242 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Wed, 25 Nov 2026 22:28:28 +0100
+Subject: [PATCH] fansensor: report fanN_fault as OperationalStatus
+
+hwmon drivers report a failed fan through fanN_fault, which fansensor
+ignores. psusensor already monitors these files for PSU fans.
+
+When the fan controller provides fanN_fault for a fan's channel,
+publish xyz.openbmc_project.State.Decorator.OperationalStatus on the
+fan's inventory item, and update Functional from the file whenever
+presence is polled. bmcweb reports Functional as the Health of the fan.
+An absent fan is reported as functional, whatever the file reads.
+Changes are logged with the ResourceEvent ResourceStatusChangedCritical
+and ResourceStatusChangedOK messages.
+
+Upstream-Status: Pending
+---
+ src/fan/FanItem.cpp |   69 +++++++++++++++++++++++++++++++++++++++++++++++++--
+ src/fan/FanItem.hpp |   13 ++++++++--
+ src/fan/FanMain.cpp |   26 ++++++++++++++++++-
+ 3 files changed, 101 insertions(+), 7 deletions(-)
+
+diff --git a/src/fan/FanItem.cpp b/src/fan/FanItem.cpp
+index be93f73..4be54fe 100644
+--- a/src/fan/FanItem.cpp
++++ b/src/fan/FanItem.cpp
+@@ -5,10 +5,12 @@
+ 
+ #include <boost/asio/error.hpp>
+ #include <boost/asio/io_context.hpp>
++#include <phosphor-logging/lg2.hpp>
+ #include <sdbusplus/asio/object_server.hpp>
+ 
+ #include <chrono>
+ #include <filesystem>
++#include <fstream>
+ #include <memory>
+ #include <string>
+ #include <utility>
+@@ -19,8 +21,10 @@ static constexpr unsigned int pollIntervalMs = 1000;
+ FanItem::FanItem(sdbusplus::asio::object_server& objectServer,
+                  boost::asio::io_context& io, const std::string& name,
+                  const std::string& configPath, const std::string& sensorPath,
+-                 std::shared_ptr<PresenceGpio> presenceGpio) :
+-    objServer(objectServer), pollTimer(io), presence(std::move(presenceGpio))
++                 std::shared_ptr<PresenceGpio> presenceGpio,
++                 const std::filesystem::path& faultPath) :
++    objServer(objectServer), pollTimer(io), presence(std::move(presenceGpio)),
++    faultPath(faultPath), name(name)
+ {
+     std::string path = "/xyz/openbmc_project/inventory/" + escapeName(name);
+ 
+@@ -43,6 +47,14 @@ FanItem::FanItem(sdbusplus::asio::object_server& objectServer,
+                             {"cooling", "cooled_by", boardPath},
+                         });
+     itemAssoc->initialize();
++
++    if (!faultPath.empty())
++    {
++        statusIface = objectServer.add_interface(
++            path, "xyz.openbmc_project.State.Decorator.OperationalStatus");
++        statusIface->register_property("Functional", functional);
++        statusIface->initialize();
++    }
+ }
+ 
+ FanItem::~FanItem()
+@@ -51,6 +63,7 @@ FanItem::~FanItem()
+     objServer.remove_interface(itemIface);
+     objServer.remove_interface(fanIface);
+     objServer.remove_interface(itemAssoc);
++    objServer.remove_interface(statusIface);
+ }
+ 
+ void FanItem::start()
+@@ -60,7 +73,12 @@ void FanItem::start()
+ 
+ void FanItem::update()
+ {
+-    itemIface->set_property("Present", presence->isPresent());
++    bool present = presence->isPresent();
++    itemIface->set_property("Present", present);
++    if (statusIface)
++    {
++        updateFunctional(present);
++    }
+ 
+     std::weak_ptr<FanItem> weakRef = weak_from_this();
+     pollTimer.expires_after(std::chrono::milliseconds(pollIntervalMs));
+@@ -76,3 +94,48 @@ void FanItem::update()
+         }
+     });
+ }
++
++// An absent fan is not reported as failed, whatever the controller says.
++void FanItem::updateFunctional(bool present)
++{
++    bool newFunctional = true;
++    if (present)
++    {
++        std::ifstream faultFile(faultPath);
++        int fault = 0;
++        if (!(faultFile >> fault))
++        {
++            if (!faultReadFailed)
++            {
++                lg2::error("Failed to read '{PATH}'", "PATH", faultPath);
++                faultReadFailed = true;
++            }
++            return;
++        }
++        faultReadFailed = false;
++        newFunctional = fault == 0;
++    }
++
++    if (newFunctional == functional)
++    {
++        return;
++    }
++    functional = newFunctional;
++    statusIface->set_property("Functional", functional);
++
++    if (functional)
++    {
++        lg2::info("{NAME} health status changed to OK", "NAME", name,
++                  "REDFISH_MESSAGE_ID",
++                  std::string("ResourceEvent.1.0.ResourceStatusChangedOK"),
++                  "REDFISH_MESSAGE_ARGS", name + ",OK");
++    }
++    else
++    {
++        lg2::error(
++            "{NAME} health status changed to Critical", "NAME", name,
++            "REDFISH_MESSAGE_ID",
++            std::string("ResourceEvent.1.0.ResourceStatusChangedCritical"),
++            "REDFISH_MESSAGE_ARGS", name + ",Critical");
++    }
++}
+diff --git a/src/fan/FanItem.hpp b/src/fan/FanItem.hpp
+index b448f3e..8653059 100644
+--- a/src/fan/FanItem.hpp
++++ b/src/fan/FanItem.hpp
+@@ -6,19 +6,22 @@
+ #include <boost/asio/steady_timer.hpp>
+ #include <sdbusplus/asio/object_server.hpp>
+ 
++#include <filesystem>
+ #include <memory>
+ #include <string>
+ 
+ // Inventory item of a fan with a presence GPIO, published at
+ // /xyz/openbmc_project/inventory/<name> and associated with the board that
+-// configures the fan.
++// configures the fan. If the fan controller reports fan failures through a
++// hwmon fanN_fault file, the item also reports whether the fan is functional.
+ class FanItem : public std::enable_shared_from_this<FanItem>
+ {
+   public:
+     FanItem(sdbusplus::asio::object_server& objectServer,
+             boost::asio::io_context& io, const std::string& name,
+             const std::string& configPath, const std::string& sensorPath,
+-            std::shared_ptr<PresenceGpio> presenceGpio);
++            std::shared_ptr<PresenceGpio> presenceGpio,
++            const std::filesystem::path& faultPath);
+     FanItem(const FanItem&) = delete;
+     FanItem& operator=(const FanItem&) = delete;
+     ~FanItem();
+@@ -29,9 +32,15 @@ class FanItem : public std::enable_shared_from_this<FanItem>
+     sdbusplus::asio::object_server& objServer;
+     boost::asio::steady_timer pollTimer;
+     std::shared_ptr<PresenceGpio> presence;
++    std::filesystem::path faultPath;
++    std::string name;
+     std::shared_ptr<sdbusplus::asio::dbus_interface> itemIface;
+     std::shared_ptr<sdbusplus::asio::dbus_interface> fanIface;
+     std::shared_ptr<sdbusplus::asio::dbus_interface> itemAssoc;
++    std::shared_ptr<sdbusplus::asio::dbus_interface> statusIface;
++    bool functional = true;
++    bool faultReadFailed = false;
+ 
+     void update();
++    void updateFunctional(bool present);
+ };
+diff --git a/src/fan/FanMain.cpp b/src/fan/FanMain.cpp
+index 5761256..d2d6d4e 100644
+--- a/src/fan/FanMain.cpp
++++ b/src/fan/FanMain.cpp
+@@ -536,6 +536,20 @@ static std::optional<FanConnector> setupConnector(
+     return result;
+ }
+ 
++// The hwmon fanN_fault file of fan channel @index, if the driver has one.
++static std::filesystem::path findFaultPath(
++    const std::filesystem::path& directory, size_t index)
++{
++    std::filesystem::path faultPath =
++        directory / ("fan" + std::to_string(index + 1) + "_fault");
++    std::error_code ec;
++    if (!std::filesystem::exists(faultPath, ec))
++    {
++        return {};
++    }
++    return faultPath;
++}
++
+ // A fan whose Connector lists no tachometer is driven by its PWM channel
+ // alone. entity-manager does not publish empty arrays, so "Tachs": [] shows up
+ // as a Connector without Tachs.
+@@ -659,11 +673,19 @@ static void createTachlessFans(
+             {
+                 continue;
+             }
++            std::filesystem::path faultPath;
++            auto findIndex = findBase->second.find("Index");
++            if (findIndex != findBase->second.end())
++            {
++                faultPath = findFaultPath(
++                    directory, std::visit(VariantToUnsignedIntVisitor(),
++                                          findIndex->second));
++            }
+             auto fanItem = std::make_shared<FanItem>(
+                 objectServer, io, sensorName, path.str,
+                 "/xyz/openbmc_project/sensors/fan_pwm/" +
+                     sensor_paths::escapePathForDbus(connector->pwmName),
+-                presenceGpio);
++                presenceGpio, faultPath);
+             fanItem->start();
+             fanItems[sensorName] = std::move(fanItem);
+         }
+@@ -814,7 +836,7 @@ static void createSensorsFromConfigs(
+             auto fanItem = std::make_shared<FanItem>(
+                 objectServer, io, sensorName, *interfacePath,
+                 "/xyz/openbmc_project/sensors/fan_tach/" + tachSensor->name,
+-                presenceGpio);
++                presenceGpio, findFaultPath(directory, index));
+             fanItem->start();
+             fanItems[sensorName] = std::move(fanItem);
+         }
+-- 
+2.53.0
+

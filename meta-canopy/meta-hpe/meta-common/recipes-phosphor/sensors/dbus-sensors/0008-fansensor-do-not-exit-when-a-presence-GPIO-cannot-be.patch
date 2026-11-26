@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Wed, 25 Nov 2026 22:28:28 +0100
+Subject: [PATCH] fansensor: do not exit when a presence GPIO cannot be set up
+
+The PresenceGpio constructors throw std::runtime_error when the GPIO
+named in a fan's Presence configuration does not exist or cannot be
+requested, but createSensors() only catches std::system_error. A
+misspelled PinName, or a line held by another consumer, terminates
+fansensor and takes every fan PWM sensor down with it.
+
+Catch std::runtime_error, which std::system_error derives from, so the
+error is logged and the fan is created without presence detection.
+
+Upstream-Status: Pending
+---
+ src/fan/FanMain.cpp |    3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/fan/FanMain.cpp b/src/fan/FanMain.cpp
+index d0d87eb..9210fd0 100644
+--- a/src/fan/FanMain.cpp
++++ b/src/fan/FanMain.cpp
+@@ -47,6 +47,7 @@
+ #include <memory>
+ #include <optional>
+ #include <regex>
++#include <stdexcept>
+ #include <string>
+ #include <string_view>
+ #include <system_error>
+@@ -530,7 +531,7 @@ void createSensors(
+                                 }
+                                 presenceGpios[*pinName] = presenceGpio;
+                             }
+-                            catch (const std::system_error& e)
++                            catch (const std::runtime_error& e)
+                             {
+                                 lg2::error(
+                                     "Failed to create GPIO monitor object for "
+-- 
+2.53.0
+

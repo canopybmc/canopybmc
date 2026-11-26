@@ -1,0 +1,207 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Wed, 25 Nov 2026 22:28:28 +0100
+Subject: [PATCH] fansensor: extract presence GPIO setup
+
+Move the parsing of a fan's Presence configuration and the creation of
+its GPIO monitor into getPresenceGpio().
+
+No functional change.
+
+Upstream-Status: Pending
+---
+ src/fan/FanMain.cpp |  166 +++++++++++++++++++++++++--------------------------
+ 1 file changed, 82 insertions(+), 84 deletions(-)
+
+diff --git a/src/fan/FanMain.cpp b/src/fan/FanMain.cpp
+index 9cc3dd9..47185fb 100644
+--- a/src/fan/FanMain.cpp
++++ b/src/fan/FanMain.cpp
+@@ -375,6 +375,84 @@ static std::optional<FanConfig> findFanConfig(
+     return std::nullopt;
+ }
+ 
++// Return the presence monitor for a fan's Presence configuration, creating
++// it unless another fan already monitors the same GPIO.
++static std::shared_ptr<PresenceGpio> getPresenceGpio(
++    boost::asio::io_context& io,
++    boost::container::flat_map<std::string, std::weak_ptr<PresenceGpio>>&
++        presenceGpios,
++    const SensorBaseConfigMap& presenceConfig, const std::string& sensorName)
++{
++    auto findPolarity = presenceConfig.find("Polarity");
++    auto findPinName = presenceConfig.find("PinName");
++
++    if (findPinName == presenceConfig.end() ||
++        findPolarity == presenceConfig.end())
++    {
++        lg2::error("Malformed Presence Configuration");
++        return nullptr;
++    }
++
++    bool inverted = std::get<std::string>(findPolarity->second) == "Low";
++    const auto* pinName = std::get_if<std::string>(&findPinName->second);
++    if (pinName == nullptr)
++    {
++        lg2::error("Malformed Presence pinName for sensor '{NAME}'", "NAME",
++                   sensorName);
++        return nullptr;
++    }
++
++    auto findPresenceGpio = presenceGpios.find(*pinName);
++    if (findPresenceGpio != presenceGpios.end())
++    {
++        auto p = findPresenceGpio->second.lock();
++        if (p)
++        {
++            return p;
++        }
++    }
++
++    auto findMonitorType = presenceConfig.find("MonitorType");
++    bool polling = false;
++    if (findMonitorType != presenceConfig.end())
++    {
++        auto mType = std::get<std::string>(findMonitorType->second);
++        if (mType == "Polling")
++        {
++            polling = true;
++        }
++        else if (mType != "Event")
++        {
++            lg2::error("Unsupported GPIO MonitorType of '{TYPE}' for '{NAME}', "
++                       "supported types: Polling, Event default",
++                       "TYPE", mType, "NAME", sensorName);
++        }
++    }
++
++    std::shared_ptr<PresenceGpio> presenceGpio(nullptr);
++    try
++    {
++        if (polling)
++        {
++            presenceGpio = std::make_shared<PollingPresenceGpio>(
++                "Fan", sensorName, *pinName, inverted, io);
++        }
++        else
++        {
++            presenceGpio = std::make_shared<EventPresenceGpio>(
++                "Fan", sensorName, *pinName, inverted, io);
++        }
++        presenceGpios[*pinName] = presenceGpio;
++    }
++    catch (const std::runtime_error& e)
++    {
++        lg2::error("Failed to create GPIO monitor object for "
++                   "'{PIN_NAME}' / '{SENSOR_NAME}': '{ERROR}'",
++                   "PIN_NAME", *pinName, "SENSOR_NAME", sensorName, "ERROR", e);
++    }
++    return presenceGpio;
++}
++
+ static void createSensorsFromConfigs(
+     boost::asio::io_context& io, sdbusplus::asio::object_server& objectServer,
+     boost::container::flat_map<std::string, std::shared_ptr<TachSensor>>&
+@@ -465,95 +543,15 @@ static void createSensorsFromConfigs(
+                        sensorName);
+         }
+ 
+-        auto presenceConfig =
+-            sensorData->find(cfgIntf + std::string(".Presence"));
+-
+         std::shared_ptr<PresenceGpio> presenceGpio(nullptr);
+ 
+         // presence sensors are optional
++        auto presenceConfig =
++            sensorData->find(cfgIntf + std::string(".Presence"));
+         if (presenceConfig != sensorData->end())
+         {
+-            auto findPolarity = presenceConfig->second.find("Polarity");
+-            auto findPinName = presenceConfig->second.find("PinName");
+-
+-            if (findPinName == presenceConfig->second.end() ||
+-                findPolarity == presenceConfig->second.end())
+-            {
+-                lg2::error("Malformed Presence Configuration");
+-            }
+-            else
+-            {
+-                bool inverted = std::get<std::string>(findPolarity->second) ==
+-                                "Low";
+-                const auto* pinName =
+-                    std::get_if<std::string>(&findPinName->second);
+-
+-                if (pinName != nullptr)
+-                {
+-                    auto findPresenceGpio = presenceGpios.find(*pinName);
+-                    if (findPresenceGpio != presenceGpios.end())
+-                    {
+-                        auto p = findPresenceGpio->second.lock();
+-                        if (p)
+-                        {
+-                            presenceGpio = p;
+-                        }
+-                    }
+-                    if (!presenceGpio)
+-                    {
+-                        auto findMonitorType =
+-                            presenceConfig->second.find("MonitorType");
+-                        bool polling = false;
+-                        if (findMonitorType != presenceConfig->second.end())
+-                        {
+-                            auto mType =
+-                                std::get<std::string>(findMonitorType->second);
+-                            if (mType == "Polling")
+-                            {
+-                                polling = true;
+-                            }
+-                            else if (mType != "Event")
+-                            {
+-                                lg2::error(
+-                                    "Unsupported GPIO MonitorType of '{TYPE}' for '{NAME}', "
+-                                    "supported types: Polling, Event default",
+-                                    "TYPE", mType, "NAME", sensorName);
+-                            }
+-                        }
+-                        try
+-                        {
+-                            if (polling)
+-                            {
+-                                presenceGpio =
+-                                    std::make_shared<PollingPresenceGpio>(
+-                                        "Fan", sensorName, *pinName, inverted,
+-                                        io);
+-                            }
+-                            else
+-                            {
+-                                presenceGpio =
+-                                    std::make_shared<EventPresenceGpio>(
+-                                        "Fan", sensorName, *pinName, inverted,
+-                                        io);
+-                            }
+-                            presenceGpios[*pinName] = presenceGpio;
+-                        }
+-                        catch (const std::runtime_error& e)
+-                        {
+-                            lg2::error(
+-                                "Failed to create GPIO monitor object for "
+-                                "'{PIN_NAME}' / '{SENSOR_NAME}': '{ERROR}'",
+-                                "PIN_NAME", *pinName, "SENSOR_NAME", sensorName,
+-                                "ERROR", e);
+-                        }
+-                    }
+-                }
+-                else
+-                {
+-                    lg2::error("Malformed Presence pinName for sensor '{NAME}'",
+-                               "NAME", sensorName);
+-                }
+-            }
++            presenceGpio = getPresenceGpio(io, presenceGpios,
++                                           presenceConfig->second, sensorName);
+         }
+         std::optional<RedundancySensor>* redundancy = nullptr;
+         if (fanType == FanTypes::aspeed)
+-- 
+2.53.0
+

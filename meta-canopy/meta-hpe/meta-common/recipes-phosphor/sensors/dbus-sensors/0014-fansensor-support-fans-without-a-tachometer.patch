@@ -1,0 +1,258 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Wed, 25 Nov 2026 22:28:28 +0100
+Subject: [PATCH] fansensor: support fans without a tachometer
+
+fansensor finds fans through their hwmon fanN_input files, so a fan
+without a tachometer never gets a PWM sensor. Some BMC fan controllers
+have no tachometer inputs at all: the HPE GXP fan controller drives PWM
+and only reports whether each fan is present or failed.
+
+Treat a fan whose Connector lists no Tachs as tachless. entity-manager
+does not publish empty arrays, so "Tachs": [] arrives as a Connector
+without Tachs. For each hwmon device of a BMC fan controller, create
+the PWM sensor of every tachless fan configured for it, and its
+inventory item when it has a presence GPIO. Tachless fans are skipped
+when matching fanN_input files, so a driver that reports something
+other than RPM there does not get a tach sensor for them. Tachless fans
+on I2C fan controllers are not handled.
+
+The rescan check and the PWM sensor creation move into helpers that
+both paths share.
+
+The HPE DL360 Gen11 and Gen12 configurations already describe their
+fans this way.
+
+Upstream-Status: Pending
+---
+ src/fan/FanMain.cpp |  174 ++++++++++++++++++++++++++++++++++++++++++++-------
+ 1 file changed, 150 insertions(+), 24 deletions(-)
+
+diff --git a/src/fan/FanMain.cpp b/src/fan/FanMain.cpp
+index c07e8aa..fcbbad5 100644
+--- a/src/fan/FanMain.cpp
++++ b/src/fan/FanMain.cpp
+@@ -17,6 +17,7 @@
+ #include "FanItem.hpp"
+ #include "PresenceGpio.hpp"
+ #include "PwmSensor.hpp"
++#include "SensorPaths.hpp"
+ #include "TachSensor.hpp"
+ #include "Thresholds.hpp"
+ #include "Utils.hpp"
+@@ -535,6 +536,140 @@ static std::optional<FanConnector> setupConnector(
+     return result;
+ }
+ 
++// A fan whose Connector lists no tachometer is driven by its PWM channel
++// alone. entity-manager does not publish empty arrays, so "Tachs": [] shows up
++// as a Connector without Tachs.
++static bool isTachless(const SensorBaseConfigMap& connector)
++{
++    auto findTachs = connector.find("Tachs");
++    if (findTachs == connector.end())
++    {
++        return true;
++    }
++    const auto* tachs = std::get_if<std::vector<uint64_t>>(&findTachs->second);
++    return tachs != nullptr && tachs->empty();
++}
++
++// On rescans, only the fans whose configuration changed are recreated.
++static bool takeChangedConfig(boost::container::flat_set<std::string>& changed,
++                              const std::string& name)
++{
++    for (auto it = changed.begin(); it != changed.end(); it++)
++    {
++        if (it->ends_with(name))
++        {
++            changed.erase(it);
++            return true;
++        }
++    }
++    return false;
++}
++
++static void createPwmSensor(
++    boost::container::flat_map<std::string, std::unique_ptr<PwmSensor>>&
++        pwmSensors,
++    const FanConnector& connector,
++    std::shared_ptr<sdbusplus::asio::connection>& dbusConnection,
++    sdbusplus::asio::object_server& objectServer, const std::string& configPath)
++{
++    std::error_code ec;
++    if (!connector.pwmPath.empty() &&
++        std::filesystem::exists(connector.pwmPath, ec) &&
++        (!pwmSensors.contains(connector.pwmPath)))
++    {
++        pwmSensors[connector.pwmPath] = std::make_unique<PwmSensor>(
++            connector.pwmName, connector.pwmPath, dbusConnection, objectServer,
++            configPath, "Fan", connector.pwmMutable);
++    }
++}
++
++// Create the fans of a BMC fan controller that have no tachometer. They have
++// no fanN_input file to be discovered by, so they are taken from the
++// configuration and only get a PWM sensor and an inventory item.
++static void createTachlessFans(
++    boost::asio::io_context& io, sdbusplus::asio::object_server& objectServer,
++    boost::container::flat_map<std::string, std::unique_ptr<PwmSensor>>&
++        pwmSensors,
++    boost::container::flat_map<std::string, std::weak_ptr<PresenceGpio>>&
++        presenceGpios,
++    boost::container::flat_map<std::string, std::shared_ptr<FanItem>>& fanItems,
++    std::shared_ptr<sdbusplus::asio::connection>& dbusConnection,
++    const std::shared_ptr<boost::container::flat_set<std::string>>&
++        sensorsChanged,
++    const ManagedObjectType& sensorConfigurations)
++{
++    std::error_code ec;
++    for (const auto& hwmon :
++         std::filesystem::directory_iterator("/sys/class/hwmon", ec))
++    {
++        const std::filesystem::path& directory = hwmon.path();
++        FanTypes fanType = getFanType(directory);
++        if (fanType == FanTypes::i2c)
++        {
++            continue;
++        }
++        std::string cfgIntf = configInterfaceName(sensorTypes[fanType]);
++
++        for (const auto& [path, cfgData] : sensorConfigurations)
++        {
++            auto findBase = cfgData.find(cfgIntf);
++            auto findConnector =
++                cfgData.find(cfgIntf + std::string(".Connector"));
++            if (findBase == cfgData.end() || findConnector == cfgData.end() ||
++                !isTachless(findConnector->second))
++            {
++                continue;
++            }
++
++            auto findName = findBase->second.find("Name");
++            if (findName == findBase->second.end())
++            {
++                lg2::error(
++                    "could not determine configuration name for '{PATH}'",
++                    "PATH", path.str);
++                continue;
++            }
++            std::string sensorName = std::get<std::string>(findName->second);
++
++            if (sensorsChanged != nullptr && fanItems.contains(sensorName) &&
++                !takeChangedConfig(*sensorsChanged, escapeName(sensorName)))
++            {
++                continue;
++            }
++
++            std::optional<FanConnector> connector =
++                setupConnector(findConnector->second, directory, sensorName);
++            if (!connector || connector->pwmPath.empty())
++            {
++                continue;
++            }
++            createPwmSensor(pwmSensors, *connector, dbusConnection,
++                            objectServer, path.str);
++
++            fanItems.erase(sensorName);
++            auto presenceConfig =
++                cfgData.find(cfgIntf + std::string(".Presence"));
++            if (presenceConfig == cfgData.end())
++            {
++                continue;
++            }
++            std::shared_ptr<PresenceGpio> presenceGpio = getPresenceGpio(
++                io, presenceGpios, presenceConfig->second, sensorName);
++            if (!presenceGpio)
++            {
++                continue;
++            }
++            auto fanItem = std::make_shared<FanItem>(
++                objectServer, io, sensorName,
++                "/xyz/openbmc_project/sensors/fan_pwm/" +
++                    sensor_paths::escapePathForDbus(connector->pwmName),
++                presenceGpio);
++            fanItem->start();
++            fanItems[sensorName] = std::move(fanItem);
++        }
++    }
++}
++
+ static void createSensorsFromConfigs(
+     boost::asio::io_context& io, sdbusplus::asio::object_server& objectServer,
+     boost::container::flat_map<std::string, std::shared_ptr<TachSensor>>&
+@@ -588,6 +723,14 @@ static void createSensorsFromConfigs(
+         const std::string* interfacePath = &fanConfig->path;
+         const SensorBaseConfiguration* baseConfiguration = &fanConfig->base;
+ 
++        auto findConnector =
++            sensorData->find(cfgIntf + std::string(".Connector"));
++        if (findConnector != sensorData->end() &&
++            isTachless(findConnector->second))
++        {
++            continue;
++        }
++
+         auto findSensorName = baseConfiguration->second.find("Name");
+ 
+         if (findSensorName == baseConfiguration->second.end())
+@@ -602,22 +745,11 @@ static void createSensorsFromConfigs(
+         auto findSensor = tachSensors.find(sensorName);
+         if (!firstScan && findSensor != tachSensors.end())
+         {
+-            bool found = false;
+-            for (auto it = sensorsChanged->begin(); it != sensorsChanged->end();
+-                 it++)
+-            {
+-                if (it->ends_with(findSensor->second->name))
+-                {
+-                    sensorsChanged->erase(it);
+-                    findSensor->second = nullptr;
+-                    found = true;
+-                    break;
+-                }
+-            }
+-            if (!found)
++            if (!takeChangedConfig(*sensorsChanged, escapeName(sensorName)))
+             {
+                 continue;
+             }
++            findSensor->second = nullptr;
+         }
+         std::vector<thresholds::Threshold> sensorThresholds;
+         if (!parseThresholdsFromConfig(*sensorData, sensorThresholds))
+@@ -654,8 +786,6 @@ static void createSensorsFromConfigs(
+             std::make_pair(defaultMinReading, defaultMaxReading);
+ 
+         FanConnector connector;
+-        auto findConnector =
+-            sensorData->find(cfgIntf + std::string(".Connector"));
+         if (findConnector != sensorData->end())
+         {
+             std::optional<FanConnector> parsed =
+@@ -689,17 +819,13 @@ static void createSensorsFromConfigs(
+             fanItems[sensorName] = std::move(fanItem);
+         }
+ 
+-        std::error_code ec;
+-        if (!connector.pwmPath.empty() &&
+-            std::filesystem::exists(connector.pwmPath, ec) &&
+-            (!pwmSensors.contains(connector.pwmPath)))
+-        {
+-            pwmSensors[connector.pwmPath] = std::make_unique<PwmSensor>(
+-                connector.pwmName, connector.pwmPath, dbusConnection,
+-                objectServer, *interfacePath, "Fan", connector.pwmMutable);
+-        }
++        createPwmSensor(pwmSensors, connector, dbusConnection, objectServer,
++                        *interfacePath);
+     }
+ 
++    createTachlessFans(io, objectServer, pwmSensors, presenceGpios, fanItems,
++                       dbusConnection, sensorsChanged, sensorConfigurations);
++
+     createRedundancySensor(tachSensors, dbusConnection, objectServer);
+ }
+ 
+-- 
+2.53.0
+
