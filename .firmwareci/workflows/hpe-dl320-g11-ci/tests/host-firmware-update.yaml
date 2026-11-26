@@ -36,7 +36,7 @@ stages:
         parameters:
           shell: "/bin/bash"
           command: |
-            strings [[storage.dl320g11_bios_update]]/[[storage.dl320g11_bios_update.golden_image]] \
+            strings [[storage.dl320g11_bios_update]]/[[attributes.GoldenImage]] \
               | grep -Po "(?<=^U63 v)[0-9]\.[0-9]+$" | tail -1
           expect:
             - regex: '[0-9]\.[0-9]+'

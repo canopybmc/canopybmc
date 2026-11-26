@@ -7,4 +7,12 @@ attributes:
   Device: dl320
   Host: dl320g11-1.lab.9e.network
   HostUser: oscar
+  # DIMM serials differ per board; inventory-memory checks them.
+  Dimm2SerialNumber: E3712D7D
+  Dimm9SerialNumber: E3712D3E
+  # storage/dl320g11_nvram
+  NvramBin: dl320g11_host_reserved_original.bin
+  EvsDat: dl320g11_evs_original.dat
+  # storage/dl320g11_bios_update
+  GoldenImage: dl320_ci_sysrom.rom
 reservation-system: dutctl

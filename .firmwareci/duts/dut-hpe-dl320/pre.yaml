@@ -21,7 +21,7 @@ pre-stage:
       agent: "[[attributes.Agent]]"
       device: "[[attributes.Device]]"
       command: emulate-host
-      args: ["[[storage.dl320g11_bios_update]]/[[storage.dl320g11_bios_update.golden_image]]"]
+      args: ["[[storage.dl320g11_bios_update]]/[[attributes.GoldenImage]]"]
 
   - cmd: dutctl
     name: Power on DUT
@@ -124,13 +124,13 @@ pre-stage:
       on-failure: continue
     transport: *bmc_ssh
     parameters:
-      command: "flashcp -v /tmp/[[storage.dl320g11_nvram.rom]] /dev/mtd/host-reserved"
+      command: "flashcp -v /tmp/[[attributes.NvramBin]] /dev/mtd/host-reserved"
 
   - cmd: shell
     name: Copy EVs to CHIF path
     transport: *bmc_ssh
     parameters:
-      command: "cp /tmp/[[storage.dl320g11_nvram.evs]] /var/lib/chif/evs.dat"
+      command: "cp /tmp/[[attributes.EvsDat]] /var/lib/chif/evs.dat"
 
   - cmd: shell
     name: Restart CHIF service
