@@ -40,6 +40,6 @@ index 0646d3bf6e63..501cecfc1859 100644
 +			};
 +		};
 +
- 		fan-keys {
- 		compatible = "gpio-keys-polled";
- 		poll-interval = <1000>;
+ 		fanctrl: fan-controller@c1000c00 {
+ 			compatible = "hpe,gxp-fan-ctrl";
+ 			reg = <0xc1000c00 0x200>;

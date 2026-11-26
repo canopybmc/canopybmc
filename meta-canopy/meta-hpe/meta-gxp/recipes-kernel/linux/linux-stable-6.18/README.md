@@ -83,8 +83,6 @@ Every patch should contain an "Upstream-Status" tag as described in the
 - 0041 # ARM: dts: hpe-gxp: add PGOOD interrupt to host power regulator
 - 0042 # regulator: gxp-cpld: debounce PGOOD IRQ before notifying consumers
 
-- 0044 # ARM: dts: hpe-gxp: add gpio-keys-polled node for fan presence
-
 ### SOC temp
 
 - 0046 # dt-bindings: hwmon: add HPE GXP SoC temperature sensor binding
