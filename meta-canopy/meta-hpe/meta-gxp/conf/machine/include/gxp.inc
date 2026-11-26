@@ -46,6 +46,13 @@ VIRTUAL-RUNTIME_obmc-chassis-state-manager ?= "x86-power-control"
 VIRTUAL-RUNTIME_obmc-sensors-hwmon = "dbus-sensors"
 VIRTUAL-RUNTIME_obmc-fan-control = "phosphor-pid-control"
 
+# Fan inventory comes from entity-manager and dbus-sensors fansensor.
+VIRTUAL-RUNTIME_obmc-inventory-manager = "entity-manager"
+VIRTUAL-RUNTIME_obmc-fan-presence = ""
+# obmc-fan-mgmt already installs phosphor-pid-control. obmc-fan-control
+# would add phosphor-fan-monitor, which needs phosphor-inventory-manager.
+IMAGE_FEATURES:remove = "obmc-fan-control"
+
 # HPE packagegroup providers
 PREFERRED_PROVIDER_virtual/obmc-chassis-mgmt = "packagegroup-hpe-apps"
 PREFERRED_PROVIDER_virtual/obmc-fan-mgmt = "packagegroup-hpe-apps"

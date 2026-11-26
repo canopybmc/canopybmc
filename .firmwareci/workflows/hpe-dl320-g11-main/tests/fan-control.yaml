@@ -1,8 +1,8 @@
 name: "Sensor: Fan Control"
 description: >-
   Verify PID fan control is running and producing reasonable PWM values.
-  Covers phosphor-pid-control patches, fan sensor config, PID zones from
-  entity-manager, and fan presence monitoring.
+  Covers phosphor-pid-control patches, fan sensor config and PID zones from
+  entity-manager.
 
 defaults:
   transport: &bmc_ssh
@@ -45,15 +45,6 @@ stages:
         parameters:
           executable: systemctl
           args: ["is-active", "phosphor-pid-control.service"]
-      - cmd: cmd
-        name: Fan presence service active
-        transport: *bmc_ssh
-        options:
-          timeout: 5s
-          on-failure: continue
-        parameters:
-          executable: systemctl
-          args: ["is-active", "phosphor-fan-presence-tach@0.service"]
 
   - name: Fan PWM Values in Range
     steps:
