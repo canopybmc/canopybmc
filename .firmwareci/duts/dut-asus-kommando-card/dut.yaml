@@ -52,6 +52,13 @@ attributes:
   Sensors:
     Count: "19..19"
     Names: ["Header[0-2]_Temp"]
+  Inventory:
+    MinSensors: "19"
+  Cooling:
+    MinFans: "2"
+  IPMI:
+    ManufacturerID: "2623"
+    ProductID: "1234"
   Fans:
     Pwms: [Pwm_7, Pwm_8]
   Console:

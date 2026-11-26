@@ -1,0 +1,5 @@
+name: kommando-ipmi-card-ipmi
+description: >-
+  IPMI 2.0 tests over LAN for the ASUS IPMI Expansion Card (Kommando) that run
+  on pushes to main and on tags.
+runs-on: asus-kommando-card

@@ -1,0 +1,138 @@
+name: IPMI system event log
+description: >-
+  The system event log follows the IPMI specification: version 1.5 or later,
+  reservations, a readable clock and no overflow. An added chassis intrusion
+  event becomes the newest entry with its sensor type, direction and the BMC
+  time. Malformed requests and a clear with a stale reservation are refused.
+
+defaults:
+  local: &local
+    proto: local
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
+
+stages:
+  - name: IPMI system event log
+    steps:
+      # Waits until the BMC answers IPMI over LAN.
+      - cmd: ipmi
+        name: IPMI answers over LAN
+        transport: *local
+        parameters:
+          lan: *lan
+          get: device/ipmi-version
+          retry: {timeout: 10m, interval: 10s}
+          expect: {eq: "2.0"}
+
+      - cmd: ipmi
+        name: SEL version is 1.5 or later
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: sel/version
+          expect: {ge: 1.5}
+
+      - cmd: ipmi
+        name: Reserve SEL returns a reservation
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: sel/reservation
+          expect: {ne: 0}
+
+      - cmd: ipmi
+        name: SEL time is readable
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: sel/time
+          expect: exists
+
+      - cmd: ipmi
+        name: SEL has not overflowed
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: sel/overflow
+          expect: {eq: false}
+
+      - cmd: ipmi
+        name: SEL info rejects an extra byte
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          raw: 0x0a 0x40 0x00
+          expect: {completion: 0xc7}
+
+      - cmd: ipmi
+        name: Get SEL Time rejects an extra byte
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          raw: 0x0a 0x48 0x01
+          expect: {completion: 0xc7}
+
+      # The bytes spell CLR, the request the specification defines; the stale
+      # reservation ID 0 keeps the SEL intact.
+      - cmd: ipmi
+        name: Clear SEL with a stale reservation is refused
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          raw: 0x0a 0x47 0x00 0x00 0x43 0x4c 0x52 0x00
+          expect: {completion: 0xc5}
+
+      - cmd: ipmi
+        name: SEL accepts an added entry
+        transport: *local
+        parameters:
+          lan: *lan
+          set: sel/entry
+          value: {sensor-type: physical-security, sensor: 1, event-type: sensor-specific, event-data: 0x00 0xff 0xff}
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: Newest SEL entry is the added chassis intrusion
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: sel/last/event
+          expect: {matches: '(?i)chassis intrusion'}
+
+      - cmd: ipmi
+        name: Newest SEL entry is a Physical Security event
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: sel/last/sensor-type
+          expect: {eq: Physical Security}
+
+      - cmd: ipmi
+        name: Newest SEL entry is an assertion
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: sel/last/direction
+          expect: {eq: asserted}
+
+      - cmd: ipmi
+        name: Newest SEL entry carries the BMC clock time
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: sel/last/time
+          expect: {matches: '^20[2-9][0-9]-'}

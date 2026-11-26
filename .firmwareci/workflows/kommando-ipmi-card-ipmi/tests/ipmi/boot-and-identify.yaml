@@ -1,0 +1,111 @@
+name: IPMI boot flags and identify
+description: >-
+  IPMI boot flags and the chassis identify LED work: a one-time PXE boot set
+  over IPMI reads back over IPMI and over Redfish, clearing it reads back as
+  not valid, and the identify LED turns on for a time and off again.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
+
+stages:
+  - name: IPMI boot flags and identify
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: ipmi
+        name: A one-time PXE boot is set
+        transport: *local
+        parameters:
+          lan: *lan
+          set: boot/flags
+          value: {device: pxe, persistent: false}
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: The boot device reads back as PXE
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: boot/device
+          expect: {eq: pxe}
+
+      - cmd: ipmi
+        name: The boot flags read back as one-time
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: boot/persistent
+          expect: {eq: false}
+
+      - cmd: redfish
+        name: Redfish shows the same PXE override
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: Boot/BootSourceOverrideTarget, op: eq, value: Pxe}
+
+      - cmd: ipmi
+        name: The boot flags are cleared
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          set: boot/flags
+          value: {device: none, persistent: false, valid: false}
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: The boot flags read back as not valid
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: boot/valid
+          expect: {eq: false}
+
+      - cmd: ipmi
+        name: Chassis identify turns on for 15 seconds
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          set: chassis/identify
+          value: 15s
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: Chassis identify turns off
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          set: chassis/identify
+          value: "off"
+          expect: {completion: 0}
