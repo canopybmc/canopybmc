@@ -1,8 +1,8 @@
 name: Redfish account lifecycle
 description: >-
-  An administrator creates a ReadOnly account over Redfish, changes its role,
-  password and enabled state, and deletes it. After each change the account
-  logs in, or is refused, as the change says.
+  An administrator creates a ReadOnly account over Redfish, changes its role
+  and password, disables and enables it again, and deletes it. After each
+  change the account logs in, or is refused, as the change says.
 
 defaults:
   local: &local
@@ -157,6 +157,29 @@ stages:
           auth: {user: tslifecycle, password: Ts-N3wPass-26}
           validate: request
           request: {method: GET, path: /redfish/v1/AccountService, status: 401}
+
+      - cmd: redfish
+        name: An administrator enables the account again
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: PATCH
+            path: /redfish/v1/AccountService/Accounts/tslifecycle
+            body: {Enabled: true}
+            status: [200, 204]
+
+      - cmd: redfish
+        name: The enabled account logs in again
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          auth: {user: tslifecycle, password: Ts-N3wPass-26}
+          validate: request
+          request: {method: GET, path: /redfish/v1/AccountService, status: 200}
 
       - cmd: redfish
         name: The account is deleted

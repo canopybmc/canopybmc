@@ -3,7 +3,8 @@ description: >-
   Redfish authentication: the service root answers without login, protected
   resources refuse anonymous requests, a session opens with the right
   password, its token works, it belongs to its user, and it is gone after a
-  delete. Wrong passwords and unknown users get no session.
+  delete, together with its token. Wrong passwords and unknown users get no
+  session.
 
 defaults:
   local: &local
@@ -122,6 +123,29 @@ stages:
           <<: *admin
           validate: request
           request: {method: GET, path: "{{ SESSION }}", status: 404}
+
+      # The redfish step does not store or send a session token, so this check
+      # uses curl: it opens its own session, uses the token, deletes the
+      # session with it and uses the token again.
+      - cmd: shell
+        name: A deleted session's token is refused
+        transport: *local
+        options: {timeout: 60s, on-failure: continue}
+        parameters:
+          command: |
+            B="https://[[attributes.BMC]]:[[attributes.RedfishPort]]"
+            H=$(curl -sk -m 20 -D - -o /dev/null -H 'Content-Type: application/json' \
+              -d '{"UserName":"[[attributes.BMCUser]]","Password":"[[attributes.BMCPassword]]"}' \
+              "$B/redfish/v1/SessionService/Sessions" | tr -d '\r')
+            T=$(echo "$H" | awk 'tolower($1) == "x-auth-token:" {print $2}')
+            L=$(echo "$H" | awk 'tolower($1) == "location:" {print $2}')
+            get() { curl -sk -m 20 -o /dev/null -w '%{http_code}' -H "X-Auth-Token: $T" "$@"; }
+            before=$(get "$B/redfish/v1/AccountService")
+            delete=$(get -X DELETE "$B$L")
+            after=$(get "$B/redfish/v1/AccountService")
+            echo "before=$before delete=$delete after=$after"
+          expect:
+            - regex: '^before=200 delete=20[04] after=401$'
 
       - cmd: redfish
         name: A session with a wrong password is refused
