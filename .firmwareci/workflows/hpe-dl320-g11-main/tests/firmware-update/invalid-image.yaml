@@ -1,0 +1,133 @@
+name: Redfish invalid firmware image
+description: >-
+  An invalid firmware image does not reach the flash: the BMC refuses an
+  upload of random bytes or accepts it and then rejects it, and afterwards it
+  still runs the same firmware, did not restart and is healthy.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Redfish invalid firmware image
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: Remember the running BMC firmware version
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: FirmwareVersion, op: matches, value: '\S', variable: BMC_FIRMWARE}
+
+      - cmd: redfish
+        name: Remember the last BMC reset time
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: LastResetTime, op: matches, value: '\S', variable: LAST_RESET}
+
+      - cmd: shell
+        name: An invalid image is prepared on the runner
+        transport: *local
+        parameters:
+          command: >-
+            head -c 4194304 /dev/urandom > /tmp/ts-invalid-image.tar && echo prepared
+          expect:
+            - regex: '^prepared$'
+
+      - cmd: redfish
+        name: The invalid image upload is refused or accepted for checking
+        transport: *local
+        options: {timeout: 10m, on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: /redfish/v1/UpdateService/update
+            file: /tmp/ts-invalid-image.tar
+            status: [200, 202, 400, 415]
+
+      # Gives the BMC time to reject the image, or to start a wrong update that
+      # the next steps would then catch.
+      - cmd: sleep
+        name: The BMC checks the image
+        parameters:
+          duration: 2m
+
+      - cmd: redfish
+        name: The BMC runs the same firmware
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 5m, interval: 10s}
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: FirmwareVersion, op: eq, value: "{{ BMC_FIRMWARE }}"}
+
+      - cmd: redfish
+        name: The BMC did not restart
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: LastResetTime, op: eq, value: "{{ LAST_RESET }}"}
+
+      - cmd: redfish
+        name: The manager is healthy
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: Status/Health, op: eq, value: OK}
+
+      - cmd: redfish
+        name: Every firmware inventory item is healthy
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/UpdateService, forEach: FirmwareInventory, prop: Status/Health, op: eq, value: OK}
+
+      - cmd: shell
+        name: The invalid image is removed from the runner
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          command: >-
+            rm -f /tmp/ts-invalid-image.tar && echo removed
+          expect:
+            - regex: '^removed$'

@@ -1,0 +1,72 @@
+name: IPMI DCMI
+description: >-
+  The BMC serves the DCMI extension: its capabilities, a management controller
+  ID, an asset tag and a power reading. A malformed capabilities request is
+  refused.
+
+defaults:
+  local: &local
+    proto: local
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
+
+stages:
+  - name: IPMI DCMI
+    steps:
+      # Waits until the BMC answers IPMI over LAN.
+      - cmd: ipmi
+        name: IPMI answers over LAN
+        transport: *local
+        parameters:
+          lan: *lan
+          get: device/ipmi-version
+          retry: {timeout: 10m, interval: 10s}
+          expect: {eq: "2.0"}
+
+      - cmd: ipmi
+        name: DCMI capabilities are served
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: dcmi/version
+          expect: exists
+
+      - cmd: ipmi
+        name: DCMI reports a management controller ID
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: dcmi/controller-id
+          expect: exists
+
+      - cmd: ipmi
+        name: DCMI serves an asset tag
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: dcmi/asset-tag
+          expect: exists
+
+      - cmd: ipmi
+        name: DCMI serves a power reading
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: dcmi/power/current
+          expect: exists
+
+      - cmd: ipmi
+        name: DCMI capabilities reject a short request
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          raw: 0x2c 0x01 0xdc
+          expect: {completion: 0xc7}

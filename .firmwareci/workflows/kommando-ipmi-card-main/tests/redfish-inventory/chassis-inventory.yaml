@@ -1,0 +1,114 @@
+name: Redfish chassis inventory
+description: >-
+  The chassis inventory over Redfish is complete and healthy: every chassis is
+  served and every present one is healthy, and the board's chassis reports a
+  defined type and its manufacturer, model, serial and part number.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+    validate: inventory
+
+stages:
+  - name: Redfish chassis inventory
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: Every chassis is served
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: /redfish/v1, forEach: Chassis, prop: Id, op: exists}
+
+      - cmd: redfish
+        name: Every present chassis is healthy
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - path: /redfish/v1
+                forEach: Chassis
+                where: {prop: Status/State, op: ne, value: Absent}
+                prop: Status/Health
+                op: eq
+                value: OK
+
+      - cmd: redfish
+        name: The board chassis has a defined type
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]", prop: ChassisType, op: matches, value: '^[A-Z][A-Za-z]+$'}
+
+      - cmd: redfish
+        name: The board chassis reports its manufacturer
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]", prop: Manufacturer, op: matches, value: '\S'}
+
+      - cmd: redfish
+        name: The board chassis reports its model
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]", prop: Model, op: matches, value: '\S'}
+
+      - cmd: redfish
+        name: The board chassis reports its serial number
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]", prop: SerialNumber, op: matches, value: '\S'}
+
+      - cmd: redfish
+        name: The board chassis reports its part number
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]", prop: PartNumber, op: matches, value: '\S'}
+
+      - cmd: redfish
+        name: The board chassis links to its sensors
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]", prop: "Sensors/@odata.id", op: exists}

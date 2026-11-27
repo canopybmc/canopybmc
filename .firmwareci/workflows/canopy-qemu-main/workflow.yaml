@@ -1,0 +1,5 @@
+name: canopy-qemu-main
+description: >-
+  Slow QEMU tests for Canopy OpenBMC that run on pushes to main and on tags:
+  the DMTF Redfish Service and Protocol Validators.
+runs-on: canopy-qemu

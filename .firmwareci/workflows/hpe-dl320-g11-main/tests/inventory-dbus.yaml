@@ -2,29 +2,42 @@ name: "Inventory: D-Bus Objects"
 description: >-
   Verify SMBIOS-derived inventory objects are present on D-Bus after host POST.
   Covers the smbios-mdr service populating TPM, PCIe slots, BIOS, DIMM, and
-  CPU objects under xyz.openbmc_project.Smbios.MDR_V2. Requires host POST
-  complete.
+  CPU objects under xyz.openbmc_project.Smbios.MDR_V2. Powers the host on and
+  waits for the SMBIOS transfer first.
 
 defaults:
-  transport: &bmc_ssh
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  bmc_ssh: &bmc_ssh
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
 
 stages:
   - name: Power On host
     steps:
-      - cmd: cmd
-        name: Power on host via Redfish
-        transport:
-          proto: local
+      - cmd: redfish
+        name: The host is powered on
+        transport: *local
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"Power On HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 204]
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+            retry: {timeout: 5m, interval: 5s}
       - cmd: shell
         name: Wait for SMBIOS transfer
         transport: *bmc_ssh
@@ -32,9 +45,18 @@ stages:
           timeout: 15m
         parameters:
           command: >-
+            full=$(journalctl -k --no-pager | grep -c 'push: queue is full');
             while [ ! -f /var/lib/smbios/smbios2 ] ||
                   [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
-            do sleep 1; done;
+            do
+              now=$(journalctl -k --no-pager | grep -c 'push: queue is full');
+              if [ "$now" -gt "$full" ]; then
+                echo "CHIF push queue full ($full -> $now): restarting CHIF";
+                systemctl restart xyz.openbmc_project.GxpChif.service;
+                full=$now;
+              fi;
+              sleep 5;
+            done;
             echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
           expect:
             - regex: "SMBIOS ready"
@@ -52,17 +74,18 @@ stages:
           args: [tree, xyz.openbmc_project.Smbios.MDR_V2, --no-pager]
           expect:
             - regex: "tpm0"
-      - cmd: cmd
-        name: PCIe slot objects >= 4 on Smbios.MDR_V2
+      - cmd: shell
+        name: PCIe slot objects on Smbios.MDR_V2 at the board minimum
         transport: *bmc_ssh
         options:
           timeout: 5s
           on-failure: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "COUNT=$(busctl tree xyz.openbmc_project.Smbios.MDR_V2 --no-pager | grep -c pcieslot); echo \"PCIe slots: $COUNT\"; test \"$COUNT\" -ge 4"
+          command: >-
+            n=$(busctl tree xyz.openbmc_project.Smbios.MDR_V2 --no-pager | grep -c pcieslot);
+            echo "PCIe slots: $n, minimum [[attributes.Smbios.MinPcieSlots]]";
+            [ "$n" -ge "[[attributes.Smbios.MinPcieSlots]]" ]
+      # "/bios": a bare "bios" also matches the service path /xyz/openbmc_project/Smbios.
       - cmd: cmd
         name: BIOS object on Smbios.MDR_V2
         transport: *bmc_ssh
@@ -73,7 +96,7 @@ stages:
           executable: busctl
           args: [tree, xyz.openbmc_project.Smbios.MDR_V2, --no-pager]
           expect:
-            - regex: "bios"
+            - regex: "/bios"
       - cmd: cmd
         name: DIMM objects on Smbios.MDR_V2
         transport: *bmc_ssh

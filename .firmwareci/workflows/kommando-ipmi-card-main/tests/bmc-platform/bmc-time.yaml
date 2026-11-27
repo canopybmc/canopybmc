@@ -1,0 +1,87 @@
+name: BMC time
+description: >-
+  The BMC keeps a usable clock: Redfish reports the manager time in ISO 8601
+  with its UTC offset and the NTP setting, and the IPMI SEL clock is set. The
+  test only reads, so it never moves the clock.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
+
+stages:
+  - name: BMC time
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The manager time is ISO 8601 with an offset
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: DateTime, op: matches, value: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{2}:[0-9]{2}$'}
+
+      - cmd: redfish
+        name: The manager reports its UTC offset
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: DateTimeLocalOffset, op: matches, value: '^[+-][0-9]{2}:[0-9]{2}$'}
+
+      - cmd: redfish
+        name: The manager clock is set
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: DateTime, op: matches, value: '^20[2-9][0-9]-'}
+
+      - cmd: redfish
+        name: The NTP setting is reported
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]/NetworkProtocol", prop: NTP/ProtocolEnabled, op: exists}
+
+      - cmd: ipmi
+        name: The SEL time is set
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: sel/time
+          expect: {matches: '^20[2-9][0-9]-'}

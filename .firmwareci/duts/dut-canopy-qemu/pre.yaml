@@ -29,8 +29,3 @@ pre-stage:
       executable: qemu-system-arm-openBMC
       firmware: "/tmp/firmware"
       variable: qemu_pid
-
-  - cmd: sleep
-    name: Wait for QEMU to boot
-    parameters:
-      duration: 100s

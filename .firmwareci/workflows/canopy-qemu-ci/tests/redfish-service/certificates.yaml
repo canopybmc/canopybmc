@@ -1,0 +1,63 @@
+name: Redfish HTTPS certificate
+description: >-
+  The BMC serves HTTPS with a certificate that Redfish manages: the
+  certificate service is served, lists at least one certificate location, and
+  the HTTPS certificate collection of the manager holds a certificate.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+    validate: inventory
+
+stages:
+  - name: Redfish HTTPS certificate
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The certificate service is served
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: /redfish/v1/CertificateService, prop: Id, op: exists}
+
+      # On the first boot, the certificate manager publishes the HTTPS
+      # certificate some seconds after Redfish answers.
+      - cmd: redfish
+        name: The certificate service lists a certificate location
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            retry: {timeout: 5m}
+            rules:
+              - {path: /redfish/v1/CertificateService/CertificateLocations, prop: "Links/Certificates@odata.count", op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The manager holds an HTTPS certificate
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            retry: {timeout: 5m}
+            rules:
+              - {path: "[[attributes.RedfishManager]]/NetworkProtocol/HTTPS/Certificates", prop: "Members@odata.count", op: ge, value: "1"}

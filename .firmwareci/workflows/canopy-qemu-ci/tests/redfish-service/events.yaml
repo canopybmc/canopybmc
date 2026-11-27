@@ -1,0 +1,104 @@
+name: Redfish event service
+description: >-
+  The event service is enabled, a submitted test event arrives on the
+  server-sent event stream, and an event subscription can be created, read
+  back and deleted. The subscription points at 192.0.2.1, an address reserved
+  for documentation, so no event leaves the lab.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Redfish event service
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The event service is enabled
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/EventService, prop: ServiceEnabled, op: eq, value: "true"}
+
+      - cmd: redfish
+        name: A submitted test event arrives over SSE
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: events
+          events:
+            trigger:
+              method: POST
+              path: /redfish/v1/EventService/Actions/EventService.SubmitTestEvent
+              body: {MessageId: Base.1.13.0.Success, Severity: OK}
+              status: [200, 204]
+            wait: 30s
+            expect:
+              - {prop: MessageId, op: matches, value: Success}
+
+      - cmd: redfish
+        name: An event subscription is created
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: /redfish/v1/EventService/Subscriptions
+            body: {Destination: "https://192.0.2.1:8443/events", Protocol: Redfish, Context: ts-suite}
+            status: 201
+            rules:
+              - {header: Location, op: matches, value: "/redfish/v1/EventService/Subscriptions/", variable: SUBSCRIPTION}
+
+      - cmd: redfish
+        name: The subscription keeps its context
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: GET
+            path: "{{ SUBSCRIPTION }}"
+            status: 200
+            rules:
+              - {prop: Context, op: eq, value: ts-suite}
+
+      - cmd: redfish
+        name: The subscription is deleted
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: DELETE, path: "{{ SUBSCRIPTION }}", status: [200, 204]}
+
+      - cmd: redfish
+        name: The deleted subscription is gone
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: request
+          request: {method: GET, path: "{{ SUBSCRIPTION }}", status: 404}

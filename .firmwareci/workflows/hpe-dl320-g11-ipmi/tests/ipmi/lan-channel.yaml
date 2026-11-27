@@ -1,0 +1,155 @@
+name: IPMI LAN channel
+description: >-
+  The IPMI LAN channel is set up safely: it is an 802.3 LAN channel with
+  multiple sessions and IPMI 2.0 authentication, offers cipher suite 17,
+  refuses null and anonymous logins, a wrong password and cipher suite 0, and
+  reports a valid address. Sessions run at Administrator level.
+
+defaults:
+  local: &local
+    proto: local
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
+
+stages:
+  - name: IPMI LAN channel
+    steps:
+      # Waits until the BMC answers IPMI over LAN.
+      - cmd: ipmi
+        name: IPMI answers over LAN
+        transport: *local
+        parameters:
+          lan: *lan
+          get: device/ipmi-version
+          retry: {timeout: 10m, interval: 10s}
+          expect: {eq: "2.0"}
+
+      - cmd: ipmi
+        name: The LAN channel is an 802.3 LAN
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: channel/1/medium
+          expect: {eq: 802.3-lan}
+
+      - cmd: ipmi
+        name: The LAN channel supports multiple sessions
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: channel/1/sessions
+          expect: {eq: multi-session}
+
+      - cmd: ipmi
+        name: The LAN channel offers IPMI 2.0 authentication
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: channel/1/auth/ipmi-v20
+          expect: {eq: true}
+
+      - cmd: ipmi
+        name: The LAN channel refuses null and anonymous logins
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: channel/1/auth/logins
+          expect: {eq: non-null-user}
+
+      - cmd: ipmi
+        name: The LAN channel offers cipher suite 17
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: channel/1/cipher-suites
+          expect: {contains: 17}
+
+      - cmd: ipmi
+        name: The LAN channel carries IPMI and SOL payloads
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: channel/1/payloads
+          expect: {matches: "ipmi.*sol"}
+
+      - cmd: ipmi
+        name: LAN parameters are not left set-in-progress
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: lan/1/set-in-progress
+          expect: {eq: complete}
+
+      - cmd: ipmi
+        name: The LAN channel reports an IP address
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: lan/1/ip
+          expect: {ne: 0.0.0.0}
+
+      - cmd: ipmi
+        name: The IP source is static or DHCP
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: lan/1/ip-source
+          expect: {matches: '^(static|dhcp)$'}
+
+      - cmd: ipmi
+        name: The LAN channel reports a MAC address
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: lan/1/mac
+          expect: {ne: "00:00:00:00:00:00"}
+
+      - cmd: ipmi
+        name: A LAN session runs at Administrator level
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: session/privilege
+          expect: {eq: administrator}
+
+      - cmd: ipmi
+        name: Auth capabilities reject a short request
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          raw: 0x06 0x38 0x01
+          expect: {completion: 0xc7}
+
+      - cmd: ipmi
+        name: A wrong password is refused
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: {host: "[[attributes.BMC]]", user: "[[attributes.BMCUser]]", password: not-the-password, cipher: 17}
+          get: device/device-id
+          expect: refused
+
+      # Cipher suite 0 has no authentication and no encryption.
+      - cmd: ipmi
+        name: Cipher suite 0 is refused
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: {host: "[[attributes.BMC]]", user: "[[attributes.BMCUser]]", password: "[[attributes.BMCPassword]]", cipher: 0}
+          get: device/device-id
+          expect: refused

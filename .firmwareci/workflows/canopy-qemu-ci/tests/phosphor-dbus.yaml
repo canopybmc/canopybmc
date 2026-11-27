@@ -3,130 +3,148 @@ description: >-
   Validate D-Bus system bus accessibility, core phosphor service
   registration, object tree structure, and essential OpenBMC services.
 
+on-failure: continue
+
 defaults:
   transport: &bmc_ssh
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
-      port: 2222
+      port: "[[attributes.SSHPort]]"
 
 stages:
   - name: Wait for BMC
     steps:
-      - cmd: cmd
-        name: Wait for SSH
-        transport: *bmc_ssh
-        options:
-          timeout: 5m
+      # The SSH transport does not retry a refused connection, and the QEMU
+      # port forward accepts before the BMC listens. Once Redfish answers, SSH
+      # is up too.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: {proto: local}
         parameters:
-          executable: echo
-          args: ["SSH connected"]
-      - cmd: cmd
-        name: Wait for services to settle
+          host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+          auth: {user: "[[attributes.BMCUser]]", password: "[[attributes.BMCPassword]]"}
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+      # Waits for the services this test checks, not for the whole boot:
+      # "Smoke: Boot" checks that the boot finishes.
+      - cmd: shell
+        name: The checked services started
         transport: *bmc_ssh
-        options:
-          timeout: 2m
+        options: {timeout: 6m}
         parameters:
-          executable: sleep
-          args: ["45"]
+          command: >-
+            u="xyz.openbmc_project.Inventory.Manager xyz.openbmc_project.Logging
+            xyz.openbmc_project.Settings bmcweb phosphor-ipmi-host";
+            for i in $(seq 60); do systemctl is-active --quiet $u && break; sleep 5; done;
+            if systemctl is-active --quiet $u; then echo started; else systemctl is-active $u | tr '\n' ' '; fi
+          expect:
+            - regex: '^started$'
 
   - name: D-Bus System Bus
     steps:
-      - cmd: cmd
+      - cmd: shell
         name: D-Bus system bus is accessible
         transport: *bmc_ssh
         parameters:
-          executable: busctl
-          args: ["status"]
+          command: busctl status
           expect:
             - regex: "BusAddress=unix:path="
-      - cmd: cmd
-        name: systemd1 and freedesktop.DBus registered
+      - cmd: shell
+        name: systemd1 registered
         transport: *bmc_ssh
         parameters:
-          executable: busctl
-          args: ["list", "--no-pager"]
+          command: busctl list --no-pager
           expect:
-            - regex: "org\\.freedesktop\\.systemd1"
-            - regex: "org\\.freedesktop\\.DBus"
+            - regex: '^org\.freedesktop\.systemd1\s'
+      - cmd: shell
+        name: freedesktop.DBus registered
+        transport: *bmc_ssh
+        parameters:
+          command: busctl list --no-pager
+          expect:
+            - regex: '^org\.freedesktop\.DBus\s'
 
   - name: Core Phosphor Services on D-Bus
     steps:
-      - cmd: cmd
+      - cmd: shell
         name: Inventory.Manager on D-Bus
         transport: *bmc_ssh
         parameters:
-          executable: busctl
-          args: ["list", "--no-pager"]
+          command: busctl list --no-pager
           expect:
-            - regex: "xyz\\.openbmc_project\\.Inventory\\.Manager"
-      - cmd: cmd
+            - regex: '^xyz\.openbmc_project\.Inventory\.Manager\s'
+      - cmd: shell
         name: Logging on D-Bus
         transport: *bmc_ssh
         parameters:
-          executable: busctl
-          args: ["list", "--no-pager"]
+          command: busctl list --no-pager
           expect:
-            - regex: "xyz\\.openbmc_project\\.Logging"
-      - cmd: cmd
+            - regex: '^xyz\.openbmc_project\.Logging\s'
+      - cmd: shell
         name: Settings on D-Bus
         transport: *bmc_ssh
         parameters:
-          executable: busctl
-          args: ["list", "--no-pager"]
+          command: busctl list --no-pager
           expect:
-            - regex: "xyz\\.openbmc_project\\.Settings"
+            - regex: '^xyz\.openbmc_project\.Settings\s'
 
   - name: Phosphor Service Status
     steps:
-      - cmd: cmd
+      - cmd: shell
         name: Inventory Manager active
         transport: *bmc_ssh
         parameters:
-          executable: systemctl
-          args: ["is-active", "xyz.openbmc_project.Inventory.Manager"]
-      - cmd: cmd
+          command: systemctl is-active xyz.openbmc_project.Inventory.Manager
+          expect:
+            - regex: '^active$'
+      - cmd: shell
         name: Logging active
         transport: *bmc_ssh
         parameters:
-          executable: systemctl
-          args: ["is-active", "xyz.openbmc_project.Logging"]
-      - cmd: cmd
+          command: systemctl is-active xyz.openbmc_project.Logging
+          expect:
+            - regex: '^active$'
+      - cmd: shell
         name: Settings active
         transport: *bmc_ssh
         parameters:
-          executable: systemctl
-          args: ["is-active", "xyz.openbmc_project.Settings"]
-      - cmd: cmd
+          command: systemctl is-active xyz.openbmc_project.Settings
+          expect:
+            - regex: '^active$'
+      - cmd: shell
         name: bmcweb active
         transport: *bmc_ssh
         parameters:
-          executable: systemctl
-          args: ["is-active", "bmcweb"]
-      - cmd: cmd
+          command: systemctl is-active bmcweb
+          expect:
+            - regex: '^active$'
+      - cmd: shell
         name: phosphor-ipmi-host active
         transport: *bmc_ssh
         parameters:
-          executable: systemctl
-          args: ["is-active", "phosphor-ipmi-host"]
+          command: systemctl is-active phosphor-ipmi-host
+          expect:
+            - regex: '^active$'
 
   - name: D-Bus Object Trees
     steps:
-      - cmd: cmd
+      - cmd: shell
         name: Inventory object tree exists
         transport: *bmc_ssh
         parameters:
-          executable: busctl
-          args: ["tree", "xyz.openbmc_project.Inventory.Manager", "--no-pager"]
+          command: busctl tree xyz.openbmc_project.Inventory.Manager --no-pager
           expect:
             - regex: "/xyz/openbmc_project/inventory"
-      - cmd: cmd
+      - cmd: shell
         name: Logging.Create interface available
         transport: *bmc_ssh
         parameters:
-          executable: busctl
-          args: ["introspect", "xyz.openbmc_project.Logging", "/xyz/openbmc_project/logging", "--no-pager"]
+          command: busctl introspect xyz.openbmc_project.Logging /xyz/openbmc_project/logging --no-pager
           expect:
-            - regex: "xyz\\.openbmc_project\\.Logging\\.Create"
+            - regex: '^xyz\.openbmc_project\.Logging\.Create\s'

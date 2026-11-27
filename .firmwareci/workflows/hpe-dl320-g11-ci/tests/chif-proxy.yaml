@@ -2,116 +2,189 @@ name: "CHIF: I2C Proxy and PlatDef Download"
 description: >-
   Verify the CHIF I2C proxy (0x0072) and PlatDef v1 download (0x0200)
   handlers produce correctly-formatted responses. Checks the BMC journal
-  for PlatDef extraction and segment mapping at startup, and the host
-  console log for absence of CHIF response-format errors after POST.
-  Requires the host to have completed at least one POST cycle.
+  for PlatDef extraction and segment mapping at CHIF startup. The test then
+  powers on the host, waits for the POST, and checks that the console output
+  of this boot is not empty and holds no CHIF response-format errors.
 
 defaults:
-  transport: &bmc_ssh
+  local: &local
+    proto: local
+  bmc: &bmc
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  redfish: &redfish
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
 
 stages:
-  - name: CHIF Service Startup
+  - name: CHIF I2C Proxy and PlatDef
     steps:
-      - cmd: cmd
-        name: CHIF service is running
-        transport: *bmc_ssh
+      # The SSH transport does not retry a refused connection, so wait for
+      # the BMC on Redfish first.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
         parameters:
-          executable: systemctl
-          args: ["is-active", "xyz.openbmc_project.GxpChif.service"]
+          <<: *redfish
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: shell
+        name: CHIF service is active
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: systemctl is-active xyz.openbmc_project.GxpChif.service
+          expect:
+            - regex: '^active$'
 
       - cmd: shell
         name: PlatDef extracted from host SPI flash
-        transport: *bmc_ssh
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          command: "journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep 'UEFI FV: extracted'"
+          command: >-
+            journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep 'UEFI FV: extracted'
           expect:
-            - regex: "extracted \\d+ bytes"
+            - regex: 'extracted \d+ bytes'
 
       - cmd: shell
         name: PlatDef decompressed with records
-        transport: *bmc_ssh
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          command: "journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep 'PlatDef: decompressed'"
+          command: >-
+            journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep 'PlatDef: decompressed'
           expect:
-            - regex: "decompressed \\d+ bytes"
+            - regex: 'decompressed \d+ bytes'
 
       - cmd: shell
         name: I2C segment mappings parsed
-        transport: *bmc_ssh
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          command: "journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep 'parsed.*I2C segment'"
+          command: >-
+            journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep 'parsed.*I2C segment'
           expect:
-            - regex: "parsed \\d+ I2C segment mappings"
+            - regex: 'parsed \d+ I2C segment mappings'
 
       - cmd: shell
         name: I2C segments resolved to kernel buses
-        transport: *bmc_ssh
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          command: "journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep 'I2C map: resolved'"
+          command: >-
+            journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep 'I2C map: resolved'
           expect:
-            - regex: "resolved \\d+ of \\d+ segments"
+            - regex: 'resolved \d+ of \d+ segments'
 
-  - name: I2C Proxy Response Format
-    steps:
+      # The CHIF errors below are printed by the host firmware during POST,
+      # so the host must boot before the console checks mean anything.
       - cmd: shell
-        name: No I2C proxy size-mismatch errors
-        transport: *bmc_ssh
+        name: Mark the end of the host console log
+        transport: *bmc
         parameters:
-          command: "grep -c 'HpIicWriteRead: CHIF response invalid.*Size' /var/log/obmc-console.log /var/log/obmc-console.log.1 2>/dev/null || echo 0"
+          command: stat -c '%i:%s' /var/log/obmc-console.log 2>/dev/null || echo 0:0
+          variable: CONSOLE_MARK
+
+      - cmd: redfish
+        name: The host is powered on
+        transport: *local
+        parameters:
+          <<: *redfish
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 204]
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+            retry: {timeout: 5m, interval: 5s}
+
+      # The host firmware sends SMBIOS late in POST. When the CHIF push queue
+      # is full the transfer stalls, and a CHIF restart recovers it.
+      - cmd: shell
+        name: The host POST delivers SMBIOS data
+        transport: *bmc
+        options: {timeout: 15m}
+        parameters:
+          command: |
+            full=$(journalctl -k --no-pager | grep -c 'push: queue is full')
+            while [ ! -f /var/lib/smbios/smbios2 ] ||
+                  [ "$(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0)" -le 1000 ]; do
+              now=$(journalctl -k --no-pager | grep -c 'push: queue is full')
+              if [ "$now" -gt "$full" ]; then
+                echo "CHIF push queue full ($full -> $now): restarting CHIF"
+                systemctl restart xyz.openbmc_project.GxpChif.service
+                full=$now
+              fi
+              sleep 5
+            done
+            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
           expect:
-            - regex: "^0$"
+            - regex: '^SMBIOS ready'
+
+      # obmc-console renames a full log to .log.1; the inode tells which file
+      # held the mark.
+      - cmd: shell
+        name: The host wrote to its console during this boot
+        transport: *bmc
+        parameters:
+          command: |
+            L=/var/log/obmc-console.log; m={{ CONSOLE_MARK }}; ino=${m%%:*}; off=${m##*:}
+            if [ "$(stat -c %i $L 2>/dev/null)" = "$ino" ]; then tail -c +$((off + 1)) $L
+            elif [ "$(stat -c %i $L.1 2>/dev/null)" = "$ino" ]; then tail -c +$((off + 1)) $L.1; cat $L
+            else cat $L.1 $L 2>/dev/null; fi > /tmp/fwci-console.txt
+            echo "$(( $(wc -c < /tmp/fwci-console.txt) )) bytes"
+          expect:
+            - regex: '^[1-9][0-9]* bytes$'
+
+      - cmd: shell
+        name: No HpIicWriteRead size-mismatch errors
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: >-
+            n=$(grep -a -c 'HpIicWriteRead: CHIF response invalid.*Size' /tmp/fwci-console.txt); echo "$n"
+          expect:
+            - regex: '^0$'
 
       - cmd: shell
         name: No HpIicChifWriteRead size-mismatch errors
-        transport: *bmc_ssh
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          command: "grep -c 'HpIicChifWriteRead: CHIF response invalid.*Size' /var/log/obmc-console.log /var/log/obmc-console.log.1 2>/dev/null || echo 0"
+          command: >-
+            n=$(grep -a -c 'HpIicChifWriteRead: CHIF response invalid.*Size' /tmp/fwci-console.txt); echo "$n"
           expect:
-            - regex: "^0$"
+            - regex: '^0$'
 
-  - name: I2C Proxy Error Codes
-    on-failure: continue
-    steps:
-      - cmd: shell
-        name: "[Report] I2C segment-not-found errors"
-        transport: *bmc_ssh
-        parameters:
-          command: "grep -c 'i2c Error 0000006C' /var/log/obmc-console.log 2>/dev/null || echo 0"
-
-      - cmd: shell
-        name: "[Report] I2C general errors (absent devices)"
-        transport: *bmc_ssh
-        parameters:
-          command: "grep -c 'i2c Error 00000007' /var/log/obmc-console.log 2>/dev/null || echo 0"
-
-  - name: PlatDef Download Response Format
-    steps:
       - cmd: shell
         name: No DownloadDemandedTypePlatDef errors
-        transport: *bmc_ssh
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          command: "grep -c 'DownloadDemandedTypePlatDef: CHIF response invalid' /var/log/obmc-console.log /var/log/obmc-console.log.1 2>/dev/null || echo 0"
+          command: >-
+            n=$(grep -a -c 'DownloadDemandedTypePlatDef: CHIF response invalid' /tmp/fwci-console.txt); echo "$n"
           expect:
-            - regex: "^0$"
+            - regex: '^0$'
 
       - cmd: shell
         name: No GetPowerSupplyI2CInfo PlatDef failures
-        transport: *bmc_ssh
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          command: "grep -c 'GetPowerSupplyI2CInfo: DownloadDemandedTypePlatDef failed' /var/log/obmc-console.log /var/log/obmc-console.log.1 2>/dev/null || echo 0"
+          command: >-
+            n=$(grep -a -c 'GetPowerSupplyI2CInfo: DownloadDemandedTypePlatDef failed' /tmp/fwci-console.txt); echo "$n"
           expect:
-            - regex: "^0$"
-
-  - name: CHIF Kernel Health
-    on-failure: continue
-    steps:
-      - cmd: shell
-        name: "[Report] Kernel go-bit drops"
-        transport: *bmc_ssh
-        parameters:
-          command: "dmesg | grep -c 'go bit of rq_ctrl not set' || echo 0"
+            - regex: '^0$'

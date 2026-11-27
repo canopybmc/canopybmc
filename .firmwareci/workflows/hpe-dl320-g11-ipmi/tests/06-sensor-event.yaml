@@ -1,198 +1,193 @@
 name: "IPMI: Sensor Commands (NetFn 0x04)"
 description: >-
   Verify Sensor NetFn commands (Table G-1, §35): Get Sensor Reading (2Dh), Get
-  Sensor Threshold (27h), and Get Sensor Type (2Fh).
+  Sensor Threshold (27h) and Get Sensor Type (2Fh).
 
-  A set of sensors is BMC-served and present with the host powered
-  off: both PSUs
-  (IINPUT/IOUTPUT/PINPUT/POUTPUT/TEMP1/VINPUT/VOUTPUT/FAN1 per PSU)
-  and the GXP SoC temperature. The host is powered off first so that
-  baseline is asserted in a known off state. CPU and DIMM sensors only
-  enter the SDR after the host is up. The host-off record count is
-  captured into baseline_sensors and re-asserted with the host on.
+  A set of sensors is BMC-served and present with the host powered off: both
+  PSUs and the SoC temperature. The host is powered off first so that this
+  baseline is asserted in a known off state, and the SDR record count is
+  stored. CPU, DIMM and fan sensors only enter the SDR after the host is up,
+  so with the host on the record count is at least the baseline and the fan
+  sensors are present.
 
-  Sensor numbers are assigned dynamically by dbus-sdr, so GXP_Temp's
-  number is resolved from the SDR once at run time into gxp_sensor and
-  reused by every per-sensor command rather than hardcoded. GXP_Temp
-  is the anchor because it is present either way.
+  Sensor numbers are assigned dynamically by dbus-sdr, so the SoC temperature
+  sensor number is resolved from the SDR at run time and reused by the Get
+  Sensor Threshold and Get Sensor Type requests.
 
 variables:
-  gxp_sensor: "__unresolved__"
-  baseline_sensors: "__unresolved__"
+  SOC_SENSOR: unresolved
 
 defaults:
-  transport: &local
+  local: &local
     proto: local
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
 
 stages:
   - name: Power Off Host
     steps:
-      - cmd: shell
-        name: Chassis Control - Power down (0x00 0x02 0x00)
+      - cmd: ipmi
+        name: Host power off is accepted
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x00 0x02 0x00
-      - cmd: shell
-        name: Poll chassis status until power-on bit is clear
+          lan: *lan
+          set: chassis/power
+          value: "off"
+          expect: {completion: 0x00}
+      - cmd: ipmi
+        name: Chassis power reads off
         transport: *local
-        options:
-          timeout: "2m"
         parameters:
-          command: >-
-            while true; do
-            S=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 raw 0x00 0x01 2>/dev/null | awk '{print $1}');
-            [ -n "$S" ] && [ $(( 0x$S & 1 )) -eq 0 ] && echo "host off (0x$S)" && exit 0;
-            sleep 5;
-            done
+          lan: *lan
+          get: chassis/power
+          retry: {timeout: 2m, interval: 5s}
+          expect: {eq: "off"}
 
   - name: Baseline Sensors (host off)
     steps:
-      - cmd: shell
-        name: Poll until the SDR is populated
+      - cmd: ipmi
+        name: SDR holds records with the host off
         transport: *local
-        options:
-          timeout: "5m"
         parameters:
-          command: >-
-            while true; do
-            N=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 sdr elist 2>/dev/null | wc -l);
-            [ "$N" -gt 0 ] && echo "$N sensor records" && exit 0;
-            sleep 5;
-            done
-      - cmd: shell
-        name: PSU1, PSU2 and GXP temperature are present with the host off
+          lan: *lan
+          get: sdr/records
+          retry: {timeout: 5m, interval: 5s}
+          expect: {ge: 1}
+          variable: SDR_RECORDS
+      - cmd: ipmi
+        name: PSU1 sensors are present with the host off
         transport: *local
-        options:
-          timeout: "30s"
+        options: {on-failure: continue}
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            sdr elist
-          expect:
-            - regex: 'PSU1'
-            - regex: 'PSU2'
-            - regex: 'GXP_Temp'
-      - cmd: shell
-        name: Record the host-off sensor record count
+          lan: *lan
+          get: sdr/*/name
+          where: {name: {matches: "[[attributes.IPMI.Sensors.PSU1]]"}}
+          expect: {count: {ge: 1}}
+      - cmd: ipmi
+        name: PSU2 sensors are present with the host off
         transport: *local
-        options:
-          timeout: "30s"
+        options: {on-failure: continue}
         parameters:
-          command: >-
-            N=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 sdr elist | wc -l);
-            printf '%s' "$N"
-          variable: baseline_sensors
-          expect:
-            - regex: '^\s*[1-9][0-9]*\s*$'
+          lan: *lan
+          get: sdr/*/name
+          where: {name: {matches: "[[attributes.IPMI.Sensors.PSU2]]"}}
+          expect: {count: {ge: 1}}
+      - cmd: ipmi
+        name: SoC temperature is present with the host off
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: sdr/*/name
+          where: {name: {matches: "[[attributes.IPMI.Sensors.SoCTemp]]"}}
+          expect: {count: {ge: 1}}
 
   - name: Sensor Commands
     steps:
+      # A raw request takes no stored variable, so the sensor number goes through ipmitool.
       - cmd: shell
-        name: Resolve GXP_Temp sensor number from the SDR
+        name: Resolve the SoC temperature sensor number from the SDR
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
           command: >-
-            L=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 sdr elist 2>/dev/null);
-            N=$(echo "$L" | grep -i gxp_temp | head -1 | awk -F'|' '{gsub(/[^0-9a-fA-F]/,"",$2); print "0x"$2}');
-            [ -z "$N" ] && N=$(echo "$L" | head -1 | awk -F'|' '{gsub(/[^0-9a-fA-F]/,"",$2); print "0x"$2}');
-            printf '%s' "$N"
-          variable: gxp_sensor
+            ipmitool -I lanplus -H [[attributes.BMC]] -U [[attributes.BMCUser]]
+            -P [[attributes.BMCPassword]] -C 17 sdr elist
+            | awk -F'|' -v s='[[attributes.IPMI.Sensors.SoCTemp]]'
+            '$1 ~ s { gsub(/[^0-9a-fA-F]/, "", $2); print "0x" $2; exit }'
+          variable: SOC_SENSOR
           expect:
-            - regex: '^\s*0x[0-9a-fA-F]{2}\s*$'
-      - cmd: shell
-        name: Get Sensor Reading (0x04 0x2d) - gxp temp sensor
+            - regex: '^0x[0-9a-fA-F]{2}\s*$'
+      - cmd: ipmi
+        name: Get Sensor Reading reads the SoC temperature
         transport: *local
-        options:
-          timeout: "30s"
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: sdr/*/reading
+          where: {name: {matches: "[[attributes.IPMI.Sensors.SoCTemp]]"}}
+          expect: [{count: {ge: 1}}, {ge: 0}]
+      - cmd: shell
+        name: Get Sensor Threshold returns the mask and six thresholds
+        transport: *local
+        options: {on-failure: continue}
         parameters:
           command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x04 0x2d {{ gxp_sensor }}
+            ipmitool -I lanplus -H [[attributes.BMC]] -U [[attributes.BMCUser]]
+            -P [[attributes.BMCPassword]] -C 17 raw 0x04 0x27 {{ SOC_SENSOR }}
           expect:
-            - regex: '^\s*[0-9a-f]{2}'
+            - regex: '^\s*[0-9a-f]{2}( [0-9a-f]{2}){6}\s*$'
       - cmd: shell
-        name: Get Sensor Threshold (0x04 0x27) - gxp temp sensor
+        name: Get Sensor Type reports a temperature threshold sensor
         transport: *local
-        options:
-          timeout: "30s"
-          on-failure: continue
+        options: {on-failure: continue}
         parameters:
           command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x04 0x27 {{ gxp_sensor }}
-      - cmd: shell
-        name: Get Sensor Type (0x04 0x2f)
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x04 0x2f {{ gxp_sensor }}
+            ipmitool -I lanplus -H [[attributes.BMC]] -U [[attributes.BMCUser]]
+            -P [[attributes.BMCPassword]] -C 17 raw 0x04 0x2f {{ SOC_SENSOR }}
           expect:
-            - regex: '^\s*[0-9a-f]{2}'
+            - regex: '^\s*01 01\s*$'
 
   - name: Power On Host
     steps:
-      - cmd: shell
-        name: Chassis power on (no-op if already on)
+      - cmd: ipmi
+        name: Host power on is accepted
         transport: *local
-        options:
-          timeout: "1m"
-          on-failure: continue
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            chassis power on
-      - cmd: shell
-        name: Poll chassis status until host is on
+          lan: *lan
+          set: chassis/power
+          value: "on"
+          expect: {completion: 0x00}
+      - cmd: ipmi
+        name: Chassis power reads on
         transport: *local
-        options:
-          timeout: "8m"
         parameters:
-          command: >-
-            while true; do
-            S=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 raw 0x00 0x01 2>/dev/null | awk '{print $1}');
-            [ -n "$S" ] && [ $(( 0x$S & 1 )) -eq 1 ] && echo "host on (0x$S)" && exit 0;
-            sleep 5;
-            done
+          lan: *lan
+          get: chassis/power
+          retry: {timeout: 8m, interval: 5s}
+          expect: {eq: "on"}
 
   - name: Sensors With Host On
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: Baseline sensors still present after power on
+      - cmd: ipmi
+        name: PSU1 sensors are still present
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            sdr elist
-          expect:
-            - regex: 'PSU1'
-            - regex: 'PSU2'
-            - regex: 'GXP_Temp'
-            - regex: 'Pwm'
-      - cmd: shell
-        name: Sensor count is at least the host-off baseline
+          lan: *lan
+          get: sdr/*/name
+          where: {name: {matches: "[[attributes.IPMI.Sensors.PSU1]]"}}
+          expect: {count: {ge: 1}}
+      - cmd: ipmi
+        name: PSU2 sensors are still present
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            N=$(ipmitool -I lanplus -H [[attributes.BMC]] -U root -P [[attributes.BMCPassword]] -C 17 sdr elist | wc -l);
-            echo "sensor records: $N (host-off baseline {{ baseline_sensors }})";
-            test "$N" -ge "{{ baseline_sensors }}"
+          lan: *lan
+          get: sdr/*/name
+          where: {name: {matches: "[[attributes.IPMI.Sensors.PSU2]]"}}
+          expect: {count: {ge: 1}}
+      - cmd: ipmi
+        name: SoC temperature is still present
+        transport: *local
+        parameters:
+          lan: *lan
+          get: sdr/*/name
+          where: {name: {matches: "[[attributes.IPMI.Sensors.SoCTemp]]"}}
+          expect: {count: {ge: 1}}
+      - cmd: ipmi
+        name: Fan sensors are present with the host on
+        transport: *local
+        parameters:
+          lan: *lan
+          get: sdr/*/name
+          where: {name: {matches: "[[attributes.IPMI.Sensors.Fan]]"}}
+          expect: {count: {ge: 1}}
+      - cmd: ipmi
+        name: SDR record count is at least the host-off baseline
+        transport: *local
+        parameters:
+          lan: *lan
+          get: sdr/records
+          expect: {ge: "{{ SDR_RECORDS }}"}

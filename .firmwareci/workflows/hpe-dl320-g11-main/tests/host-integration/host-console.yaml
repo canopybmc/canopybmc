@@ -1,0 +1,94 @@
+name: Host console
+description: >-
+  The BMC gives remote access to the host's consoles: the serial console
+  answers over IPMI Serial over LAN, and the KVM serves the host screen
+  through the BMC's web server while the VNC port stays closed to the
+  network.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
+
+stages:
+  - name: Host console
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      # 409: the host is already on.
+      - cmd: redfish
+        name: The host is powered on
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 202, 204, 409]
+
+      - cmd: ping
+        name: The host OS answers on SSH
+        options: {timeout: 15m}
+        parameters:
+          host: "[[attributes.Host]]"
+          port: 22
+
+      # The host OS must run a login prompt on the serial port that SOL carries.
+      - cmd: ipmi
+        name: The host serial console answers over SOL
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          sol: {duration: 45s, send: ts-sol-check, wait: 5s}
+          expect:
+            - {matches: '(?m)^ts-sol-check\r*$'}
+            - {matches: '(?i)(login:|password:)'}
+
+      - cmd: vnc
+        name: The KVM serves the host screen at 640x480 or larger
+        options: {on-failure: continue}
+        parameters:
+          host: "[[attributes.BMC]]"
+          auth: {user: "[[attributes.BMCUser]]", password: "[[attributes.BMCPassword]]"}
+          insecure: true
+          expect: {width: {ge: 640}, height: {ge: 480}}
+
+      - cmd: vnc
+        name: The KVM host screen is not blank
+        options: {on-failure: continue}
+        parameters:
+          host: "[[attributes.BMC]]"
+          auth: {user: "[[attributes.BMCUser]]", password: "[[attributes.BMCPassword]]"}
+          insecure: true
+          expect: {blank: false}
+
+      # The KVM is reachable only through the BMC's authenticated web server.
+      - cmd: ping
+        name: The VNC port 5900 is closed to the network
+        options: {on-failure: continue}
+        parameters:
+          host: "[[attributes.BMC]]"
+          port: 5900
+          expect: {should_fail: true}

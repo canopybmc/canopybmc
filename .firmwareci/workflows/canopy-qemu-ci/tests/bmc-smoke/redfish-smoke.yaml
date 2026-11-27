@@ -1,0 +1,117 @@
+name: Redfish smoke
+description: >-
+  Fast checks over Redfish that a booted BMC is usable: the service root has
+  an identity, every manager is enabled and healthy, reports its firmware
+  version and has a set clock. Works on any BMC with a Redfish service.
+
+defaults:
+  redfish: &redfish
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+    validate: inventory
+
+stages:
+  - name: Redfish smoke
+    steps:
+      # Waits on Redfish itself: on a QEMU DUT, a TCP check of the forwarded
+      # port passes before the BMC listens.
+      - cmd: redfish
+        name: Redfish service answers
+        transport:
+          proto: local
+        parameters:
+          <<: *redfish
+          inventory:
+            retry:
+              timeout: 10m
+            rules:
+              - path: /redfish/v1
+                collection: Managers
+                op: ge
+                value: "1"
+
+      - cmd: redfish
+        name: Service root UUID is not all zeros
+        transport:
+          proto: local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - path: /redfish/v1
+                prop: UUID
+                op: ne
+                value: "00000000-0000-0000-0000-000000000000"
+
+      # A manager reports Starting until the BMC finishes its boot, which
+      # comes after Redfish answers.
+      - cmd: redfish
+        name: Every manager is enabled
+        transport:
+          proto: local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *redfish
+          inventory:
+            retry:
+              timeout: 10m
+            rules:
+              - path: /redfish/v1
+                forEach: Managers
+                prop: Status/State
+                op: eq
+                value: Enabled
+
+      - cmd: redfish
+        name: Every manager is healthy
+        transport:
+          proto: local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - path: /redfish/v1
+                forEach: Managers
+                prop: Status/Health
+                op: eq
+                value: OK
+
+      - cmd: redfish
+        name: Every manager reports its firmware version
+        transport:
+          proto: local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - path: /redfish/v1
+                forEach: Managers
+                prop: FirmwareVersion
+                op: matches
+                value: '\S'
+
+      # A clock that starts at 1970 breaks TLS, sessions and log timestamps.
+      - cmd: redfish
+        name: Every manager clock is set
+        transport:
+          proto: local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - path: /redfish/v1
+                forEach: Managers
+                prop: DateTime
+                op: matches
+                value: '^20[2-9][0-9]-'

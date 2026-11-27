@@ -2,97 +2,123 @@ name: "Boot: One-Time Override (BIOS Setup)"
 description: >-
   Sets a one-time BIOS Setup boot override over Redfish, verifies BootService
   resolves it against the CQSBOOT#### options and writes the CQTBOOTNEXT EV,
-  reboots the host, and confirms the override is consumed and reconciled back
-  in phosphor-settings.
+  reboots the host, and confirms the override is consumed, the EV is cleared,
+  Redfish reconciles the override back to Continuous, and the host console
+  of the override boot shows the BIOS setup entry.
 
-  This is **very slow**! It power-cycles the host and waits for two POST cycles
-  (the UEFI reboots itself again after honouring the one-time boot due to a
-  "policy change".)
-  It must run after the host has POSTed at least once so the firmware has
-  published its boot options (CQSBOOT####) and boot order (CQHBOOTORDER).
+  This is **very slow**! It resets the BIOS NVRAM and boots the host once,
+  so that the firmware publishes its boot options (CQSBOOT####) and boot
+  order (CQHBOOTORDER), then restarts the host for the override (the UEFI
+  reboots itself again after honouring the one-time boot due to a "policy
+  change"). If the test fails, a last stage dumps the EV store.
 
 defaults:
-  transport: &bmc_ssh
+  local: &local
+    proto: local
+  bmc: &bmc
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  redfish: &redfish
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
 
-stages:
-  - name: Reset NVRAM before power on
-    steps:
-      - cmd: shell
-        name: Power off host via Redfish
-        transport: &local
-          proto: local
-        parameters:
-          command: >-
-            curl -sk -u root:[[attributes.BMCPassword]]
-            -X POST -H 'Content-Type: application/json'
-            -d '{"ResetType":"ForceOff"}'
-            -o /dev/null -w '%{http_code}'
-            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
-          expect:
-            - regex: "^(200|204)$"
+  # The host firmware sends SMBIOS late in POST. When the CHIF push queue is
+  # full the transfer stalls, and a CHIF restart recovers it.
+  wait_smbios: &wait_smbios
+    cmd: shell
+    name: The host POST delivers SMBIOS data
+    transport: *bmc
+    options: {timeout: 15m}
+    parameters:
+      command: |
+        full=$(journalctl -k --no-pager | grep -c 'push: queue is full')
+        while [ ! -f /var/lib/smbios/smbios2 ] ||
+              [ "$(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0)" -le 1000 ]; do
+          now=$(journalctl -k --no-pager | grep -c 'push: queue is full')
+          if [ "$now" -gt "$full" ]; then
+            echo "CHIF push queue full ($full -> $now): restarting CHIF"
+            systemctl restart xyz.openbmc_project.GxpChif.service
+            full=$now
+          fi
+          sleep 5
+        done
+        echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
+      expect:
+        - regex: '^SMBIOS ready'
 
-      - cmd: shell
-        name: Reset NVRAM
+stages:
+  - name: Boot EVs and override test
+    steps:
+      # The SSH transport does not retry a refused connection, so wait for
+      # the BMC on Redfish first.
+      - cmd: redfish
+        name: Redfish service answers
         transport: *local
         parameters:
-          command: >-
-            curl -sk -u root:[[attributes.BMCPassword]]
-            -X POST -H 'Content-Type: application/json'
-            -o /dev/null -w '%{http_code}'
-            https://[[attributes.BMC]]/redfish/v1/Systems/system/Bios/Actions/Bios.ResetBios
-          expect:
-            - regex: "^(200|204)$"
+          <<: *redfish
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
 
-      - cmd: cmd
-        name: Wait a bit for NVRAM reset to be completed
-        transport: *bmc_ssh
-        options:
-          timeout: 3m
+      - cmd: redfish
+        name: The host is powered off
+        transport: *local
         parameters:
-          executable: sleep
-          args: ["20"]
+          <<: *redfish
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: ForceOff}
+            status: [200, 204]
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "Off"}
+            retry: {timeout: 2m, interval: 5s}
 
-      - cmd: shell
-        name: Power on host via Redfish
-        transport: &local
-          proto: local
+      - cmd: redfish
+        name: Redfish ResetBios is accepted
+        transport: *local
         parameters:
-          command: >-
-            curl -sk -u root:[[attributes.BMCPassword]]
-            -X POST -H 'Content-Type: application/json'
-            -d '{"ResetType":"On"}'
-            -o /dev/null -w '%{http_code}'
-            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
-          expect:
-            - regex: "^(200|204)$"
+          <<: *redfish
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Bios/Actions/Bios.ResetBios"
+            status: [200, 204]
 
-      - cmd: shell
-        name: Wait for SMBIOS transfer (host POST complete)
-        transport: *bmc_ssh
-        options:
-          timeout: 20m # NVRAM reset can take ages
+      # The NVRAM reset finishes after Bios.ResetBios answers, and the test
+      # knows no state that shows when it is done.
+      - cmd: sleep
+        name: Wait for the NVRAM reset to finish
         parameters:
-          command: >-
-            full=$(journalctl -k --no-pager | grep -c 'push: queue is full');
-            while [ ! -f /var/lib/smbios/smbios2 ] ||
-                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
-            do
-              now=$(journalctl -k --no-pager | grep -c 'push: queue is full');
-              if [ "$now" -gt "$full" ]; then
-                echo "CHIF push queue full ($full -> $now): restarting CHIF";
-                systemctl restart xyz.openbmc_project.GxpChif.service;
-                full=$now;
-              fi;
-              sleep 5;
-            done;
-            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
-          expect:
-            - regex: "SMBIOS ready"
+          duration: 20s
+
+      - cmd: redfish
+        name: The host is powered on
+        transport: *local
+        parameters:
+          <<: *redfish
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 204]
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+            retry: {timeout: 5m, interval: 5s}
+
+      # The first POST after an NVRAM reset takes much longer.
+      - <<: *wait_smbios
+        options: {timeout: 20m}
 
       - cmd: ping
         name: Wait for host OS
@@ -101,153 +127,183 @@ stages:
         parameters:
           host: "[[attributes.Host]]"
 
-  - name: Boot EVs and override test
-    on-failure: continue
-    steps:
       - cmd: shell
         name: Boot options (CQSBOOT) published by firmware
-        transport: *bmc_ssh
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          command: "grep -a -o CQSBOOT /var/lib/chif/evs.dat 2>/dev/null | wc -l"
+          command: grep -a -o CQSBOOT /var/lib/chif/evs.dat | wc -l
           expect:
-            - regex: "^[1-9][0-9]*$"
+            - regex: '^[1-9][0-9]*$'
+
       - cmd: shell
         name: Persistent boot order (CQHBOOTORDER) published by firmware
-        transport: *bmc_ssh
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          command: "grep -a -c CQHBOOTORDER /var/lib/chif/evs.dat 2>/dev/null || echo 0"
+          command: n=$(grep -a -c CQHBOOTORDER /var/lib/chif/evs.dat); echo "$n"
           expect:
-            - regex: "^[1-9][0-9]*$"
+            - regex: '^[1-9][0-9]*$'
 
-      - cmd: shell
-        name: PATCH BootSourceOverride BiosSetup/Once
+      - cmd: redfish
+        name: PATCH BootSourceOverride BiosSetup/Once is accepted
         transport: *local
         parameters:
-          command: >-
-            curl -sk -u root:[[attributes.BMCPassword]]
-            -X PATCH -H 'Content-Type: application/json'
-            -d '{"Boot":{"BootSourceOverrideEnabled":"Once","BootSourceOverrideTarget":"BiosSetup"}}'
-            -o /dev/null -w '%{http_code}'
-            https://[[attributes.BMC]]/redfish/v1/Systems/system
-          expect:
-            - regex: "^(200|204)$"
+          <<: *redfish
+          validate: request
+          request:
+            method: PATCH
+            path: "[[attributes.RedfishSystem]]"
+            body: {Boot: {BootSourceOverrideEnabled: Once, BootSourceOverrideTarget: BiosSetup}}
+            status: [200, 204]
+
       - cmd: shell
         name: BootService resolved and applied one-time option (journal)
-        transport: *bmc_ssh
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          command: "journalctl -u xyz.openbmc_project.GxpChif.service --no-pager | grep 'One-time boot: option'"
+          command: >-
+            journalctl -u xyz.openbmc_project.GxpChif.service --no-pager
+            | grep 'One-time boot: option'
           expect:
-            - regex: "One-time boot: option"
-      - cmd: shell
-        name: CQTBOOTNEXT EV written to store
-        transport: *bmc_ssh
-        parameters:
-          command: "grep -a -c CQTBOOTNEXT /var/lib/chif/evs.dat 2>/dev/null || echo 0"
-          expect:
-            - regex: "^[1-9][0-9]*$"
-      - cmd: cmd
-        name: Redfish reports BiosSetup/Once override
-        transport: *local
-        options:
-          timeout: 30s
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
-          expect:
-            - regex: '"BootSourceOverrideTarget": *"BiosSetup"'
-            - regex: '"BootSourceOverrideEnabled": *"Once"'
+            - regex: 'One-time boot: option'
 
       - cmd: shell
-        name: Clear stale SMBIOS marker
-        transport: *bmc_ssh
+        name: CQTBOOTNEXT EV written to store
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          command: "rm -f /var/lib/smbios/smbios2"
+          command: n=$(grep -a -c CQTBOOTNEXT /var/lib/chif/evs.dat); echo "$n"
+          expect:
+            - regex: '^[1-9][0-9]*$'
+
+      - cmd: redfish
+        name: Redfish reports the BiosSetup/Once override
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          validate: inventory
+          inventory:
+            rules:
+              - path: "[[attributes.RedfishSystem]]"
+                all:
+                  - {prop: Boot/BootSourceOverrideTarget, op: eq, value: BiosSetup}
+                  - {prop: Boot/BootSourceOverrideEnabled, op: eq, value: Once}
+
+      # Without the old file, the next SMBIOS wait proves a new POST.
       - cmd: shell
-        name: ForceRestart host via Redfish
+        name: Clear stale SMBIOS data
+        transport: *bmc
+        parameters:
+          command: rm -f /var/lib/smbios/smbios2
+
+      # Marks the end of the console log, so that a later step reads only what
+      # the host writes after this point.
+      - cmd: shell
+        name: Mark the end of the host console log
+        transport: *bmc
+        parameters:
+          command: stat -c '%i:%s' /var/log/obmc-console.log 2>/dev/null || echo 0:0
+          variable: CONSOLE_MARK
+
+      - cmd: redfish
+        name: Redfish ForceRestart is accepted
         transport: *local
         parameters:
-          command: >-
-            curl -sk -u root:[[attributes.BMCPassword]]
-            -X POST -H 'Content-Type: application/json'
-            -d '{"ResetType":"ForceRestart"}'
-            -o /dev/null -w '%{http_code}'
-            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
-          expect:
-            - regex: "^(200|204)$"
-      - cmd: shell
-        name: Wait for POST after override (SMBIOS re-transfer)
-        transport: *bmc_ssh
-        options:
-          timeout: 15m
-        parameters:
-          command: >-
-            full=$(journalctl -k --no-pager | grep -c 'push: queue is full');
-            while [ ! -f /var/lib/smbios/smbios2 ] ||
-                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
-            do
-              now=$(journalctl -k --no-pager | grep -c 'push: queue is full');
-              if [ "$now" -gt "$full" ]; then
-                echo "CHIF push queue full ($full -> $now): restarting CHIF";
-                systemctl restart xyz.openbmc_project.GxpChif.service;
-                full=$now;
-              fi;
-              sleep 5;
-            done;
-            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
-          expect:
-            - regex: "SMBIOS ready"
-      - cmd: cmd
-        name: Wait for all EVs to be published
-        transport: *bmc_ssh
-        options:
-          timeout: 2m
-        parameters:
-          executable: sleep
-          args: ["20"]
-      - cmd: cmd
-        name: Dump EV storage
-        transport: *bmc_ssh
-        options:
-          timeout: 2m
-        parameters:
-          executable: hexdump
-          args: ["-C", "/var/lib/chif/evs.dat"]
+          <<: *redfish
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: ForceRestart}
+            status: [200, 204]
+
+      - <<: *wait_smbios
+        name: The POST after the override delivers SMBIOS data
 
       - cmd: shell
         name: Host consumed one-time boot (journal)
-        transport: *bmc_ssh
+        transport: *bmc
         options:
           timeout: 3m
+          on-failure: continue
         parameters:
-          command: >-
+          command: |
+            r=not-consumed
             for i in $(seq 1 30); do
               journalctl -u xyz.openbmc_project.GxpChif.service --no-pager |
-                grep -q 'One-time boot consumed' && { echo consumed; exit 0; }
-              sleep 5;
-            done;
-            echo "not-consumed"; exit 1
+                grep -q 'One-time boot consumed' && { r=consumed; break; }
+              sleep 5
+            done
+            echo "$r"
           expect:
-            - regex: "^consumed$"
+            - regex: '^consumed$'
+
+      # The firmware deletes the EV over CHIF after it consumed the override.
       - cmd: shell
         name: CQTBOOTNEXT cleared from store
-        transport: *bmc_ssh
+        transport: *bmc
+        options:
+          timeout: 3m
+          on-failure: continue
         parameters:
-          command: "grep -a -c CQTBOOTNEXT /var/lib/chif/evs.dat 2>/dev/null || echo 0"
+          command: |
+            for i in $(seq 1 24); do
+              n=$(grep -a -c CQTBOOTNEXT /var/lib/chif/evs.dat)
+              [ "$n" = 0 ] && break
+              sleep 5
+            done
+            echo "$n"
           expect:
-            - regex: "^0$"
-      - cmd: cmd
+            - regex: '^0$'
+
+      - cmd: redfish
         name: Redfish override reconciled back to Continuous
         transport: *local
-        options:
-          timeout: 30s
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Systems/system"]
+          <<: *redfish
+          validate: inventory
+          inventory:
+            retry: {timeout: 1m, interval: 5s}
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: Boot/BootSourceOverrideEnabled, op: eq, value: Continuous}
+
+      # obmc-console renames a full log to .log.1; the inode tells which file
+      # held the mark.
+      - cmd: shell
+        name: The host wrote to its console during the override boot
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: |
+            L=/var/log/obmc-console.log; m={{ CONSOLE_MARK }}; ino=${m%%:*}; off=${m##*:}
+            if [ "$(stat -c %i $L 2>/dev/null)" = "$ino" ]; then tail -c +$((off + 1)) $L
+            elif [ "$(stat -c %i $L.1 2>/dev/null)" = "$ino" ]; then tail -c +$((off + 1)) $L.1; cat $L
+            else cat $L.1 $L 2>/dev/null; fi > /tmp/fwci-console.txt
+            echo "$(( $(wc -c < /tmp/fwci-console.txt) )) bytes"
           expect:
-            - regex: '"BootSourceOverrideEnabled": *"Continuous"'
+            - regex: '^[1-9][0-9]* bytes$'
 
       - cmd: shell
-        name: "Console shows System Utilities / BIOS setup entry"
-        transport: *bmc_ssh
+        name: Console shows System Utilities / BIOS setup entry
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
-          command: "grep -aiE 'System Utilities|Setup Utility|One-Time Boot' /var/log/obmc-console.log /var/log/obmc-console.log.1 2>/dev/null | tail -n 20 || echo '(console log empty)'"
+          command: >-
+            l=$(grep -a -i -E 'System Utilities|Setup Utility|One-Time Boot' /tmp/fwci-console.txt | tail -n 20);
+            echo "${l:-not found}"
+          expect:
+            - regex: '(?i)system utilities|setup utility|one-time boot'
+
+  - name: Dump EV store after a failure
+    run-condition: failure
+    steps:
+      - cmd: shell
+        name: Dump EV storage
+        transport: *bmc
+        options:
+          timeout: 2m
+        parameters:
+          command: hexdump -C /var/lib/chif/evs.dat

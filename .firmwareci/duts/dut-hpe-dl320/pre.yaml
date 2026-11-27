@@ -31,16 +31,6 @@ pre-stage:
       command: power
       args: ["on"]
 
-  - cmd: cmd
-    name: Setup Tools
-    transport: &local
-      proto: local
-    options:
-      timeout: 2m
-    parameters:
-      executable: cat
-      args: ["[[storage.dl320_tools]]/dummy.txt"]
-
   - cmd: dutctl
     name: Wait for boot banner on serial
     options:
@@ -64,23 +54,30 @@ pre-stage:
       proto: ssh
       options:
         host: "[[attributes.BMC]]"
-        user: root
+        port: "[[attributes.SSHPort]]"
+        user: "[[attributes.BMCUser]]"
         password: "[[attributes.BMCPassword]]"
     options:
       timeout: 2m
     parameters:
       command: "journalctl -t phosphor-bmc-state-manager -f | grep -m 1 BMC_READY"
 
-  - cmd: shell
+  - cmd: redfish
     name: Power off host to reset NVRAM/EVs to known good state
-    transport: *local
+    transport: &local
+      proto: local
     parameters:
-      command: >-
-        curl -sk -u root:[[attributes.BMCPassword]]
-        -X POST -H 'Content-Type: application/json'
-        -d '{"ResetType":"ForceOff"}'
-        -o /dev/null -w '%{http_code}'
-        https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
+      host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+      auth:
+        user: "[[attributes.BMCUser]]"
+        password: "[[attributes.BMCPassword]]"
+      validate: request
+      request:
+        method: POST
+        path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+        body: {ResetType: ForceOff}
+        # 409: the host is off already.
+        status: [200, 202, 204, 409]
 
   - cmd: shell
     name: Host system DC gets/stays powered off (systemd-journal)
@@ -98,14 +95,14 @@ pre-stage:
       timeout: 10s
     transport: *local
     parameters:
-      host: "[[attributes.BMC]]"
+      host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
       auth:
-        user: root
+        user: "[[attributes.BMCUser]]"
         password: "[[attributes.BMCPassword]]"
       validate: inventory
       inventory:
         rules:
-          - path: /redfish/v1/Systems/system
+          - path: "[[attributes.RedfishSystem]]"
             prop: PowerState
             op: eq
             value: "Off"

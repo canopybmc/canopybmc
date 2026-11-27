@@ -1,0 +1,119 @@
+name: IPMI watchdog
+description: >-
+  The IPMI watchdog timer can be set, started and stopped: a set timer with no
+  timeout action reads back its settings, a reset starts it counting down,
+  and turning it off stops it. The timeout action is none throughout, so the
+  test never resets the host.
+
+defaults:
+  local: &local
+    proto: local
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
+
+stages:
+  - name: IPMI watchdog
+    steps:
+      # Waits until the BMC answers IPMI over LAN.
+      - cmd: ipmi
+        name: IPMI answers over LAN
+        transport: *local
+        parameters:
+          lan: *lan
+          get: device/ipmi-version
+          retry: {timeout: 10m, interval: 10s}
+          expect: {eq: "2.0"}
+
+      - cmd: ipmi
+        name: Set Watchdog Timer is accepted
+        transport: *local
+        parameters:
+          lan: *lan
+          set: watchdog
+          value: {timer-use: sms-os, timeout-action: none, initial-countdown: 600s}
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: The watchdog timer use reads back as SMS/OS
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: watchdog/timer-use
+          expect: {eq: sms-os}
+
+      - cmd: ipmi
+        name: The watchdog timeout action reads back as none
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: watchdog/timeout-action
+          expect: {eq: none}
+
+      - cmd: ipmi
+        name: The watchdog initial countdown reads back as 600 seconds
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: watchdog/initial-countdown
+          expect: {eq: 600s}
+
+      - cmd: ipmi
+        name: Reset Watchdog Timer starts the timer
+        transport: *local
+        parameters:
+          lan: *lan
+          set: watchdog
+          value: reset
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: The watchdog is running
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: watchdog/running
+          expect: {eq: true}
+
+      - cmd: ipmi
+        name: The present countdown is at most the initial countdown
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: watchdog/present-countdown
+          expect: {le: 600s}
+
+      - cmd: ipmi
+        name: Turning the watchdog off is accepted
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          set: watchdog
+          value: "off"
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: The watchdog is stopped
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: watchdog/running
+          expect: {eq: false}
+
+      - cmd: ipmi
+        name: Get Watchdog rejects an extra byte
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          raw: 0x06 0x25 0x00
+          expect: {completion: 0xc7}

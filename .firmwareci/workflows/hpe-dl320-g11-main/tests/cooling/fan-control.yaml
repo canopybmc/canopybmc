@@ -1,0 +1,80 @@
+name: Fan control
+description: >-
+  The BMC controls the fans: the board chassis serves its fans, every present
+  fan is healthy and turning, and on OpenBMC a fan control service runs.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  bmc: &bmc
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Fan control
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The board chassis serves its fans
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 5m, interval: 10s}
+            rules:
+              - {path: "[[attributes.RedfishChassis]]/ThermalSubsystem", collection: Fans, op: ge, value: "[[attributes.Cooling.MinFans]]"}
+
+      - cmd: redfish
+        name: Every present fan is healthy
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]/ThermalSubsystem", forEach: Fans, where: {prop: Status/State, op: ne, value: Absent}, prop: Status/Health, op: eq, value: OK}
+
+      - cmd: redfish
+        name: Every present fan is turning
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]/ThermalSubsystem", forEach: Fans, where: {prop: Status/State, op: ne, value: Absent}, prop: SpeedPercent/Reading, op: ge, value: "1"}
+
+      # OpenBMC: phosphor-pid-control or phosphor-fan-control.
+      - cmd: shell
+        name: A fan control service runs
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: >-
+            systemctl list-units --state=active --no-legend --plain 'phosphor-pid-control*' 'phosphor-fan-control*' | awk '{print $1}' | head -1
+          expect:
+            - regex: '^phosphor-(pid|fan)-control'

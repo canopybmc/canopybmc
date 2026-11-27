@@ -1,0 +1,184 @@
+name: IPMI users
+description: >-
+  IPMI user management works end to end in a free user slot: a user is
+  created, gets a password and a privilege, logs in only with the privilege
+  it has, is disabled and deleted, and cannot log in afterwards. The test uses
+  slot 15, the last of the 15 OpenBMC user slots.
+
+defaults:
+  local: &local
+    proto: local
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
+
+stages:
+  - name: IPMI users
+    steps:
+      # Waits until the BMC answers IPMI over LAN.
+      - cmd: ipmi
+        name: IPMI answers over LAN
+        transport: *local
+        parameters:
+          lan: *lan
+          get: device/ipmi-version
+          retry: {timeout: 10m, interval: 10s}
+          expect: {eq: "2.0"}
+
+      - cmd: ipmi
+        name: The test user slot is free
+        transport: *local
+        parameters:
+          lan: *lan
+          get: "user/15/name"
+          expect: {matches: "^$"}
+
+      - cmd: ipmi
+        name: Set User Name creates the test user
+        transport: *local
+        parameters:
+          lan: *lan
+          set: "user/15/name"
+          value: tsipmi
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: Get User Name reads the test user back
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: "user/15/name"
+          expect: {eq: tsipmi}
+
+      - cmd: ipmi
+        name: Set User Password sets the test password
+        transport: *local
+        parameters:
+          lan: *lan
+          set: "user/15/password"
+          value: Ts-1pmi-Pass26
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: The test password passes the password test
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          set: "user/15/password-test"
+          value: Ts-1pmi-Pass26
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: A wrong password fails the password test
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          set: "user/15/password-test"
+          value: not-the-password
+          expect: {completion: 0x80}
+
+      - cmd: ipmi
+        name: Set User Access limits the test user to User
+        transport: *local
+        parameters:
+          lan: *lan
+          set: "user/15/privilege"
+          value: user
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: Set User Password enables the test user
+        transport: *local
+        parameters:
+          lan: *lan
+          set: "user/15/enabled"
+          value: true
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: Get User Access reads the User privilege
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: "user/15/privilege"
+          expect: {eq: user}
+
+      - cmd: ipmi
+        name: An administrator session is refused for a User account
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: {host: "[[attributes.BMC]]", user: tsipmi, password: Ts-1pmi-Pass26, cipher: 17}
+          get: device/device-id
+          expect: refused
+
+      - cmd: ipmi
+        name: Set User Access raises the test user to Administrator
+        transport: *local
+        parameters:
+          lan: *lan
+          set: "user/15/privilege"
+          value: administrator
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: The test user opens an administrator session
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: {host: "[[attributes.BMC]]", user: tsipmi, password: Ts-1pmi-Pass26, cipher: 17}
+          get: device/ipmi-version
+          expect: {eq: "2.0"}
+
+      - cmd: ipmi
+        name: Set User Password disables the test user
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          set: "user/15/enabled"
+          value: false
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: A disabled user cannot log in
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: {host: "[[attributes.BMC]]", user: tsipmi, password: Ts-1pmi-Pass26, cipher: 17}
+          get: device/device-id
+          expect: refused
+
+      - cmd: ipmi
+        name: An empty Set User Name deletes the test user
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          set: "user/15/name"
+          value: ""
+          expect: {completion: 0}
+
+      - cmd: ipmi
+        name: The test user slot is free again
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: "user/15/name"
+          expect: {matches: "^$"}
+
+      - cmd: ipmi
+        name: A deleted user cannot log in
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: {host: "[[attributes.BMC]]", user: tsipmi, password: Ts-1pmi-Pass26, cipher: 17}
+          get: device/device-id
+          expect: refused

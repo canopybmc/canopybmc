@@ -1,0 +1,60 @@
+name: Redfish DMTF conformance
+description: >-
+  Run the DMTF Redfish reference validators against the BMC. The
+  Service-Validator checks every resource against the Redfish schemas, and
+  the Protocol-Validator checks the DSP0266 protocol behavior. The service
+  crawl takes long on a BMC with many resources.
+
+stages:
+  - name: Redfish DMTF conformance
+    steps:
+      # Waits on Redfish itself: on a QEMU DUT, a TCP check of the forwarded
+      # port passes before the BMC listens.
+      - cmd: redfish
+        name: Redfish service answers
+        transport:
+          proto: local
+        parameters:
+          host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+          auth:
+            user: "[[attributes.BMCUser]]"
+            password: "[[attributes.BMCPassword]]"
+          validate: inventory
+          inventory:
+            retry:
+              timeout: 10m
+            rules:
+              - path: /redfish/v1
+                collection: Managers
+                op: ge
+                value: "1"
+
+      - cmd: redfish
+        name: Schema conformance (Redfish-Service-Validator)
+        transport:
+          proto: local
+        options:
+          timeout: 40m
+          on-failure: continue
+        parameters:
+          host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+          auth:
+            user: "[[attributes.BMCUser]]"
+            password: "[[attributes.BMCPassword]]"
+          validate: service
+
+      # Last step: it sends wrong credentials on purpose, which can trigger
+      # an account lockout for later requests.
+      - cmd: redfish
+        name: Protocol conformance (Redfish-Protocol-Validator)
+        transport:
+          proto: local
+        options:
+          timeout: 30m
+          on-failure: continue
+        parameters:
+          host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+          auth:
+            user: "[[attributes.BMCUser]]"
+            password: "[[attributes.BMCPassword]]"
+          validate: protocol

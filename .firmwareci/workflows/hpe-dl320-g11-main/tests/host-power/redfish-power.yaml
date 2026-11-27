@@ -1,0 +1,220 @@
+name: Redfish host power control
+description: >-
+  The host's power follows the Redfish reset actions: the system offers the
+  standard reset types, and ForceOff, On, ForceRestart, PowerCycle and
+  GracefulShutdown each lead to the power state they promise. The host is
+  on at the end.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Redfish host power control
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The host allows the standard reset types
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: "Actions/#ComputerSystem.Reset/ResetType@Redfish.AllowableValues", op: contains, value: ForceOff}
+              - {path: "[[attributes.RedfishSystem]]", prop: "Actions/#ComputerSystem.Reset/ResetType@Redfish.AllowableValues", op: contains, value: "On"}
+              - {path: "[[attributes.RedfishSystem]]", prop: "Actions/#ComputerSystem.Reset/ResetType@Redfish.AllowableValues", op: contains, value: ForceRestart}
+
+      - cmd: redfish
+        name: The host is powered on first
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 202, 204, 409]
+
+      - cmd: redfish
+        name: The host reports power on
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 5m, interval: 5s}
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+
+      - cmd: redfish
+        name: Redfish ForceOff is accepted
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: ForceOff}
+            status: [200, 202, 204]
+
+      - cmd: redfish
+        name: The host reports power off after ForceOff
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 2m, interval: 5s}
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "Off"}
+
+      - cmd: redfish
+        name: Redfish On is accepted
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 202, 204]
+
+      - cmd: redfish
+        name: The host reports power on after On
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 5m, interval: 5s}
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+
+      - cmd: redfish
+        name: Redfish ForceRestart is accepted
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: ForceRestart}
+            status: [200, 202, 204]
+
+      - cmd: redfish
+        name: The host reports power on after ForceRestart
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 5m, interval: 5s}
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+
+      - cmd: redfish
+        name: Redfish PowerCycle is accepted
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: PowerCycle}
+            status: [200, 202, 204]
+
+      - cmd: redfish
+        name: The host reports power on after PowerCycle
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 5m, interval: 5s}
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+
+      # The host needs time to boot an OS that answers the ACPI power button.
+      - cmd: sleep
+        name: The host OS boots
+        parameters:
+          duration: 4m
+
+      - cmd: redfish
+        name: Redfish GracefulShutdown is accepted
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: GracefulShutdown}
+            status: [200, 202, 204]
+
+      - cmd: redfish
+        name: The host reports power off after GracefulShutdown
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m, interval: 5s}
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "Off"}
+
+      - cmd: redfish
+        name: The host is powered on again
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 202, 204]
+
+      - cmd: redfish
+        name: The host reports power on at the end
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 5m, interval: 5s}
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}

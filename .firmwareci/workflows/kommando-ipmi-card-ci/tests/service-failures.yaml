@@ -1,24 +1,46 @@
 name: "Smoke: Service Failures"
 description: >-
-  Verify no unexpected service failures and no crash-looping
-  critical services.
+  Verify that no systemd unit failed on the BMC, except clear-once and
+  trace-enable, which may fail on this platform. The step names each failed
+  unit.
 
 defaults:
-  transport: &bmc_ssh
+  bmc: &bmc
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
 
 stages:
   - name: No Unexpected Failures
     steps:
-      - cmd: cmd
-        name: List failed units
-        transport: *bmc_ssh
+      # The SSH transport does not retry a refused connection, so wait for
+      # the BMC on Redfish first.
+      - cmd: redfish
+        name: Redfish service answers
+        transport:
+          proto: local
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "FAILED=$(systemctl list-units --state=failed --no-pager --no-legend | grep -v 'clear-once\\|trace-enable'); if [ -n \"$FAILED\" ]; then echo \"$FAILED\"; exit 1; fi; echo '0 unexpected failures'"
+          host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+          auth:
+            user: "[[attributes.BMCUser]]"
+            password: "[[attributes.BMCPassword]]"
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: shell
+        name: No unit failed except clear-once and trace-enable
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: >-
+            f=$(systemctl list-units --state=failed --no-pager --no-legend --plain
+            | grep -v -e clear-once -e trace-enable | awk '{print $1}');
+            echo "${f:-none}"
+          expect:
+            - regex: '^none$'

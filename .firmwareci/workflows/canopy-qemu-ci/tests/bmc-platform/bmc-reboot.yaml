@@ -1,0 +1,97 @@
+name: BMC reboot
+description: >-
+  A graceful BMC restart over Redfish takes the BMC down and brings it back:
+  afterwards the manager is enabled and healthy, runs the same firmware and
+  accepts logins.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: BMC reboot
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: Remember the BMC firmware version
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: FirmwareVersion, op: matches, value: '\S', variable: BMC_FIRMWARE}
+
+      - cmd: redfish
+        name: A graceful restart takes the BMC down and back up
+        transport: *local
+        options: {timeout: 15m}
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishManager]]/Actions/Manager.Reset"
+            body: {ResetType: GracefulRestart}
+            status: [200, 202, 204]
+            restart: {down: 3m, up: 10m}
+
+      - cmd: redfish
+        name: The manager is enabled after the restart
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 5m}
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: Status/State, op: eq, value: Enabled}
+
+      - cmd: redfish
+        name: The manager is healthy after the restart
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: Status/Health, op: eq, value: OK}
+
+      - cmd: redfish
+        name: The BMC runs the same firmware after the restart
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: FirmwareVersion, op: eq, value: "{{ BMC_FIRMWARE }}"}
+
+      - cmd: redfish
+        name: A session opens after the restart
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          auth: {user: "[[attributes.BMCUser]]", password: "[[attributes.BMCPassword]]", mode: session}
+          validate: request
+          request: {method: GET, path: "[[attributes.RedfishManager]]", status: 200}

@@ -2,138 +2,132 @@ name: "User: Disable Root Account"
 description: >-
   Verify root account can be safely disabled and re-enabled using a
   backup administrator account. CRITICAL: never disable root without
-  a backup admin — it locks out SSH and Redfish completely.
+  a backup admin, it locks out SSH and Redfish completely. The re-enable
+  and the removal of the backup admin also run after a failure.
   BMC-only, no host power required.
 
 defaults:
-  transport: &bmc_ssh
-    proto: ssh
-    options:
-      host: "[[attributes.BMC]]"
-      user: "root"
-      password: "[[attributes.BMCPassword]]"
-      port: 2222
+  local: &local
+    proto: local
+  root: &root
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth: {user: "[[attributes.BMCUser]]", password: "[[attributes.BMCPassword]]"}
+    validate: request
+  ciadmin: &ciadmin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth: {user: ciadmin, password: Adm1nBack9}
+    validate: request
+  delete_ciadmin: &delete_ciadmin
+    cmd: redfish
+    name: Delete ciadmin if it exists
+    transport: *local
+    parameters:
+      <<: *root
+      request: {method: DELETE, path: /redfish/v1/AccountService/Accounts/ciadmin, status: [200, 204, 404]}
+  restore: &restore
+    - cmd: redfish
+      name: Re-enable root via ciadmin
+      transport: *local
+      parameters:
+        <<: *ciadmin
+        request:
+          method: PATCH
+          path: "/redfish/v1/AccountService/Accounts/[[attributes.BMCUser]]"
+          body: {Enabled: true}
+          status: [200, 204]
+    - *delete_ciadmin
 
 stages:
   - name: Wait for BMC
     steps:
-      - cmd: cmd
-        name: Wait for SSH
-        transport: *bmc_ssh
-        options:
-          timeout: 5m
+      # Waits on Redfish itself: the QEMU port forward accepts before the BMC listens.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
         parameters:
-          executable: echo
-          args: ["SSH connected"]
-      - cmd: cmd
-        name: Wait for services to settle
-        transport: *bmc_ssh
-        options:
-          timeout: 2m
-        parameters:
-          executable: sleep
-          args: ["45"]
+          <<: *root
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
 
   - name: Create Backup Admin
     steps:
-      - cmd: cmd
+      - *delete_ciadmin
+      - cmd: redfish
         name: Create ciadmin backup administrator
-        transport: &local
-          proto: local
-        options:
-          timeout: 30s
+        transport: *local
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"UserName\":\"ciadmin\",\"Password\":\"Adm1nBack9\",\"RoleId\":\"Administrator\",\"Enabled\":true}' https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts -o /dev/null -w '%{http_code}'); echo \"Create ciadmin HTTP=$HTTP\"; test \"$HTTP\" = \"201\""
-      - cmd: cmd
+          <<: *root
+          request:
+            method: POST
+            path: /redfish/v1/AccountService/Accounts
+            body: {UserName: ciadmin, Password: Adm1nBack9, RoleId: Administrator, Enabled: true}
+            status: 201
+      - cmd: redfish
         name: Verify ciadmin can authenticate
         transport: *local
-        options:
-          timeout: 30s
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u ciadmin:Adm1nBack9 https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/Systems/system -o /dev/null -w '%{http_code}'); echo \"ciadmin login HTTP=$HTTP\"; test \"$HTTP\" = \"200\""
+          <<: *ciadmin
+          request: {method: GET, path: "[[attributes.RedfishSystem]]", status: 200}
 
   - name: Disable Root
     steps:
-      - cmd: cmd
+      - cmd: redfish
         name: Disable root via ciadmin
         transport: *local
-        options:
-          timeout: 30s
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u ciadmin:Adm1nBack9 -X PATCH -H 'Content-Type: application/json' -d '{\"Enabled\":false}' https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts/root -o /dev/null -w '%{http_code}'); echo \"Disable root HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
-      - cmd: cmd
+          <<: *ciadmin
+          request:
+            method: PATCH
+            path: "/redfish/v1/AccountService/Accounts/[[attributes.BMCUser]]"
+            body: {Enabled: false}
+            status: [200, 204]
+      - cmd: redfish
         name: Verify root is disabled
         transport: *local
-        options:
-          timeout: 30s
         parameters:
-          executable: curl
-          args: [-sk, -u, "ciadmin:Adm1nBack9",
-                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts/root"]
-          expect:
-            - regex: '"Enabled": *false'
-      - cmd: cmd
+          <<: *ciadmin
+          request:
+            method: GET
+            path: "/redfish/v1/AccountService/Accounts/[[attributes.BMCUser]]"
+            status: 200
+            rules:
+              - {prop: Enabled, op: eq, value: "false"}
+      - cmd: redfish
         name: Root cannot login (HTTP 401)
         transport: *local
-        options:
-          timeout: 30s
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/Systems/system -o /dev/null -w '%{http_code}'); echo \"Root login disabled HTTP=$HTTP\"; test \"$HTTP\" = \"401\""
+          <<: *root
+          request: {method: GET, path: "[[attributes.RedfishSystem]]", status: 401}
 
   - name: Re-enable Root
     steps:
-      - cmd: cmd
+      - cmd: redfish
         name: Re-enable root via ciadmin
         transport: *local
-        options:
-          timeout: 30s
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u ciadmin:Adm1nBack9 -X PATCH -H 'Content-Type: application/json' -d '{\"Enabled\":true}' https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts/root -o /dev/null -w '%{http_code}'); echo \"Re-enable root HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
-      - cmd: cmd
+          <<: *ciadmin
+          request:
+            method: PATCH
+            path: "/redfish/v1/AccountService/Accounts/[[attributes.BMCUser]]"
+            body: {Enabled: true}
+            status: [200, 204]
+      - cmd: redfish
         name: Root can login again (HTTP 200)
         transport: *local
-        options:
-          timeout: 30s
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/Systems/system -o /dev/null -w '%{http_code}'); echo \"Root login restored HTTP=$HTTP\"; test \"$HTTP\" = \"200\""
+          <<: *root
+          request: {method: GET, path: "[[attributes.RedfishSystem]]", status: 200}
 
+  # FirmwareCI has no stage that runs after both a pass and a failure, so the
+  # same steps run in a normal last stage and in a failure stage.
   - name: Cleanup
-    steps:
-      - cmd: cmd
-        name: Cleanup - ensure root is enabled
-        transport: *local
-        options:
-          on-failure: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "curl -sk -u ciadmin:Adm1nBack9 -X PATCH -H 'Content-Type: application/json' -d '{\"Enabled\":true}' https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts/root -o /dev/null -w '%{http_code}'"
-      - cmd: cmd
-        name: Cleanup - delete ciadmin
-        transport: *local
-        options:
-          on-failure: continue
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "curl -sk -u root:[[attributes.BMCPassword]] -X DELETE https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/AccountService/Accounts/ciadmin -o /dev/null -w '%{http_code}'"
+    on-failure: continue
+    steps: *restore
+
+  - name: Cleanup after a failure
+    run-condition: failure
+    on-failure: continue
+    steps: *restore

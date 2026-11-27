@@ -1,0 +1,69 @@
+name: Redfish log services
+description: >-
+  The BMC offers its logs over Redfish: the manager and the system each have
+  at least one log service, and every log service links to its entries, which
+  can be read.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+    validate: inventory
+
+stages:
+  - name: Redfish log services
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The manager has a log service
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", collection: LogServices, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: Every manager log service links to its entries
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", forEach: LogServices, prop: "Entries/@odata.id", op: exists}
+
+      - cmd: redfish
+        name: The system has a log service
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", collection: LogServices, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: Every system log service links to its entries
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", forEach: LogServices, prop: "Entries/@odata.id", op: exists}

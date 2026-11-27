@@ -1,0 +1,47 @@
+{
+    "Exposes": [
+        {
+            "Address": "0x48",
+            "Bus": 3,
+            "Name": "CPU0 Temp",
+            "Type": "TMP75"
+        },
+        {
+            "Address": "0x49",
+            "Bus": 3,
+            "Name": "CPU1 Temp",
+            "Type": "TMP75"
+        },
+        {
+            "Address": "0x4c",
+            "Bus": 3,
+            "Name": "Multi0 Temp",
+            "Type": "TMP421"
+        },
+        {
+            "Address": "0x4d",
+            "Bus": 3,
+            "Name": "Multi1 Temp",
+            "Type": "TMP421"
+        },
+        {
+            "Address": "0x56",
+            "Bus": 7,
+            "Name": "Exhaust Temp",
+            "Type": "TMP75"
+        },
+        {
+            "Address": "0x57",
+            "Bus": 7,
+            "Name": "Board Temp",
+            "Type": "TMP75"
+        }
+    ],
+    "Name": "Canopy QEMU",
+    "Probe": "TRUE",
+    "Type": "Board",
+    "xyz.openbmc_project.Inventory.Decorator.Asset": {
+        "Manufacturer": "QEMU",
+        "Model": "AST2600 EVB"
+    }
+}

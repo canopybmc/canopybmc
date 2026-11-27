@@ -1,0 +1,100 @@
+name: OpenBMC health
+description: >-
+  Fast checks inside an OpenBMC that its boot finished cleanly: systemd reports
+  the system running, no unit failed, no service restarted, no process
+  crashed and the kernel logged no oops. The checks need no list of expected
+  services, so they work on every OpenBMC platform.
+
+defaults:
+  transport: &bmc
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: OpenBMC health
+    steps:
+      # The SSH transport connects once and does not retry, and on a QEMU DUT
+      # a TCP check of the forwarded port passes before the BMC listens. Once
+      # Redfish answers, the BMC's SSH server is up too.
+      - cmd: redfish
+        name: Redfish service answers
+        transport:
+          proto: local
+        parameters:
+          host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+          auth:
+            user: "[[attributes.BMCUser]]"
+            password: "[[attributes.BMCPassword]]"
+          validate: inventory
+          inventory:
+            retry:
+              timeout: 10m
+            rules:
+              - path: /redfish/v1
+                collection: Managers
+                op: ge
+                value: "1"
+
+      - cmd: shell
+        name: systemd reports the system running
+        transport: *bmc
+        options:
+          timeout: 10m
+          on-failure: continue
+        parameters:
+          command: systemctl is-system-running --wait
+          expect:
+            - regex: '^running$'
+
+      - cmd: shell
+        name: No unit has failed
+        transport: *bmc
+        options:
+          on-failure: continue
+        parameters:
+          command: >-
+            f=$(systemctl list-units --failed --no-legend --plain | awk '{print $1}');
+            echo "${f:-none}"
+          expect:
+            - regex: '^none$'
+
+      - cmd: shell
+        name: No service restarted since the boot
+        transport: *bmc
+        options:
+          on-failure: continue
+        parameters:
+          command: >-
+            r=$(systemctl show -p Id -p NRestarts '*.service'
+            | awk -F= '/^Id=/{u=$2} /^NRestarts=/ && $2 > 0 {print u, $2}');
+            echo "${r:-none}"
+          expect:
+            - regex: '^none$'
+
+      - cmd: shell
+        name: No process crashed since the boot
+        transport: *bmc
+        options:
+          on-failure: continue
+        parameters:
+          command: >-
+            c=$(journalctl -b -o cat | grep -E 'terminated abnormally with signal|dumped core');
+            echo "${c:-none}"
+          expect:
+            - regex: '^none$'
+
+      - cmd: shell
+        name: The kernel logged no oops, BUG or panic
+        transport: *bmc
+        options:
+          on-failure: continue
+        parameters:
+          command: >-
+            k=$(dmesg | grep -E 'Oops|BUG:|Kernel panic|Call Trace');
+            echo "${k:-none}"
+          expect:
+            - regex: '^none$'

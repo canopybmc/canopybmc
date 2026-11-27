@@ -1,491 +1,397 @@
 name: "IPMI: User Management Lifecycle (NetFn 0x06)"
 description: >-
-  Create an IPMI user (NetFn 0x06), confirm it works over IPMI LAN and is
-  visible/manageable in Redfish as an Administrator, then delete it and confirm
-  it is gone from both. Also regression-tests a non-contiguous slot (user in
-  slot 3 while slot 2 is empty), which previously left the user unusable and
-  unmanageable in Redfish.
+  Create an IPMI user in slot 2 (NetFn 0x06), confirm it works over IPMI LAN
+  and is visible and manageable in Redfish and on D-Bus as an Administrator,
+  then delete it and confirm it is gone from IPMI and Redfish. Also
+  regression-tests a non-contiguous slot (user in slot 3 while slot 2 is
+  empty), which previously left the user unusable and unmanageable in Redfish.
+  The test first removes users left in slots 2 and 3 by an earlier run, and
+  removes them again in the last stages, also after a failure.
 
 defaults:
-  transport: &local
+  local: &local
     proto: local
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
+  bmc: &bmc
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  # An empty user name deletes the user; on an empty slot it changes nothing.
+  cleanup: &cleanup
+    - cmd: ipmi
+      name: User slot 3 is emptied
+      transport: *local
+      parameters:
+        lan: *lan
+        set: user/3/name
+        value: ""
+        expect: {completion: 0x00}
+    - cmd: ipmi
+      name: User slot 2 is emptied
+      transport: *local
+      parameters:
+        lan: *lan
+        set: user/2/name
+        value: ""
+        expect: {completion: 0x00}
 
 stages:
+  - name: Remove Leftover Users
+    steps: *cleanup
+
   - name: Create User
     steps:
-      - cmd: shell
-        name: Set User Name, slot 2 "fwcitest"
+      - cmd: ipmi
+        name: Set User Name, slot 2 fwcitest
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x45 0x02
-            0x66 0x77 0x63 0x69 0x74 0x65 0x73 0x74 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
-
-      - cmd: shell
-        name: Set User Password, slot 2, Testpass123
+          lan: *lan
+          set: user/2/name
+          value: fwcitest
+          expect: {completion: 0x00}
+      - cmd: ipmi
+        name: Set User Password, slot 2
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x47 0x82 0x02
-            0x54 0x65 0x73 0x74 0x70 0x61 0x73 0x73
-            0x31 0x32 0x33
-            0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
-
-      - cmd: shell
-        name: Set User Access, slot 2, ch1, Administrator, IPMI msg
+          lan: *lan
+          set: user/2/password
+          value: Testpass123
+          expect: {completion: 0x00}
+      - cmd: ipmi
+        name: Set User Access, slot 2, channel 1, Administrator
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x43 0xB1 0x02 0x04 0x00
-
-      - cmd: shell
-        name: Enable User - slot 2
+          lan: *lan
+          set: user/2/privilege
+          value: administrator
+          expect: {completion: 0x00}
+      - cmd: ipmi
+        name: Enable User, slot 2
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x47 0x82 0x01
+          lan: *lan
+          set: user/2/enabled
+          value: true
+          expect: {completion: 0x00}
 
   - name: Verify User Exists
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: Get User Name slot 2, expect "fwcitest" bytes
+      - cmd: ipmi
+        name: Get User Name, slot 2 is fwcitest
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x46 0x02
-          expect:
-            - regex: '66 77 63 69 74 65 73 74'
-
-      - cmd: shell
-        name: Get User Access - slot 2, ch1
+          lan: *lan
+          get: user/2/name
+          expect: {eq: fwcitest}
+      - cmd: ipmi
+        name: Get User Access, slot 2 is Administrator on channel 1
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x44 0x01 0x02
-
+          lan: *lan
+          get: user/2/privilege
+          expect: {eq: administrator}
       - cmd: shell
-        name: user list 1 (alias) - slot 2 shows fwcitest as ADMINISTRATOR
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            OUT=$(ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17 user list 1);
-            echo "$OUT";
-            echo "$OUT" | awk '$1 == "2" && $2 == "fwcitest" && /ADMINISTRATOR/ {f=1} END {exit !f}'
-
-      - cmd: shell
-        name: fwcitest on D-Bus with priv-admin and ipmi group
-        transport: &bmc_ssh
-          proto: ssh
-          options:
-            host: "[[attributes.BMC]]"
-            user: "root"
-            password: "[[attributes.BMCPassword]]"
-        options:
-          timeout: "30s"
+        name: fwcitest on D-Bus has priv-admin
+        transport: *bmc
         parameters:
           command: >-
             busctl get-property xyz.openbmc_project.User.Manager
             /xyz/openbmc_project/user/fwcitest
-            xyz.openbmc_project.User.Attributes
-            UserPrivilege UserEnabled UserGroups
+            xyz.openbmc_project.User.Attributes UserPrivilege
           expect:
-            - regex: 's "priv-admin"'
-            - regex: 'b true'
+            - regex: '^s "priv-admin"\s*$'
+      - cmd: shell
+        name: fwcitest on D-Bus is enabled
+        transport: *bmc
+        parameters:
+          command: >-
+            busctl get-property xyz.openbmc_project.User.Manager
+            /xyz/openbmc_project/user/fwcitest
+            xyz.openbmc_project.User.Attributes UserEnabled
+          expect:
+            - regex: '^b true\s*$'
+      - cmd: shell
+        name: fwcitest on D-Bus is in the ipmi group
+        transport: *bmc
+        parameters:
+          command: >-
+            busctl get-property xyz.openbmc_project.User.Manager
+            /xyz/openbmc_project/user/fwcitest
+            xyz.openbmc_project.User.Attributes UserGroups
+          expect:
             - regex: '"ipmi"'
-
-      - cmd: shell
-        name: Account fwcitest visible in Redfish AccountService
+      - cmd: redfish
+        name: Account fwcitest is visible in Redfish
         transport: *local
-        options:
-          timeout: "60s"
         parameters:
-          command: >-
-            i=0;
-            while [ $i -lt 20 ]; do
-            CODE=$(curl -sk -o /dev/null -w '%{http_code}'
-            -u root:[[attributes.BMCPassword]]
-            https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/fwcitest);
-            [ "$CODE" = 200 ] && break;
-            i=$((i+1));
-            sleep 1;
-            done;
-            echo "Redfish GET fwcitest HTTP=$CODE";
-            test "$CODE" = 200
-
-      - cmd: shell
-        name: Account fwcitest has Administrator role and is enabled
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 1m}
+            rules:
+              - {path: /redfish/v1/AccountService/Accounts/fwcitest, prop: UserName, op: eq, value: fwcitest}
+      - cmd: redfish
+        name: Account fwcitest has the Administrator role
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            curl -sk -u root:[[attributes.BMCPassword]]
-            https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/fwcitest
-          expect:
-            - regex: '"UserName": *"fwcitest"'
-            - regex: '"RoleId": *"Administrator"'
-            - regex: '"Enabled": *true'
-
-      - cmd: shell
-        name: Account fwcitest is manageable via Redfish (PATCH HTTP 200/204)
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService/Accounts/fwcitest, prop: RoleId, op: eq, value: Administrator}
+      - cmd: redfish
+        name: Account fwcitest is enabled in Redfish
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            curl -sk -o /dev/null -w '%{http_code}'
-            -u root:[[attributes.BMCPassword]]
-            -X PATCH -H 'Content-Type: application/json'
-            -d '{"Enabled":true}'
-            https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/fwcitest
-          expect:
-            - regex: '^(200|204)$'
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService/Accounts/fwcitest, prop: Enabled, op: eq, value: "true"}
+      - cmd: redfish
+        name: Account fwcitest is manageable via Redfish PATCH
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: PATCH
+            path: /redfish/v1/AccountService/Accounts/fwcitest
+            body: {Enabled: true}
+            status: [200, 204]
 
   - name: Verify User Login
     steps:
-      - cmd: shell
-        name: Check user login
+      - cmd: ipmi
+        name: fwcitest opens an Administrator session over LAN
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U fwcitest -P Testpass123 -C 17
-            -L Administrator mc info
-          expect:
-            - regex: 'Device ID\s*: [0-9]{2}'
+          lan: {host: "[[attributes.BMC]]", user: fwcitest, password: Testpass123, cipher: 17}
+          get: device/device-id
+          expect: exists
 
   - name: Delete User
     steps:
-      - cmd: shell
-        name: Disable User - slot 2
+      - cmd: ipmi
+        name: Disable User, slot 2
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x47 0x82 0x00
-      - cmd: shell
-        name: Downgrade User Access slot 2, ch1, User privilege
+          lan: *lan
+          set: user/2/enabled
+          value: false
+          expect: {completion: 0x00}
+      - cmd: ipmi
+        name: Downgrade User Access, slot 2, channel 1, User
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x43 0x81 0x02 0x02 0x00
-      - cmd: shell
-        name: Clear User Name - slot 2, 16 null bytes
+          lan: *lan
+          set: user/2/privilege
+          value: user
+          expect: {completion: 0x00}
+      - cmd: ipmi
+        name: Clear User Name, slot 2
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x45 0x02
-            0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
-            0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+          lan: *lan
+          set: user/2/name
+          value: ""
+          expect: {completion: 0x00}
 
   - name: Verify Deletion
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: Get User Name  - slot 2 should be all null bytes
+      - cmd: ipmi
+        name: Get User Name, slot 2 is empty
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x46 0x02
-          expect:
-            - regex: '^\s*(?:00\s+){15}00\s*$'
-
-      - cmd: shell
-        name: Get User Access slot 2, ch1 should have no access
+          lan: *lan
+          get: user/2/name
+          expect: {matches: '^$'}
+      - cmd: ipmi
+        name: Get User Access, slot 2 has no access on channel 1
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x44 0x01 0x02
-
-  - name: Verify Deletion in Redfish
-    steps:
-      - cmd: shell
-        name: Account fwcitest removed from Redfish AccountService (HTTP 404)
+          lan: *lan
+          get: user/2/privilege
+          expect: {eq: no-access}
+      - cmd: redfish
+        name: Account fwcitest is removed from Redfish (HTTP 404)
         transport: *local
-        options:
-          timeout: "60s"
         parameters:
-          command: >-
-            i=0;
-            while [ $i -lt 20 ]; do
-            CODE=$(curl -sk -o /dev/null -w '%{http_code}'
-            -u root:[[attributes.BMCPassword]]
-            https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/fwcitest);
-            [ "$CODE" = 404 ] && break;
-            i=$((i+1));
-            sleep 1;
-            done;
-            echo "Redfish GET deleted fwcitest HTTP=$CODE";
-            test "$CODE" = 404
+          <<: *admin
+          validate: request
+          request: {method: GET, path: /redfish/v1/AccountService/Accounts/fwcitest, status: 404}
 
   - name: Non-Contiguous Slot - Create in Slot 3 (slot 2 empty)
     steps:
-      - cmd: shell
-        name: Set User Name, slot 3 "fwcigap"
+      - cmd: ipmi
+        name: Set User Name, slot 3 fwcigap
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x45 0x03
-            0x66 0x77 0x63 0x69 0x67 0x61 0x70 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
-
-      - cmd: shell
-        name: Set User Password, slot 3, GapUser789!
+          lan: *lan
+          set: user/3/name
+          value: fwcigap
+          expect: {completion: 0x00}
+      - cmd: ipmi
+        name: Set User Password, slot 3
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x47 0x83 0x02
-            0x47 0x61 0x70 0x55 0x73 0x65 0x72 0x37
-            0x38 0x39 0x21
-            0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
-
-      - cmd: shell
-        name: Set User Access, slot 3, ch1, Administrator, IPMI msg
+          lan: *lan
+          set: user/3/password
+          value: "GapUser789!"
+          expect: {completion: 0x00}
+      - cmd: ipmi
+        name: Set User Access, slot 3, channel 1, Administrator
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x43 0xB1 0x03 0x04 0x00
-
-      - cmd: shell
-        name: Enable User - slot 3
+          lan: *lan
+          set: user/3/privilege
+          value: administrator
+          expect: {completion: 0x00}
+      - cmd: ipmi
+        name: Enable User, slot 3
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x47 0x83 0x01
-
+          lan: *lan
+          set: user/3/enabled
+          value: true
+          expect: {completion: 0x00}
 
   - name: Non-Contiguous Slot - Verify on BMC (IPMI)
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: Get User Name slot 3, expect "fwcigap" bytes
+      - cmd: ipmi
+        name: Get User Name, slot 3 is fwcigap
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x46 0x03
-          expect:
-            - regex: '66 77 63 69 67 61 70'
-
-      - cmd: shell
-        name: Slot 2 still empty (confirms non-contiguous allocation)
+          lan: *lan
+          get: user/3/name
+          expect: {eq: fwcigap}
+      - cmd: ipmi
+        name: Slot 2 is still empty
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x46 0x02
-          expect:
-            - regex: '^\s*(?:00\s+){15}00\s*$'
-
+          lan: *lan
+          get: user/2/name
+          expect: {matches: '^$'}
+      # The ipmi step reads one slot per step, so ipmitool lists all slots.
       - cmd: shell
         name: fwcigap occupies exactly one user slot
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
           command: >-
-            N=$(ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17 user list 1
-            | awk '$2 == "fwcigap"' | wc -l);
-            echo "fwcigap slot count=$N";
-            test "$N" = 1
-
-      - cmd: shell
-        name: Slot 3 reaches ADMINISTRATOR priv limit on ch1
+            ipmitool -I lanplus -H [[attributes.BMC]] -U [[attributes.BMCUser]]
+            -P [[attributes.BMCPassword]] -C 17 user list 1
+            | awk '$2 == "fwcigap"' | wc -l
+          expect:
+            - regex: '^\s*1\s*$'
+      - cmd: ipmi
+        name: Slot 3 reaches Administrator on channel 1
         transport: *local
-        options:
-          timeout: "60s"
         parameters:
-          command: >-
-            i=0;
-            while [ $i -lt 10 ]; do
-            OUT=$(ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17 user list 1);
-            echo "$OUT" | awk '$1 == "3" && $2 == "fwcigap" && /ADMINISTRATOR/ {f=1} END {exit !f}'
-            && break;
-            i=$((i+1));
-            sleep 1;
-            done;
-            echo "$OUT";
-            echo "$OUT" | awk '$1 == "3" && $2 == "fwcigap" && /ADMINISTRATOR/ {f=1} END {exit !f}'
-
+          lan: *lan
+          get: user/3/privilege
+          retry: {timeout: 30s}
+          expect: {eq: administrator}
       - cmd: shell
-        name: fwcigap on D-Bus with priv-admin and ipmi group
-        transport: *bmc_ssh
-        options:
-          timeout: "30s"
+        name: fwcigap on D-Bus has priv-admin
+        transport: *bmc
         parameters:
           command: >-
             busctl get-property xyz.openbmc_project.User.Manager
             /xyz/openbmc_project/user/fwcigap
-            xyz.openbmc_project.User.Attributes
-            UserPrivilege UserEnabled UserGroups
+            xyz.openbmc_project.User.Attributes UserPrivilege
           expect:
-            - regex: 's "priv-admin"'
-            - regex: 'b true'
-            - regex: '"ipmi"'
-
+            - regex: '^s "priv-admin"\s*$'
       - cmd: shell
-        name: Login as fwcigap over LAN (slot 3 user is usable)
-        transport: *local
-        options:
-          timeout: "30s"
+        name: fwcigap on D-Bus is enabled
+        transport: *bmc
         parameters:
           command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U fwcigap -P GapUser789! -C 17 -L Administrator
-            mc info
+            busctl get-property xyz.openbmc_project.User.Manager
+            /xyz/openbmc_project/user/fwcigap
+            xyz.openbmc_project.User.Attributes UserEnabled
           expect:
-            - regex: 'Device ID\s*: [0-9]{2}'
+            - regex: '^b true\s*$'
+      - cmd: shell
+        name: fwcigap on D-Bus is in the ipmi group
+        transport: *bmc
+        parameters:
+          command: >-
+            busctl get-property xyz.openbmc_project.User.Manager
+            /xyz/openbmc_project/user/fwcigap
+            xyz.openbmc_project.User.Attributes UserGroups
+          expect:
+            - regex: '"ipmi"'
+      - cmd: ipmi
+        name: fwcigap opens an Administrator session over LAN
+        transport: *local
+        parameters:
+          lan: {host: "[[attributes.BMC]]", user: fwcigap, password: "GapUser789!", cipher: 17}
+          get: device/device-id
+          expect: exists
 
   - name: Non-Contiguous Slot - Verify in Redfish
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: Account fwcigap visible in Redfish AccountService (HTTP 200)
+      - cmd: redfish
+        name: Account fwcigap is visible in Redfish
         transport: *local
-        options:
-          timeout: "60s"
         parameters:
-          command: >-
-            i=0;
-            while [ $i -lt 20 ]; do
-            CODE=$(curl -sk -o /dev/null -w '%{http_code}'
-            -u root:[[attributes.BMCPassword]]
-            https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/fwcigap);
-            [ "$CODE" = 200 ] && break;
-            i=$((i+1));
-            sleep 1;
-            done;
-            echo "Redfish GET fwcigap HTTP=$CODE";
-            test "$CODE" = 200
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 1m}
+            rules:
+              - {path: /redfish/v1/AccountService/Accounts/fwcigap, prop: UserName, op: eq, value: fwcigap}
+      - cmd: redfish
+        name: Account fwcigap has the Administrator role
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService/Accounts/fwcigap, prop: RoleId, op: eq, value: Administrator}
+      - cmd: redfish
+        name: Account fwcigap is enabled in Redfish
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService/Accounts/fwcigap, prop: Enabled, op: eq, value: "true"}
+      - cmd: redfish
+        name: Account fwcigap is manageable via Redfish PATCH
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: PATCH
+            path: /redfish/v1/AccountService/Accounts/fwcigap
+            body: {Enabled: true}
+            status: [200, 204]
 
-      - cmd: shell
-        name: Account fwcigap has Administrator role and is enabled
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            curl -sk -u root:[[attributes.BMCPassword]]
-            https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/fwcigap
-          expect:
-            - regex: '"UserName": *"fwcigap"'
-            - regex: '"RoleId": *"Administrator"'
-            - regex: '"Enabled": *true'
+  - name: Remove Test Users
+    on-failure: continue
+    steps: *cleanup
 
-      - cmd: shell
-        name: Account fwcigap is manageable via Redfish (PATCH HTTP 200/204)
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            curl -sk -o /dev/null -w '%{http_code}'
-            -u root:[[attributes.BMCPassword]]
-            -X PATCH -H 'Content-Type: application/json'
-            -d '{"Enabled":true}'
-            https://[[attributes.BMC]]/redfish/v1/AccountService/Accounts/fwcigap
-          expect:
-            - regex: '^(200|204)$'
-
-  - name: Non-Contiguous Slot - Cleanup
-    steps:
-      - cmd: shell
-        name: Disable User - slot 3
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x47 0x83 0x00
-      - cmd: shell
-        name: Downgrade User Access slot 3, ch1, User privilege
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x43 0x81 0x03 0x02 0x00
-      - cmd: shell
-        name: Clear User Name - slot 3, 16 null bytes
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x06 0x45 0x03
-            0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
-            0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+  - name: Remove Test Users after a failure
+    run-condition: failure
+    on-failure: continue
+    steps: *cleanup

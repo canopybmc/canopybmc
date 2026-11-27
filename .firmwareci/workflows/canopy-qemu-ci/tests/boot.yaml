@@ -1,59 +1,93 @@
 name: "Smoke: Boot"
 description: >-
-  Verify the QEMU OpenBMC instance boots successfully, is accessible
-  via SSH, has no unexpected failed services, and reports dmesg output.
+  Verify the QEMU OpenBMC instance boots: Redfish answers, systemd finishes
+  its startup, the OS release is Canopy, no unit has failed and the kernel
+  logged no oops, BUG or panic.
+
+on-failure: continue
 
 defaults:
   transport: &bmc_ssh
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
-      port: 2222
+      port: "[[attributes.SSHPort]]"
 
 stages:
   - name: Wait for BMC
     steps:
-      - cmd: cmd
-        name: Wait for SSH
-        transport: *bmc_ssh
-        options:
-          timeout: 5m
+      # The SSH transport does not retry a refused connection, and the QEMU
+      # port forward accepts before the BMC listens. Once Redfish answers, SSH
+      # is up too.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: {proto: local}
         parameters:
-          executable: echo
-          args: ["SSH connected"]
-      - cmd: cmd
-        name: Wait for services to settle
-        transport: *bmc_ssh
-        options:
-          timeout: 2m
-        parameters:
-          executable: sleep
-          args: ["45"]
+          host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+          auth: {user: "[[attributes.BMCUser]]", password: "[[attributes.BMCPassword]]"}
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
 
   - name: Verify Boot
     steps:
-      - cmd: cmd
+      # is-system-running exits 1 when degraded; the failed-units check reports that.
+      - cmd: shell
+        name: systemd finished the boot
+        transport: *bmc_ssh
+        options: {timeout: 10m}
+        parameters:
+          command: echo "$(systemctl is-system-running --wait)"
+          expect:
+            - regex: '^(running|degraded)$'
+      - cmd: shell
         name: OS release is Canopy
         transport: *bmc_ssh
         parameters:
-          executable: cat
-          args: ["/etc/os-release"]
+          command: cat /etc/os-release
           expect:
-            - regex: "canopy"
-      - cmd: cmd
+            - regex: '^ID="?canopy"?$'
+      - cmd: shell
         name: No unexpected failed services
         transport: *bmc_ssh
         parameters:
-          executable: systemctl
-          args: ["list-units", "--failed", "--no-pager"]
+          command: systemctl list-units --failed --no-pager
           expect:
             - regex: "0 loaded units listed"
-      - cmd: cmd
-        name: "[Report only] dmesg output"
+      - cmd: shell
+        name: The kernel logged no oops, BUG or panic
         transport: *bmc_ssh
-        options:
-          on-failure: continue
         parameters:
-          executable: dmesg
+          command: k=$(dmesg | grep -E 'Oops|BUG:|Kernel panic|Call Trace'); echo "${k:-none}"
+          expect:
+            - regex: '^none$'
+
+  # Runs only after a failure, to name what keeps the boot from finishing.
+  - name: Show what blocks the boot
+    run-condition: failure
+    steps:
+      - cmd: shell
+        name: Unfinished jobs
+        transport: *bmc_ssh
+        parameters:
+          command: systemctl list-jobs --no-pager
+      # systemctl status exits non-zero for a unit that is not running; the
+      # step only shows the output.
+      - cmd: shell
+        name: Status of the units with a job
+        transport: *bmc_ssh
+        parameters:
+          command: >-
+            for u in $(systemctl list-jobs --no-legend --plain | awk '{print $2}');
+            do systemctl status --no-pager --lines 20 "$u"; done; true
+      - cmd: shell
+        name: Services that restarted
+        transport: *bmc_ssh
+        parameters:
+          command: >-
+            systemctl show -p Id -p NRestarts '*.service'
+            | awk -F= '/^Id=/{u=$2} /^NRestarts=/ && $2 > 0 {print u, $2}'

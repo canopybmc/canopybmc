@@ -1,31 +1,40 @@
 name: "Smoke: Service Health"
 description: >-
-  Verify all critical IPMI services are running.
-  Each step checks one systemd unit via systemctl is-active.
+  Verify that the IPMI services are running: the IPMI host daemon, the KCS
+  bridge of the host interface and the IPMI SEL logger. Each step checks one
+  systemd unit with systemctl is-active.
 
 defaults:
-  transport: &bmc_ssh
+  bmc: &bmc
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
 
 stages:
   - name: Critical Services Running
+    on-failure: continue
     steps:
       - cmd: shell
-        name: Ipmi Host service
-        transport: *bmc_ssh
+        name: IPMI host service is active
+        transport: *bmc
         parameters:
           command: systemctl is-active phosphor-ipmi-host.service
+          expect:
+            - regex: '^active\s*$'
       - cmd: shell
-        name: Ipmi KCS service
-        transport: *bmc_ssh
+        name: IPMI KCS service is active
+        transport: *bmc
         parameters:
-          command: systemctl is-active phosphor-ipmi-kcs@ipmi_kcs1.service
+          command: systemctl is-active "[[attributes.IPMI.KCSUnit]]"
+          expect:
+            - regex: '^active\s*$'
       - cmd: shell
-        name: Ipmi Log (SEL)
-        transport: *bmc_ssh
+        name: IPMI SEL logger is active
+        transport: *bmc
         parameters:
           command: systemctl is-active xyz.openbmc_project.Logging.IPMI
+          expect:
+            - regex: '^active\s*$'

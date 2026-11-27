@@ -1,80 +1,73 @@
 name: "Inventory: Sensors"
 description: >-
-  Verify sensor count and presence of platform-universal sensors via Redfish.
-  Covers entity-manager configs and dbus-sensors for GXP, CPU temperature
-  sensors. PSU sensors are verified in inventory-psu.yaml. Fan PWM sensors
-  are verified in fan-control.yaml.
+  Power on the host, then verify over Redfish that the board chassis serves
+  the number of sensors in the DUT attribute Sensors.Count (a min..max range)
+  and every sensor named in Sensors.Names (each item is a regular expression
+  for one sensor name). Covers entity-manager configs and dbus-sensors for
+  GXP and CPU temperature sensors; the CPU sensors appear only after the host
+  POST. PSU sensors are verified in inventory-psu.yaml. Fan PWM sensors are
+  verified in fan-control.yaml.
 
 defaults:
-  transport: &local
+  local: &local
     proto: local
+  redfish: &redfish
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+    validate: inventory
 
 stages:
-  - name: Power On host
+  - name: Sensors
     steps:
-      - cmd: cmd
-        name: Power on host via Redfish
+      - cmd: redfish
+        name: Redfish service answers
         transport: *local
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"Power On HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
-      - cmd: cmd
-        name: Wait 120s for host POST and PECI sensors
-        transport: *local
-        options:
-          timeout: 3m
-        parameters:
-          executable: sleep
-          args: ["120"]
+          <<: *redfish
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
 
-  - name: Sensor Counts
-    steps:
-      - cmd: cmd
-        name: Total sensor count >= 20
+      - cmd: redfish
+        name: The host is powered on
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors"]
-          expect:
-            - regex: '"Members@odata.count": *([2-9][0-9]|[1-9][0-9]{2,})'
+          <<: *redfish
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 204]
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+            retry: {timeout: 5m, interval: 5s}
 
-  - name: Temperature Sensors Present
-    steps:
-      - cmd: cmd
-        name: GXP_Temp present
+      # The PECI CPU sensors appear once the host has passed POST.
+      - cmd: redfish
+        name: The chassis serves the board's number of sensors
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors"]
-          expect:
-            - regex: "GXP_Temp"
-      - cmd: cmd
-        name: DTS_CPU1 present
+          <<: *redfish
+          inventory:
+            retry: {timeout: 5m, interval: 10s}
+            rules:
+              - {path: "[[attributes.RedfishChassis]]", collection: Sensors, op: range, value: "[[attributes.Sensors.Count]]"}
+
+      # bmcweb names each member <type>_<sensor name>.
+      - cmd: redfish
+        name: The board's named sensors exist
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors"]
-          expect:
-            - regex: "DTS_CPU1"
-      - cmd: cmd
-        name: Die_CPU1 present
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors"]
-          expect:
-            - regex: "Die_CPU1"
+          <<: *redfish
+          inventory:
+            retry: {timeout: 5m, interval: 10s}
+            rules:
+              - {path: "[[attributes.RedfishChassis]]/Sensors", prop: Members, op: matches, value: '/Sensors/[a-z_]+_[[attributes.Sensors.Names.0]]\b'}
+              - {path: "[[attributes.RedfishChassis]]/Sensors", prop: Members, op: matches, value: '/Sensors/[a-z_]+_[[attributes.Sensors.Names.1]]\b'}
+              - {path: "[[attributes.RedfishChassis]]/Sensors", prop: Members, op: matches, value: '/Sensors/[a-z_]+_[[attributes.Sensors.Names.2]]\b'}

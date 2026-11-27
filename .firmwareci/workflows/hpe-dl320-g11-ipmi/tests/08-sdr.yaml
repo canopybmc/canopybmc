@@ -2,105 +2,71 @@ name: "IPMI: SDR Repository Commands (NetFn 0x0a)"
 description: >-
   Verify SDR Repository commands (Table G-1, §33): Get SDR Repository Info
   (20h), Get SDR Repository Allocation Info (21h), Reserve SDR Repository
-  (22h), Get SDR (23h, first record header), and Get SDR Repository Time
-  (28h).
+  (22h), Get SDR (23h, first record header) and Get SDR Repository Time
+  (28h, not implemented on this BMC), and that the sensors of the SDR can be
+  listed.
 
 defaults:
-  transport: &local
+  local: &local
     proto: local
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
 
 stages:
-  - name: Get SDR Repository Info
+  - name: SDR Repository Commands
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: Get SDR Repository Info (0x0a 0x20)
+      - cmd: ipmi
+        name: SDR repository is version 1.5
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0a 0x20
-
-  - name: Get SDR Repository Allocation Info
-    steps:
-      - cmd: shell
-        name: Get SDR Repository Allocation Info (0x0a 0x21)
+          lan: *lan
+          get: sdr/version
+          expect: {eq: "1.5"}
+      - cmd: ipmi
+        name: SDR repository holds records
         transport: *local
-        options:
-          timeout: "30s"
-          on-failure: continue
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0a 0x21
-
-  - name: Reserve SDR Repository
-    steps:
-      - cmd: shell
-        name: Reserve SDR Repository (0x0a 0x22)
+          lan: *lan
+          get: sdr/records
+          expect: {ge: 1}
+      # Byte 8 is the last byte of the reply, so the check needs the whole reply.
+      - cmd: ipmi
+        name: SDR allocation info answers with all nine bytes
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0a 0x22
-
-  - name: Get SDR
-    steps:
-      - cmd: shell
-        name: Get SDR (0x0a 0x23) - first record header (5 bytes)
+          lan: *lan
+          raw: 0x0a 0x21
+          expect: {byte: 8, ge: 0}
+      - cmd: ipmi
+        name: Reserve SDR Repository returns a reservation
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0a 0x23 0x00 0x00 0x00 0x00 0x00 0x05
-
-  - name: SDR Repository Time
-    steps:
-      - cmd: shell
-        name: Get SDR Repository Time (0x0a 0x28)
+          lan: *lan
+          get: sdr/reservation
+          expect: {ne: 0}
+      - cmd: ipmi
+        name: First SDR record carries SDR version 1.5
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0a 0x28 2>&1 || true
-          expect:
-            - regex: 'rsp=0xc1|Invalid command'
-
-  - name: SDR Repository via ipmitool Aliases
-    steps:
-      - cmd: shell
-        name: sdr info (alias)
+          lan: *lan
+          get: sdr-record/0/version
+          expect: {eq: "1.5"}
+      # Not implemented on this BMC: ipmid answers 0xC1.
+      - cmd: ipmi
+        name: Get SDR Repository Time is rejected with 0xC1
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            sdr info
-          expect:
-            - regex: 'Record Count\s*:'
-      - cmd: shell
-        name: sdr list (alias - enumerates all sensor records)
+          lan: *lan
+          get: sdr/time
+          expect: {completion: 0xc1}
+      - cmd: ipmi
+        name: The sensors of the SDR can be listed
         transport: *local
-        options:
-          timeout: "3m"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            sdr list
-          expect:
-            - regex: '\|'
+          lan: *lan
+          get: sdr/*/name
+          expect: {count: {ge: 1}}

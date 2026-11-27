@@ -1,0 +1,101 @@
+name: IPMI sensor data repository
+description: >-
+  The sensor data repository follows the IPMI specification: version 1.5,
+  holds records, hands out reservations and refuses a partial read without
+  one. No threshold sensor is in a critical or non-recoverable state.
+
+defaults:
+  local: &local
+    proto: local
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
+
+stages:
+  - name: IPMI sensor data repository
+    steps:
+      # Waits until the BMC answers IPMI over LAN.
+      - cmd: ipmi
+        name: IPMI answers over LAN
+        transport: *local
+        parameters:
+          lan: *lan
+          get: device/ipmi-version
+          retry: {timeout: 10m, interval: 10s}
+          expect: {eq: "2.0"}
+
+      - cmd: ipmi
+        name: SDR repository is version 1.5
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: sdr/version
+          expect: {eq: "1.5"}
+
+      - cmd: ipmi
+        name: SDR repository holds records
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: sdr/records
+          expect: {ge: 1}
+
+      - cmd: ipmi
+        name: Reserve SDR repository returns a reservation
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: sdr/reservation
+          expect: {ne: 0}
+
+      - cmd: ipmi
+        name: First SDR record carries SDR version 1.5
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: sdr-record/0/version
+          expect: {eq: "1.5"}
+
+      # ns: no reading yet, for example while the host is off.
+      - cmd: ipmi
+        name: No threshold sensor is critical or non-recoverable
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: sdr/*/state
+          where: {type: threshold}
+          expect: {matches: '^(ok|nc|ns)$'}
+
+      - cmd: ipmi
+        name: SDR repository info rejects an extra byte
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          raw: 0x0a 0x20 0x00
+          expect: {completion: 0xc7}
+
+      - cmd: ipmi
+        name: A partial SDR read without reservation is refused
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          raw: 0x0a 0x23 0x00 0x00 0x00 0x00 0x01 0x0f
+          expect: {completion: 0xc5}
+
+      - cmd: ipmi
+        name: Device SDR info rejects an extra byte
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          raw: 0x04 0x20 0x01 0x00
+          expect: {completion: 0xc7}

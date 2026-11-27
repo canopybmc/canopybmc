@@ -1,205 +1,164 @@
 name: "Inventory: Power Supplies"
 description: >-
-  Verify PSU sensor presence, live power/voltage readings, sensor health, and
-  PSU identity via Redfish. Covers gxp-psu kernel driver, entity-manager PSU
-  config, and the PowerSubsystem Redfish path. PSU2 checks use on-failure:
-  continue as some platforms may have only 1 PSU.
+  Power on the host, then verify the power supplies over Redfish: the PSU
+  sensors in the DUT attribute PSU.Sensors exist, the PSU power sensors of
+  PSU.InputPower and PSU.OutputPower read above 0 W, the voltage sensors of
+  PSU.InputVoltage and PSU.OutputVoltage read inside their ranges, the input
+  power sensor is healthy, and the PowerSubsystem holds PSU.Count supplies
+  that each report manufacturer, serial number and part number. Covers the
+  gxp-psu kernel driver, the entity-manager PSU config and the
+  PowerSubsystem Redfish path.
 
 defaults:
-  transport: &local
+  local: &local
     proto: local
+  redfish: &redfish
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+    validate: inventory
+  # A number above 0, as bmcweb prints it.
+  above_zero: &above_zero '^([1-9][0-9]*(\.[0-9]+)?|0\.[0-9]*[1-9][0-9]*)$'
 
 stages:
-  - name: Power On host
+  - name: Power Supplies
     steps:
-      - cmd: cmd
-        name: Power on host via Redfish
+      - cmd: redfish
+        name: Redfish service answers
         transport: *local
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"Power On HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
-      - cmd: cmd
-        name: Wait 120s for host and PSU readings
-        transport: *local
-        options:
-          timeout: 3m
-        parameters:
-          executable: sleep
-          args: ["120"]
+          <<: *redfish
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
 
-  - name: PSU1 Sensor Presence
-    steps:
-      - cmd: cmd
-        name: All 8 PSU1 sensors present
+      - cmd: redfish
+        name: The host is powered on
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "DATA=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors); MISSING=''; for S in IINPUT_PSU1 IOUTPUT_PSU1 VINPUT_PSU1 VOUTPUT_PSU1 PINPUT_PSU1 POUTPUT_PSU1 TEMP1_PSU1 FAN1_PSU1; do echo \"$DATA\" | grep -q \"$S\" || MISSING=\"$MISSING $S\"; done; if [ -n \"$MISSING\" ]; then echo \"MISSING:$MISSING\"; exit 1; fi; echo 'All 8 PSU1 sensors present'"
+          <<: *redfish
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 204]
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+            retry: {timeout: 5m, interval: 5s}
 
-  - name: PSU2 Power Readings
-    steps:
-      - cmd: cmd
-        name: PINPUT_PSU2 > 0 W
+      # bmcweb names each member <type>_<sensor name>.
+      - cmd: redfish
+        name: The board's PSU sensors exist
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/power_PINPUT_PSU2"]
-          expect:
-            - regex: '"Reading": *([1-9][0-9]*\.?[0-9]*|0\.[0-9]*[1-9][0-9]*)'
-      - cmd: cmd
-        name: POUTPUT_PSU2 > 0 W
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/power_POUTPUT_PSU2"]
-          expect:
-            - regex: '"Reading": *([1-9][0-9]*\.?[0-9]*|0\.[0-9]*[1-9][0-9]*)'
+          <<: *redfish
+          inventory:
+            retry: {timeout: 3m, interval: 10s}
+            rules:
+              - {path: "[[attributes.RedfishChassis]]/Sensors", prop: Members, op: matches, value: '/Sensors/[a-z_]+_[[attributes.PSU.Sensors.0]]\b'}
+              - {path: "[[attributes.RedfishChassis]]/Sensors", prop: Members, op: matches, value: '/Sensors/[a-z_]+_[[attributes.PSU.Sensors.1]]\b'}
+              - {path: "[[attributes.RedfishChassis]]/Sensors", prop: Members, op: matches, value: '/Sensors/[a-z_]+_[[attributes.PSU.Sensors.2]]\b'}
+              - {path: "[[attributes.RedfishChassis]]/Sensors", prop: Members, op: matches, value: '/Sensors/[a-z_]+_[[attributes.PSU.Sensors.3]]\b'}
+              - {path: "[[attributes.RedfishChassis]]/Sensors", prop: Members, op: matches, value: '/Sensors/[a-z_]+_[[attributes.PSU.Sensors.4]]\b'}
+              - {path: "[[attributes.RedfishChassis]]/Sensors", prop: Members, op: matches, value: '/Sensors/[a-z_]+_[[attributes.PSU.Sensors.5]]\b'}
+              - {path: "[[attributes.RedfishChassis]]/Sensors", prop: Members, op: matches, value: '/Sensors/[a-z_]+_[[attributes.PSU.Sensors.6]]\b'}
+              - {path: "[[attributes.RedfishChassis]]/Sensors", prop: Members, op: matches, value: '/Sensors/[a-z_]+_[[attributes.PSU.Sensors.7]]\b'}
 
-  - name: PSU2 Voltage Readings
-    steps:
-      - cmd: cmd
-        name: VINPUT_PSU2 in 100-250 V
+      # The PSU readings settle after the host power-on.
+      - cmd: redfish
+        name: PSU input power reads above 0 W
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/voltage_VINPUT_PSU2"]
-          expect:
-            - regex: '"Reading": *(1[0-9][0-9]|2[0-4][0-9]|250)\.?[0-9]*'
-      - cmd: cmd
-        name: VOUTPUT_PSU2 in 11-14 V
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/voltage_VOUTPUT_PSU2"]
-          expect:
-            - regex: '"Reading": *(1[1-4])\.?[0-9]*'
+          <<: *redfish
+          inventory:
+            retry: {timeout: 3m, interval: 10s}
+            rules:
+              - {path: "[[attributes.RedfishChassis]]/Sensors/[[attributes.PSU.InputPower]]", prop: Reading, op: matches, value: *above_zero}
 
-  - name: PSU2 Sensor Health
-    steps:
-      - cmd: cmd
-        name: PINPUT_PSU2 Health is OK
+      - cmd: redfish
+        name: PSU output power reads above 0 W
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/power_PINPUT_PSU2"]
-          expect:
-            - regex: '"Health": *"OK"'
+          <<: *redfish
+          inventory:
+            retry: {timeout: 3m, interval: 10s}
+            rules:
+              - {path: "[[attributes.RedfishChassis]]/Sensors/[[attributes.PSU.OutputPower]]", prop: Reading, op: matches, value: *above_zero}
 
-  - name: PSU1 Identity
-    steps:
-      - cmd: cmd
-        name: PSU1 Manufacturer populated
+      - cmd: redfish
+        name: PSU input voltage is in range
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/HPE_POWER_SUPPLY_1"]
-          expect:
-            - regex: '"Manufacturer": *"[^"][^"]*"'
-      - cmd: cmd
-        name: PSU1 SerialNumber populated
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/HPE_POWER_SUPPLY_1"]
-          expect:
-            - regex: '"SerialNumber": *"[^"][^"]*"'
-      - cmd: cmd
-        name: PSU1 PartNumber populated
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/HPE_POWER_SUPPLY_1"]
-          expect:
-            - regex: '"PartNumber": *"[^"][^"]*"'
+          <<: *redfish
+          inventory:
+            retry: {timeout: 3m, interval: 10s}
+            rules:
+              - {path: "[[attributes.RedfishChassis]]/Sensors/[[attributes.PSU.InputVoltage.Sensor]]", prop: Reading, op: range, value: "[[attributes.PSU.InputVoltage.Range]]"}
 
-  - name: PSU2 Identity
-    steps:
-      - cmd: cmd
-        name: PSU2 Manufacturer populated
+      - cmd: redfish
+        name: PSU output voltage is in range
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/HPE_POWER_SUPPLY_2"]
-          expect:
-            - regex: '"Manufacturer": *"[^"][^"]*"'
-      - cmd: cmd
-        name: PSU2 SerialNumber populated
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/HPE_POWER_SUPPLY_2"]
-          expect:
-            - regex: '"SerialNumber": *"[^"][^"]*"'
-      - cmd: cmd
-        name: PSU2 PartNumber populated
-        transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
-        parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/PowerSubsystem/PowerSupplies/HPE_POWER_SUPPLY_2"]
-          expect:
-            - regex: '"PartNumber": *"[^"][^"]*"'
+          <<: *redfish
+          inventory:
+            retry: {timeout: 3m, interval: 10s}
+            rules:
+              - {path: "[[attributes.RedfishChassis]]/Sensors/[[attributes.PSU.OutputVoltage.Sensor]]", prop: Reading, op: range, value: "[[attributes.PSU.OutputVoltage.Range]]"}
 
-  - name: PSU2 Checks
-    steps:
-      - cmd: cmd
-        name: PSU2 sensors readable
+      - cmd: redfish
+        name: PSU input power sensor is healthy
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
+        options: {on-failure: continue}
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "for S in power_PINPUT_PSU2 power_POUTPUT_PSU2 voltage_VINPUT_PSU2 voltage_VOUTPUT_PSU2; do READING=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/$S | grep -o '\"Reading\": *[0-9.-]*' | head -1 | grep -o '[0-9.-]*$'); echo \"$S=$READING\"; test -n \"$READING\" || { echo \"FAIL: $S not found\"; exit 1; }; done"
-      - cmd: cmd
-        name: PINPUT_PSU2 Health is OK
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]/Sensors/[[attributes.PSU.InputPower]]", prop: Status/Health, op: eq, value: OK}
+
+      - cmd: redfish
+        name: The PowerSubsystem holds the board's power supplies
         transport: *local
-        options:
-          timeout: 30s
-          on-failure: continue
+        options: {on-failure: continue}
         parameters:
-          executable: curl
-          args: [-sk, -u, "root:[[attributes.BMCPassword]]", "https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/Sensors/power_PINPUT_PSU2"]
-          expect:
-            - regex: '"Health": *"OK"'
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]/PowerSubsystem", collection: PowerSupplies, op: eq, value: "[[attributes.PSU.Count]]"}
+
+      - cmd: redfish
+        name: Every power supply reports its manufacturer
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]/PowerSubsystem", forEach: PowerSupplies, prop: Manufacturer, op: matches, value: '\S'}
+
+      - cmd: redfish
+        name: Every power supply reports its serial number
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]/PowerSubsystem", forEach: PowerSupplies, prop: SerialNumber, op: matches, value: '\S'}
+
+      - cmd: redfish
+        name: Every power supply reports its part number
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *redfish
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]/PowerSubsystem", forEach: PowerSupplies, prop: PartNumber, op: matches, value: '\S'}

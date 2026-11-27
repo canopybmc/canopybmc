@@ -1,0 +1,102 @@
+name: Redfish account service
+description: >-
+  The account service is set up as Redfish defines it: it is enabled, it has
+  the predefined Administrator, Operator and ReadOnly roles with their
+  privileges, the test account is an Administrator, and the session service
+  is enabled.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Redfish account service
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The account service is enabled
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService, prop: ServiceEnabled, op: eq, value: "true"}
+
+      - cmd: redfish
+        name: The Administrator role may configure users
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService/Roles/Administrator, prop: AssignedPrivileges, op: contains, value: ConfigureUsers}
+
+      - cmd: redfish
+        name: The Operator role may configure components
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService/Roles/Operator, prop: AssignedPrivileges, op: contains, value: ConfigureComponents}
+
+      - cmd: redfish
+        name: The ReadOnly role may log in
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/AccountService/Roles/ReadOnly, prop: AssignedPrivileges, op: contains, value: Login}
+
+      - cmd: redfish
+        name: The test account is an Administrator
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "/redfish/v1/AccountService/Accounts/[[attributes.BMCUser]]", prop: RoleId, op: eq, value: Administrator}
+
+      - cmd: redfish
+        name: The session service is enabled
+        transport: *local
+        options:
+          on-failure: continue
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1/SessionService, prop: ServiceEnabled, op: eq, value: "true"}

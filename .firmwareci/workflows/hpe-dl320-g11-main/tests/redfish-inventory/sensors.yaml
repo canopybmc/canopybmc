@@ -1,0 +1,78 @@
+name: Redfish sensors
+description: >-
+  The board's sensors are served over Redfish: at least the expected number of
+  sensors exists, and every enabled sensor is healthy and serves a reading.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+    validate: inventory
+
+stages:
+  - name: Redfish sensors
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The board chassis serves the expected sensors
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            retry: {timeout: 5m, interval: 10s}
+            rules:
+              - {path: "[[attributes.RedfishChassis]]", collection: Sensors, op: ge, value: "[[attributes.Inventory.MinSensors]]"}
+
+      - cmd: redfish
+        name: Every enabled sensor is healthy
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - path: "[[attributes.RedfishChassis]]"
+                forEach: Sensors
+                where: {prop: Status/State, op: eq, value: Enabled}
+                prop: Status/Health
+                op: eq
+                value: OK
+
+      - cmd: redfish
+        name: Every enabled sensor serves a reading
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - path: "[[attributes.RedfishChassis]]"
+                forEach: Sensors
+                where: {prop: Status/State, op: eq, value: Enabled}
+                prop: Reading
+                op: exists
+
+      - cmd: redfish
+        name: Every sensor names its reading type
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishChassis]]", forEach: Sensors, prop: ReadingType, op: matches, value: '\S'}

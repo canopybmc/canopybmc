@@ -1,98 +1,166 @@
 name: "Network: CHIF BMC Config Reporting"
 description: >-
-  Verify that the BMC network IP address is being displayed on boot
-  (checking /var/log/obmc-console.log for that.)
+  Verify that the host firmware shows the BMC network IP address during POST.
+  The BMC side must be ready first: CHIF runs, phosphor-networkd is on D-Bus
+  with eth0 and its DHCPEnabled property, and eth0 is up with an IPv4
+  address. The test then powers on the host, waits for the POST, and finds
+  the eth0 IPv4 address in the console output that the host wrote during this
+  boot (/var/log/obmc-console.log).
 
 defaults:
-  transport: &bmc_ssh
+  local: &local
+    proto: local
+  bmc: &bmc
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  redfish: &redfish
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
 
 stages:
-  - name: Network D-Bus State
+  - name: CHIF BMC Config Reporting
     steps:
-      - cmd: cmd
-        name: CHIF service is running
-        transport: *bmc_ssh
+      # The SSH transport does not retry a refused connection, so wait for
+      # the BMC on Redfish first.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
         parameters:
-          executable: systemctl
-          args: ["is-active", "xyz.openbmc_project.GxpChif.service"]
-      - cmd: cmd
-        name: Network service registered on D-Bus
-        transport: *bmc_ssh
-        parameters:
-          executable: busctl
-          args: [list, --no-pager]
-          expect:
-            - regex: "xyz\\.openbmc_project\\.Network"
-      - cmd: cmd
-        name: eth0 interface is UP
-        transport: *bmc_ssh
-        parameters:
-          executable: ip
-          args: ["link", "show", "eth0"]
-          expect:
-            - regex: "UP"
-      - cmd: cmd
-        name: eth0 has an IPv4 address to report
-        transport: *bmc_ssh
-        parameters:
-          executable: ip
-          args: ["-4", "addr", "show", "eth0"]
-          expect:
-            - regex: "inet [0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+/"
+          <<: *redfish
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
       - cmd: shell
-        name: EthernetInterface exposed on D-Bus for CHIF query
-        transport: *bmc_ssh
+        name: CHIF service is active
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: systemctl is-active xyz.openbmc_project.GxpChif.service
+          expect:
+            - regex: '^active$'
+
+      - cmd: shell
+        name: Network service registered on D-Bus
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: busctl list --no-pager --no-legend | awk '$1 == "xyz.openbmc_project.Network" {print $1}'
+          expect:
+            - regex: '^xyz\.openbmc_project\.Network$'
+
+      # BusyBox ip prints no "state". UP is the interface flag and LOWER_UP
+      # the link flag.
+      - cmd: shell
+        name: eth0 interface is UP
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: ip link show eth0
+          expect:
+            - regex: '[<,]UP[,>]'
+            - regex: '[<,]LOWER_UP[,>]'
+
+      - cmd: shell
+        name: eth0 has an IPv4 address to report
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: ip -4 addr show eth0
+          expect:
+            - regex: 'inet [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/'
+
+      - cmd: shell
+        name: EthernetInterface on D-Bus has DHCPEnabled for CHIF
+        transport: *bmc
+        options: {on-failure: continue}
         parameters:
           command: >-
             busctl introspect xyz.openbmc_project.Network
             /xyz/openbmc_project/network/eth0
             xyz.openbmc_project.Network.EthernetInterface --no-pager
           expect:
-            - regex: "DHCPEnabled"
+            - regex: 'DHCPEnabled'
 
-  - name: Power On Host
-    steps:
+      # Marks the end of the console log, so that a later step reads only what
+      # the host writes after this point.
       - cmd: shell
-        name: Power on host via Redfish
-        transport: &local
-          proto: local
+        name: Mark the end of the host console log
+        transport: *bmc
         parameters:
-          command: >-
-            curl -sk -u root:[[attributes.BMCPassword]]
-            -X POST -H 'Content-Type: application/json'
-            -d '{"ResetType":"On"}'
-            -o /dev/null -w '%{http_code}'
-            https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset
-          expect:
-            - regex: "^(200|204)$"
+          command: stat -c '%i:%s' /var/log/obmc-console.log 2>/dev/null || echo 0:0
+          variable: CONSOLE_MARK
+
+      - cmd: redfish
+        name: The host is powered on
+        transport: *local
+        parameters:
+          <<: *redfish
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 204]
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+            retry: {timeout: 5m, interval: 5s}
+
+      # The host firmware sends SMBIOS late in POST. When the CHIF push queue
+      # is full the transfer stalls, and a CHIF restart recovers it.
       - cmd: shell
-        name: Wait for SMBIOS transfer (host POST complete)
-        transport: *bmc_ssh
-        options:
-          timeout: 15m
+        name: The host POST delivers SMBIOS data
+        transport: *bmc
+        options: {timeout: 15m}
         parameters:
-          command: >-
+          command: |
+            full=$(journalctl -k --no-pager | grep -c 'push: queue is full')
             while [ ! -f /var/lib/smbios/smbios2 ] ||
-                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
-            do sleep 1; done;
+                  [ "$(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0)" -le 1000 ]; do
+              now=$(journalctl -k --no-pager | grep -c 'push: queue is full')
+              if [ "$now" -gt "$full" ]; then
+                echo "CHIF push queue full ($full -> $now): restarting CHIF"
+                systemctl restart xyz.openbmc_project.GxpChif.service
+                full=$now
+              fi
+              sleep 5
+            done
             echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
           expect:
-            - regex: "SMBIOS ready"
+            - regex: '^SMBIOS ready'
 
-  - name: Console check
-    on-failure: continue
-    steps:
+      # obmc-console renames a full log to .log.1; the inode tells which file
+      # held the mark.
       - cmd: shell
-        name: BMC IPv4 shown on host console
-        transport: *bmc_ssh
+        name: The host wrote to its console during this boot
+        transport: *bmc
         parameters:
-          command: >-
-            IP=$(ip -4 -o addr show eth0 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -n1);
-            echo "BMC eth0 IPv4: $IP";
-            grep -aF "$IP" /var/log/obmc-console.log /var/log/obmc-console.log.1 2>/dev/null | tail -n 5 ||
-              echo '(BMC IP not found in console log / log empty)'
+          command: |
+            L=/var/log/obmc-console.log; m={{ CONSOLE_MARK }}; ino=${m%%:*}; off=${m##*:}
+            if [ "$(stat -c %i $L 2>/dev/null)" = "$ino" ]; then tail -c +$((off + 1)) $L
+            elif [ "$(stat -c %i $L.1 2>/dev/null)" = "$ino" ]; then tail -c +$((off + 1)) $L.1; cat $L
+            else cat $L.1 $L 2>/dev/null; fi > /tmp/fwci-console.txt
+            echo "$(( $(wc -c < /tmp/fwci-console.txt) )) bytes"
+          expect:
+            - regex: '^[1-9][0-9]* bytes$'
+
+      - cmd: shell
+        name: The host console shows the BMC IPv4 address
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: |
+            IP=$(ip -4 -o addr show eth0 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)
+            echo "BMC eth0 IPv4: $IP"
+            n=$(grep -a -c -F "$IP" /tmp/fwci-console.txt)
+            echo "console lines with it: $n"
+          expect:
+            - regex: '^console lines with it: [1-9][0-9]*$'

@@ -3,16 +3,33 @@ description: >-
   Verify the GXP Virtual UART kernel driver (8250_gxp_vuart) is loaded and
   functional. Checks device node, driver binding, sysfs attributes (LPC
   address, SIRQ, enable), and that the VUART receives host POST data when
-  the host boots. This is a kernel-level test — it bypasses obmc-console
-  and reads directly from /dev/ttyS3.
+  the host boots. This is a kernel-level test: it stops obmc-console and
+  reads directly from /dev/ttyS3. The test starts obmc-console again at the
+  end, and a last stage does so after a failure.
 
 defaults:
-  transport: &bmc_ssh
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  bmc_ssh: &bmc_ssh
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
+  restart_console: &restart_console
+    cmd: shell
+    name: Stop raw capture and restart obmc-console-server
+    transport: *bmc_ssh
+    options:
+      timeout: 10s
+    parameters:
+      command: "kill $(pidof dd) 2>/dev/null; rm -f /tmp/vuart_test.bin; systemctl start obmc-console@ttyVUART0.service"
 
 stages:
   - name: Device Node
@@ -27,7 +44,7 @@ stages:
           executable: readlink
           args: [/dev/ttyVUART0]
           expect:
-            - regex: "ttyS3"
+            - regex: "(^|/)ttyS3$"
       - cmd: cmd
         name: ttyS3 character device exists
         transport: *bmc_ssh
@@ -81,12 +98,12 @@ stages:
           timeout: 5s
           on-failure: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "VAL=$(cat /sys/devices/platform/ahb@80000000/80fd0200.serial/vuart_enable); echo \"vuart_enable=$VAL\"; test \"$VAL\" = \"1\""
+          executable: cat
+          args: ["/sys/devices/platform/ahb@80000000/80fd0200.serial/vuart_enable"]
+          expect:
+            - regex: "^1$"
       - cmd: cmd
-        name: LPC address is 0x3f8 (COM1)
+        name: LPC address is COM1 or COM2 (0x3f8 or 0x2f8)
         transport: *bmc_ssh
         options:
           timeout: 5s
@@ -95,117 +112,119 @@ stages:
           executable: cat
           args: ["/sys/devices/platform/ahb@80000000/80fd0200.serial/lpc_address"]
           expect:
-            - regex: "0x3f8|0x2f8"
-      - cmd: shell
+            - regex: "^0x[23]f8$"
+      - cmd: cmd
         name: SIRQ is 3 or 4 (COM IRQ)
         transport: *bmc_ssh
         options:
           timeout: 5s
           on-failure: continue
         parameters:
-          command: >-
-            VAL=$(cat /sys/devices/platform/ahb@80000000/80fd0200.serial/sirq);
-            echo "sirq=$VAL"
+          executable: cat
+          args: ["/sys/devices/platform/ahb@80000000/80fd0200.serial/sirq"]
           expect:
-            - regex: "sirq=(3|4)"
+            - regex: "^[34]$"
 
   - name: Host Data Reception
     steps:
-      - cmd: cmd
-        name: Power off host for data capture test
-        transport: &local
-          proto: local
-        options:
-          timeout: 30s
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"ForceOff\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"ForceOff HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
-      - cmd: cmd
-        name: Wait for power off
+      - cmd: redfish
+        name: The host is powered off
         transport: *local
         parameters:
-          executable: sleep
-          args: ["10"]
-      - cmd: cmd
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: ForceOff}
+            status: [200, 204]
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "Off"}
+            retry: {timeout: 2m, interval: 5s}
+      - cmd: shell
         name: Record baseline interrupt count
         transport: *bmc_ssh
         options:
           timeout: 5s
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "BEFORE=$(cat /proc/interrupts | grep ttyS3 | awk '{print $2}'); echo \"$BEFORE\" > /tmp/vuart_irq_before; echo \"baseline_irq=$BEFORE\""
-      - cmd: cmd
+          command: "awk '/ttyS3/ {print $2}' /proc/interrupts"
+          expect:
+            - regex: "^[0-9]+$"
+          variable: IRQ_BEFORE
+      # dd keeps ttyS3 open until the restart step kills it, so its IRQ line stays in /proc/interrupts.
+      - cmd: shell
         name: Stop obmc-console and start raw capture
         transport: *bmc_ssh
         options:
           timeout: 10s
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "systemctl stop obmc-console@ttyVUART0.service; rm -f /tmp/vuart_test.bin; nohup sh -c 'dd if=/dev/ttyS3 of=/tmp/vuart_test.bin bs=1 count=4096 2>/dev/null' </dev/null >/dev/null 2>&1 &"
-      - cmd: cmd
-        name: Power on host
+          command: "systemctl stop obmc-console@ttyVUART0.service; rm -f /tmp/vuart_test.bin; nohup sh -c 'dd if=/dev/ttyS3 of=/tmp/vuart_test.bin bs=1 count=1048576 2>/dev/null' </dev/null >/dev/null 2>&1 &"
+      - cmd: redfish
+        name: The host is powered on
         transport: *local
-        options:
-          timeout: 30s
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{\"ResetType\":\"On\"}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset -o /dev/null -w '%{http_code}'); echo \"On HTTP=$HTTP\"; test \"$HTTP\" = \"200\" || test \"$HTTP\" = \"204\""
-      - cmd: cmd
-        name: Wait for host POST data
-        transport: *local
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset"
+            body: {ResetType: "On"}
+            status: [200, 204]
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: PowerState, op: eq, value: "On"}
+            retry: {timeout: 5m, interval: 5s}
+      - cmd: shell
+        name: Wait for SMBIOS transfer (host POST complete)
+        transport: *bmc_ssh
         options:
-          timeout: 4m
+          timeout: 15m
         parameters:
-          executable: sleep
-          args: ["180"]
-      - cmd: cmd
-        name: VUART received bytes from host
+          command: >-
+            full=$(journalctl -k --no-pager | grep -c 'push: queue is full');
+            while [ ! -f /var/lib/smbios/smbios2 ] ||
+                  [ $(stat -c %s /var/lib/smbios/smbios2 2>/dev/null || echo 0) -le 1000 ];
+            do
+              now=$(journalctl -k --no-pager | grep -c 'push: queue is full');
+              if [ "$now" -gt "$full" ]; then
+                echo "CHIF push queue full ($full -> $now): restarting CHIF";
+                systemctl restart xyz.openbmc_project.GxpChif.service;
+                full=$now;
+              fi;
+              sleep 5;
+            done;
+            echo "SMBIOS ready: $(stat -c %s /var/lib/smbios/smbios2) bytes"
+          expect:
+            - regex: "SMBIOS ready"
+      - cmd: shell
+        name: VUART received more than 100 bytes from host
         transport: *bmc_ssh
         options:
           timeout: 10s
           on-failure: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "SIZE=$(wc -c < /tmp/vuart_test.bin 2>/dev/null); echo \"captured_bytes=$SIZE\"; test \"$SIZE\" -gt 100"
-      - cmd: cmd
-        name: Interrupt count increased during host boot
+          command: "n=$(wc -c < /tmp/vuart_test.bin); echo \"captured_bytes=$n\"; [ \"$n\" -gt 100 ]"
+      - cmd: shell
+        name: Interrupt count rose by more than 10 during host boot
         transport: *bmc_ssh
         options:
           timeout: 5s
           on-failure: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "BEFORE=$(cat /tmp/vuart_irq_before 2>/dev/null); AFTER=$(cat /proc/interrupts | grep ttyS3 | awk '{print $2}'); echo \"irq_before=$BEFORE irq_after=$AFTER\"; if [ -n \"$BEFORE\" ] && [ -n \"$AFTER\" ]; then DELTA=$((AFTER - BEFORE)); echo \"delta=$DELTA\"; test \"$DELTA\" -gt 10; else echo 'SKIP: interrupt line not available after console stop'; true; fi"
-      - cmd: cmd
+          command: "n=$(awk '/ttyS3/ {print $2}' /proc/interrupts); echo \"irq_before={{ IRQ_BEFORE }} irq_after=$n\"; [ $((n - {{ IRQ_BEFORE }})) -gt 10 ]"
+      - cmd: shell
         name: Captured data contains BIOS POST text
         transport: *bmc_ssh
         options:
           timeout: 5s
           on-failure: continue
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "strings /tmp/vuart_test.bin > /tmp/vuart_strings.txt; FOUND=0; for PAT in 'Initialization' 'CHIF' 'Memory' 'BMC'; do grep -qi \"$PAT\" /tmp/vuart_strings.txt && FOUND=$((FOUND+1)); done; echo \"matched_patterns=$FOUND/4\"; test \"$FOUND\" -ge 1"
-      - cmd: cmd
-        name: Restart obmc-console-server
-        transport: *bmc_ssh
-        options:
-          timeout: 10s
-        parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "kill $(pidof dd) 2>/dev/null; rm -f /tmp/vuart_test.bin /tmp/vuart_strings.txt /tmp/vuart_irq_before; systemctl start obmc-console@ttyVUART0.service"
+          command: "strings /tmp/vuart_test.bin | grep -oiE 'Initialization|CHIF|Memory|BMC' | sort -u"
+          expect:
+            - regex: "(?i)initialization|chif|memory|bmc"
+      - *restart_console
+
+  # FirmwareCI has no run-condition "always"; on success the stage above restarted obmc-console.
+  - name: Restart Console After Failure
+    run-condition: failure
+    steps:
+      - *restart_console

@@ -1,0 +1,79 @@
+name: OpenBMC network
+description: >-
+  The BMC's network is up: every enabled interface reports its link up over
+  Redfish, and inside the BMC an interface has a global IPv4 address, a
+  default route exists and systemd-networkd runs.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  bmc: &bmc
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: OpenBMC network
+    steps:
+      # The SSH transport connects once, so the file waits on Redfish first.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: Every enabled BMC interface reports its link up
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - path: "[[attributes.RedfishManager]]"
+                forEach: EthernetInterfaces
+                where: {prop: InterfaceEnabled, op: eq, value: "true"}
+                prop: LinkStatus
+                op: eq
+                value: LinkUp
+
+      - cmd: shell
+        name: An interface has a global IPv4 address
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: ip -4 -o addr show scope global | awk '{print $2, $4}'
+          expect:
+            - regex: '^\S+ [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]+$'
+
+      - cmd: shell
+        name: A default route exists
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: ip -4 route show default
+          expect:
+            - regex: '^default via [0-9.]+ dev \S+'
+
+      - cmd: shell
+        name: systemd-networkd runs
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: systemctl is-active systemd-networkd
+          expect:
+            - regex: '^active$'

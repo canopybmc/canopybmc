@@ -6,11 +6,11 @@ post-stage:
       proto: local
     parameters:
       command: >-
-        curl -sk -u root:[[attributes.BMCPassword]]
+        curl -sk -u '[[attributes.BMCUser]]:[[attributes.BMCPassword]]'
         -X POST -H 'Content-Type: application/json'
         -d '{"ResetType":"ForceOff"}'
         -o /dev/null -w '%{http_code}'
-        https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset || true
+        'https://[[attributes.BMC]]:[[attributes.RedfishPort]][[attributes.RedfishSystem]]/Actions/ComputerSystem.Reset' || true
 
   - cmd: shell
     name: Host system DC gets/stays powered off (systemd-journal)
@@ -21,7 +21,8 @@ post-stage:
       proto: ssh
       options:
         host: "[[attributes.BMC]]"
-        user: "root"
+        port: "[[attributes.SSHPort]]"
+        user: "[[attributes.BMCUser]]"
         password: "[[attributes.BMCPassword]]"
     parameters:
       command: |
@@ -36,14 +37,14 @@ post-stage:
     transport:
       proto: local
     parameters:
-      host: "[[attributes.BMC]]"
+      host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
       auth:
-        user: root
+        user: "[[attributes.BMCUser]]"
         password: "[[attributes.BMCPassword]]"
       validate: inventory
       inventory:
         rules:
-          - path: /redfish/v1/Systems/system
+          - path: "[[attributes.RedfishSystem]]"
             prop: PowerState
             op: eq
             value: "Off"
@@ -73,11 +74,3 @@ post-stage:
       device: "[[attributes.Device]]"
       command: power
       args: ["off"]
-
-  - cmd: dutctl
-    name: Reload golden image to host
-    parameters:
-      agent: "[[attributes.Agent]]"
-      device: "[[attributes.Device]]"
-      command: emulate-host
-      args: ["[[storage.dl320g11_bios_update]]/[[storage.dl320g11_bios_update.golden_image]]"]

@@ -3,99 +3,91 @@ description: >-
   Validate bmcweb service status, HTTPS connectivity, TLS certificate,
   and Redfish service root accessibility from the test runner.
 
+on-failure: continue
+
 defaults:
   transport: &bmc_ssh
     proto: ssh
     options:
       host: "[[attributes.BMC]]"
-      user: "root"
+      user: "[[attributes.BMCUser]]"
       password: "[[attributes.BMCPassword]]"
-      port: 2222
+      port: "[[attributes.SSHPort]]"
+  local: &local
+    proto: local
+  anonymous: &anonymous
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth: {mode: none}
 
 stages:
   - name: Wait for BMC
     steps:
-      - cmd: cmd
-        name: Wait for SSH
-        transport: *bmc_ssh
-        options:
-          timeout: 5m
+      # The SSH transport does not retry a refused connection, and the QEMU
+      # port forward accepts before the BMC listens. Once Redfish answers, SSH
+      # is up too.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
         parameters:
-          executable: echo
-          args: ["SSH connected"]
-      - cmd: cmd
-        name: Wait for services to settle
-        transport: *bmc_ssh
-        options:
-          timeout: 2m
-        parameters:
-          executable: sleep
-          args: ["45"]
+          host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+          auth: {user: "[[attributes.BMCUser]]", password: "[[attributes.BMCPassword]]"}
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
 
   - name: bmcweb Service
     steps:
-      - cmd: cmd
+      - cmd: shell
         name: bmcweb is active
         transport: *bmc_ssh
         parameters:
-          executable: systemctl
-          args: ["is-active", "bmcweb"]
-      - cmd: cmd
+          command: systemctl is-active bmcweb
+          expect:
+            - regex: '^active$'
+      - cmd: shell
         name: bmcweb is enabled
         transport: *bmc_ssh
         parameters:
-          executable: systemctl
-          args: ["is-enabled", "bmcweb"]
+          command: systemctl is-enabled bmcweb
+          expect:
+            - regex: '^enabled$'
 
   - name: HTTPS Connectivity
     steps:
-      - cmd: cmd
-        name: HTTPS port responds
-        transport: &local
-          proto: local
-        options:
-          timeout: 15s
+      - cmd: redfish
+        name: HTTPS port answers without login
+        transport: *local
         parameters:
-          executable: curl
-          args: [-sk, "-I", "--connect-timeout", "10",
-                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/"]
-          expect:
-            - regex: "HTTP/.*[0-9]{3}"
-      - cmd: cmd
+          <<: *anonymous
+          validate: request
+          request: {method: GET, path: /redfish/v1, status: 200}
+      # No native step reads the server certificate.
+      - cmd: shell
         name: TLS certificate present
         transport: *local
-        options:
-          timeout: 15s
-          on-failure: continue
+        options: {timeout: 15s}
         parameters:
-          executable: sh
-          args:
-            - "-c"
-            - "echo | openssl s_client -connect [[attributes.BMC]]:[[attributes.RedfishPort]] 2>/dev/null | grep -c 'BEGIN CERTIFICATE'"
+          command: echo | openssl s_client -connect [[attributes.BMC]]:[[attributes.RedfishPort]] 2>/dev/null | grep -c 'BEGIN CERTIFICATE'
           expect:
-            - regex: "1"
+            - regex: '^1$'
 
   - name: Redfish Service Root
     steps:
-      - cmd: cmd
-        name: Redfish v1 returns JSON
+      - cmd: redfish
+        name: Redfish v1 reports its RedfishVersion
         transport: *local
-        options:
-          timeout: 15s
         parameters:
-          executable: curl
-          args: [-sk, "--max-time", "10",
-                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/"]
-          expect:
-            - regex: '"RedfishVersion"'
-      - cmd: cmd
+          <<: *anonymous
+          validate: inventory
+          inventory:
+            rules:
+              - {path: /redfish/v1, prop: RedfishVersion, op: exists}
+      - cmd: redfish
         name: Redfish requires authentication
         transport: *local
-        options:
-          timeout: 15s
         parameters:
-          executable: curl
-          args: [-sk, "-I", "--max-time", "10",
-                 "https://[[attributes.BMC]]:[[attributes.RedfishPort]]/redfish/v1/Systems"]
-          expect:
-            - regex: "HTTP/.*401"
+          <<: *anonymous
+          validate: request
+          request: {method: GET, path: /redfish/v1/Systems, status: 401}

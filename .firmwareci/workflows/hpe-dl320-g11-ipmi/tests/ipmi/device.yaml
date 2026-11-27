@@ -1,0 +1,109 @@
+name: IPMI device
+description: >-
+  The BMC identifies itself over IPMI as the board it runs on: IPMI 2.0, the
+  manufacturer and product IDs of the board, a firmware revision, normal
+  operation, a passed self test and a device GUID. Malformed requests are
+  refused with the completion code the IPMI specification defines.
+
+defaults:
+  local: &local
+    proto: local
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
+
+stages:
+  - name: IPMI device
+    steps:
+      # Waits until the BMC answers IPMI over LAN.
+      - cmd: ipmi
+        name: IPMI answers over LAN
+        transport: *local
+        parameters:
+          lan: *lan
+          get: device/ipmi-version
+          retry: {timeout: 10m, interval: 10s}
+          expect: {eq: "2.0"}
+
+      - cmd: ipmi
+        name: IPMI version is 2.0
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: device/ipmi-version
+          expect: {eq: "2.0"}
+
+      - cmd: ipmi
+        name: Manufacturer ID is the board's
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: device/manufacturer-id
+          expect: {eq: "[[attributes.IPMI.ManufacturerID]]"}
+
+      - cmd: ipmi
+        name: Product ID is the board's
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: device/product-id
+          expect: {eq: "[[attributes.IPMI.ProductID]]"}
+
+      - cmd: ipmi
+        name: Firmware revision is not zero
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: device/firmware-revision
+          expect: {matches: '^([1-9][0-9]*\.[0-9]+|0\.[0-9]*[1-9][0-9]*)$'}
+
+      - cmd: ipmi
+        name: Device reports normal operation
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: device/available
+          expect: {eq: true}
+
+      - cmd: ipmi
+        name: Self test reports no error
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: device/self-test
+          expect: {eq: passed}
+
+      - cmd: ipmi
+        name: Device GUID is not all zeros
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: device/device-guid
+          expect: {ne: "00000000-0000-0000-0000-000000000000"}
+
+      - cmd: ipmi
+        name: Get Device ID rejects an extra byte
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          raw: 0x06 0x01 0x00
+          expect: {completion: 0xc7}
+
+      - cmd: ipmi
+        name: System info is not left set-in-progress
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: system-info/set-in-progress
+          expect: {eq: complete}

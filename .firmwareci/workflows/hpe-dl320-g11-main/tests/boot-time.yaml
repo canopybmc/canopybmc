@@ -48,3 +48,4 @@ stages:
           timeout: 25s
         parameters:
           host: "[[attributes.BMC]]"
+          port: "[[attributes.SSHPort]]"

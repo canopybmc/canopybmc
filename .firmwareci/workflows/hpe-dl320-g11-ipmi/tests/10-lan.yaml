@@ -1,85 +1,66 @@
 name: "IPMI: LAN Configuration Commands (NetFn 0x0c)"
 description: >-
-  Verify Get LAN Configuration Parameter (0x0c 0x02) for key network
-  parameters on channel 1: IP address (param3), subnet mask (param6), MAC
-  address (param5), VLAN ID (param20), and RMCP+ messaging cipher suite
-  entries (param23).
+  Verify Get LAN Configuration Parameters (0x0c 0x02) for key network
+  parameters on channel 1: IP address (param 3), IP address source (param 4),
+  MAC address (param 5), subnet mask (param 6), VLAN ID (param 20) and the
+  RMCP+ messaging cipher suite entries (param 23).
 
 defaults:
-  transport: &local
+  local: &local
     proto: local
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
 
 stages:
   - name: LAN Configuration - IP and Network
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: Get LAN Config IP Address (0x0c 0x02) - ch1 param3
+      - cmd: ipmi
+        name: Channel 1 reports an IP address
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0c 0x02 0x01 0x03 0x00 0x00
-      - cmd: shell
-        name: Get LAN Config Subnet Mask (0x0c 0x02) - ch1 param6
+          lan: *lan
+          get: lan/1/ip
+          expect: {ne: 0.0.0.0}
+      - cmd: ipmi
+        name: Channel 1 reports a subnet mask
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0c 0x02 0x01 0x06 0x00 0x00
-      - cmd: shell
-        name: Get LAN Config MAC Address (0x0c 0x02) - ch1 param5
+          lan: *lan
+          get: lan/1/netmask
+          expect: {ne: 0.0.0.0}
+      - cmd: ipmi
+        name: Channel 1 reports a MAC address
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0c 0x02 0x01 0x05 0x00 0x00
+          lan: *lan
+          get: lan/1/mac
+          expect: {ne: "00:00:00:00:00:00"}
+      - cmd: ipmi
+        name: Channel 1 IP address source is static or DHCP
+        transport: *local
+        parameters:
+          lan: *lan
+          get: lan/1/ip-source
+          expect: {matches: '^(static|dhcp)$'}
 
   - name: LAN Configuration - VLAN and Cipher
+    on-failure: continue
     steps:
-      - cmd: shell
-        name: Get LAN Config VLAN ID (0x0c 0x02) - ch1 param20
+      - cmd: ipmi
+        name: Channel 1 VLAN is off or a valid VLAN ID
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0c 0x02 0x01 0x14 0x00 0x00
-      - cmd: shell
-        name: Get LAN Config Cipher Suite Entries (0x0c 0x02) - ch1 param23
+          lan: *lan
+          get: lan/1/vlan
+          expect: {matches: '^(off|[1-9][0-9]{0,3})$'}
+      - cmd: ipmi
+        name: Cipher suite entries parameter has revision 11h
         transport: *local
-        options:
-          timeout: "30s"
         parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            raw 0x0c 0x02 0x01 0x17 0x00 0x00
-          expect:
-            - regex: '^\s*11( [0-9a-f]{2})+'
-
-  - name: LAN Configuration via ipmitool Alias
-    steps:
-      - cmd: shell
-        name: lan print 1 (alias - full channel 1 LAN config)
-        transport: *local
-        options:
-          timeout: "30s"
-        parameters:
-          command: >-
-            ipmitool -I lanplus -H [[attributes.BMC]]
-            -U root -P [[attributes.BMCPassword]] -C 17
-            lan print 1
-          expect:
-            - regex: 'IP Address Source\s*:'
-            - regex: 'MAC Address\s*:'
+          lan: *lan
+          raw: 0x0c 0x02 0x01 0x17 0x00 0x00
+          expect: {byte: 0, eq: 0x11}

@@ -1,0 +1,126 @@
+name: IPMI chassis
+description: >-
+  Chassis and boot information is readable over IPMI without changing the
+  host: power state, power-on hours, the system GUID, the power restore policy
+  and the boot options. Malformed requests are refused.
+
+defaults:
+  local: &local
+    proto: local
+  lan: &lan
+    host: "[[attributes.BMC]]"
+    user: "[[attributes.BMCUser]]"
+    password: "[[attributes.BMCPassword]]"
+    cipher: 17
+
+stages:
+  - name: IPMI chassis
+    steps:
+      # Waits until the BMC answers IPMI over LAN.
+      - cmd: ipmi
+        name: IPMI answers over LAN
+        transport: *local
+        parameters:
+          lan: *lan
+          get: device/ipmi-version
+          retry: {timeout: 10m, interval: 10s}
+          expect: {eq: "2.0"}
+
+      - cmd: ipmi
+        name: Chassis power reads on or off
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: chassis/power
+          expect: {matches: '^(on|off)$'}
+
+      - cmd: ipmi
+        name: Chassis reports power-on hours
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: chassis/power-on-hours
+          expect: exists
+
+      - cmd: ipmi
+        name: System GUID is well formed
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: device/guid
+          expect: {matches: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'}
+
+      - cmd: ipmi
+        name: System GUID is not all zeros
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: device/guid
+          expect: {matches: '[1-9a-f]'}
+
+      - cmd: ipmi
+        name: Power restore policy is a defined value
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: chassis/power-restore-policy
+          expect: {matches: '^(always-off|previous|always-on)$'}
+
+      - cmd: ipmi
+        name: Boot options are not left set-in-progress
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: boot/set-in-progress
+          expect: {eq: complete}
+
+      - cmd: ipmi
+        name: Boot flags are readable
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          get: boot/device
+          expect: exists
+
+      - cmd: ipmi
+        name: Chassis status rejects an extra byte
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          raw: 0x00 0x01 0x00
+          expect: {completion: 0xc7}
+
+      - cmd: ipmi
+        name: Chassis control rejects a missing action byte
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          raw: 0x00 0x02
+          expect: {completion: 0xc7}
+
+      - cmd: ipmi
+        name: POH counter rejects an extra byte
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          raw: 0x00 0x0f 0x00
+          expect: {completion: 0xc7}
+
+      - cmd: ipmi
+        name: Boot options reject a short request
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          lan: *lan
+          raw: 0x00 0x09 0x03 0x00
+          expect: {completion: 0xc7}

@@ -1,0 +1,124 @@
+name: Redfish boot override
+description: >-
+  The boot source override works over Redfish: the system offers PXE and the
+  BIOS setup as targets, a one-time override to each reads back as set, and
+  clearing the override reads back as disabled. The host does not reboot, so
+  the test only proves what the BMC stores.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Redfish boot override
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The system offers boot override targets
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: "Boot/BootSourceOverrideTarget@Redfish.AllowableValues", op: contains, value: Pxe}
+              - {path: "[[attributes.RedfishSystem]]", prop: "Boot/BootSourceOverrideTarget@Redfish.AllowableValues", op: contains, value: BiosSetup}
+
+      - cmd: redfish
+        name: A one-time boot from PXE is set
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: PATCH
+            path: "[[attributes.RedfishSystem]]"
+            body: {Boot: {BootSourceOverrideTarget: Pxe, BootSourceOverrideEnabled: Once}}
+            status: [200, 204]
+
+      - cmd: redfish
+        name: The override target reads back as PXE
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: Boot/BootSourceOverrideTarget, op: eq, value: Pxe}
+
+      - cmd: redfish
+        name: The override reads back as once
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: Boot/BootSourceOverrideEnabled, op: eq, value: Once}
+
+      - cmd: redfish
+        name: A one-time boot into the BIOS setup is set
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: PATCH
+            path: "[[attributes.RedfishSystem]]"
+            body: {Boot: {BootSourceOverrideTarget: BiosSetup, BootSourceOverrideEnabled: Once}}
+            status: [200, 204]
+
+      - cmd: redfish
+        name: The override target reads back as BIOS setup
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: Boot/BootSourceOverrideTarget, op: eq, value: BiosSetup}
+
+      - cmd: redfish
+        name: The boot override is cleared
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: PATCH
+            path: "[[attributes.RedfishSystem]]"
+            body: {Boot: {BootSourceOverrideTarget: None, BootSourceOverrideEnabled: Disabled}}
+            status: [200, 204]
+
+      - cmd: redfish
+        name: The override reads back as disabled
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishSystem]]", prop: Boot/BootSourceOverrideEnabled, op: eq, value: Disabled}

@@ -1,0 +1,122 @@
+name: Redfish BMC dump
+description: >-
+  The BMC creates a diagnostic dump on request over Redfish: the dump log
+  service collects a Manager dump through a task, lists it with a size and a
+  download link, the archive holds the dump report, and ClearLog removes all
+  dumps.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+  bmc: &bmc
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      port: "[[attributes.SSHPort]]"
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: Redfish BMC dump
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: CollectDiagnosticData creates a BMC dump
+        transport: *local
+        options: {timeout: 12m}
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishManager]]/LogServices/Dump/Actions/LogService.CollectDiagnosticData"
+            body: {DiagnosticDataType: Manager}
+            status: [200, 202]
+            task: {wait: 10m, interval: 5s}
+
+      - cmd: redfish
+        name: The dump log lists a dump entry
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 1m, interval: 10s}
+            rules:
+              - {path: "[[attributes.RedfishManager]]/LogServices/Dump", collection: Entries, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: Every dump entry has a size
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]/LogServices/Dump", forEach: Entries, prop: AdditionalDataSizeBytes, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: Every dump entry has a download link
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]/LogServices/Dump", forEach: Entries, prop: AdditionalDataURI, op: matches, value: '/attachment$'}
+
+      # phosphor-debug-collector keeps each archive in its own directory under dumps/.
+      - cmd: shell
+        name: The newest dump archive holds the dump report
+        transport: *bmc
+        options: {on-failure: continue}
+        parameters:
+          command: >-
+            f=$(ls -t /var/lib/phosphor-debug-collector/dumps/*/* | head -n 1); echo "$f"; xz -dc "$f" | tar -tf - | head -n 60
+          expect:
+            - regex: 'obmcdump_'
+            - regex: 'summary\.log'
+
+      - cmd: redfish
+        name: ClearLog removes the dumps
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: request
+          request:
+            method: POST
+            path: "[[attributes.RedfishManager]]/LogServices/Dump/Actions/LogService.ClearLog"
+            body: {}
+            status: [200, 204]
+
+      - cmd: redfish
+        name: No dump entry is left
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          validate: inventory
+          inventory:
+            retry: {timeout: 1m, interval: 10s}
+            rules:
+              - {path: "[[attributes.RedfishManager]]/LogServices/Dump", collection: Entries, op: count, value: "0"}

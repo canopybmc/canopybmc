@@ -1,0 +1,131 @@
+name: Redfish manager
+description: >-
+  The BMC's Manager resource describes the BMC: it is a BMC, it is powered on,
+  it reports a firmware version and a well-formed UUID, it serves HTTPS on
+  port 443 and a host name, and every network interface has a unicast MAC
+  address.
+
+defaults:
+  local: &local
+    proto: local
+  admin: &admin
+    host: "[[attributes.BMC]]:[[attributes.RedfishPort]]"
+    auth:
+      user: "[[attributes.BMCUser]]"
+      password: "[[attributes.BMCPassword]]"
+    validate: inventory
+
+stages:
+  - name: Redfish manager
+    steps:
+      # Waits on Redfish itself, see test rule 4 in the README.
+      - cmd: redfish
+        name: Redfish service answers
+        transport: *local
+        parameters:
+          <<: *admin
+          inventory:
+            retry: {timeout: 10m}
+            rules:
+              - {path: /redfish/v1, collection: Managers, op: ge, value: "1"}
+
+      - cmd: redfish
+        name: The manager is a BMC
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: ManagerType, op: eq, value: BMC}
+
+      - cmd: redfish
+        name: The manager is powered on
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: PowerState, op: eq, value: "On"}
+
+      - cmd: redfish
+        name: The manager carries a well-formed UUID
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: UUID, op: matches, value: '^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$'}
+
+      - cmd: redfish
+        name: The manager reports a firmware version
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: FirmwareVersion, op: matches, value: '\S'}
+
+      - cmd: redfish
+        name: The manager links to the systems it manages
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", prop: "Links/ManagerForServers@odata.count", op: ge, value: "1"}
+
+      - cmd: redfish
+        name: HTTPS is enabled
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]/NetworkProtocol", prop: HTTPS/ProtocolEnabled, op: eq, value: "true"}
+
+      - cmd: redfish
+        name: HTTPS listens on port 443
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]/NetworkProtocol", prop: HTTPS/Port, op: eq, value: "443"}
+
+      - cmd: redfish
+        name: The BMC reports a host name
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]/NetworkProtocol", prop: HostName, op: matches, value: '\S'}
+
+      - cmd: redfish
+        name: Every BMC interface has a unicast MAC address
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              # The lowest bit of the first octet marks a multicast address.
+              - {path: "[[attributes.RedfishManager]]", forEach: EthernetInterfaces, prop: MACAddress, op: matches, value: '^[0-9a-fA-F][02468aceACE](:[0-9a-fA-F]{2}){5}$'}
+
+      - cmd: redfish
+        name: No BMC interface has an all-zero MAC address
+        transport: *local
+        options: {on-failure: continue}
+        parameters:
+          <<: *admin
+          inventory:
+            rules:
+              - {path: "[[attributes.RedfishManager]]", forEach: EthernetInterfaces, prop: MACAddress, op: ne, value: "00:00:00:00:00:00"}
