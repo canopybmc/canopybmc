@@ -47,6 +47,8 @@ stages:
                 op: ne
                 value: "00000000-0000-0000-0000-000000000000"
 
+      # A manager reports Starting until the BMC finishes its boot, which
+      # comes after Redfish answers.
       - cmd: redfish
         name: Every manager is enabled
         transport:
@@ -56,6 +58,8 @@ stages:
         parameters:
           <<: *redfish
           inventory:
+            retry:
+              timeout: 10m
             rules:
               - path: /redfish/v1
                 forEach: Managers

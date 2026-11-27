@@ -1,0 +1,42 @@
+From 1067124e3ccf3a4343ec434b8762f88a09a9ad70 Mon Sep 17 00:00:00 2001
+From: llogen <christoph.lange@blindspot.software>
+Date: Fri, 27 Nov 2026 11:40:09 +0100
+Subject: [PATCH] persistent_data: restore the session timeout
+
+bmcweb writes the session timeout as a non-negative integer, and the
+JSON parser reads it back as an unsigned number. readData() asks for
+a signed integer, gets no value and keeps the default, so a changed
+SessionTimeout is lost at every bmcweb restart. Read it as unsigned,
+as the revision field already is.
+
+Tested: on the QEMU AST2600 EVB, PATCH SessionTimeout 1200 and then
+Manager.Reset GracefulRestart or ForceRestart. Before this change,
+bmcweb_persistent_data.json held the new value after the restart, but
+SessionTimeout read 1800. With nlohmann_json 3.12.0, the value read
+back from that file is unsigned: get_ptr<const int64_t*>() returns
+null and get_ptr<const uint64_t*>() returns 1200.
+
+Upstream-Status: Pending
+Signed-off-by: llogen <christoph.lange@blindspot.software>
+---
+ include/persistent_data.hpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/include/persistent_data.hpp b/include/persistent_data.hpp
+index 51b7746..dac6a8d 100644
+--- a/include/persistent_data.hpp
++++ b/include/persistent_data.hpp
+@@ -196,8 +196,8 @@ class ConfigFile
+                     }
+                     else if (item.first == "timeout")
+                     {
+-                        const int64_t* jTimeout =
+-                            item.second.get_ptr<const int64_t*>();
++                        const uint64_t* jTimeout =
++                            item.second.get_ptr<const uint64_t*>();
+                         if (jTimeout == nullptr)
+                         {
+                             BMCWEB_LOG_DEBUG(
+-- 
+2.53.0
+

@@ -38,6 +38,8 @@ stages:
             rules:
               - {path: /redfish/v1/CertificateService, prop: Id, op: exists}
 
+      # On the first boot, the certificate manager publishes the HTTPS
+      # certificate some seconds after Redfish answers.
       - cmd: redfish
         name: The certificate service lists a certificate location
         transport: *local
@@ -45,6 +47,7 @@ stages:
         parameters:
           <<: *admin
           inventory:
+            retry: {timeout: 5m}
             rules:
               - {path: /redfish/v1/CertificateService/CertificateLocations, prop: "Links/Certificates@odata.count", op: ge, value: "1"}
 
@@ -55,5 +58,6 @@ stages:
         parameters:
           <<: *admin
           inventory:
+            retry: {timeout: 5m}
             rules:
               - {path: "[[attributes.RedfishManager]]/NetworkProtocol/HTTPS/Certificates", prop: "Members@odata.count", op: ge, value: "1"}

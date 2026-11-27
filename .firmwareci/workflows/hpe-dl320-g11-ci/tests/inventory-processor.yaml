@@ -3,9 +3,9 @@ description: >-
   Verify the CPU inventory over Redfish after the host POST. Checks that
   SMBIOS processor data flows through smbios-mdr to Redfish: the Processors
   collection has members, and every present processor is Enabled and reports
-  its manufacturer, at least 4 cores, its threads, its maximum speed, its
-  family and model, and a serial number that is not the HPE placeholder
-  "Proc N". The ProcessorSummary core count is above 0.
+  its manufacturer, at least 4 cores, its threads, its maximum speed, and
+  its family and model. No serial number is the HPE placeholder "Proc N".
+  The ProcessorSummary core count is above 0.
 
 defaults:
   local: &local
@@ -156,8 +156,9 @@ stages:
             rules:
               - {path: "[[attributes.RedfishSystem]]", forEach: Processors, where: *present, prop: ProcessorId/EffectiveModel, op: matches, value: '\S'}
 
-      # RE2 has no negative lookahead: the regex matches every non-empty value
-      # except the HPE placeholder "Proc <digit>".
+      # A processor without a serial number passes: only the placeholder is
+      # wrong. RE2 has no negative lookahead: the regex matches every non-empty
+      # value except the HPE placeholder "Proc <digit>".
       - cmd: redfish
         name: No processor serial number is HPE placeholder data
         transport: *local
@@ -168,7 +169,7 @@ stages:
             rules:
               - path: "[[attributes.RedfishSystem]]"
                 forEach: Processors
-                where: *present
+                where: {prop: SerialNumber, op: exists}
                 prop: SerialNumber
                 op: matches
                 value: '^([^P].*|P[^r].*|Pr[^o].*|Pro[^c].*|Proc[^ ].*|Proc [^0-9].*|Proc [0-9].+|P|Pr|Pro|Proc|Proc )$'

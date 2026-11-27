@@ -57,6 +57,8 @@ stages:
           expect:
             - regex: '^xyz\.openbmc_project\.Network$'
 
+      # BusyBox ip prints no "state". UP is the interface flag and LOWER_UP
+      # the link flag.
       - cmd: shell
         name: eth0 interface is UP
         transport: *bmc
@@ -64,7 +66,8 @@ stages:
         parameters:
           command: ip link show eth0
           expect:
-            - regex: 'state UP'
+            - regex: '[<,]UP[,>]'
+            - regex: '[<,]LOWER_UP[,>]'
 
       - cmd: shell
         name: eth0 has an IPv4 address to report
