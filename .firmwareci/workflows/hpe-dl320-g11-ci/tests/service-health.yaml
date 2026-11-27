@@ -94,12 +94,6 @@ stages:
           executable: systemctl
           args: ["is-active", "xyz.openbmc_project.gpiopresence.service"]
       - cmd: cmd
-        name: Inventory Manager
-        transport: *bmc_ssh
-        parameters:
-          executable: systemctl
-          args: ["is-active", "xyz.openbmc_project.Inventory.Manager.service"]
-      - cmd: cmd
         name: Log Manager
         transport: *bmc_ssh
         parameters:

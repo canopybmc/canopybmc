@@ -1,0 +1,223 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Wed, 25 Nov 2026 22:28:28 +0100
+Subject: [PATCH] fansensor: extract connector setup
+
+Move the parsing of a fan's Connector configuration, which resolves and
+enables its PWM channel, into setupConnector().
+
+No functional change.
+
+Upstream-Status: Pending
+---
+ src/fan/FanMain.cpp |  173 ++++++++++++++++++++++++++++-----------------------
+ 1 file changed, 96 insertions(+), 77 deletions(-)
+
+diff --git a/src/fan/FanMain.cpp b/src/fan/FanMain.cpp
+index 47185fb..10db57a 100644
+--- a/src/fan/FanMain.cpp
++++ b/src/fan/FanMain.cpp
+@@ -453,6 +453,86 @@ static std::shared_ptr<PresenceGpio> getPresenceGpio(
+     return presenceGpio;
+ }
+ 
++struct FanConnector
++{
++    std::filesystem::path pwmPath;
++    std::string pwmName;
++    // The Mutable parameter is optional, defaulting to false
++    bool pwmMutable = false;
++    std::optional<std::string> led;
++};
++
++// Parse a fan's Connector configuration and enable its PWM channel. Returns
++// std::nullopt if the configured PWM channel does not exist.
++static std::optional<FanConnector> setupConnector(
++    const SensorBaseConfigMap& connector,
++    const std::filesystem::path& directory, const std::string& sensorName)
++{
++    FanConnector result;
++
++    auto findPwm = connector.find("Pwm");
++    if (findPwm != connector.end())
++    {
++        size_t pwm = std::visit(VariantToUnsignedIntVisitor(), findPwm->second);
++        if (!findPwmPath(directory, pwm, result.pwmPath))
++        {
++            lg2::error("Connector for '{NAME}' no pwm channel found!", "NAME",
++                       sensorName);
++            return std::nullopt;
++        }
++
++        std::filesystem::path pwmEnableFile =
++            "pwm" + std::to_string(pwm + 1) + "_enable";
++        std::filesystem::path enablePath =
++            result.pwmPath.parent_path() / pwmEnableFile;
++        enablePwm(enablePath);
++
++        /* use pwm name override if found in configuration else
++         * use default */
++        auto findOverride = connector.find("PwmName");
++        if (findOverride != connector.end())
++        {
++            result.pwmName =
++                std::visit(VariantToStringVisitor(), findOverride->second);
++        }
++        else
++        {
++            result.pwmName = "Pwm_" + std::to_string(pwm + 1);
++        }
++
++        // Check PWM sensor mutability
++        auto findMutable = connector.find("Mutable");
++        if (findMutable != connector.end())
++        {
++            const auto* ptrMutable = std::get_if<bool>(&(findMutable->second));
++            if (ptrMutable != nullptr)
++            {
++                result.pwmMutable = *ptrMutable;
++            }
++        }
++    }
++    else
++    {
++        lg2::error("Connector for '{NAME}' missing pwm!", "NAME", sensorName);
++    }
++
++    auto findLED = connector.find("LED");
++    if (findLED != connector.end())
++    {
++        const auto* ledName = std::get_if<std::string>(&(findLED->second));
++        if (ledName == nullptr)
++        {
++            lg2::error("Wrong format for LED of '{NAME}'", "NAME", sensorName);
++        }
++        else
++        {
++            result.led = *ledName;
++        }
++    }
++
++    return result;
++}
++
+ static void createSensorsFromConfigs(
+     boost::asio::io_context& io, sdbusplus::asio::object_server& objectServer,
+     boost::container::flat_map<std::string, std::shared_ptr<TachSensor>>&
+@@ -566,80 +646,18 @@ static void createSensorsFromConfigs(
+         std::pair<double, double> limits =
+             std::make_pair(defaultMinReading, defaultMaxReading);
+ 
+-        auto connector = sensorData->find(cfgIntf + std::string(".Connector"));
+-
+-        std::optional<std::string> led;
+-        std::string pwmName;
+-        std::filesystem::path pwmPath;
+-
+-        // The Mutable parameter is optional, defaulting to false
+-        bool isValueMutable = false;
+-        if (connector != sensorData->end())
++        FanConnector connector;
++        auto findConnector =
++            sensorData->find(cfgIntf + std::string(".Connector"));
++        if (findConnector != sensorData->end())
+         {
+-            auto findPwm = connector->second.find("Pwm");
+-            if (findPwm != connector->second.end())
+-            {
+-                size_t pwm =
+-                    std::visit(VariantToUnsignedIntVisitor(), findPwm->second);
+-                if (!findPwmPath(directory, pwm, pwmPath))
+-                {
+-                    lg2::error("Connector for '{NAME}' no pwm channel found!",
+-                               "NAME", sensorName);
+-                    continue;
+-                }
+-
+-                std::filesystem::path pwmEnableFile =
+-                    "pwm" + std::to_string(pwm + 1) + "_enable";
+-                std::filesystem::path enablePath =
+-                    pwmPath.parent_path() / pwmEnableFile;
+-                enablePwm(enablePath);
+-
+-                /* use pwm name override if found in configuration else
+-                 * use default */
+-                auto findOverride = connector->second.find("PwmName");
+-                if (findOverride != connector->second.end())
+-                {
+-                    pwmName = std::visit(VariantToStringVisitor(),
+-                                         findOverride->second);
+-                }
+-                else
+-                {
+-                    pwmName = "Pwm_" + std::to_string(pwm + 1);
+-                }
+-
+-                // Check PWM sensor mutability
+-                auto findMutable = connector->second.find("Mutable");
+-                if (findMutable != connector->second.end())
+-                {
+-                    const auto* ptrMutable =
+-                        std::get_if<bool>(&(findMutable->second));
+-                    if (ptrMutable != nullptr)
+-                    {
+-                        isValueMutable = *ptrMutable;
+-                    }
+-                }
+-            }
+-            else
++            std::optional<FanConnector> parsed =
++                setupConnector(findConnector->second, directory, sensorName);
++            if (!parsed)
+             {
+-                lg2::error("Connector for '{NAME}' missing pwm!", "NAME",
+-                           sensorName);
+-            }
+-
+-            auto findLED = connector->second.find("LED");
+-            if (findLED != connector->second.end())
+-            {
+-                const auto* ledName =
+-                    std::get_if<std::string>(&(findLED->second));
+-                if (ledName == nullptr)
+-                {
+-                    lg2::error("Wrong format for LED of '{NAME}'", "NAME",
+-                               sensorName);
+-                }
+-                else
+-                {
+-                    led = *ledName;
+-                }
++                continue;
+             }
++            connector = std::move(*parsed);
+         }
+ 
+         findLimits(limits, baseConfiguration);
+@@ -651,16 +669,17 @@ static void createSensorsFromConfigs(
+         tachSensor = std::make_shared<TachSensor>(
+             path.string(), baseType, objectServer, dbusConnection, presenceGpio,
+             redundancy, io, sensorName, std::move(sensorThresholds),
+-            *interfacePath, limits, powerState, led);
++            *interfacePath, limits, powerState, connector.led);
+         tachSensor->setupRead();
+ 
+         std::error_code ec;
+-        if (!pwmPath.empty() && std::filesystem::exists(pwmPath, ec) &&
+-            (!pwmSensors.contains(pwmPath)))
++        if (!connector.pwmPath.empty() &&
++            std::filesystem::exists(connector.pwmPath, ec) &&
++            (!pwmSensors.contains(connector.pwmPath)))
+         {
+-            pwmSensors[pwmPath] = std::make_unique<PwmSensor>(
+-                pwmName, pwmPath, dbusConnection, objectServer, *interfacePath,
+-                "Fan", isValueMutable);
++            pwmSensors[connector.pwmPath] = std::make_unique<PwmSensor>(
++                connector.pwmName, connector.pwmPath, dbusConnection,
++                objectServer, *interfacePath, "Fan", connector.pwmMutable);
+         }
+     }
+ 
+-- 
+2.53.0
+

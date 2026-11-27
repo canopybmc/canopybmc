@@ -1,0 +1,108 @@
+name: "Fan: Kernel and GPIO Interfaces"
+description: >-
+  Verify the kernel side of the fan rework with the host off. gxp-fan-ctrl
+  exposes pwmN and fanN_fault on all 8 channels, installed or not, and no
+  longer fakes a tach through fanN_input. The xreg fanN-installed lines
+  exist, the fanN-fail lines and gpio-keys-polled are gone, and fansensor
+  holds the installed lines of the 7 configured fans as active-high inputs.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+
+stages:
+  - name: gxp-fan-ctrl hwmon
+    steps:
+      - cmd: shell
+        name: pwm1 to pwm8 exist on all channels
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            N=$(grep -lx hpe_gxp_fan_ctrl /sys/class/hwmon/hwmon*/name) || { echo "FAIL: no hpe_gxp_fan_ctrl hwmon device"; exit 1; }
+            H=${N%/name}; echo "hwmon: $H"; OK=true
+            for C in 1 2 3 4 5 6 7 8; do
+              if [ -e "$H/pwm$C" ]; then echo "pwm$C present"; else echo "FAIL: pwm$C missing"; OK=false; fi
+            done
+            $OK
+      - cmd: shell
+        name: fan1_fault to fan8_fault exist on all channels
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            N=$(grep -lx hpe_gxp_fan_ctrl /sys/class/hwmon/hwmon*/name) || exit 1
+            H=${N%/name}; OK=true
+            for C in 1 2 3 4 5 6 7 8; do
+              if [ -e "$H/fan${C}_fault" ]; then echo "fan${C}_fault=$(cat $H/fan${C}_fault)"; else echo "FAIL: fan${C}_fault missing"; OK=false; fi
+            done
+            $OK
+      - cmd: shell
+        name: No fanN_input reporting PWM as fan speed
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            N=$(grep -lx hpe_gxp_fan_ctrl /sys/class/hwmon/hwmon*/name) || exit 1
+            H=${N%/name}
+            F=$(ls "$H" | grep -E '^fan[0-9]+_input$')
+            if [ -n "$F" ]; then echo "FAIL: found" $F; exit 1; fi
+            echo "no fanN_input in $H"
+
+  - name: xreg fan GPIO lines
+    steps:
+      - cmd: shell
+        name: fan1-installed to fan8-installed lines exist
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            OK=true
+            for C in 1 2 3 4 5 6 7 8; do
+              L=$(gpiofind fan$C-installed) && echo "fan$C-installed: $L" || { echo "FAIL: fan$C-installed not found"; OK=false; }
+            done
+            $OK
+      - cmd: shell
+        name: No gpio-keys-polled driver or input device
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            OK=true
+            if [ -e /sys/bus/platform/drivers/gpio-keys-polled ]; then echo "FAIL: gpio-keys-polled driver registered"; OK=false; fi
+            if grep -qs gpio-keys /proc/bus/input/devices; then echo "FAIL: gpio-keys input device present"; grep -s -A1 gpio-keys /proc/bus/input/devices; OK=false; fi
+            $OK && echo "no gpio-keys-polled"
+            $OK
+      - cmd: shell
+        name: fansensor holds fan1-7-installed as active-high inputs
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            I=$(gpioinfo); OK=true
+            for C in 1 2 3 4 5 6 7; do
+              L=$(echo "$I" | grep "\"fan$C-installed\"")
+              echo "$L"
+              echo "$L" | grep -qE '"FanSensor" +input +active-high .*used' || { echo "FAIL: fan$C-installed not held by FanSensor as active-high input"; OK=false; }
+            done
+            $OK
+      - cmd: shell
+        name: No fanN-fail lines
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            F=$(gpioinfo | grep -E '"fan[0-9]+-fail"')
+            if [ -n "$F" ]; then echo "FAIL: fail lines still exported"; echo "$F"; exit 1; fi
+            echo "no fanN-fail lines"

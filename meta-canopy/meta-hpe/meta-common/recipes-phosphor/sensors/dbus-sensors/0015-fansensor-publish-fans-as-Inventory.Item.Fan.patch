@@ -1,0 +1,134 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Wed, 25 Nov 2026 22:28:28 +0100
+Subject: [PATCH] fansensor: publish fans as Inventory.Item.Fan
+
+bmcweb lists the fans of a chassis through the chassis' cooled_by
+association, and only returns objects that implement
+xyz.openbmc_project.Inventory.Item.Fan. The inventory items fansensor
+creates have neither, so they do not show up in Redfish
+ThermalSubsystem/Fans. Platforms that want them listed run
+phosphor-inventory-manager with a static associations file instead.
+
+Add the Item.Fan interface next to Inventory.Item, and a cooling
+association to the board that configures the fan, the same board its
+sensors name in their chassis association. Set PrettyName to the
+configured fan name instead of leaving it empty.
+
+Upstream-Status: Pending
+---
+ src/fan/FanItem.cpp |   19 ++++++++++++++-----
+ src/fan/FanItem.hpp |    6 ++++--
+ src/fan/FanMain.cpp |    4 ++--
+ 3 files changed, 20 insertions(+), 9 deletions(-)
+
+diff --git a/src/fan/FanItem.cpp b/src/fan/FanItem.cpp
+index 42a593c..be93f73 100644
+--- a/src/fan/FanItem.cpp
++++ b/src/fan/FanItem.cpp
+@@ -8,6 +8,7 @@
+ #include <sdbusplus/asio/object_server.hpp>
+ 
+ #include <chrono>
++#include <filesystem>
+ #include <memory>
+ #include <string>
+ #include <utility>
+@@ -17,7 +18,7 @@ static constexpr unsigned int pollIntervalMs = 1000;
+ 
+ FanItem::FanItem(sdbusplus::asio::object_server& objectServer,
+                  boost::asio::io_context& io, const std::string& name,
+-                 const std::string& sensorPath,
++                 const std::string& configPath, const std::string& sensorPath,
+                  std::shared_ptr<PresenceGpio> presenceGpio) :
+     objServer(objectServer), pollTimer(io), presence(std::move(presenceGpio))
+ {
+@@ -25,15 +26,22 @@ FanItem::FanItem(sdbusplus::asio::object_server& objectServer,
+ 
+     itemIface =
+         objectServer.add_interface(path, "xyz.openbmc_project.Inventory.Item");
+-    itemIface->register_property("PrettyName",
+-                                 std::string()); // unused property
++    itemIface->register_property("PrettyName", name);
+     itemIface->register_property("Present", presence->isPresent());
+     itemIface->initialize();
+ 
++    fanIface = objectServer.add_interface(
++        path, "xyz.openbmc_project.Inventory.Item.Fan");
++    fanIface->initialize();
++
++    std::string boardPath =
++        std::filesystem::path(configPath).parent_path().string();
+     itemAssoc = objectServer.add_interface(path, association::interface);
+     itemAssoc->register_property(
+-        "Associations",
+-        std::vector<Association>{{"sensors", "inventory", sensorPath}});
++        "Associations", std::vector<Association>{
++                            {"sensors", "inventory", sensorPath},
++                            {"cooling", "cooled_by", boardPath},
++                        });
+     itemAssoc->initialize();
+ }
+ 
+@@ -41,6 +49,7 @@ FanItem::~FanItem()
+ {
+     pollTimer.cancel();
+     objServer.remove_interface(itemIface);
++    objServer.remove_interface(fanIface);
+     objServer.remove_interface(itemAssoc);
+ }
+ 
+diff --git a/src/fan/FanItem.hpp b/src/fan/FanItem.hpp
+index e2bb501..b448f3e 100644
+--- a/src/fan/FanItem.hpp
++++ b/src/fan/FanItem.hpp
+@@ -10,13 +10,14 @@
+ #include <string>
+ 
+ // Inventory item of a fan with a presence GPIO, published at
+-// /xyz/openbmc_project/inventory/<name>.
++// /xyz/openbmc_project/inventory/<name> and associated with the board that
++// configures the fan.
+ class FanItem : public std::enable_shared_from_this<FanItem>
+ {
+   public:
+     FanItem(sdbusplus::asio::object_server& objectServer,
+             boost::asio::io_context& io, const std::string& name,
+-            const std::string& sensorPath,
++            const std::string& configPath, const std::string& sensorPath,
+             std::shared_ptr<PresenceGpio> presenceGpio);
+     FanItem(const FanItem&) = delete;
+     FanItem& operator=(const FanItem&) = delete;
+@@ -29,6 +30,7 @@ class FanItem : public std::enable_shared_from_this<FanItem>
+     boost::asio::steady_timer pollTimer;
+     std::shared_ptr<PresenceGpio> presence;
+     std::shared_ptr<sdbusplus::asio::dbus_interface> itemIface;
++    std::shared_ptr<sdbusplus::asio::dbus_interface> fanIface;
+     std::shared_ptr<sdbusplus::asio::dbus_interface> itemAssoc;
+ 
+     void update();
+diff --git a/src/fan/FanMain.cpp b/src/fan/FanMain.cpp
+index fcbbad5..5761256 100644
+--- a/src/fan/FanMain.cpp
++++ b/src/fan/FanMain.cpp
+@@ -660,7 +660,7 @@ static void createTachlessFans(
+                 continue;
+             }
+             auto fanItem = std::make_shared<FanItem>(
+-                objectServer, io, sensorName,
++                objectServer, io, sensorName, path.str,
+                 "/xyz/openbmc_project/sensors/fan_pwm/" +
+                     sensor_paths::escapePathForDbus(connector->pwmName),
+                 presenceGpio);
+@@ -812,7 +812,7 @@ static void createSensorsFromConfigs(
+         if (presenceGpio)
+         {
+             auto fanItem = std::make_shared<FanItem>(
+-                objectServer, io, sensorName,
++                objectServer, io, sensorName, *interfacePath,
+                 "/xyz/openbmc_project/sensors/fan_tach/" + tachSensor->name,
+                 presenceGpio);
+             fanItem->start();
+-- 
+2.53.0
+

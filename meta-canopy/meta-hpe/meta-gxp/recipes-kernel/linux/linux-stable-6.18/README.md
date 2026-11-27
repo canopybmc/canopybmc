@@ -74,7 +74,6 @@ Every patch should contain an "Upstream-Status" tag as described in the
 
 - 0037 # dt-bindings: hwmon: gxp-fan-ctrl: replace fn2 syscon with fan-supply
 - 0038 # hwmon: gxp-fan-ctrl: use fan-supply regulator and fix sysfs semantics
-    - 0043 # hwmon: gxp-fan-ctrl: expose fan_input reporting PWM duty cycle
 - 0039 # dt-bindings: soc: hpe: gxp-fn2: allow regulator child nodes
 
 #### needs CLPD & fan-supply (not directly related)
@@ -82,8 +81,6 @@ Every patch should contain an "Upstream-Status" tag as described in the
 - 0040 # ARM: dts: hpe-gxp: add CPLD host power regulator and fan-supply
 - 0041 # ARM: dts: hpe-gxp: add PGOOD interrupt to host power regulator
 - 0042 # regulator: gxp-cpld: debounce PGOOD IRQ before notifying consumers
-
-- 0044 # ARM: dts: hpe-gxp: add gpio-keys-polled node for fan presence
 
 ### SOC temp
 

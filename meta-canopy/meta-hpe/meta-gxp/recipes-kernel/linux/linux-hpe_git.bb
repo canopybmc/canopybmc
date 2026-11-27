@@ -63,8 +63,6 @@ SRC_URI:append = " \
     file://0040-ARM-dts-hpe-gxp-add-CPLD-host-power-regulator-and-fa.patch \
     file://0041-ARM-dts-hpe-gxp-add-PGOOD-interrupt-to-host-power-re.patch \
     file://0042-regulator-gxp-cpld-debounce-PGOOD-IRQ-before-notifyi.patch \
-    file://0043-hwmon-gxp-fan-ctrl-expose-fan_input-reporting-PWM-du.patch \
-    file://0044-ARM-dts-hpe-gxp-add-gpio-keys-polled-node-for-fan-pr.patch \
     file://0046-dt-bindings-hwmon-add-HPE-GXP-SoC-temperature-sensor.patch \
     file://0047-hwmon-gxp-coretemp-add-HPE-GXP-SoC-temperature-senso.patch \
     file://0048-ARM-dts-hpe-gxp-add-coretemp-sensor-node.patch \

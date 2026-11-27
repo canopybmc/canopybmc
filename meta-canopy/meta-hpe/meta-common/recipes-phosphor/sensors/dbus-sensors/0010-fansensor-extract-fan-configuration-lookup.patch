@@ -1,0 +1,225 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pedro Maione <pedro.maione@9elements.com>
+Date: Wed, 25 Nov 2026 22:28:28 +0100
+Subject: [PATCH] fansensor: extract fan configuration lookup
+
+Move the loop that matches a hwmon fan channel to its entity-manager
+record into findFanConfig().
+
+No functional change.
+
+Upstream-Status: Pending
+---
+ src/fan/FanMain.cpp |  184 ++++++++++++++++++++++++++++-----------------------
+ 1 file changed, 101 insertions(+), 83 deletions(-)
+
+diff --git a/src/fan/FanMain.cpp b/src/fan/FanMain.cpp
+index 4a27f5c..9cc3dd9 100644
+--- a/src/fan/FanMain.cpp
++++ b/src/fan/FanMain.cpp
+@@ -281,6 +281,100 @@ void createRedundancySensor(
+         "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
+ }
+ 
++struct FanConfig
++{
++    std::string_view type;
++    const std::string& path;
++    const SensorData& data;
++    const SensorBaseConfiguration& base;
++};
++
++// Find the configuration record for channel @index of the fan controller
++// whose hwmon directory is @directory.
++static std::optional<FanConfig> findFanConfig(
++    const ManagedObjectType& sensorConfigurations, FanTypes fanType,
++    size_t index, const std::filesystem::path& directory)
++{
++    std::string cfgIntf = configInterfaceName(sensorTypes[fanType]);
++    for (const auto& [path, cfgData] : sensorConfigurations)
++    {
++        // find the base of the configuration to see if indexes
++        // match
++        auto sensorBaseFind = cfgData.find(cfgIntf);
++        if (sensorBaseFind == cfgData.end())
++        {
++            continue;
++        }
++
++        const SensorBaseConfiguration& baseConfiguration = *sensorBaseFind;
++        FanConfig config{sensorTypes[fanType], path.str, cfgData,
++                         baseConfiguration};
++
++        auto findIndex = baseConfiguration.second.find("Index");
++        if (findIndex == baseConfiguration.second.end())
++        {
++            lg2::error("'{INTERFACE}' missing index", "INTERFACE",
++                       baseConfiguration.first);
++            continue;
++        }
++        unsigned int configIndex =
++            std::visit(VariantToUnsignedIntVisitor(), findIndex->second);
++        if (configIndex != index)
++        {
++            continue;
++        }
++        if (fanType == FanTypes::aspeed || fanType == FanTypes::nuvoton ||
++            fanType == FanTypes::hpe)
++        {
++            // there will be only 1 aspeed or nuvoton or hpe sensor
++            // object in sysfs, we found the fan
++            return config;
++        }
++        if (fanType == FanTypes::i2c)
++        {
++            std::error_code ec;
++            std::filesystem::path deviceLink =
++                std::filesystem::read_symlink(directory / "device", ec);
++            if (ec)
++            {
++                lg2::error("read_symlink() failed for '{PATH}': "
++                           "'{ERROR_MESSAGE}'",
++                           "PATH", directory / "device", "ERROR_MESSAGE",
++                           ec.message());
++                continue;
++            }
++            std::string deviceName = deviceLink.filename();
++
++            size_t bus = 0;
++            size_t addr = 0;
++            if (!getDeviceBusAddr(deviceName, bus, addr))
++            {
++                continue;
++            }
++
++            auto findBus = baseConfiguration.second.find("Bus");
++            auto findAddress = baseConfiguration.second.find("Address");
++            if (findBus == baseConfiguration.second.end() ||
++                findAddress == baseConfiguration.second.end())
++            {
++                lg2::error("'{INTERFACE}' missing bus or address", "INTERFACE",
++                           baseConfiguration.first);
++                continue;
++            }
++            unsigned int configBus =
++                std::visit(VariantToUnsignedIntVisitor(), findBus->second);
++            unsigned int configAddress =
++                std::visit(VariantToUnsignedIntVisitor(), findAddress->second);
++
++            if (configBus == bus && configAddress == addr)
++            {
++                return config;
++            }
++        }
++    }
++    return std::nullopt;
++}
++
+ static void createSensorsFromConfigs(
+     boost::asio::io_context& io, sdbusplus::asio::object_server& objectServer,
+     boost::container::flat_map<std::string, std::shared_ptr<TachSensor>>&
+@@ -320,94 +414,18 @@ static void createSensorsFromConfigs(
+         // convert to 0 based
+         size_t index = std::stoul(indexStr) - 1;
+ 
+-        std::string_view baseType;
+-        const SensorData* sensorData = nullptr;
+-        const std::string* interfacePath = nullptr;
+-        const SensorBaseConfiguration* baseConfiguration = nullptr;
+-        for (const auto& [path, cfgData] : sensorConfigurations)
+-        {
+-            // find the base of the configuration to see if indexes
+-            // match
+-            auto sensorBaseFind = cfgData.find(cfgIntf);
+-            if (sensorBaseFind == cfgData.end())
+-            {
+-                continue;
+-            }
+-
+-            baseConfiguration = &(*sensorBaseFind);
+-            interfacePath = &path.str;
+-            baseType = sensorTypes[fanType];
+-
+-            auto findIndex = baseConfiguration->second.find("Index");
+-            if (findIndex == baseConfiguration->second.end())
+-            {
+-                lg2::error("'{INTERFACE}' missing index", "INTERFACE",
+-                           baseConfiguration->first);
+-                continue;
+-            }
+-            unsigned int configIndex =
+-                std::visit(VariantToUnsignedIntVisitor(), findIndex->second);
+-            if (configIndex != index)
+-            {
+-                continue;
+-            }
+-            if (fanType == FanTypes::aspeed || fanType == FanTypes::nuvoton ||
+-                fanType == FanTypes::hpe)
+-            {
+-                // there will be only 1 aspeed or nuvoton or hpe sensor
+-                // object in sysfs, we found the fan
+-                sensorData = &cfgData;
+-                break;
+-            }
+-            if (fanType == FanTypes::i2c)
+-            {
+-                std::error_code ec;
+-                std::filesystem::path deviceLink =
+-                    std::filesystem::read_symlink(directory / "device", ec);
+-                if (ec)
+-                {
+-                    lg2::error("read_symlink() failed for '{PATH}': "
+-                               "'{ERROR_MESSAGE}'",
+-                               "PATH", directory / "device", "ERROR_MESSAGE",
+-                               ec.message());
+-                    continue;
+-                }
+-                std::string deviceName = deviceLink.filename();
+-
+-                size_t bus = 0;
+-                size_t addr = 0;
+-                if (!getDeviceBusAddr(deviceName, bus, addr))
+-                {
+-                    continue;
+-                }
+-
+-                auto findBus = baseConfiguration->second.find("Bus");
+-                auto findAddress = baseConfiguration->second.find("Address");
+-                if (findBus == baseConfiguration->second.end() ||
+-                    findAddress == baseConfiguration->second.end())
+-                {
+-                    lg2::error("'{INTERFACE}' missing bus or address",
+-                               "INTERFACE", baseConfiguration->first);
+-                    continue;
+-                }
+-                unsigned int configBus =
+-                    std::visit(VariantToUnsignedIntVisitor(), findBus->second);
+-                unsigned int configAddress = std::visit(
+-                    VariantToUnsignedIntVisitor(), findAddress->second);
+-
+-                if (configBus == bus && configAddress == addr)
+-                {
+-                    sensorData = &cfgData;
+-                    break;
+-                }
+-            }
+-        }
+-        if (sensorData == nullptr)
++        std::optional<FanConfig> fanConfig =
++            findFanConfig(sensorConfigurations, fanType, index, directory);
++        if (!fanConfig)
+         {
+             lg2::error("failed to find match for '{PATH}'", "PATH",
+                        path.string());
+             continue;
+         }
++        std::string_view baseType = fanConfig->type;
++        const SensorData* sensorData = &fanConfig->data;
++        const std::string* interfacePath = &fanConfig->path;
++        const SensorBaseConfiguration* baseConfiguration = &fanConfig->base;
+ 
+         auto findSensorName = baseConfiguration->second.find("Name");
+ 
+-- 
+2.53.0
+

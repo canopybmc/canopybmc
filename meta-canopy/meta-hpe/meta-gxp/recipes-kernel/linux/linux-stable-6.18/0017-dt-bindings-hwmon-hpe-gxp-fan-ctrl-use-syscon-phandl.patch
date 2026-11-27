@@ -15,7 +15,7 @@ Signed-off-by: Marcello Sylvester Bauer <marcello.bauer@9elements.com>
  1 file changed, 15 insertions(+), 13 deletions(-)
 
 diff --git a/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml b/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml
-index 4a52aac6be72..bc29a684a8f4 100644
+index 4a52aac6be72..c0cd518260cd 100644
 --- a/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml
 +++ b/Documentation/devicetree/bindings/hwmon/hpe,gxp-fan-ctrl.yaml
 @@ -18,28 +18,30 @@ properties:
@@ -36,7 +36,7 @@ index 4a52aac6be72..bc29a684a8f4 100644
 -      - const: fn2
 +  hpe,xreg:
 +    $ref: /schemas/types.yaml#/definitions/phandle
-+    description: Phandle to the XREG syscon for fan install/fail status
++    description: Phandle to the XREG syscon for fan fail status
 +
 +  hpe,fn2:
 +    $ref: /schemas/types.yaml#/definitions/phandle
