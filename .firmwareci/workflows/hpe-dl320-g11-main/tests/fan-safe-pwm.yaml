@@ -1,0 +1,93 @@
+name: "Fan: Safe PWM Restore on All Channels"
+description: >-
+  Verify that gxp-fan-ctrl writes the safe duty cycle to all 8 channels when
+  it releases the fans, not only to installed ones. With the host on, pwm8,
+  which has no fan on the DL320 so neither fansensor nor PID writes it, is
+  set to 200. Unbinding the driver runs the same restore as a BMC shutdown,
+  so after binding it again pwm8 must read 127 (fan-shutdown-percent 50).
+  The kernel panic path shares that restore and is not triggered here.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+  local: &local
+    proto: local
+
+stages:
+  - name: Power On Host
+    steps:
+      - cmd: shell
+        name: Power on host via Redfish
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          command: |
+            HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{"ResetType":"On"}' -o /dev/null -w '%{http_code}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset)
+            echo "Power On HTTP=$HTTP"
+            [ "$HTTP" = 200 ] || [ "$HTTP" = 204 ]
+      - cmd: shell
+        name: Fan supply on
+        transport: *bmc_ssh
+        options:
+          timeout: 3m
+        parameters:
+          command: |
+            N=$(grep -lx hpe_gxp_fan_ctrl /sys/class/hwmon/hwmon*/name) || exit 1
+            H=${N%/name}
+            until [ "$(cat $H/pwm8_enable)" = 1 ]; do sleep 2; done
+            echo "pwm8_enable=1"
+
+  - name: Write a Channel With No Fan
+    steps:
+      - cmd: shell
+        name: No Pwm_8 sensor, so nothing else writes pwm8
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            if busctl --list tree xyz.openbmc_project.FanSensor | grep -q /fan_pwm/Pwm_8; then echo "FAIL: Pwm_8 is configured"; exit 1; fi
+            echo "no Pwm_8 sensor"
+      - cmd: shell
+        name: pwm8 accepts a write with no fan configured
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            N=$(grep -lx hpe_gxp_fan_ctrl /sys/class/hwmon/hwmon*/name) || exit 1
+            H=${N%/name}
+            echo 200 > $H/pwm8 || exit 1
+            V=$(cat $H/pwm8); echo "pwm8=$V"
+            [ "$V" = 200 ]
+
+  - name: Restore on Driver Release
+    steps:
+      - cmd: shell
+        name: Unbind and bind gxp-fan-ctrl
+        transport: *bmc_ssh
+        options:
+          timeout: 30s
+        parameters:
+          command: |
+            N=$(grep -lx hpe_gxp_fan_ctrl /sys/class/hwmon/hwmon*/name) || exit 1
+            D=$(basename "$(readlink -f ${N%/name}/device)"); echo "device: $D"
+            echo "$D" > /sys/bus/platform/drivers/gxp-fan-ctrl/unbind || exit 1
+            echo "$D" > /sys/bus/platform/drivers/gxp-fan-ctrl/bind || exit 1
+            grep -lx hpe_gxp_fan_ctrl /sys/class/hwmon/hwmon*/name
+      - cmd: shell
+        name: pwm8 reads the 50% restore duty (127)
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            N=$(grep -lx hpe_gxp_fan_ctrl /sys/class/hwmon/hwmon*/name) || exit 1
+            H=${N%/name}
+            V=$(cat $H/pwm8); echo "pwm8=$V"
+            [ "$V" = 127 ]

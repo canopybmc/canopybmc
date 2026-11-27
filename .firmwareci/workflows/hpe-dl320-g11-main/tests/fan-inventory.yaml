@@ -1,0 +1,381 @@
+name: "Fan: Inventory, Presence and Redfish"
+description: >-
+  Verify the fan inventory that fansensor now owns, on a DL320 with fans
+  3-7 installed and slots 1-2 empty. phosphor-fan and
+  phosphor-inventory-manager are gone, and entity-manager publishes the 7
+  fan configs with their presence pins. With the host on, fansensor
+  publishes Fan_1 to Fan_7 with presence, health and associations, and
+  Redfish ThermalSubsystem/Fans lists them through the chassis cooled_by
+  association. The last stages repeat presence and health with the host
+  off and check that no fan changed health. PID control is covered in
+  fan-control.yaml.
+
+defaults:
+  transport: &bmc_ssh
+    proto: ssh
+    options:
+      host: "[[attributes.BMC]]"
+      user: "root"
+      password: "[[attributes.BMCPassword]]"
+  local: &local
+    proto: local
+
+stages:
+  - name: Fan Stack Services
+    steps:
+      - cmd: shell
+        name: fansensor active with no restarts
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            S=xyz.openbmc_project.fansensor.service
+            A=$(systemctl is-active $S); R=$(systemctl show -p NRestarts --value $S)
+            echo "$S ActiveState=$A NRestarts=$R"
+            [ "$A" = active ] && [ "$R" = 0 ]
+      - cmd: shell
+        name: fansensor logged no presence or fault read errors
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            E=$(journalctl -b --no-pager -o cat -u xyz.openbmc_project.fansensor.service | grep -E "Error requesting gpio|Error reading gpio|Malformed Presence|Failed to read '")
+            if [ -n "$E" ]; then echo "$E"; exit 1; fi
+            echo "no presence or fault read errors since boot"
+      - cmd: shell
+        name: phosphor-fan and inventory manager not installed
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            U=$(systemctl list-unit-files --no-legend 'phosphor-fan*' 'xyz.openbmc_project.Inventory.Manager*')
+            B=$(busctl list --no-legend | grep xyz.openbmc_project.Inventory.Manager)
+            if [ -n "$U$B" ]; then echo "FAIL: still installed"; echo "$U"; echo "$B"; exit 1; fi
+            echo "no phosphor-fan units, no Inventory.Manager"
+
+  - name: Entity-Manager Fan Configs
+    steps:
+      - cmd: shell
+        name: entity-manager publishes 7 HPEFan configs
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            P=$(busctl call xyz.openbmc_project.ObjectMapper /xyz/openbmc_project/object_mapper xyz.openbmc_project.ObjectMapper GetSubTreePaths sias /xyz/openbmc_project/inventory 0 1 xyz.openbmc_project.Configuration.HPEFan)
+            echo "$P"; OK=true
+            echo "$P" | grep -q '^as 7 ' || { echo "FAIL: expected 7 HPEFan configs"; OK=false; }
+            for C in 1 2 3 4 5 6 7; do
+              echo "$P" | grep -q "\"/xyz/openbmc_project/inventory/system/chassis/chassis/Fan_$C\"" || { echo "FAIL: Fan_$C config missing"; OK=false; }
+            done
+            $OK
+      - cmd: shell
+        name: Fan N polls fanN-installed, active high
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            I=xyz.openbmc_project.Configuration.HPEFan.Presence; OK=true
+            for C in 1 2 3 4 5 6 7; do
+              O=/xyz/openbmc_project/inventory/system/chassis/chassis/Fan_$C
+              P=$(busctl get-property xyz.openbmc_project.EntityManager $O $I PinName)
+              M=$(busctl get-property xyz.openbmc_project.EntityManager $O $I MonitorType)
+              Y=$(busctl get-property xyz.openbmc_project.EntityManager $O $I Polarity)
+              echo "Fan_$C PinName=$P MonitorType=$M Polarity=$Y"
+              [ "$P" = "s \"fan$C-installed\"" ] && [ "$M" = 's "Polling"' ] && [ "$Y" = 's "High"' ] || OK=false
+            done
+            $OK
+
+  - name: Power On Host
+    steps:
+      - cmd: shell
+        name: Power on host via Redfish
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          command: |
+            HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{"ResetType":"On"}' -o /dev/null -w '%{http_code}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset)
+            echo "Power On HTTP=$HTTP"
+            [ "$HTTP" = 200 ] || [ "$HTTP" = 204 ]
+      - cmd: shell
+        name: Fan supply on
+        transport: *bmc_ssh
+        options:
+          timeout: 3m
+        parameters:
+          command: |
+            N=$(grep -lx hpe_gxp_fan_ctrl /sys/class/hwmon/hwmon*/name) || exit 1
+            H=${N%/name}
+            until [ "$(cat $H/pwm3_enable)" = 1 ]; do sleep 2; done
+            echo "pwm3_enable=1"
+
+  - name: fansensor Fan Items
+    steps:
+      - cmd: shell
+        name: Pwm_1 to Pwm_7 sensors exist, no fan_tach sensors
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            T=$(busctl --list tree xyz.openbmc_project.FanSensor); OK=true
+            for C in 1 2 3 4 5 6 7; do
+              echo "$T" | grep -qx "/xyz/openbmc_project/sensors/fan_pwm/Pwm_$C" && echo "Pwm_$C present" || { echo "FAIL: Pwm_$C missing"; OK=false; }
+            done
+            if echo "$T" | grep -q /fan_tach/; then echo "FAIL: tach sensors on tachless fans"; echo "$T" | grep /fan_tach/; OK=false; fi
+            $OK
+      - cmd: shell
+        name: Fan_1 to Fan_7 implement Item, Item.Fan, OperationalStatus
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            OK=true
+            for C in 1 2 3 4 5 6 7; do
+              X=$(busctl introspect xyz.openbmc_project.FanSensor /xyz/openbmc_project/inventory/Fan_$C 2>&1)
+              for I in xyz.openbmc_project.Inventory.Item xyz.openbmc_project.Inventory.Item.Fan xyz.openbmc_project.State.Decorator.OperationalStatus; do
+                echo "$X" | grep -q "^$I " && echo "Fan_$C $I" || { echo "FAIL: Fan_$C has no $I"; OK=false; }
+              done
+            done
+            $OK
+      - cmd: shell
+        name: Fan_N PrettyName is "Fan N"
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            OK=true
+            for C in 1 2 3 4 5 6 7; do
+              P=$(busctl get-property xyz.openbmc_project.FanSensor /xyz/openbmc_project/inventory/Fan_$C xyz.openbmc_project.Inventory.Item PrettyName)
+              echo "Fan_$C PrettyName=$P"
+              [ "$P" = "s \"Fan $C\"" ] || OK=false
+            done
+            $OK
+      - cmd: shell
+        name: Fans 3-7 present, slots 1-2 empty
+        transport: *bmc_ssh
+        options:
+          timeout: 30s
+        parameters:
+          command: |
+            D=$(($(date +%s) + 20))
+            while :; do
+              S=""; OK=true
+              for C in 1 2 3 4 5 6 7; do
+                P=$(busctl get-property xyz.openbmc_project.FanSensor /xyz/openbmc_project/inventory/Fan_$C xyz.openbmc_project.Inventory.Item Present)
+                case $C in 1|2) W="b false";; *) W="b true";; esac
+                S="$S
+            Fan_$C Present=$P expected=$W"
+                [ "$P" = "$W" ] || OK=false
+              done
+              $OK || [ $(date +%s) -ge $D ] && break
+              sleep 2
+            done
+            echo "$S"
+            $OK
+      - cmd: shell
+        name: Fans 1-7 functional with host on
+        transport: *bmc_ssh
+        options:
+          timeout: 90s
+        parameters:
+          command: |
+            N=$(grep -lx hpe_gxp_fan_ctrl /sys/class/hwmon/hwmon*/name) || exit 1
+            H=${N%/name}; D=$(($(date +%s) + 60))
+            while :; do
+              S=""; OK=true
+              for C in 1 2 3 4 5 6 7; do
+                F=$(busctl get-property xyz.openbmc_project.FanSensor /xyz/openbmc_project/inventory/Fan_$C xyz.openbmc_project.State.Decorator.OperationalStatus Functional)
+                S="$S
+            Fan_$C Functional=$F fan${C}_fault=$(cat $H/fan${C}_fault)"
+                [ "$F" = "b true" ] || OK=false
+              done
+              $OK || [ $(date +%s) -ge $D ] && break
+              sleep 2
+            done
+            echo "$S"
+            $OK
+      - cmd: shell
+        name: Fan_N associates Pwm_N and the chassis
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            OK=true
+            for C in 1 2 3 4 5 6 7; do
+              A=$(busctl get-property xyz.openbmc_project.FanSensor /xyz/openbmc_project/inventory/Fan_$C xyz.openbmc_project.Association.Definitions Associations)
+              echo "Fan_$C $A"
+              echo "$A" | grep -q "\"sensors\" \"inventory\" \"/xyz/openbmc_project/sensors/fan_pwm/Pwm_$C\"" || { echo "FAIL: Fan_$C has no sensors association to Pwm_$C"; OK=false; }
+              echo "$A" | grep -q '"cooling" "cooled_by" "/xyz/openbmc_project/inventory/system/chassis/chassis"' || { echo "FAIL: Fan_$C has no cooling association to the chassis"; OK=false; }
+            done
+            $OK
+
+  - name: Object Mapper Associations
+    steps:
+      - cmd: shell
+        name: Chassis cooled_by lists Fan_1 to Fan_7
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            E=$(busctl get-property xyz.openbmc_project.ObjectMapper /xyz/openbmc_project/inventory/system/chassis/chassis/cooled_by xyz.openbmc_project.Association endpoints)
+            echo "$E"; OK=true
+            for C in 1 2 3 4 5 6 7; do
+              echo "$E" | grep -q "\"/xyz/openbmc_project/inventory/Fan_$C\"" || { echo "FAIL: Fan_$C not in chassis cooled_by"; OK=false; }
+            done
+            $OK
+      - cmd: shell
+        name: Fan_N sensors endpoint is Pwm_N
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            OK=true
+            for C in 1 2 3 4 5 6 7; do
+              E=$(busctl get-property xyz.openbmc_project.ObjectMapper /xyz/openbmc_project/inventory/Fan_$C/sensors xyz.openbmc_project.Association endpoints)
+              echo "Fan_$C/sensors $E"
+              [ "$E" = "as 1 \"/xyz/openbmc_project/sensors/fan_pwm/Pwm_$C\"" ] || OK=false
+            done
+            $OK
+
+  - name: Redfish ThermalSubsystem Fans
+    steps:
+      - cmd: shell
+        name: Fans collection lists Fan_1 to Fan_7
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          command: |
+            R=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/ThermalSubsystem/Fans | tr -d ' \n')
+            M=$(echo "$R" | sed -n 's/.*"Members@odata.count":\([0-9]*\).*/\1/p')
+            echo "Members@odata.count=$M"; OK=true
+            [ "$M" = 7 ] || OK=false
+            for C in 1 2 3 4 5 6 7; do
+              echo "$R" | grep -q "/ThermalSubsystem/Fans/Fan_$C\"" || { echo "FAIL: Fan_$C not listed"; OK=false; }
+            done
+            $OK
+      - cmd: shell
+        name: Fans 3-7 Enabled and OK, fans 1-2 Absent
+        transport: *local
+        options:
+          timeout: 60s
+        parameters:
+          command: |
+            OK=true
+            for C in 1 2 3 4 5 6 7; do
+              R=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/ThermalSubsystem/Fans/Fan_$C | tr -d ' \n')
+              S=$(echo "$R" | sed -n 's/.*"State":"\([A-Za-z]*\)".*/\1/p')
+              H=$(echo "$R" | sed -n 's/.*"Health":"\([A-Za-z]*\)".*/\1/p')
+              case $C in 1|2) W=Absent;; *) W=Enabled;; esac
+              echo "Fan_$C State=$S Health=$H expected State=$W Health=OK"
+              [ "$S" = "$W" ] && [ "$H" = OK ] || OK=false
+            done
+            $OK
+      - cmd: shell
+        name: Fan_N SpeedPercent comes from Pwm_N
+        transport: *local
+        options:
+          timeout: 60s
+        parameters:
+          command: |
+            OK=true
+            for C in 1 2 3 4 5 6 7; do
+              R=$(curl -sk -u root:[[attributes.BMCPassword]] https://[[attributes.BMC]]/redfish/v1/Chassis/chassis/ThermalSubsystem/Fans/Fan_$C | tr -d ' \n')
+              U=$(echo "$R" | sed -n 's/.*"DataSourceUri":"\([^"]*\)".*/\1/p')
+              V=$(echo "$R" | sed -n 's/.*"SpeedPercent":{[^}]*"Reading":\([0-9.]*\).*/\1/p')
+              echo "Fan_$C DataSourceUri=$U Reading=$V"
+              [ "$U" = "/redfish/v1/Chassis/chassis/Sensors/fanpwm_Pwm_$C" ] || OK=false
+            done
+            $OK
+
+  - name: Power Off Host
+    steps:
+      - cmd: shell
+        name: Power off host via Redfish
+        transport: *local
+        options:
+          timeout: 30s
+        parameters:
+          command: |
+            HTTP=$(curl -sk -u root:[[attributes.BMCPassword]] -X POST -H 'Content-Type: application/json' -d '{"ResetType":"ForceOff"}' -o /dev/null -w '%{http_code}' https://[[attributes.BMC]]/redfish/v1/Systems/system/Actions/ComputerSystem.Reset)
+            echo "ForceOff HTTP=$HTTP"
+            [ "$HTTP" = 200 ] || [ "$HTTP" = 204 ]
+      - cmd: shell
+        name: Fan supply off
+        transport: *bmc_ssh
+        options:
+          timeout: 2m
+        parameters:
+          command: |
+            N=$(grep -lx hpe_gxp_fan_ctrl /sys/class/hwmon/hwmon*/name) || exit 1
+            H=${N%/name}
+            until [ "$(cat $H/pwm3_enable)" = 0 ]; do sleep 2; done
+            echo "pwm3_enable=0"
+
+  - name: Presence and Health With Host Off
+    steps:
+      - cmd: shell
+        name: Fans 3-7 present, slots 1-2 empty with host off
+        transport: *bmc_ssh
+        options:
+          timeout: 30s
+        parameters:
+          command: |
+            D=$(($(date +%s) + 20))
+            while :; do
+              S=""; OK=true
+              for C in 1 2 3 4 5 6 7; do
+                P=$(busctl get-property xyz.openbmc_project.FanSensor /xyz/openbmc_project/inventory/Fan_$C xyz.openbmc_project.Inventory.Item Present)
+                case $C in 1|2) W="b false";; *) W="b true";; esac
+                S="$S
+            Fan_$C Present=$P expected=$W"
+                [ "$P" = "$W" ] || OK=false
+              done
+              $OK || [ $(date +%s) -ge $D ] && break
+              sleep 2
+            done
+            echo "$S"
+            $OK
+      - cmd: shell
+        name: Fans 1-7 functional with host off
+        transport: *bmc_ssh
+        options:
+          timeout: 60s
+        parameters:
+          command: |
+            N=$(grep -lx hpe_gxp_fan_ctrl /sys/class/hwmon/hwmon*/name) || exit 1
+            H=${N%/name}; D=$(($(date +%s) + 30))
+            while :; do
+              S=""; OK=true
+              for C in 1 2 3 4 5 6 7; do
+                F=$(busctl get-property xyz.openbmc_project.FanSensor /xyz/openbmc_project/inventory/Fan_$C xyz.openbmc_project.State.Decorator.OperationalStatus Functional)
+                S="$S
+            Fan_$C Functional=$F fan${C}_fault=$(cat $H/fan${C}_fault)"
+                [ "$F" = "b true" ] || OK=false
+              done
+              $OK || [ $(date +%s) -ge $D ] && break
+              sleep 2
+            done
+            echo "$S"
+            $OK
+      - cmd: shell
+        name: No fan changed health across host power on and off
+        transport: *bmc_ssh
+        options:
+          timeout: 10s
+        parameters:
+          command: |
+            E=$(journalctl -b --no-pager -o cat -u xyz.openbmc_project.fansensor.service | grep 'health status changed to')
+            if [ -n "$E" ]; then echo "$E"; exit 1; fi
+            echo "no fan health changes since boot"
